@@ -2,6 +2,7 @@ package com.positivity.location.contract;
 
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.service.StorageLocationService;
 import org.junit.jupiter.api.DisplayName;
@@ -196,6 +197,27 @@ class StorageLocationContractBehaviorIT extends BaseContractIntegrationTest {
     // -------------------------------------------------------------------------
     // PATCH /v1/locations/{locationId}/storage-locations/{storageLocationId}
     // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#39 - GET /v1/storage-locations/{id}/validation returns location validation payload")
+    void getStorageLocationValidation_returns200() throws Exception {
+        when(storageLocationService.getStorageLocationValidation(STORAGE_ID))
+                .thenReturn(StorageLocationValidationResponseDTO.builder()
+                        .storageLocationId(STORAGE_ID)
+                        .siteId(SITE_ID)
+                        .exists(true)
+                        .active(true)
+                        .maxUnitCapacity(64)
+                        .build());
+
+        mockMvc.perform(withGatewayAuth(get("/v1/storage-locations/{id}/validation", STORAGE_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.storageLocationId").value(STORAGE_ID.toString()))
+                .andExpect(jsonPath("$.siteId").value(SITE_ID.toString()))
+                .andExpect(jsonPath("$.exists").value(true))
+                .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.maxUnitCapacity").value(64));
+    }
 
     /**
      * A general PATCH (e.g., rename) returns 200 with the updated resource.

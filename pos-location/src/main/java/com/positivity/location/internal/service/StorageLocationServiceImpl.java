@@ -1,8 +1,12 @@
 package com.positivity.location.internal.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.location.internal.client.LocationInventoryInquiryClient;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
@@ -11,6 +15,7 @@ import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.service.StorageLocationInventoryTransferService;
 import com.positivity.location.service.StorageLocationService;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -30,6 +35,15 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional
 public class StorageLocationServiceImpl implements StorageLocationService {
 
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
+    private static final String CAPACITY = "capacity";
+    private static final String TEMPERATURE = "temperature";
+    private static final String UNIT_COUNT = "unitCount";
+    private static final String UNIT_COUNT_SNAKE = "unit_count";
+    private static final String MAX_UNIT_COUNT = "maxUnitCount";
+    private static final String MAX_UNIT_COUNT_SNAKE = "max_unit_count";
     private static final String STORAGE_LOCATION_NOT_FOUND = "STORAGE_LOCATION_NOT_FOUND";
     private static final String DESTINATION_REQUIRED = "DESTINATION_REQUIRED";
     private static final String DESTINATION_NOT_FOUND = "DESTINATION_NOT_FOUND";
@@ -39,13 +53,16 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     private final StorageLocationRepository storageLocationRepository;
     private final LocationRepository locationRepository;
     private final StorageLocationInventoryTransferService storageLocationInventoryTransferService;
+    private final LocationInventoryInquiryClient locationInventoryInquiryClient;
 
     public StorageLocationServiceImpl(StorageLocationRepository storageLocationRepository,
             LocationRepository locationRepository,
-            StorageLocationInventoryTransferService storageLocationInventoryTransferService) {
+            StorageLocationInventoryTransferService storageLocationInventoryTransferService,
+            LocationInventoryInquiryClient locationInventoryInquiryClient) {
         this.storageLocationRepository = storageLocationRepository;
         this.locationRepository = locationRepository;
         this.storageLocationInventoryTransferService = storageLocationInventoryTransferService;
+        this.locationInventoryInquiryClient = locationInventoryInquiryClient;
     }
 
     /**
@@ -91,7 +108,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 .status(StorageLocationStatus.ACTIVE)
                 .siteId(siteId)
                 .parentStorageLocationId(parentId)
-                .inventoryCount(0)
+                .capacity(serializeJson(request.getCapacity(), CAPACITY))
+                .temperature(serializeJson(request.getTemperature(), TEMPERATURE))
                 .build());
 
         return toResponse(saved);
@@ -111,6 +129,33 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         StorageLocationEntity entity = storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, STORAGE_LOCATION_NOT_FOUND));
         return toResponse(entity);
+    }
+
+    /**
+     * Retrieves existence/active validation details by storage location id.
+     *
+     * @param storageLocationId storage location identifier
+     * @return validation details for inter-service consumers
+     */
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public StorageLocationValidationResponseDTO getStorageLocationValidation(@NonNull UUID storageLocationId) {
+        return storageLocationRepository.findById(storageLocationId)
+                .map(entity -> StorageLocationValidationResponseDTO.builder()
+                        .storageLocationId(storageLocationId)
+                        .siteId(entity.getSiteId())
+                        .exists(true)
+                        .active(entity.getStatus() == StorageLocationStatus.ACTIVE)
+                        .maxUnitCapacity(extractMaxUnitCapacity(entity.getCapacity()))
+                        .build())
+                .orElseGet(() -> StorageLocationValidationResponseDTO.builder()
+                        .storageLocationId(storageLocationId)
+                        .siteId(null)
+                        .exists(false)
+                        .active(false)
+                        .maxUnitCapacity(null)
+                        .build());
     }
 
     /**
@@ -158,6 +203,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         applyPatchedName(siteId, storageLocationId, patch, existing);
         applyPatchedBarcode(siteId, storageLocationId, patch, existing);
         applyPatchedParent(siteId, storageLocationId, patch, existing);
+        applyPatchedCapacity(patch, existing);
+        applyPatchedTemperature(patch, existing);
         applyPatchedStatus(siteId, storageLocationId, patch, existing);
 
         StorageLocationEntity saved = storageLocationRepository.saveAndFlush(existing);
@@ -179,7 +226,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         StorageLocationEntity existing = storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, STORAGE_LOCATION_NOT_FOUND));
 
-        if (existing.getInventoryCount() > 0) {
+        if (locationInventoryInquiryClient.getOnHandQuantity(storageLocationId) > 0) {
             transferInventory(siteId, existing, destinationStorageLocationId);
         }
 
@@ -257,6 +304,20 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         existing.setBarcode(newBarcode);
     }
 
+    private void applyPatchedCapacity(StorageLocationPatchRequest patch, StorageLocationEntity existing) {
+        if (patch.getCapacity() == null) {
+            return;
+        }
+        existing.setCapacity(serializeJson(patch.getCapacity(), CAPACITY));
+    }
+
+    private void applyPatchedTemperature(StorageLocationPatchRequest patch, StorageLocationEntity existing) {
+        if (patch.getTemperature() == null) {
+            return;
+        }
+        existing.setTemperature(serializeJson(patch.getTemperature(), TEMPERATURE));
+    }
+
     private void applyPatchedParent(UUID siteId, UUID storageLocationId,
             StorageLocationPatchRequest patch, StorageLocationEntity existing) {
         UUID proposedParentId = patch.getParentStorageLocationId();
@@ -286,7 +347,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         if (requested == null) {
             return;
         }
-        if (requested == StorageLocationStatus.INACTIVE && existing.getInventoryCount() > 0) {
+        if (requested == StorageLocationStatus.INACTIVE
+                && locationInventoryInquiryClient.getOnHandQuantity(storageLocationId) > 0) {
             UUID destinationStorageLocationId = patch.getDestinationStorageLocationId();
             if (destinationStorageLocationId != null && destinationStorageLocationId.equals(storageLocationId)) {
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_DESTINATION);
@@ -324,7 +386,68 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 .status(entity.getStatus().name())
                 .siteId(entity.getSiteId())
                 .parentStorageLocationId(entity.getParentStorageLocationId())
-                .inventoryCount(entity.getInventoryCount())
+                .capacity(deserializeJson(entity.getCapacity(), CAPACITY))
+                .temperature(deserializeJson(entity.getTemperature(), TEMPERATURE))
+                .inventoryCount(0)
                 .build();
+    }
+
+    private String serializeJson(Map<String, Object> value, String fieldName) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return JSON_MAPPER.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be a valid JSON object", ex);
+        }
+    }
+
+    private Map<String, Object> deserializeJson(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return JSON_MAPPER.readValue(value, MAP_TYPE);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to deserialize " + fieldName + " for storage location", ex);
+        }
+    }
+
+    private Integer extractMaxUnitCapacity(String capacityJson) {
+        Map<String, Object> capacity = deserializeJson(capacityJson, CAPACITY);
+        if (capacity == null) {
+            return null;
+        }
+        Integer unitCapacity = toInteger(capacity.get(MAX_UNIT_COUNT));
+        if (unitCapacity != null) {
+            return unitCapacity;
+        }
+        unitCapacity = toInteger(capacity.get(MAX_UNIT_COUNT_SNAKE));
+        if (unitCapacity != null) {
+            return unitCapacity;
+        }
+        unitCapacity = toInteger(capacity.get(UNIT_COUNT));
+        if (unitCapacity != null) {
+            return unitCapacity;
+        }
+        return toInteger(capacity.get(UNIT_COUNT_SNAKE));
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return Integer.valueOf(text.trim());
+            } catch (NumberFormatException ex) {
+                return null;
+            }
+        }
+        return null;
     }
 }

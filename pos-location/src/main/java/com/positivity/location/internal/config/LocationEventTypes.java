@@ -64,6 +64,9 @@ public final class LocationEventTypes {
         public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_GET = EventTypeRegistration
                         .fastRead("LOCATION_STORAGE_LOCATION_GET", "Get a storage location").build();
 
+        public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_VALIDATE = EventTypeRegistration
+                        .fastRead("LOCATION_STORAGE_LOCATION_VALIDATE", "Validate a storage location").build();
+
         public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_CREATE = EventTypeRegistration
                         .write("LOCATION_STORAGE_LOCATION_CREATE", "Create a storage location").build();
 
@@ -103,6 +106,7 @@ public final class LocationEventTypes {
                                 // Storage Location events
                                 LOCATION_STORAGE_LOCATION_LIST,
                                 LOCATION_STORAGE_LOCATION_GET,
+                                LOCATION_STORAGE_LOCATION_VALIDATE,
                                 LOCATION_STORAGE_LOCATION_CREATE,
                                 LOCATION_STORAGE_LOCATION_UPDATE,
                                 // Site Defaults events
