@@ -27,7 +27,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Contract behavior integration tests for picking execution endpoints — Story #179:
+ * Contract behavior integration tests for picking execution endpoints — Story
+ * #179:
  * Mechanic Executes Picking (Scan + Confirm).
  *
  * <p>
@@ -40,10 +41,13 @@ import tools.jackson.databind.ObjectMapper;
  * <p>
  * ADR compliance:
  * <ul>
- * <li>ADR-0006: pos-inventory provides pick state APIs; workexec owns orchestration</li>
+ * <li>ADR-0006: pos-inventory provides pick state APIs; workexec owns
+ * orchestration</li>
  * <li>ADR-0011: gateway auth headers (X-User, X-Authorities) required</li>
- * <li>ADR-0014: internal service security — all endpoints require gateway auth</li>
- * <li>ADR-0017: 200 OK for mutations returning body, 403 without auth, 422 for domain-policy violations</li>
+ * <li>ADR-0014: internal service security — all endpoints require gateway
+ * auth</li>
+ * <li>ADR-0017: 200 OK for mutations returning body, 403 without auth, 422 for
+ * domain-policy violations</li>
  * </ul>
  *
  * Issue: #179
@@ -64,7 +68,8 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
 
     /**
      * CH1: Verifies that POST /v1/inventory/pick-lists/{id}/release with valid
-     * gateway auth returns 200 OK with a PickListResponse showing status=READY_TO_PICK.
+     * gateway auth returns 200 OK with a PickListResponse showing
+     * status=READY_TO_PICK.
      *
      * <p>
      * BLOCKED: {@code releasePickList} does not exist on {@code PickListService} —
@@ -102,7 +107,8 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
 
     /**
      * CH2: Verifies that POST /v1/inventory/pick-lists/{id}/release without the
-     * required X-Authorities header returns 403 Forbidden per ADR-0011 and ADR-0014.
+     * required X-Authorities header returns 403 Forbidden per ADR-0011 and
+     * ADR-0014.
      *
      * Issue: #179
      */
@@ -123,7 +129,8 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
 
     /**
      * CH3: Verifies that POST /v1/inventory/pick-lists/{id}/tasks/{taskId}/confirm
-     * with a valid scan body and gateway auth returns 200 OK with a PickTaskResponse
+     * with a valid scan body and gateway auth returns 200 OK with a
+     * PickTaskResponse
      * showing status=PICKED.
      *
      * <p>
@@ -196,7 +203,8 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
         UUID locationId = UUID.randomUUID();
 
         // BLOCKED: confirmPickTask and PickScanMismatchException do not exist
-        // Issue #179: compile fix — constructor is (UUID expectedSkuId, UUID scannedSkuId)
+        // Issue #179: compile fix — constructor is (UUID expectedSkuId, UUID
+        // scannedSkuId)
         when(pickListService.confirmPickTask(
                 eq(pickListId), eq(taskId), eq(wrongSkuId), eq(locationId), eq(1)))
                 .thenThrow(new PickScanMismatchException(UUID.randomUUID(), wrongSkuId));
@@ -220,7 +228,8 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
      * gateway auth returns 200 OK with a JSON array of PickTaskResponse objects.
      *
      * <p>
-     * BLOCKED: {@code getPickTasksForPickList} does not exist on {@code PickListService} —
+     * BLOCKED: {@code getPickTasksForPickList} does not exist on
+     * {@code PickListService} —
      * this test will not compile until the scaffold is in place.
      * After scaffold: RED because the controller endpoint does not exist (404).
      *

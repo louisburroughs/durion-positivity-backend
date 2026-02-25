@@ -32,58 +32,58 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("ConsumptionServiceImpl")
 class ConsumptionServiceImplTest {
 
-        @Mock
-        private PickTaskRepository pickTaskRepository;
+    @Mock
+    private PickTaskRepository pickTaskRepository;
 
-        @Mock
-        private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    @Mock
+    private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
-        @Captor
-        private ArgumentCaptor<List<InventoryLedgerEntry>> entriesCaptor;
+    @Captor
+    private ArgumentCaptor<List<InventoryLedgerEntry>> entriesCaptor;
 
-        private ConsumptionServiceImpl inMemoryService() {
-                return new ConsumptionServiceImpl();
-        }
+    private ConsumptionServiceImpl inMemoryService() {
+        return new ConsumptionServiceImpl();
+    }
 
-        private ConsumptionServiceImpl persistentService() {
-                return new ConsumptionServiceImpl(pickTaskRepository, inventoryLedgerEntryRepository);
-        }
+    private ConsumptionServiceImpl persistentService() {
+        return new ConsumptionServiceImpl(pickTaskRepository, inventoryLedgerEntryRepository);
+    }
 
     // ─── CS1: consumePickedItems — valid picks → ConsumptionResponse fields ─────
 
     @Test
-        @DisplayName("in-memory mode returns response with one ledger id per item")
-        void consumePickedItems_inMemoryMode_returnsPopulatedResponse() {
+    @DisplayName("in-memory mode returns response with one ledger id per item")
+    void consumePickedItems_inMemoryMode_returnsPopulatedResponse() {
         UUID workorderId = UUID.randomUUID();
         UUID pickListId = UUID.randomUUID();
-                List<ConsumeItemLine> items = List.of(
-                                new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 2),
-                                new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 4));
-                ConsumeItemsRequest request = new ConsumeItemsRequest(workorderId, pickListId, items);
+        List<ConsumeItemLine> items = List.of(
+                new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 2),
+                new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 4));
+        ConsumeItemsRequest request = new ConsumeItemsRequest(workorderId, pickListId, items);
 
-                ConsumptionResponse result = inMemoryService().consumePickedItems(request);
+        ConsumptionResponse result = inMemoryService().consumePickedItems(request);
 
         assertThat(result.getConsumptionId()).isNotNull();
         assertThat(result.getWorkorderId()).isEqualTo(workorderId);
-                assertThat(result.getPickListId()).isEqualTo(pickListId);
-                assertThat(result.getTotalItemsConsumed()).isEqualTo(2);
+        assertThat(result.getPickListId()).isEqualTo(pickListId);
+        assertThat(result.getTotalItemsConsumed()).isEqualTo(2);
         assertThat(result.getCreatedAt()).isNotNull();
-                assertThat(result.getLedgerEntryIds()).hasSize(2).doesNotContainNull();
+        assertThat(result.getLedgerEntryIds()).hasSize(2).doesNotContainNull();
     }
 
     // ─── CS2: consumePickedItems — ledger entries created per consumed item ──────
 
     @Test
-        @DisplayName("null items are treated as empty list in in-memory mode")
-        void consumePickedItems_inMemoryMode_withNullItems_returnsEmptyLedgerIds() {
-                UUID workorderId = UUID.randomUUID();
-                ConsumeItemsRequest request = new ConsumeItemsRequest(workorderId, UUID.randomUUID(), null);
+    @DisplayName("null items are treated as empty list in in-memory mode")
+    void consumePickedItems_inMemoryMode_withNullItems_returnsEmptyLedgerIds() {
+        UUID workorderId = UUID.randomUUID();
+        ConsumeItemsRequest request = new ConsumeItemsRequest(workorderId, UUID.randomUUID(), null);
 
-                ConsumptionResponse result = inMemoryService().consumePickedItems(request);
+        ConsumptionResponse result = inMemoryService().consumePickedItems(request);
 
-                assertThat(result.getWorkorderId()).isEqualTo(workorderId);
-                assertThat(result.getTotalItemsConsumed()).isZero();
-                assertThat(result.getLedgerEntryIds()).isEmpty();
+        assertThat(result.getWorkorderId()).isEqualTo(workorderId);
+        assertThat(result.getTotalItemsConsumed()).isZero();
+        assertThat(result.getLedgerEntryIds()).isEmpty();
     }
 
     // ─── CS3: consumePickedItems — pickTask NOT in PICKED status → exception ─────

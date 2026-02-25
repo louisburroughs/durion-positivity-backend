@@ -138,8 +138,8 @@ public class ReturnServiceImpl implements ReturnService {
             return;
         }
 
-        List<InventoryLedgerEntry> consumptionEntries =
-                inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+        List<InventoryLedgerEntry> consumptionEntries = inventoryLedgerEntryRepository
+                .findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                         item.getSkuId().toString(),
                         InventoryLedgerEventType.WORKORDER_CONSUMPTION,
                         workorderId.toString());
@@ -147,7 +147,7 @@ public class ReturnServiceImpl implements ReturnService {
         int totalConsumed = consumptionEntries.stream()
                 .map(InventoryLedgerEntry::getChangeInQuantity)
                 .filter(Objects::nonNull)
-            .mapToInt(value -> Math.abs(value.intValue()))
+                .mapToInt(value -> Math.abs(value.intValue()))
                 .sum();
 
         if (totalConsumed < item.getQuantityReturned()) {

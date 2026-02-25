@@ -35,7 +35,8 @@ public class PickListController {
     @EmitEvent(id = "INVENTORY_PICK_LIST_CREATE", apiVersion = "1")
     public ResponseEntity<PickListResponse> createPickList(@RequestBody CreatePickListRequest request) {
         PickListResponse response = pickListService.createPickList(request);
-        return ResponseEntity.created(URI.create("/v1/inventory/pick-lists/" + response.getPickListId())).body(response);
+        return ResponseEntity.created(URI.create("/v1/inventory/pick-lists/" + response.getPickListId()))
+                .body(response);
     }
 
     @GetMapping("/{pickListId}")
