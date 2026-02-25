@@ -276,8 +276,6 @@ public class CycleCountServiceImpl implements CycleCountService {
                                 .status(task.getStatus())
                                 .latestCountEntryId(task.getLatestCountEntryId())
                                 .countEntriesCount(task.getCountEntriesCount())
-                                .createdAt(task.getCreatedAt())
-                                .updatedAt(task.getUpdatedAt())
                                 .build();
         }
 

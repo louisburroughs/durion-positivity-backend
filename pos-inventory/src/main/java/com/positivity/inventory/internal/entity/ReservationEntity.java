@@ -5,14 +5,13 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,6 +21,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Table(name = "inventory_reservation")
@@ -29,6 +31,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class ReservationEntity {
 
     @Id
@@ -53,9 +56,11 @@ public class ReservationEntity {
     @Column(nullable = false)
     private ReservationStatus status;
 
+    @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
 
@@ -63,19 +68,4 @@ public class ReservationEntity {
     @Builder.Default
     private List<AllocationEntity> allocations = new ArrayList<>();
 
-    @PrePersist
-    protected void onCreate() {
-        Instant now = Instant.now();
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        if (updatedAt == null) {
-            updatedAt = now;
-        }
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = Instant.now();
-    }
 }

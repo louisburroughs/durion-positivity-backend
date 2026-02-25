@@ -85,7 +85,6 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                 .changeInQuantity(-Math.abs(item.getQuantity()))
                 .quantityAfter(0)
                 .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                .timestamp(Instant.now())
                 .notes("Consumed from pick task " + item.getPickTaskId() + " for workorder " + request.getWorkorderId())
                 .build();
     }

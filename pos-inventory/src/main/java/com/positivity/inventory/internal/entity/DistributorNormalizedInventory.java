@@ -1,7 +1,17 @@
 package com.positivity.inventory.internal.entity;
 
+import java.time.Instant;
+import java.util.UUID;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.positivity.shared.id.UUIDv7Id;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -10,11 +20,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import com.positivity.shared.id.UUIDv7Id;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Normalized distributor inventory state keyed by distributor and SKU.
@@ -28,6 +33,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class DistributorNormalizedInventory {
 
     @Id
@@ -60,7 +66,18 @@ public class DistributorNormalizedInventory {
 
     private String rawShipFromRegion;
 
-    @Column(nullable = false)
-    private Instant lastUpdatedAt;
+    /**
+     * Timestamp when the task was created.
+     */
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    /**
+     * Timestamp of the last update to this task.
+     */
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
 }

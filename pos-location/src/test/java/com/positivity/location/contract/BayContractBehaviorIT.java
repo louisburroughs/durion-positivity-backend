@@ -8,8 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.internal.entity.BayEntity;
 import com.positivity.location.internal.entity.Location;
+import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
+import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,8 +28,8 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 class BayContractBehaviorIT extends BaseContractIntegrationTest {
 
-    private static final UUID LOCATION_ID = UUID.nameUUIDFromBytes("101".getBytes());
-    private static final UUID EXISTING_BAY_ID = UUID.nameUUIDFromBytes("201".getBytes());
+    private UUID locationId;
+    private UUID existingBayId;
 
     @Autowired
     private MockMvc mockMvc;
@@ -38,35 +40,46 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private BayRepository bayRepository;
 
+    @Autowired
+    private ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+
     @BeforeEach
     void setUpData() {
         bayRepository.deleteAll();
         locationRepository.deleteAll();
+        serviceLocationCapabilityRepository.deleteAll();
 
         Location location = Location.builder()
-                .id(LOCATION_ID)
                 .name("Main Service Center")
                 .code("LOC-101")
                 .status("ACTIVE")
                 .active(true)
                 .build();
-        locationRepository.save(location);
+        location = locationRepository.save(location);
+        locationId = location.getId();
 
         BayEntity existingBay = BayEntity.builder()
-                .id(EXISTING_BAY_ID)
-                .locationId(LOCATION_ID)
+                .locationId(locationId)
                 .name("Lane-Seed")
                 .bayType("GENERAL_SERVICE")
                 .status("ACTIVE")
                 .maxConcurrentVehicles(1)
                 .build();
-        bayRepository.save(existingBay);
+        existingBay = bayRepository.save(existingBay);
+        existingBayId = existingBay.getId();
+
+        serviceLocationCapabilityRepository.save(ServiceLocationCapabilityEntity.builder()
+                .code("CAP-TIRE-ROTATION")
+                .name("Tire Rotation")
+                .active(true)
+                .build());
     }
 
     @AfterEach
     void cleanUp() {
         bayRepository.deleteAll();
         locationRepository.deleteAll();
+        serviceLocationCapabilityRepository.deleteAll();
     }
 
     @Test
@@ -85,7 +98,7 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(withGatewayAuth(post("/v1/locations/{locationId}/bays", 101)
+        mockMvc.perform(withGatewayAuth(post("/v1/locations/{locationId}/bays", locationId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload)))
                 .andExpect(status().isCreated());
@@ -102,7 +115,7 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(withGatewayAuth(post("/v1/locations/{locationId}/bays", 101)
+        mockMvc.perform(withGatewayAuth(post("/v1/locations/{locationId}/bays", locationId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload)))
                 .andExpect(status().isBadRequest());
@@ -122,11 +135,11 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(withGatewayAuth(post("/v1/locations/{locationId}/bays", 101)
+        mockMvc.perform(withGatewayAuth(post("/v1/locations/{locationId}/bays", locationId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload)));
 
-        mockMvc.perform(withGatewayAuth(post("/v1/locations/{locationId}/bays", 101)
+        mockMvc.perform(withGatewayAuth(post("/v1/locations/{locationId}/bays", locationId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload)))
                 .andExpect(status().isConflict());
@@ -135,7 +148,7 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("#77 - GET /v1/locations/{locationId}/bays list and filter returns 200")
     void listBays_withFilters_returnsOk() throws Exception {
-        mockMvc.perform(withGatewayAuth(get("/v1/locations/{locationId}/bays", 101)
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/{locationId}/bays", locationId)
                 .param("status", "ACTIVE")
                 .param("bayType", "TIRE_SERVICE")))
                 .andExpect(status().isOk());
@@ -144,14 +157,15 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("#77 - GET /v1/locations/{locationId}/bays/{bayId} returns 200 when found")
     void getBay_whenFound_returnsOk() throws Exception {
-        mockMvc.perform(withGatewayAuth(get("/v1/locations/{locationId}/bays/{bayId}", 101, 201)))
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/{locationId}/bays/{bayId}", locationId, existingBayId)))
                 .andExpect(status().isOk());
     }
 
     @Test
     @DisplayName("#77 - GET /v1/locations/{locationId}/bays/{bayId} returns 404 when not found")
     void getBay_whenNotFound_returnsNotFound() throws Exception {
-        mockMvc.perform(withGatewayAuth(get("/v1/locations/{locationId}/bays/{bayId}", 101, 999999)))
+        mockMvc.perform(withGatewayAuth(
+                get("/v1/locations/{locationId}/bays/{bayId}", locationId, UUID.randomUUID())))
                 .andExpect(status().isNotFound());
     }
 
@@ -165,7 +179,7 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(withGatewayAuth(patch("/v1/locations/{locationId}/bays/{bayId}", 101, 201)
+        mockMvc.perform(withGatewayAuth(patch("/v1/locations/{locationId}/bays/{bayId}", locationId, existingBayId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload)))
                 .andExpect(status().isOk());
