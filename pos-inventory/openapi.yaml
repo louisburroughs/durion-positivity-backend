@@ -217,15 +217,21 @@ paths:
         "201":
           description: Adjustment request created
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentRequestResponse"
         "400":
           description: Validation failure
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AdjustmentRequestResponse"
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "403":
+          description: User lacks required create permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/adjustments/{adjustmentRequestId}/approve:
     post:
       tags:
@@ -244,8 +250,36 @@ paths:
       responses:
         "400":
           description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Adjustment approved
+        "403":
+          description: User lacks required approval permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "404":
+          description: Referenced resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "409":
+          description: Adjustment request is in a conflicting state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "422":
+          description: Business rule validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
   /api/v1/inventory/replenishment/policies:
     get:
       tags:
@@ -668,12 +702,14 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: storageLocationId
         in: query
         description: Storage location identifier (optional; narrows to sub-location)
         required: false
         schema:
           type: string
+          format: uuid
       responses:
         "200":
           description: Availability view returned
@@ -681,12 +717,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AvailabilityView"
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "403":
+          description: User lacks required read permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "404":
           description: Product SKU or location not found
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AvailabilityView"
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
   /api/v1/inventory/replenishment/tasks:
     get:
       tags:
@@ -875,10 +929,12 @@ components:
       properties:
         productSku:
           type: string
-        locationId:
+        fromLocationId:
           type: string
+          format: uuid
         toLocationId:
           type: string
+          format: uuid
         movementType:
           type: string
           enum:
@@ -897,7 +953,7 @@ components:
         sourceTransactionId:
           type: string
       required:
-      - locationId
+      - fromLocationId
       - movementType
       - productSku
       - quantity
@@ -957,6 +1013,7 @@ components:
           type: string
         locationId:
           type: string
+          format: uuid
         quantity:
           type: integer
           format: int32
@@ -979,6 +1036,7 @@ components:
           type: string
         locationId:
           type: string
+          format: uuid
         quantity:
           type: integer
           format: int32
@@ -986,11 +1044,29 @@ components:
           type: string
         status:
           type: string
+    InventoryErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        code:
+          type: string
+        message:
+          type: string
+        context:
+          type: object
+          additionalProperties: {}
+      required:
+      - code
+      - message
+      - timestamp
     CreateReplenishmentPolicyRequest:
       type: object
       properties:
         locationId:
           type: string
+          format: uuid
         itemSKU:
           type: string
         minimumQuantity:
@@ -1015,6 +1091,7 @@ components:
           type: string
         locationId:
           type: string
+          format: uuid
         itemSKU:
           type: string
         minimumQuantity:
@@ -1032,8 +1109,10 @@ components:
           type: string
         sourceLocationId:
           type: string
+          format: uuid
         destinationLocationId:
           type: string
+          format: uuid
         quantity:
           type: integer
           format: int32
@@ -1064,8 +1143,10 @@ components:
           type: string
         sourceLocationId:
           type: string
+          format: uuid
         destinationLocationId:
           type: string
+          format: uuid
         quantityMoved:
           type: integer
           format: int32
@@ -1091,14 +1172,19 @@ components:
           format: int32
         sourceLocationId:
           type: string
+          format: uuid
         suggestedDestinationLocationId:
           type: string
+          format: uuid
         originalSuggestedLocationId:
           type: string
+          format: uuid
         finalSuggestedLocationId:
           type: string
+          format: uuid
         actualDestinationLocationId:
           type: string
+          format: uuid
         fallbackReason:
           type: string
         status:
@@ -1408,6 +1494,7 @@ components:
       properties:
         locationId:
           type: string
+          format: uuid
         locationName:
           type: string
         onHandQuantity:
@@ -1423,8 +1510,10 @@ components:
           type: string
         locationId:
           type: string
+          format: uuid
         storageLocationId:
           type: string
+          format: uuid
         onHandQuantity:
           type: integer
           format: int32
@@ -1448,8 +1537,10 @@ components:
           format: int32
         sourceLocationId:
           type: string
+          format: uuid
         destinationLocationId:
           type: string
+          format: uuid
         status:
           type: string
         triggerType:

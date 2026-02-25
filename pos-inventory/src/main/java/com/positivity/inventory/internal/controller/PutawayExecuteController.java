@@ -18,7 +18,7 @@ import com.positivity.inventory.service.PutawayExecuteService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/v1/inventory/putaway")
+@RequestMapping("/v1/inventory/putaway")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('inventory:picking:manage')")
 public class PutawayExecuteController {

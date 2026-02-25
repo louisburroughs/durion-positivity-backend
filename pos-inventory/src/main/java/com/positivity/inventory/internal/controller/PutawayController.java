@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/v1/inventory/putaway/tasks")
+@RequestMapping("/v1/inventory/putaway/tasks")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create')")
 public class PutawayController {

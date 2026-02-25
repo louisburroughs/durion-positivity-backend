@@ -3,10 +3,14 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
+import com.positivity.inventory.internal.dto.InventoryErrorResponse;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
 import com.positivity.inventory.service.StockMovementService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -59,8 +63,11 @@ public class StockMovementController {
     @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_CREATE", apiVersion = "1")
     @Operation(summary = "Create adjustment request", description = "Creates a pending adjustment request for approval before posting to the inventory ledger.")
-    @ApiResponse(responseCode = "201", description = "Adjustment request created")
-    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Adjustment request created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AdjustmentRequestResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "User lacks required create permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    })
     public ResponseEntity<AdjustmentRequestResponse> createAdjustmentRequest(
             @Valid @RequestBody CreateAdjustmentRequestDto request,
             Principal principal) {
@@ -76,8 +83,14 @@ public class StockMovementController {
     @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
     @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_APPROVE", apiVersion = "1")
     @Operation(summary = "Approve adjustment request", description = "Approves a pending adjustment request and posts the resulting movement to the inventory ledger.")
-    @ApiResponse(responseCode = "200", description = "Adjustment approved")
-    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Adjustment approved"),
+            @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "User lacks required approval permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Referenced resource not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Adjustment request is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "422", description = "Business rule validation failed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    })
     public ResponseEntity<Void> approveAdjustmentRequest(
             @PathVariable UUID adjustmentRequestId,
             Principal principal) {

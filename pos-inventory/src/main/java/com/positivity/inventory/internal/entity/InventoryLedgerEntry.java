@@ -97,21 +97,21 @@ public class InventoryLedgerEntry {
      * `locationId` and `toLocationId` are intentionally the same value.
      */
     @Column
-    private String locationId;
+    private UUID locationId;
 
     /**
      * Source location for TRANSFER movements.
      * Issue: CAP-215 Story #37
      */
     @Column
-    private String fromLocationId;
+    private UUID fromLocationId;
 
     /**
      * Destination location for TRANSFER movements.
      * Issue: CAP-215 Story #37
      */
     @Column
-    private String toLocationId;
+    private UUID toLocationId;
 
     /**
      * Mandatory reason code for ADJUST movements.

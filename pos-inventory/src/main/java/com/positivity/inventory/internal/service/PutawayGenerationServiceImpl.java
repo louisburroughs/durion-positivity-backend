@@ -22,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PutawayGenerationServiceImpl implements PutawayGenerationService {
 
-    private static final String DEFAULT_LOCATION = "DEFAULT-LOCATION";
-    private static final String STAGING_LOCATION = "STAGING";
+    private static final UUID DEFAULT_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID STAGING_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
     private final PutawayRuleRepository putawayRuleRepository;
     private final PutawayTaskRepository putawayTaskRepository;
@@ -34,7 +34,7 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
         UUID sourceReceiptId = parseRequiredUuid(request.getSourceReceiptId(), "sourceReceiptId");
 
         List<PutawayRule> enabledRules = putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc();
-        String suggestedDestination = enabledRules.isEmpty()
+        UUID suggestedDestination = enabledRules.isEmpty()
                 ? DEFAULT_LOCATION
                 : enabledRules.get(0).getDestinationLocationId();
 

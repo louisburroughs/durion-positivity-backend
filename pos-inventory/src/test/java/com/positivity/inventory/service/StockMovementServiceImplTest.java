@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
+import com.positivity.inventory.internal.dto.InventoryLedgerEntryResponse;
 import com.positivity.inventory.internal.entity.InventoryAdjustmentRequest;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
@@ -30,6 +31,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class StockMovementServiceImplTest {
 
+    private static final UUID LOC_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID LOC_2 = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID LOC_9 = UUID.fromString("99999999-9999-9999-9999-999999999999");
+
     @Mock
     private InventoryLedgerEntryRepository ledgerRepository;
 
@@ -46,7 +51,7 @@ class StockMovementServiceImplTest {
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
                 .thenReturn(10);
 
-        InventoryLedgerEntry result = service.recordMovement(request, "actor-1");
+        InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
         assertThat(result.getChangeInQuantity()).isEqualTo(5);
@@ -60,7 +65,7 @@ class StockMovementServiceImplTest {
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
                 .thenReturn(10);
 
-        InventoryLedgerEntry result = service.recordMovement(request, "actor-1");
+        InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_ISSUE);
         assertThat(result.getChangeInQuantity()).isEqualTo(-4);
@@ -118,9 +123,9 @@ class StockMovementServiceImplTest {
     void recordMovement_transfer_savesTransferInAndTransferOut_withLocations() {
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.TRANSFER, 6);
-        request.setToLocationId("LOC-2");
-        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), "LOC-2")).thenReturn(20);
-        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), "LOC-1")).thenReturn(20);
+        request.setToLocationId(LOC_2);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2)).thenReturn(20);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1)).thenReturn(20);
 
         service.recordMovement(request, "actor-1");
 
@@ -130,19 +135,19 @@ class StockMovementServiceImplTest {
 
         InventoryLedgerEntry transferIn = savedEntries.get(0);
         assertThat(transferIn.getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_IN);
-        assertThat(transferIn.getLocationId()).isEqualTo("LOC-2");
-        assertThat(transferIn.getFromLocationId()).isEqualTo("LOC-1");
-        assertThat(transferIn.getToLocationId()).isEqualTo("LOC-2");
+        assertThat(transferIn.getLocationId()).isEqualTo(LOC_2);
+        assertThat(transferIn.getFromLocationId()).isEqualTo(LOC_1);
+        assertThat(transferIn.getToLocationId()).isEqualTo(LOC_2);
         assertThat(transferIn.getChangeInQuantity()).isEqualTo(6);
 
         InventoryLedgerEntry transferOut = savedEntries.get(1);
         assertThat(transferOut.getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_OUT);
-        assertThat(transferOut.getLocationId()).isEqualTo("LOC-1");
-        assertThat(transferOut.getFromLocationId()).isEqualTo("LOC-1");
-        assertThat(transferOut.getToLocationId()).isEqualTo("LOC-2");
+        assertThat(transferOut.getLocationId()).isEqualTo(LOC_1);
+        assertThat(transferOut.getFromLocationId()).isEqualTo(LOC_1);
+        assertThat(transferOut.getToLocationId()).isEqualTo(LOC_2);
         assertThat(transferOut.getChangeInQuantity()).isEqualTo(-6);
-        verify(ledgerRepository).calculateOnHandQuantityAtLocation("SKU-123", "LOC-2");
-        verify(ledgerRepository).calculateOnHandQuantityAtLocation("SKU-123", "LOC-1");
+        verify(ledgerRepository).calculateOnHandQuantityAtLocation("SKU-123", LOC_2);
+        verify(ledgerRepository).calculateOnHandQuantityAtLocation("SKU-123", LOC_1);
     }
 
     @Test
@@ -164,7 +169,7 @@ class StockMovementServiceImplTest {
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
                 .thenReturn(8);
 
-        InventoryLedgerEntry result = service.recordMovement(request, "actor-1");
+        InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.PUTAWAY);
         assertThat(result.getChangeInQuantity()).isEqualTo(3);
@@ -178,7 +183,7 @@ class StockMovementServiceImplTest {
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
                 .thenReturn(5);
 
-        InventoryLedgerEntry result = service.recordMovement(request, "actor-1");
+        InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.RETURN_TO_STOCK);
         assertThat(result.getChangeInQuantity()).isEqualTo(2);
@@ -222,7 +227,7 @@ class StockMovementServiceImplTest {
         AdjustmentRequestResponse result = service.createAdjustmentRequest(request, "requestor-1");
 
         assertThat(result.getProductSku()).isEqualTo("SKU-123");
-        assertThat(result.getLocationId()).isEqualTo("LOC-1");
+        assertThat(result.getLocationId()).isEqualTo(LOC_1);
         assertThat(result.getQuantity()).isEqualTo(11);
         assertThat(result.getReasonCode()).isEqualTo("CYCLE_COUNT");
     }
@@ -306,8 +311,8 @@ class StockMovementServiceImplTest {
     private RecordMovementRequest baseMovementRequest(MovementType movementType, int quantity) {
         return RecordMovementRequest.builder()
                 .productSku("SKU-123")
-                .fromLocationId("LOC-1")
-                .toLocationId("LOC-9")
+                .fromLocationId(LOC_1)
+                .toLocationId(LOC_9)
                 .movementType(movementType)
                 .quantity(quantity)
                 .unitOfMeasure("EACH")
@@ -318,7 +323,7 @@ class StockMovementServiceImplTest {
     private CreateAdjustmentRequestDto baseAdjustmentRequest(int quantity) {
         return CreateAdjustmentRequestDto.builder()
                 .productSku("SKU-123")
-                .locationId("LOC-1")
+                .locationId(LOC_1)
                 .quantity(quantity)
                 .reasonCode("CYCLE_COUNT")
                 .unitOfMeasure("EACH")
@@ -329,7 +334,7 @@ class StockMovementServiceImplTest {
         return InventoryAdjustmentRequest.builder()
                 .adjustmentRequestId(UUID.randomUUID())
                 .productSku("SKU-123")
-                .locationId("LOC-1")
+                .locationId(LOC_1)
                 .quantity(quantity)
                 .reasonCode("CYCLE_COUNT")
                 .unitOfMeasure("EACH")

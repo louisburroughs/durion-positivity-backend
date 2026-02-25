@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
+import com.positivity.inventory.internal.dto.InventoryLedgerEntryResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import org.jspecify.annotations.NonNull;
 
@@ -43,7 +44,7 @@ public interface StockMovementService {
      *                                                                                on-hand
      */
     @NonNull
-    InventoryLedgerEntry recordMovement(@NonNull RecordMovementRequest request, @NonNull String actorUserId);
+    InventoryLedgerEntryResponse recordMovement(@NonNull RecordMovementRequest request, @NonNull String actorUserId);
 
     /**
      * Creates a draft adjustment request pending approval.

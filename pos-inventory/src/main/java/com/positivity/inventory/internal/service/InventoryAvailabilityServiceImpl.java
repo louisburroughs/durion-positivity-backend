@@ -30,8 +30,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class InventoryAvailabilityServiceImpl implements InventoryAvailabilityService {
 
-    private static final String DEFAULT_LOCATION = "DEFAULT";
-
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     public InventoryAvailabilityServiceImpl(InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
@@ -58,8 +56,9 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             return List.of();
         }
 
-        Map<String, List<InventoryLedgerEntry>> entriesByLocation = ledgerEntries.stream()
+        Map<UUID, List<InventoryLedgerEntry>> entriesByLocation = ledgerEntries.stream()
                 .filter(this::isProcessableEntry)
+                .filter(ledgerEntry -> ledgerEntry.getLocationId() != null)
                 .collect(Collectors.groupingBy(this::resolveLocationId));
 
         return entriesByLocation.entrySet().stream()
@@ -72,15 +71,15 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     @Transactional(readOnly = true)
     public AvailabilityView queryAvailability(
             @NonNull String productSku,
-            @NonNull String locationId,
-            @Nullable String storageLocationId) {
+            @NonNull UUID locationId,
+            @Nullable UUID storageLocationId) {
         List<InventoryLedgerEntry> allProductEntries = inventoryLedgerEntryRepository
                 .findByStockItemIdOrderByTimestampAsc(productSku);
         if (allProductEntries.isEmpty()) {
             throw new ProductNotFoundException(productSku);
         }
 
-        String scopeLocationId = (storageLocationId != null && !storageLocationId.isBlank())
+        UUID scopeLocationId = storageLocationId != null
                 ? storageLocationId
                 : locationId;
         List<InventoryLedgerEntry> locationEntries = inventoryLedgerEntryRepository
@@ -111,9 +110,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         return AvailabilityView.builder()
                 .productSku(productSku)
                 .locationId(locationId)
-                .storageLocationId(storageLocationId != null && !storageLocationId.isBlank()
-                        ? storageLocationId
-                        : null)
+                .storageLocationId(storageLocationId)
                 .onHandQuantity(onHand)
                 .allocatedQuantity(allocatedQty)
                 .availableToPromiseQuantity(onHand - allocatedQty)
@@ -134,14 +131,11 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         return true;
     }
 
-    private String resolveLocationId(InventoryLedgerEntry ledgerEntry) {
-        if (ledgerEntry.getLocationId() == null || ledgerEntry.getLocationId().isBlank()) {
-            return DEFAULT_LOCATION;
-        }
+    private UUID resolveLocationId(InventoryLedgerEntry ledgerEntry) {
         return ledgerEntry.getLocationId();
     }
 
-    private LocationAvailabilityDto toLocationAvailability(String locationId, List<InventoryLedgerEntry> entries) {
+    private LocationAvailabilityDto toLocationAvailability(UUID locationId, List<InventoryLedgerEntry> entries) {
         int onHandQuantity = entries.stream()
                 .filter(ledgerEntry -> ledgerEntry.getEventType() != null && ledgerEntry.getEventType().affectsOnHand())
                 .mapToInt(ledgerEntry -> ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity()
@@ -156,7 +150,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
 
         return LocationAvailabilityDto.builder()
                 .locationId(locationId)
-                .locationName(locationId)
+                .locationName(locationId.toString())
                 .onHandQuantity(onHandQuantity)
                 .availableToPromiseQuantity(atpQuantity)
                 .build();

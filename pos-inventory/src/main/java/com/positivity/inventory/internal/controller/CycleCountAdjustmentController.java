@@ -43,7 +43,7 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  */
 @RestController
-@RequestMapping("/api/v1/inventory/cycleCountAdjustments")
+@RequestMapping("/v1/inventory/cycleCountAdjustments")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Cycle Count Adjustments", description = "Manage inventory adjustments from cycle counts")

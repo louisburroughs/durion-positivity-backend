@@ -38,7 +38,7 @@ public class PutawayRule {
     private String criteria;
 
     @Column(nullable = false)
-    private String destinationLocationId;
+    private UUID destinationLocationId;
 
     @Column(nullable = false)
     @Builder.Default

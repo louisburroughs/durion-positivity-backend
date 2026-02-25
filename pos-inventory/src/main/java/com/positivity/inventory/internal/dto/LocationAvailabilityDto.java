@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 /**
  * Per-location availability projection for inventory availability queries.
  *
@@ -15,7 +17,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LocationAvailabilityDto {
-    private String locationId;
+    private UUID locationId;
     private String locationName;
     private int onHandQuantity;
     private int availableToPromiseQuantity;

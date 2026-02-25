@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.exception;
 
+import java.util.UUID;
+
 /**
  * Thrown when a destination location is at full capacity.
  * 
@@ -11,11 +13,11 @@ package com.positivity.inventory.internal.exception;
 public class LocationAtCapacityException extends PutawayValidationException {
     public static final String ERROR_CODE = "LOCATION_AT_CAPACITY";
     
-    private final String locationId;
+    private final UUID locationId;
     private final int currentCapacity;
     private final int maxCapacity;
     
-    public LocationAtCapacityException(String locationId, int currentCapacity, int maxCapacity) {
+    public LocationAtCapacityException(UUID locationId, int currentCapacity, int maxCapacity) {
         super(ERROR_CODE, String.format(
             "Location %s is at full capacity (%d/%d units)", 
             locationId, currentCapacity, maxCapacity));
@@ -24,7 +26,7 @@ public class LocationAtCapacityException extends PutawayValidationException {
         this.maxCapacity = maxCapacity;
     }
     
-    public String getLocationId() {
+    public UUID getLocationId() {
         return locationId;
     }
     

@@ -47,7 +47,7 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
      * @return list of ledger entries ordered by timestamp ascending
      */
     // Issue: CAP-215 Story #36
-    List<InventoryLedgerEntry> findByStockItemIdAndLocationIdOrderByTimestampAsc(String stockItemId, String locationId);
+    List<InventoryLedgerEntry> findByStockItemIdAndLocationIdOrderByTimestampAsc(String stockItemId, UUID locationId);
 
     /**
      * Find ledger entry by adjustment ID.
@@ -85,7 +85,7 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
      * @param locationId  the location bucket for quantity calculations
      * @return current on-hand quantity at the location
      */
-    default Integer calculateOnHandQuantityAtLocation(String stockItemId, String locationId) {
+    default Integer calculateOnHandQuantityAtLocation(String stockItemId, UUID locationId) {
         return calculateOnHandQuantityAtLocationForEventTypes(stockItemId, locationId,
                 InventoryLedgerEventType.onHandAffectingTypes());
     }
@@ -98,6 +98,6 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
               AND e.eventType IN :eventTypes
             """)
     Integer calculateOnHandQuantityAtLocationForEventTypes(@Param("stockItemId") String stockItemId,
-            @Param("locationId") String locationId,
+            @Param("locationId") UUID locationId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 }

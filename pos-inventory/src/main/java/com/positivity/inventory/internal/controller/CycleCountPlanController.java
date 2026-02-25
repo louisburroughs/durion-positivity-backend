@@ -21,7 +21,7 @@ import com.positivity.inventory.service.CycleCountPlanService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/v1/inventory/cycleCountPlans")
+@RequestMapping("/v1/inventory/cycleCountPlans")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyAuthority('inventory:adjustment:create','inventory:availability:read')")
 public class CycleCountPlanController {

@@ -15,7 +15,7 @@ import java.util.UUID;
 public class AdjustmentRequestResponse {
     UUID adjustmentRequestId;
     String productSku;
-    String locationId;
+    UUID locationId;
     Integer quantity;
     String reasonCode;
     String status;

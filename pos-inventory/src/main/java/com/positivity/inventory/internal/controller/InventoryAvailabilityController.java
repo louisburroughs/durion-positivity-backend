@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.AvailabilityView;
+import com.positivity.inventory.internal.dto.InventoryErrorResponse;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.dto.InventoryAvailabilityResponse;
 import com.positivity.inventory.service.InventoryAvailabilityService;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -48,13 +50,18 @@ public class InventoryAvailabilityController {
     @GetMapping("/query")
     @EmitEvent(id = "INVENTORY_AVAILABILITY_QUERY", apiVersion = "1")
     @Operation(summary = "Query inventory availability by SKU and location", description = "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location. storageLocationId is optional to narrow the scope to a sub-location.")
-    @ApiResponse(responseCode = "200", description = "Availability view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AvailabilityView.class)))
-    @ApiResponse(responseCode = "404", description = "Product SKU or location not found")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Availability view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AvailabilityView.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Product SKU or location not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    })
     // Issue: CAP-215 Story #36
     public ResponseEntity<AvailabilityView> queryAvailabilityBySku(
             @Parameter(description = "Product SKU", required = true) @RequestParam String productSku,
-            @Parameter(description = "Location identifier", required = true) @RequestParam String locationId,
-            @Parameter(description = "Storage location identifier (optional; narrows to sub-location)") @RequestParam(required = false) String storageLocationId) {
+            @Parameter(description = "Location identifier", required = true) @RequestParam UUID locationId,
+            @Parameter(description = "Storage location identifier (optional; narrows to sub-location)") @RequestParam(required = false) UUID storageLocationId) {
         log.info("GET /v1/inventory/availability/query productSku={} locationId={}", productSku, locationId);
         return ResponseEntity.ok(
                 availabilityService.queryAvailability(productSku, locationId, storageLocationId));

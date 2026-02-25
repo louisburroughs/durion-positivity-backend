@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.service;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
+import com.positivity.inventory.internal.dto.InventoryLedgerEntryResponse;
 import com.positivity.inventory.internal.entity.InventoryAdjustmentRequest;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
@@ -41,7 +42,7 @@ public class StockMovementServiceImpl implements StockMovementService {
 
     @Override
     @Transactional
-    public @NonNull InventoryLedgerEntry recordMovement(@NonNull RecordMovementRequest request,
+    public @NonNull InventoryLedgerEntryResponse recordMovement(@NonNull RecordMovementRequest request,
             @NonNull String actorUserId) {
         MovementType movementType = request.getMovementType();
 
@@ -56,7 +57,7 @@ public class StockMovementServiceImpl implements StockMovementService {
         }
 
         if (movementType == MovementType.TRANSFER) {
-            if (request.getToLocationId() == null || request.getToLocationId().isBlank()) {
+            if (request.getToLocationId() == null) {
                 throw new IllegalArgumentException("toLocationId is required for TRANSFER movements");
             }
 
@@ -99,7 +100,8 @@ public class StockMovementServiceImpl implements StockMovementService {
 
         log.debug("Recorded stock movement type={} sku={} actor={}", movementType, request.getProductSku(),
                 actorUserId);
-        return ledgerRepository.save(entry);
+        InventoryLedgerEntry savedEntry = ledgerRepository.save(entry);
+        return toResponse(savedEntry);
     }
 
     @Override
@@ -184,9 +186,30 @@ public class StockMovementServiceImpl implements StockMovementService {
                 || movementType == MovementType.TRANSFER;
     }
 
-    private int calculateQuantityAfter(String stockItemId, String locationId, int quantityDelta) {
+    private int calculateQuantityAfter(String stockItemId, UUID locationId, int quantityDelta) {
         Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId);
         int onHand = currentOnHand != null ? currentOnHand : 0;
         return onHand + quantityDelta;
+    }
+
+    private @NonNull InventoryLedgerEntryResponse toResponse(@NonNull InventoryLedgerEntry entry) {
+        return InventoryLedgerEntryResponse.builder()
+                .ledgerEntryId(entry.getLedgerEntryId())
+                .stockItemId(entry.getStockItemId())
+                .adjustmentId(entry.getAdjustmentId())
+                .eventType(entry.getEventType())
+                .changeInQuantity(entry.getChangeInQuantity())
+                .quantityAfter(entry.getQuantityAfter())
+                .unitCost(entry.getUnitCost())
+                .transactionUserId(entry.getTransactionUserId())
+                .timestamp(entry.getTimestamp())
+                .locationId(entry.getLocationId())
+                .fromLocationId(entry.getFromLocationId())
+                .toLocationId(entry.getToLocationId())
+                .reasonCode(entry.getReasonCode())
+                .sourceTransactionId(entry.getSourceTransactionId())
+                .unitOfMeasure(entry.getUnitOfMeasure())
+                .notes(entry.getNotes())
+                .build();
     }
 }
