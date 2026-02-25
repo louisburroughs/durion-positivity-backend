@@ -84,6 +84,13 @@ public enum InventoryLedgerEventType {
     GOODS_ISSUE(EventDirection.OUTBOUND, true),
 
     /**
+     * Inventory consumed from picked items to workorder execution.
+     * Direction: OUTBOUND (-)
+     * Affects On-Hand: YES
+     */
+    WORKORDER_CONSUMPTION(EventDirection.OUTBOUND, true),
+
+    /**
      * Inter-location transfer shipped to another location.
      * Direction: OUTBOUND (-)
      * Affects On-Hand: YES
