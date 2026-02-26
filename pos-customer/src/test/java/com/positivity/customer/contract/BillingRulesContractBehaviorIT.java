@@ -24,8 +24,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>
  * ADR compliance:
  * <ul>
- * <li>ADR-0002: CRM permissions — {@code crm:party:view}
- * (CrmPermissionRegistry.PARTY_VIEW)</li>
+ * <li>ADR-0025: Permission registration source is module
+ * {@code permissions.yaml}; enforced authority here is
+ * {@code crm:party:view}</li>
  * <li>ADR-0009: pos-customer owns billing rule surface; enforcement is caller
  * responsibility</li>
  * <li>ADR-0011 + ADR-0014: Auth via gateway headers
@@ -56,7 +57,7 @@ class BillingRulesContractBehaviorIT extends BaseContractIntegrationTest {
     private static final String TEST_USER = "billing-rules-test-user";
 
     /**
-     * Authority header value granting PARTY_VIEW per ADR-0002.
+     * Authority header value granting PARTY_VIEW (ADR-0025 policy).
      * Uses the canonical string form from CrmPermissionRegistry.
      */
     private static final String PARTY_VIEW_AUTH = "crm:party:view";

@@ -24,8 +24,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>
  * ADR compliance:
  * <ul>
- * <li>ADR-0002: CRM permissions — {@code crm:party:view}
- * (CrmPermissionRegistry.PARTY_VIEW)</li>
+ * <li>ADR-0025: Permission registration source is module
+ * {@code permissions.yaml}; enforced authority here is
+ * {@code crm:party:view}</li>
  * <li>ADR-0011 + ADR-0014: Auth via gateway headers
  * {@code X-Authorities: crm:party:view};
  * {@code GatewayAuthoritiesFilter} clears SecurityContextHolder when headers
@@ -51,7 +52,7 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
     /** X-User header value used for all authorized test requests. */
     private static final String TEST_USER = "snapshot-test-user";
 
-    /** X-Authorities header value granting PARTY_VIEW per ADR-0002. */
+    /** X-Authorities header value granting PARTY_VIEW (ADR-0025 policy). */
     private static final String PARTY_VIEW_AUTH = "crm:party:view";
 
     /**
