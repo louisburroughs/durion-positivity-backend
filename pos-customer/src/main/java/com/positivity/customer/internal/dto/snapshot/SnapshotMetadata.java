@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.dto.snapshot;
 
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -16,6 +17,16 @@ public class SnapshotMetadata {
     private Instant createdAt;
     @NonNull
     private String version;
+    /** Data source: CACHE or CRM_API. Null if not set. */
+    @Nullable
+    private String source;
+
+    /** True if this snapshot was served from a stale (expired) cache entry. */
+    private boolean stale;
+
+    /** When the cache entry went stale; only present when stale=true. */
+    @Nullable
+    private Instant staleSince;
 
     public SnapshotMetadata() {
     }
@@ -51,5 +62,31 @@ public class SnapshotMetadata {
 
     public void setVersion(@NonNull String version) {
         this.version = version;
+    }
+
+    @Nullable
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(@Nullable String source) {
+        this.source = source;
+    }
+
+    public boolean isStale() {
+        return stale;
+    }
+
+    public void setStale(boolean stale) {
+        this.stale = stale;
+    }
+
+    @Nullable
+    public Instant getStaleSince() {
+        return staleSince;
+    }
+
+    public void setStaleSince(@Nullable Instant staleSince) {
+        this.staleSince = staleSince;
     }
 }

@@ -20,6 +20,8 @@ public class CrmSnapshotDTO {
     private List<VehicleSummary> vehicles;
     @Nullable
     private BillingPreferences preferences;
+    @Nullable
+    private BillingRuleRef billingRules;
 
     /**
      * Vehicle summary within CRM snapshot context.
@@ -140,13 +142,14 @@ public class CrmSnapshotDTO {
     }
 
     public CrmSnapshotDTO(@NonNull SnapshotMetadata snapshotMetadata, @NonNull AccountSummary account,
-                          @NonNull List<ContactSummary> contacts, @NonNull List<VehicleSummary> vehicles,
-                          @Nullable BillingPreferences preferences) {
+            @NonNull List<ContactSummary> contacts, @NonNull List<VehicleSummary> vehicles,
+            @Nullable BillingPreferences preferences, @Nullable BillingRuleRef billingRules) {
         this.snapshotMetadata = snapshotMetadata;
         this.account = account;
         this.contacts = contacts;
         this.vehicles = vehicles;
         this.preferences = preferences;
+        this.billingRules = billingRules;
     }
 
     // Getters and Setters
@@ -194,5 +197,14 @@ public class CrmSnapshotDTO {
 
     public void setPreferences(@Nullable BillingPreferences preferences) {
         this.preferences = preferences;
+    }
+
+    @Nullable
+    public BillingRuleRef getBillingRules() {
+        return billingRules;
+    }
+
+    public void setBillingRules(@Nullable BillingRuleRef billingRules) {
+        this.billingRules = billingRules;
     }
 }
