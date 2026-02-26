@@ -17,7 +17,7 @@ public final class InventoryEventTypes {
 
         /**
          * All event type registrations for the inventory module.
-         * Total: 17 event types.
+         * Total: 20 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
