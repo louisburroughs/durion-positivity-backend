@@ -54,3 +54,7 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+
+pos:
+  people:
+    base-url: ${POS_PEOPLE_BASE_URL:http://localhost:8084}

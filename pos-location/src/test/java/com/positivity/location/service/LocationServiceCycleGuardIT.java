@@ -8,7 +8,6 @@ import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.ParentType;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
-import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,7 +77,6 @@ class LocationServiceCycleGuardIT {
 
     private Location createLocation(String name) {
         Location location = Location.builder()
-                .id(UUID.randomUUID())
                 .name(name)
                 .build();
         return locationRepository.save(location);

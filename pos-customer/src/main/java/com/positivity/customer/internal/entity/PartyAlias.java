@@ -5,7 +5,9 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -29,6 +31,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @Entity
 @Table(name = "party_alias")
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Alias mapping for merged party IDs to ensure ID resolvability")
 public class PartyAlias {
 
@@ -42,10 +45,15 @@ public class PartyAlias {
     @Schema(description = "ID of the party to redirect to (survivor)")
     private UUID targetPartyId;
 
-    @CreationTimestamp
+    @CreatedDate
     @Column(name = "created_at", updatable = false, nullable = false)
     @Schema(description = "Timestamp when the alias was created")
     private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    @Schema(description = "Timestamp when the alias was last updated")
+    private Instant updatedAt;
 
     /**
      * Creates a party alias for ID redirection.

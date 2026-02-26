@@ -1,0 +1,574 @@
+package com.positivity.customer.service;
+
+import com.positivity.customer.internal.config.CustomerCacheConfig;
+import com.positivity.customer.internal.client.PeopleClient;
+import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
+import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
+import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
+import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
+import com.positivity.customer.internal.dto.GetPartyResponse;
+import com.positivity.customer.internal.dto.MergePartiesRequest;
+import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.SearchPartiesRequest;
+import com.positivity.customer.internal.dto.SearchPartiesResponse;
+import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
+import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
+import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
+import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.Contact;
+import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ContactRepository;
+import com.positivity.customer.internal.service.PartyServiceImpl;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.Instant;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class PartyServiceImplTest {
+
+    @Mock
+    private CommercialPartyRepository partyRepository;
+    @Mock
+    private ContactRepository contactRepository;
+    @Mock
+    private CacheManager cacheManager;
+    @Mock
+    private Cache cache;
+    @Mock
+    private PeopleClient peopleClient;
+
+    private PartyServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        service = new PartyServiceImpl(partyRepository, contactRepository, cacheManager, peopleClient);
+    }
+
+    private CommercialParty party(UUID id) {
+        CommercialParty p = new CommercialParty();
+        p.setPartyId(id);
+        p.setPartyNumber("PARTY-001");
+        p.setLegalName("Acme Corp");
+        p.setDisplayName("Acme");
+        p.setPartyType(PartyType.COMMERCIAL);
+        p.setStatus(AccountStatus.ACTIVE);
+        p.setCreatedAt(Instant.now());
+        p.setModifiedAt(Instant.now());
+        p.setContacts(new HashSet<>());
+        p.setVehicleVins(new HashSet<>());
+        p.setExternalIdentifiers(new HashMap<>());
+        return p;
+    }
+
+    @Test
+    void buildSnapshotForParty_returnsNull_whenPartyNotFound() {
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(any())).thenReturn(null);
+        when(partyRepository.findByPartyId(any())).thenReturn(null);
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(UUID.randomUUID());
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void buildSnapshotForParty_returnsFreshSnapshot_onCacheMiss() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getSnapshotMetadata().getSource()).isEqualTo("CRM_API");
+        assertThat(result.getBillingRules()).isNotNull();
+        assertThat(result.getBillingRules().isPoRequired()).isFalse();
+        assertThat(result.getBillingRules().getPaymentTerms()).isEqualTo("Due on Receipt");
+        assertThat(result.getAccount()).isNotNull();
+        verify(cache).put(partyId, result);
+    }
+
+    @Test
+    void buildSnapshotForParty_returnsFromCache_onCacheHit() {
+        UUID partyId = UUID.randomUUID();
+
+        CrmSnapshotDTO cachedSnapshot = new CrmSnapshotDTO();
+        SnapshotMetadata metadata = new SnapshotMetadata();
+        metadata.setSource("CRM_API");
+        cachedSnapshot.setSnapshotMetadata(metadata);
+
+        Cache.ValueWrapper wrapper = mock(Cache.ValueWrapper.class);
+        when(wrapper.get()).thenReturn(cachedSnapshot);
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(wrapper);
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getSnapshotMetadata().getSource()).isEqualTo("CACHE");
+        verify(partyRepository, never()).findByPartyId(any());
+    }
+
+    @Test
+    void buildSnapshotForParty_handlesNullCache_gracefully() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getSnapshotMetadata().getSource()).isEqualTo("CRM_API");
+    }
+
+    @Test
+    void buildSnapshotForParty_handlesContactsWithPhoneAndEmail() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+
+        Contact c = new Contact();
+        c.setId(UUID.randomUUID());
+        c.setFirstName("Jane");
+        c.setLastName("Doe");
+        c.setPhoneNumber("555-1234");
+        c.setEmail("jane@acme.com");
+        c.setCommercialParty(p);
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getContacts()).hasSize(1);
+        assertThat(result.getContacts().getFirst().getName()).isEqualTo("Jane Doe");
+        assertThat(result.getContacts().getFirst().getPhoneNumbers()).hasSize(1);
+        assertThat(result.getContacts().getFirst().getEmailAddresses()).hasSize(1);
+    }
+
+    @Test
+    void buildSnapshotForParty_handlesBlankContactName() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+
+        Contact c = new Contact();
+        c.setId(UUID.randomUUID());
+        c.setFirstName(" ");
+        c.setLastName(null);
+        c.setCommercialParty(p);
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result.getContacts()).hasSize(1);
+        assertThat(result.getContacts().getFirst().getName()).isEqualTo("Unknown Contact");
+    }
+
+    @Test
+    void buildSnapshotForParty_usesLegalName_whenDisplayNameNullOrBlank() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+        p.setDisplayName(" ");
+        p.setLegalName("Legal Corp");
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result.getAccount().getAccountName()).isEqualTo("Legal Corp");
+    }
+
+    @Test
+    void findPartyById_delegatesToRepository() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        CommercialParty result = service.findPartyById(partyId);
+
+        assertThat(result).isSameAs(p);
+    }
+
+    @Test
+    void findContactsByParty_delegatesToRepository() {
+        CommercialParty p = party(UUID.randomUUID());
+        Contact c = new Contact();
+        c.setId(UUID.randomUUID());
+        c.setFirstName("Alex");
+        c.setLastName("Rivera");
+        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
+
+        List<Contact> result = service.findContactsByParty(p);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getFirstName()).isEqualTo("Alex");
+    }
+
+    @Test
+    void createCommercialAccount_throwsBadRequest_whenLegalNameMissing() {
+        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
+        request.setLegalName(" ");
+
+        assertThatThrownBy(() -> service.createCommercialAccount(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("legalName is required");
+    }
+
+    @Test
+    void createCommercialAccount_savesPartyAndContact() {
+        UUID partyId = UUID.randomUUID();
+        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
+        request.setLegalName("Acme Legal");
+        request.setDisplayName("Acme Display");
+        request.setTaxId("TAX-1");
+        request.setBillingTermsId("NET30");
+        request.setEmail("billing@acme.com");
+        request.setPhone("555-0001");
+        request.setExternalIdentifiers(new HashMap<>(Collections.singletonMap("erp", "A-100")));
+
+        CommercialParty saved = party(partyId);
+        saved.setLegalName("Acme Legal");
+        saved.setCreatedAt(Instant.now());
+        when(partyRepository.save(any(CommercialParty.class))).thenReturn(saved);
+
+        var response = service.createCommercialAccount(request);
+
+        assertThat(response.getPartyId()).isEqualTo(partyId.toString());
+        assertThat(response.getLegalName()).isEqualTo("Acme Legal");
+        assertThat(response.getStatus()).isEqualTo(AccountStatus.ACTIVE.toString());
+
+        ArgumentCaptor<CommercialParty> partyCaptor = ArgumentCaptor.forClass(CommercialParty.class);
+        verify(partyRepository).save(partyCaptor.capture());
+        assertThat(partyCaptor.getValue().getPartyType()).isEqualTo(PartyType.COMMERCIAL);
+        assertThat(partyCaptor.getValue().getPartyNumber()).startsWith("PARTY-");
+        assertThat(partyCaptor.getValue().getExternalIdentifiers()).containsEntry("erp", "A-100");
+        verify(contactRepository).save(any(Contact.class));
+    }
+
+    @Test
+    void getParty_returnsMappedResponse() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+        p.setTaxId("TX-1");
+        p.setBillingTermsId("NET45");
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        GetPartyResponse response = service.getParty(partyId);
+
+        assertThat(response.getPartyId()).isEqualTo(partyId.toString());
+        assertThat(response.getPartyType()).isEqualTo("COMMERCIAL");
+        assertThat(response.getTaxId()).isEqualTo("TX-1");
+        assertThat(response.getBillingTermsId()).isEqualTo("NET45");
+    }
+
+    @Test
+    void getParty_throwsNotFound_whenMissing() {
+        UUID partyId = UUID.randomUUID();
+        when(partyRepository.findByPartyId(partyId)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.getParty(partyId))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404 NOT_FOUND")
+                .hasMessageContaining("party not found");
+    }
+
+    @Test
+    void getContactsWithRoles_returnsContacts() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+        Contact c = new Contact();
+        c.setId(UUID.randomUUID());
+        c.setFirstName("Mary");
+        c.setLastName("Jane");
+        c.setEmail("mary@acme.com");
+        c.setPhoneNumber("111-2222");
+        c.setCommercialParty(p);
+
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
+
+        GetContactsWithRolesResponse response = service.getContactsWithRoles(partyId);
+
+        assertThat(response.getPartyId()).isEqualTo(partyId.toString());
+        assertThat(response.getContacts()).hasSize(1);
+        assertThat(response.getContacts().getFirst().getContactName()).isEqualTo("Mary Jane");
+        assertThat(response.getContacts().getFirst().getHasPrimaryEmail()).isTrue();
+    }
+
+    @Test
+    void searchParties_filtersByNameAndTaxId() {
+        CommercialParty match = party(UUID.randomUUID());
+        match.setLegalName("Acme Industrial");
+        match.setDisplayName("Acme");
+        match.setTaxId("T1");
+
+        CommercialParty miss = party(UUID.randomUUID());
+        miss.setLegalName("Other Corp");
+        miss.setDisplayName("Other");
+        miss.setTaxId("T2");
+
+        when(partyRepository.findAll()).thenReturn(List.of(match, miss));
+
+        SearchPartiesRequest request = new SearchPartiesRequest();
+        request.setName("acme");
+        request.setTaxId("T1");
+
+        SearchPartiesResponse response = service.searchParties(request);
+
+        assertThat(response.getTotalCount()).isEqualTo(1);
+        assertThat(response.getResults()).hasSize(1);
+        assertThat(response.getResults().getFirst().getLegalName()).isEqualTo("Acme Industrial");
+    }
+
+    @Test
+    void mergeParties_mergesContactsIdentifiersAndVins() {
+        UUID survivorId = UUID.randomUUID();
+        UUID loserId = UUID.randomUUID();
+        CommercialParty survivor = party(survivorId);
+        CommercialParty loser = party(loserId);
+
+        Contact loserContact = new Contact();
+        loserContact.setId(UUID.randomUUID());
+        loserContact.setFirstName("Loser");
+        loserContact.setLastName("Contact");
+        loserContact.setCommercialParty(loser);
+        loser.getContacts().add(loserContact);
+        loser.getExternalIdentifiers().put("legacy", "L-1");
+        loser.getVehicleVins().add("VIN-MERGE");
+
+        when(partyRepository.findByPartyId(survivorId)).thenReturn(survivor);
+        when(partyRepository.findByPartyId(loserId)).thenReturn(loser);
+
+        MergePartiesRequest request = new MergePartiesRequest();
+        request.setLosingPartyId(loserId.toString());
+        request.setJustification("duplicate");
+
+        MergePartiesResponse response = service.mergeParties(survivorId, request);
+
+        assertThat(response.getStatus()).isEqualTo("COMPLETED");
+        assertThat(survivor.getContacts()).hasSize(1);
+        assertThat(survivor.getExternalIdentifiers()).containsEntry("legacy", "L-1");
+        assertThat(survivor.getVehicleVins()).contains("VIN-MERGE");
+        assertThat(loser.getStatus()).isEqualTo(AccountStatus.MERGED);
+        verify(partyRepository).save(survivor);
+        verify(partyRepository).save(loser);
+    }
+
+    @Test
+    void mergeParties_throwsBadRequest_forInvalidLosingPartyId() {
+        UUID survivorId = UUID.randomUUID();
+        CommercialParty survivor = party(survivorId);
+        when(partyRepository.findByPartyId(survivorId)).thenReturn(survivor);
+
+        MergePartiesRequest request = new MergePartiesRequest();
+        request.setLosingPartyId("not-a-uuid");
+        request.setJustification("duplicate");
+
+        assertThatThrownBy(() -> service.mergeParties(survivorId, request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("Invalid UUID format");
+    }
+
+    @Test
+    void mergeParties_throwsBadRequest_whenMergingSelf() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty party = party(partyId);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(party);
+
+        MergePartiesRequest request = new MergePartiesRequest();
+        request.setLosingPartyId(partyId.toString());
+        request.setJustification("duplicate");
+
+        assertThatThrownBy(() -> service.mergeParties(partyId, request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Cannot merge party with itself");
+    }
+
+    @Test
+    void updateContactRoles_returnsSuccess_whenContactBelongsToParty() {
+        UUID partyId = UUID.randomUUID();
+        UUID contactId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+        Contact c = new Contact();
+        c.setId(contactId);
+        c.setCommercialParty(p);
+
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(contactRepository.findById(contactId)).thenReturn(Optional.of(c));
+
+        UpdateContactRolesResponse response = service.updateContactRoles(partyId, contactId,
+                new UpdateContactRolesRequest());
+
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getContactId()).isEqualTo(contactId.toString());
+        assertThat(response.getPartyId()).isEqualTo(partyId.toString());
+    }
+
+    @Test
+    void updateContactRoles_throwsBadRequest_whenContactNotInParty() {
+        UUID partyId = UUID.randomUUID();
+        UUID contactId = UUID.randomUUID();
+        CommercialParty p1 = party(partyId);
+        CommercialParty p2 = party(UUID.randomUUID());
+        Contact c = new Contact();
+        c.setId(contactId);
+        c.setCommercialParty(p2);
+
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p1);
+        when(contactRepository.findById(contactId)).thenReturn(Optional.of(c));
+
+        assertThatThrownBy(() -> service.updateContactRoles(partyId, contactId, new UpdateContactRolesRequest()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("contact does not belong to this party");
+    }
+
+    @Test
+    void getCommunicationPreferences_returnsDefaults() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        GetCommunicationPreferencesResponse response = service.getCommunicationPreferences(partyId);
+
+        assertThat(response.getPartyId()).isEqualTo(partyId.toString());
+        assertThat(response.getEmailPreference()).isEqualTo("NOT_APPLICABLE");
+        assertThat(response.getSmsPreference()).isEqualTo("NOT_APPLICABLE");
+        assertThat(response.getPhonePreference()).isEqualTo("NOT_APPLICABLE");
+    }
+
+    @Test
+    void upsertCommunicationPreferences_throwsBadRequest_whenBodyNull() {
+        UUID partyId = UUID.randomUUID();
+        when(partyRepository.findByPartyId(partyId)).thenReturn(party(partyId));
+
+        assertThatThrownBy(() -> service.upsertCommunicationPreferences(partyId, null))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("request body is required");
+    }
+
+    @Test
+    void upsertCommunicationPreferences_returnsSuccess_whenBodyPresent() {
+        UUID partyId = UUID.randomUUID();
+        when(partyRepository.findByPartyId(partyId)).thenReturn(party(partyId));
+
+        UpsertCommunicationPreferencesResponse response = service.upsertCommunicationPreferences(
+                partyId,
+                new UpsertCommunicationPreferencesRequest());
+
+        assertThat(response.getPartyId()).isEqualTo(partyId.toString());
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+    }
+
+    @Test
+    void createVehicleForParty_throwsBadRequest_whenVinMissing() {
+        UUID partyId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.createVehicleForParty(partyId, new CreateVehicleForPartyRequest()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("vinNumber is required");
+    }
+
+    @Test
+    void createVehicleForParty_throwsConflict_whenVinAlreadyAssociated() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+        p.getVehicleVins().add("VIN-1");
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        CreateVehicleForPartyRequest request = new CreateVehicleForPartyRequest();
+        request.setVinNumber("VIN-1");
+
+        assertThatThrownBy(() -> service.createVehicleForParty(partyId, request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("409 CONFLICT")
+                .hasMessageContaining("Vehicle already associated with this party");
+    }
+
+    @Test
+    void createVehicleForParty_addsVinAndSaves() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        CreateVehicleForPartyRequest request = new CreateVehicleForPartyRequest();
+        request.setVinNumber("VIN-NEW");
+
+        var response = service.createVehicleForParty(partyId, request);
+
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getVinNumber()).isEqualTo("VIN-NEW");
+        assertThat(p.getVehicleVins()).contains("VIN-NEW");
+        verify(partyRepository).save(p);
+    }
+
+    @Test
+    void getBillingRulesForParty_returnsDefaults_whenPartyExists() {
+        UUID partyId = UUID.randomUUID();
+        CommercialParty p = party(partyId);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        var result = service.getBillingRulesForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.isPoRequired()).isFalse();
+        assertThat(result.getPaymentTerms()).isEqualTo("Due on Receipt");
+    }
+
+    @Test
+    void getBillingRulesForParty_returnsNull_whenPartyNotFound() {
+        UUID partyId = UUID.randomUUID();
+        when(partyRepository.findByPartyId(partyId)).thenReturn(null);
+
+        var result = service.getBillingRulesForParty(partyId);
+
+        assertThat(result).isNull();
+    }
+}

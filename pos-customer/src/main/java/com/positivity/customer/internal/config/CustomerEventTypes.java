@@ -82,6 +82,8 @@ public final class CustomerEventTypes {
                                 EventTypeRegistration.fastRead("CRM_SNAPSHOT_PARTY_RETRIEVE",
                                                 "Retrieve comprehensive CRM snapshot for a party").build(),
                                 EventTypeRegistration.fastRead("CRM_SNAPSHOT_VEHICLE_RETRIEVE",
-                                                "Retrieve comprehensive CRM snapshot via vehicle ownership").build());
+                                                "Retrieve comprehensive CRM snapshot via vehicle ownership").build(),
+                                EventTypeRegistration.fastRead("CRM_SNAPSHOT_BILLING_RULES_GET",
+                                                "Get billing rules for party").build());
         }
 }

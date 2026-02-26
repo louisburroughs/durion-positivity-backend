@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.PartyType;
@@ -31,6 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PersonPartyServiceImpl implements CustomerService {
 
     private final PersonPartyRepository customerRepository;
+    private final PeopleClient peopleClient;
 
     /**
      * Retrieves all customers as DTOs.
@@ -185,6 +187,12 @@ public class PersonPartyServiceImpl implements CustomerService {
      */
     private PersonParty toEntity(CustomerDTO dto) {
         PersonParty entity = createEntityByType(dto.getCustomerType());
+        UUID canonicalPersonId = peopleClient.resolveOrCreatePersonId(
+                dto.getEmail(),
+                dto.getPhoneNumber(),
+                dto.getLastName(),
+                dto.getFirstName());
+        entity.setPersonId(canonicalPersonId);
         entity.setCustomerNumber(dto.getCustomerNumber());
         entity.setLastName(dto.getLastName());
         entity.setFirstName(dto.getFirstName());

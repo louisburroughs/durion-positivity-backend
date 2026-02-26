@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
@@ -16,6 +17,7 @@ import com.positivity.customer.internal.entity.PersonParty;
  */
 @Repository
 public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID> {
+    Optional<PersonParty> findByPersonId(@NonNull UUID personId);
 
     List<PersonParty> findByLastNameIgnoreCase(@NonNull String lastName);
 

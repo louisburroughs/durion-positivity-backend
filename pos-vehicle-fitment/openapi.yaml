@@ -364,6 +364,12 @@ components:
         cacheTimestamp:
           type: string
           format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     Manufacturer:
       type: object
       properties:
@@ -373,6 +379,12 @@ components:
         name:
           type: string
         cacheTimestamp:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
     VehicleType:
@@ -390,6 +402,12 @@ components:
         cacheTimestamp:
           type: string
           format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     Model:
       type: object
       properties:
@@ -401,5 +419,11 @@ components:
         make:
           $ref: "#/components/schemas/Make"
         cacheTimestamp:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time

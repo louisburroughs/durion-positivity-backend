@@ -25,6 +25,7 @@ import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.ContactPointRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
 
@@ -55,9 +56,13 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private ContactPointRepository contactPointRepository;
 
+        @Autowired
+        private PartyRelationshipRepository partyRelationshipRepository;
+
         @BeforeEach
         void setUp() {
                 // Clean up before each test
+                partyRelationshipRepository.deleteAll();
                 contactPointRepository.deleteAll();
                 personRepository.deleteAll();
         }

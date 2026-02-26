@@ -78,7 +78,17 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 testParty = new CommercialParty();
                 testParty.setPartyNumber("TEST-" + UUID.randomUUID().toString().substring(0, 8));
                 testParty.setLegalName("Test Commercial Account");
+                testParty.setDisplayName("Test Commercial Account");
+                testParty.setCustomerNumber("CUST-TEST-" + UUID.randomUUID().toString().substring(0, 8));
                 testParty.setStatus(AccountStatus.ACTIVE);
+
+                Contact contact = new Contact();
+                contact.setCommercialParty(testParty);
+                contact.setFirstName("Primary");
+                contact.setLastName("Contact");
+                contact.setActive(true);
+                testParty.getContacts().add(contact);
+
                 testParty = partyRepository.save(testParty);
 
                 // Create test persons

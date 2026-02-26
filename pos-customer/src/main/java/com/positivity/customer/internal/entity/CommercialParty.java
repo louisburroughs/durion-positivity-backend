@@ -1,10 +1,11 @@
 package com.positivity.customer.internal.entity;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -15,6 +16,7 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -42,6 +44,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @Entity
 @Table(name = "commercial_party")
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
 public class CommercialParty extends AbstractParty {
 
@@ -102,18 +105,15 @@ public class CommercialParty extends AbstractParty {
     }
 
     @PrePersist
-    public void generateId() {
+    public void onPersist() {
         validateNames();
         ensureContactsPresent();
-        setCreatedAt(Instant.now());
-        setModifiedAt(Instant.now());
     }
 
     @PreUpdate
-    private void validateCustomer() {
+    private void onUpdate() {
         validateNames();
         ensureContactsPresent();
-        setModifiedAt(Instant.now());
     }
 
     /** Helper method to validate customer names */

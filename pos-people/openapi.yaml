@@ -369,18 +369,18 @@ paths:
               $ref: "#/components/schemas/PersonRoleAssignmentRequest"
         required: true
       responses:
-        "201":
-          description: Role assignment created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserRoleDto"
         "400":
           description: Invalid request
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
+        "201":
+          description: Role assignment created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserRoleDto"
         "404":
           description: Person or role not found
           content:
@@ -499,14 +499,14 @@ paths:
               $ref: "#/components/schemas/LinkUserToPersonRequest"
         required: true
       responses:
-        "200":
-          description: Link already exists and is returned
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -543,14 +543,14 @@ paths:
               $ref: "#/components/schemas/CreateUserLinkRequest"
         required: true
       responses:
-        "200":
-          description: Link already exists and is returned
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -799,6 +799,26 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/StaffingAssignmentResponse"
+  /v1/people/resolve:
+    post:
+      tags:
+      - People API
+      summary: Resolve person
+      description: Find best matching person by score or create a new person
+      operationId: resolvePerson
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolvePersonRequest"
+        required: true
+      responses:
+        "200":
+          description: Person resolved successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ResolvePersonResponse"
   /v1/people/exceptions:
     get:
       tags:
@@ -1668,24 +1688,6 @@ components:
           format: date-time
       required:
       - roleCode
-    UserRoleDto:
-      type: object
-      properties:
-        userId:
-          type: string
-        roleCode:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
-        active:
-          type: boolean
     ProblemDetail:
       type: object
       properties:
@@ -1705,6 +1707,24 @@ components:
         properties:
           type: object
           additionalProperties: {}
+    UserRoleDto:
+      type: object
+      properties:
+        userId:
+          type: string
+        roleCode:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        active:
+          type: boolean
     BreakDto:
       type: object
       properties:
@@ -1901,6 +1921,73 @@ components:
       - locationId
       - personId
       - role
+    ResolvePersonRequest:
+      type: object
+      description: Resolve criteria
+      properties:
+        email:
+          type: string
+          description: Email used for matching
+          example: jane.smith@example.com
+        phone:
+          type: string
+          description: Phone number used for matching
+          example: +1-555-123-4567
+        lastName:
+          type: string
+          description: Last name used for matching
+          example: Smith
+        firstName:
+          type: string
+          description: First name used for matching
+          example: Jane
+        threshold:
+          type: integer
+          format: int32
+          description: Optional score threshold override
+          example: 30
+    ResolvePersonResponse:
+      type: object
+      description: Resolve person result
+      properties:
+        personId:
+          type: string
+          format: uuid
+          description: Canonical person ID
+          example: 550e8400-e29b-41d4-a716-446655440000
+        matchedExisting:
+          type: boolean
+          description: True when an existing person matched threshold
+        score:
+          type: integer
+          format: int32
+          description: Score of selected match (0 when created)
+        thresholdApplied:
+          type: integer
+          format: int32
+          description: Threshold used for decision
+        matchedBy:
+          type: array
+          description: Which fields contributed to the winning match
+          items:
+            type: string
+        firstName:
+          type: string
+          description: Resolved first name
+          example: Jane
+        lastName:
+          type: string
+          description: Resolved last name
+          example: Smith
+        primaryEmail:
+          type: string
+          description: Resolved primary email
+          example: jane.smith@example.com
+        phoneNumbers:
+          type: array
+          description: Resolved phone numbers
+          items:
+            type: string
     TimeEntryExceptionRequest:
       type: object
       description: Request to create a time entry exception

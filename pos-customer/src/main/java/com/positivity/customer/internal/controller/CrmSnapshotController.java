@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.CrmVehicleService;
@@ -62,6 +63,27 @@ public class CrmSnapshotController {
                 return result != null
                                 ? ResponseEntity.ok(result)
                                 : ResponseEntity.notFound().build();
+        }
+
+        @Operation(operationId = "getBillingRules", summary = "Get billing rules for a commercial party", description = "Returns the billing rule reference for a commercial party. "
+                        +
+                        "Returns default billing rules when the party has no explicitly configured rules. " +
+                        "Enforcement of these rules is the responsibility of downstream services.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Billing rules returned"),
+                        @ApiResponse(responseCode = "403", description = "Caller lacks PARTY_VIEW authority"),
+                        @ApiResponse(responseCode = "404", description = "Party not found")
+        })
+        @GetMapping("/party/{partyId}/billing-rules")
+        @PreAuthorize("hasAuthority('crm:party:view')")
+        @EmitEvent(id = "CRM_SNAPSHOT_BILLING_RULES_GET", apiVersion = "1")
+        public ResponseEntity<BillingRuleRef> getBillingRules(
+                        @Parameter(description = "Party ID (UUID)") @PathVariable UUID partyId) {
+                BillingRuleRef rules = partyOps.getBillingRulesForParty(partyId);
+                if (rules == null) {
+                        return ResponseEntity.notFound().build();
+                }
+                return ResponseEntity.ok(rules);
         }
 
         @Operation(summary = "Fetch snapshot by vehicle", description = "Returns party snapshot based on vehicle ownership")
