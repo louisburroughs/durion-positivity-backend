@@ -1,5 +1,7 @@
 package com.positivity.catalog.internal.service;
 
+import com.positivity.catalog.internal.client.InventoryClient;
+import com.positivity.catalog.internal.client.PricingClient;
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDetailView.*;
 import com.positivity.catalog.internal.entity.ProductEntity;
@@ -8,6 +10,7 @@ import com.positivity.catalog.service.ProductDetailService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -28,8 +31,11 @@ import java.util.UUID;
 public class ProductDetailServiceImpl implements ProductDetailService {
 
     private final ProductRepository productRepository;
-    // TODO: Inject PricingService when available
-    // TODO: Inject InventoryService when available
+    private final PricingClient pricingClient;
+    private final InventoryClient inventoryClient;
+
+    @Value("${pos.price.default-customer-tier-id:00000000-0000-0000-0000-000000000001}")
+    private UUID defaultCustomerTierId;
 
     /**
      * Retrieves a consolidated product detail view with pricing and availability.
@@ -89,15 +95,24 @@ public class ProductDetailServiceImpl implements ProductDetailService {
      */
     private PricingInfo fetchPricingInfo(UUID productId, UUID locationId, Instant requestTime) {
         try {
-            // TODO: Replace with actual call to Pricing Service
-            // For now, return mock data with OK status
             log.debug("Fetching pricing for productId={}, locationId={}", productId, locationId);
+            Optional<PricingClient.PriceQuoteClientResponse> quote = pricingClient.fetchPrice(productId, locationId,
+                    defaultCustomerTierId);
 
-            // Mock implementation - replace with actual service call
+            if (quote.isEmpty()) {
+                log.warn("Price service returned no data for productId={}", productId);
+                return PricingInfo.builder()
+                        .status(DataStatus.UNAVAILABLE)
+                        .asOf(requestTime)
+                        .confidence(DataConfidence.LOW)
+                        .build();
+            }
+
+            PricingClient.PriceQuoteClientResponse q = quote.get();
             return PricingInfo.builder()
-                    .msrp(99.99)
-                    .storePrice(89.99)
-                    .currency("USD")
+                    .msrp(q.msrpAmount() != null ? q.msrpAmount().doubleValue() : null)
+                    .storePrice(q.unitPriceAmount() != null ? q.unitPriceAmount().doubleValue() : null)
+                    .currency(q.msrpCurrency())
                     .status(DataStatus.OK)
                     .asOf(requestTime)
                     .confidence(DataConfidence.HIGH)
@@ -121,16 +136,26 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     private AvailabilityInfo fetchAvailabilityInfo(UUID productId, UUID locationId, Instant requestTime,
             ProductEntity product) {
         try {
-            // TODO: Replace with actual call to Inventory Service
             log.debug("Fetching availability for productId={}, locationId={}", productId, locationId);
+            Optional<InventoryClient.AvailabilityClientResponse> avail = inventoryClient
+                    .fetchAvailability(product.getSku(), locationId);
 
-            // Get static lead time from catalog
+            if (avail.isEmpty()) {
+                log.warn("Inventory service returned no data for productId={}", productId);
+                LeadTimeInfo catalogLeadTime = getCatalogLeadTime(product, requestTime);
+                return AvailabilityInfo.builder()
+                        .leadTime(catalogLeadTime)
+                        .status(DataStatus.UNAVAILABLE)
+                        .asOf(requestTime)
+                        .confidence(DataConfidence.LOW)
+                        .build();
+            }
+
+            InventoryClient.AvailabilityClientResponse a = avail.get();
             LeadTimeInfo leadTime = getLeadTimeInfo(productId, locationId, requestTime, product);
-
-            // Mock implementation - replace with actual service call
             return AvailabilityInfo.builder()
-                    .onHandQuantity(15)
-                    .availableToPromiseQuantity(12)
+                    .onHandQuantity(a.onHandQuantity())
+                    .availableToPromiseQuantity(a.availableToPromiseQuantity())
                     .leadTime(leadTime)
                     .status(DataStatus.OK)
                     .asOf(requestTime)
@@ -139,10 +164,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
 
         } catch (Exception e) {
             log.error("Failed to fetch availability for productId={}: {}", productId, e.getMessage());
-
-            // Return with UNKNOWN status but still include catalog lead time
             LeadTimeInfo catalogLeadTime = getCatalogLeadTime(product, requestTime);
-
             return AvailabilityInfo.builder()
                     .leadTime(catalogLeadTime)
                     .status(DataStatus.UNAVAILABLE)

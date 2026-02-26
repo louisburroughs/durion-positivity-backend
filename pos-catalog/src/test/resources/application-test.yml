@@ -19,6 +19,13 @@ spring:
     discovery:
       enabled: false
 
+pos:
+  price:
+    base-url: http://localhost:9999/mock-price
+    default-customer-tier-id: 00000000-0000-0000-0000-000000000099
+  inventory:
+    base-url: http://localhost:9999/mock-inventory
+
 eureka:
   client:
     enabled: false

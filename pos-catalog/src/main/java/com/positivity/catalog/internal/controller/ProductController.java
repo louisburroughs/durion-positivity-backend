@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.positivity.catalog.internal.dto.CatalogSearchResultDto;
 import com.positivity.catalog.internal.dto.EffectiveLocationPriceResponseDto;
 import com.positivity.catalog.internal.dto.GuardrailPolicyUpsertRequestDto;
 import com.positivity.catalog.internal.dto.LocationPriceOverrideCreateRequestDto;
@@ -34,6 +35,7 @@ import com.positivity.catalog.service.LocationPriceOverrideService;
 import com.positivity.catalog.service.ProductDetailService;
 import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.catalog.service.ProductMasterDataService;
+import com.positivity.catalog.service.ProductSearchService;
 import com.positivity.events.EmitEvent;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -58,6 +60,7 @@ public class ProductController {
     private final ProductLifecycleService productLifecycleService;
     private final LocationPriceOverrideService locationPriceOverrideService;
     private final ProductMasterDataService productMasterDataService;
+    private final ProductSearchService productSearchService;
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/pricing/guardrail-policies")
@@ -119,6 +122,21 @@ public class ProductController {
             @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
             @Valid @RequestBody LocationPriceOverrideDecisionRequestDto request) {
         return ResponseEntity.ok(locationPriceOverrideService.rejectOverride(overrideId, request));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @GetMapping("/search")
+    @Operation(summary = "Search catalog products", description = "Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU.")
+    @ApiResponse(responseCode = "200", description = "Search results", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogSearchResultDto.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request parameter (e.g., non-numeric limit)")
+    public ResponseEntity<CatalogSearchResultDto> searchProducts(
+            @Parameter(description = "Free-text search query (matches product name and description)") @RequestParam(required = false) String q,
+            @Parameter(description = "Filter by manufacturer brand (exact, case-insensitive)") @RequestParam(required = false) String brand,
+            @Parameter(description = "Filter by category name (exact, case-insensitive)") @RequestParam(required = false) String category,
+            @Parameter(description = "Filter by SKU (exact match, case-insensitive)") @RequestParam(required = false) String sku,
+            @Parameter(description = "Pagination cursor from previous response") @RequestParam(required = false) String cursor,
+            @Parameter(description = "Maximum number of results (1–100)") @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
