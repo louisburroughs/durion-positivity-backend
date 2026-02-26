@@ -320,6 +320,49 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         // -----------------------------------------------------------------------
+        // CS-009: Free-text q matches product description (not just name)
+        // Validates fix for contract gap: service interface documents q as
+        // "name, description" but original JPQL only matched p.name.
+        // -----------------------------------------------------------------------
+
+        @Test
+        @DisplayName("CS-009: Free-text query matches product description – returns matching product")
+        void testSearch_queryMatchesDescription_returnsMatchingProduct() throws Exception {
+                // Issue CAP-247: create a product whose name is generic but description is
+                // unique; q should find it via description.
+                String uniqueDescToken = "descmatch-" + UUID.randomUUID();
+                String genericName = "GenericProduct-" + UUID.randomUUID();
+                String sku = "SKU-CS009-" + UUID.randomUUID();
+
+                Map<String, Object> payload = Map.of(
+                                "name", genericName,
+                                "description", "This product has token " + uniqueDescToken + " in its description",
+                                "unitOfMeasure", "EA",
+                                "manufacturerId", UUID.randomUUID().toString(),
+                                "sku", sku,
+                                "mpn", "MPN-CS009-" + UUID.randomUUID(),
+                                "upc", "1000000000000",
+                                "attributes", "{}");
+
+                mockMvc.perform(withAuth(post("/v1/products")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(payload))))
+                                .andExpect(status().isCreated());
+
+                MvcResult result = mockMvc.perform(withAuth(MockMvcRequestBuilders
+                                .get(SEARCH_PATH)
+                                .param("q", uniqueDescToken)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.data").isArray())
+                                .andReturn();
+
+                JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+                assertThat(body.get("data").size())
+                                .as("q should match products by description token '%s'", uniqueDescToken)
+                                .isEqualTo(1);
+        }
+
+        // -----------------------------------------------------------------------
         // Helper
         // -----------------------------------------------------------------------
 

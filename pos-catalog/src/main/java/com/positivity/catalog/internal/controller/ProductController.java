@@ -130,7 +130,7 @@ public class ProductController {
     @ApiResponse(responseCode = "200", description = "Search results", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogSearchResultDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request parameter (e.g., non-numeric limit)")
     public ResponseEntity<CatalogSearchResultDto> searchProducts(
-            @Parameter(description = "Free-text search query") @RequestParam(required = false) String q,
+            @Parameter(description = "Free-text search query (matches product name and description)") @RequestParam(required = false) String q,
             @Parameter(description = "Filter by manufacturer brand (exact, case-insensitive)") @RequestParam(required = false) String brand,
             @Parameter(description = "Filter by category name (exact, case-insensitive)") @RequestParam(required = false) String category,
             @Parameter(description = "Filter by SKU (exact match, case-insensitive)") @RequestParam(required = false) String sku,
