@@ -136,15 +136,6 @@ class ReceivingServiceImplTest {
                 () -> receivingService.getReceivingSession(sessionId));
     }
 
-    @Test
-    void getReceivingSession_notFound_throwsException() {
-        UUID sessionId = UUID.randomUUID();
-        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.empty());
-
-        assertThrows(ReceivingSessionNotFoundException.class,
-                () -> receivingService.getReceivingSession(sessionId));
-    }
-
     // ─── Story #34: receiveItemsIntoStaging service-layer tests ──────────────
 
     // Issue #34: AC1 — exact receipt must return linesProcessed=1 and empty
