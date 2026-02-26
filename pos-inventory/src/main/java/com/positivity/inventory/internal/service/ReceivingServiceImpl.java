@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.client.SourceDocumentStubClient;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
@@ -36,6 +37,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +50,10 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final ReceivingSessionRepository receivingSessionRepository;
     private final InventoryVarianceRepository inventoryVarianceRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final SourceDocumentStubClient sourceDocumentStubClient;
+
+    @Value("${pos.inventory.receiving.source-document-service:}")
+    private String configuredSourceDocumentService;
 
     @Override
     public @NonNull ReceivingSessionResponse createReceivingSession(
@@ -69,7 +75,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .createdByUserId(actorUserId)
                 .build();
 
-        List<ReceivingLine> lines = buildLinesFromDocument(sourceDocumentId, session);
+        List<ReceivingLine> lines = buildLinesFromDocument(sourceDocumentId, sourceDocumentType, session);
         session.setLines(lines);
 
         ReceivingSession saved = receivingSessionRepository.save(session);
@@ -92,7 +98,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             @NonNull UUID sessionId,
             @NonNull ReceiveItemsRequest request,
             @NonNull String actorUserId) {
-        ReceivingSession session = resolveSessionForReceive(sessionId, request);
+        ReceivingSession session = resolveSessionForReceive(sessionId);
 
         Map<UUID, ReceivingLine> lineMap = session.getLines().stream()
                 .filter(line -> line.getLineId() != null)
@@ -268,62 +274,13 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .build();
     }
 
-    private ReceivingSession resolveSessionForReceive(UUID sessionId, ReceiveItemsRequest request) {
-        if (receivingSessionRepository == null) {
-            return buildFallbackSession(sessionId, request);
-        }
-
+    private ReceivingSession resolveSessionForReceive(UUID sessionId) {
         var sessionOptional = receivingSessionRepository.findById(sessionId);
         if (sessionOptional.isPresent()) {
             return sessionOptional.get();
         }
 
-        if (isLikelyMockitoMock(receivingSessionRepository) && supportsFallbackSession(request)) {
-            return buildFallbackSession(sessionId, request);
-        }
-
         throw new ReceivingSessionNotFoundException("Receiving session not found: " + sessionId);
-    }
-
-    private boolean isLikelyMockitoMock(Object candidate) {
-        String className = candidate.getClass().getName();
-        return className.toLowerCase(Locale.ROOT).contains("mockito");
-    }
-
-    private boolean supportsFallbackSession(ReceiveItemsRequest request) {
-        if (request.getLines() == null || request.getLines().isEmpty()) {
-            return false;
-        }
-        if (request.getLines().size() != 1) {
-            return false;
-        }
-        return request.getLines().get(0).getReceivedQuantity().compareTo(new BigDecimal("5")) != 0;
-    }
-
-    private ReceivingSession buildFallbackSession(UUID sessionId, ReceiveItemsRequest request) {
-        ReceiveLineRequest receiveLineRequest = request.getLines().get(0);
-
-        ReceivingLine line = ReceivingLine.builder()
-                .lineId(receiveLineRequest.getLineId())
-                .productId("PROD-001")
-                .expectedQuantity(new BigDecimal("10"))
-                .receivedQuantity(BigDecimal.ZERO)
-                .status(ReceivingLineStatus.EXPECTED)
-                .build();
-
-        ReceivingSession session = ReceivingSession.builder()
-                .sessionId(sessionId)
-                .sourceDocumentId("PO-123")
-                .sourceDocumentType(SourceDocumentType.PO)
-                .status(ReceivingSessionStatus.OPEN)
-                .entryMethod(EntryMethod.MANUAL)
-                .createdByUserId("system")
-                .lines(new ArrayList<>())
-                .build();
-
-        line.setSession(session);
-        session.getLines().add(line);
-        return session;
     }
 
     private void createGoodsReceiptLedgerEntry(
@@ -409,26 +366,85 @@ public class ReceivingServiceImpl implements ReceivingService {
         return SourceDocumentType.PO;
     }
 
-    private List<ReceivingLine> buildLinesFromDocument(String sourceDocumentId, ReceivingSession session) {
-        log.info("Using placeholder receiving line generation for source document {}", sourceDocumentId);
+    private List<ReceivingLine> buildLinesFromDocument(
+            String sourceDocumentId,
+            SourceDocumentType sourceDocumentType,
+            ReceivingSession session) {
+        List<SourceDocumentLineStub> sourceLines = fetchSourceDocumentLines(sourceDocumentId, sourceDocumentType);
+        List<ReceivingLine> lines = new ArrayList<>(sourceLines.size());
 
-        ReceivingLine line1 = ReceivingLine.builder()
-                .session(session)
-                .productId("PROD-001")
-                .expectedQuantity(new BigDecimal("5"))
-                .receivedQuantity(BigDecimal.ZERO)
-                .status(ReceivingLineStatus.EXPECTED)
-                .build();
+        for (SourceDocumentLineStub sourceLine : sourceLines) {
+            lines.add(ReceivingLine.builder()
+                    .session(session)
+                    .productId(sourceLine.productId())
+                    .expectedQuantity(sourceLine.expectedQuantity())
+                    .receivedQuantity(BigDecimal.ZERO)
+                    .status(ReceivingLineStatus.EXPECTED)
+                    .build());
+        }
 
-        ReceivingLine line2 = ReceivingLine.builder()
-                .session(session)
-                .productId("PROD-002")
-                .expectedQuantity(new BigDecimal("10"))
-                .receivedQuantity(BigDecimal.ZERO)
-                .status(ReceivingLineStatus.EXPECTED)
-                .build();
+        log.debug("Generated {} receiving lines for source document {}", lines.size(), sourceDocumentId);
+        return lines;
+    }
 
-        return List.of(line1, line2);
+    private List<SourceDocumentLineStub> fetchSourceDocumentLines(
+            String sourceDocumentId,
+            SourceDocumentType sourceDocumentType) {
+        String sourceService = resolveSourceDocumentService(sourceDocumentType);
+
+        log.info(
+                "Stubbed source-document lookup via service {} for {} {}",
+                sourceService,
+                sourceDocumentType,
+                sourceDocumentId);
+
+        List<SourceDocumentStubClient.SourceDocumentLineDto> stubLines = sourceDocumentStubClient.fetchLines(
+                sourceService,
+                sourceDocumentType,
+                sourceDocumentId);
+
+        if (stubLines == null || stubLines.isEmpty()) {
+            throw new SourceDocumentNotFoundException(
+                    "No receiving lines returned for " + sourceDocumentType + " " + sourceDocumentId
+                            + " from service " + sourceService);
+        }
+
+        List<SourceDocumentLineStub> lines = new ArrayList<>(stubLines.size());
+        for (int i = 0; i < stubLines.size(); i++) {
+            lines.add(mapStubLine(stubLines.get(i), sourceDocumentId, i + 1));
+        }
+        return lines;
+    }
+
+    private SourceDocumentLineStub mapStubLine(
+            SourceDocumentStubClient.SourceDocumentLineDto stubLine,
+            String sourceDocumentId,
+            int lineNumber) {
+        String productId = stubLine != null ? stubLine.getProductId() : null;
+        if (productId == null || productId.isBlank()) {
+            throw new IllegalStateException(
+                    "Invalid source document line " + lineNumber + " for " + sourceDocumentId
+                            + ": productId is required");
+        }
+
+        BigDecimal expectedQuantity = stubLine != null ? stubLine.getExpectedQuantity() : null;
+        if (expectedQuantity == null || expectedQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException(
+                    "Invalid source document line " + lineNumber + " for " + sourceDocumentId
+                            + ": expectedQuantity must be greater than 0");
+        }
+
+        return new SourceDocumentLineStub(productId, expectedQuantity);
+    }
+
+    private String resolveSourceDocumentService(SourceDocumentType sourceDocumentType) {
+        if (configuredSourceDocumentService != null && !configuredSourceDocumentService.isBlank()) {
+            return configuredSourceDocumentService;
+        }
+        return sourceDocumentType == SourceDocumentType.ASN ? "pos-shipments" : "pos-order";
+    }
+
+    private record SourceDocumentLineStub(String productId, BigDecimal expectedQuantity) {
     }
 
     private ReceivingSessionResponse mapToResponse(ReceivingSession session) {
