@@ -3,8 +3,9 @@ package com.positivity.customer.internal.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.shared.id.UUIDv7Id;
@@ -12,6 +13,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -45,6 +47,7 @@ import lombok.ToString;
         @Index(name = "idx_contact_point_type", columnList = "contact_type"),
         @Index(name = "idx_contact_point_value", columnList = "value")
 })
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Contact point (email, phone) for a person")
 public class ContactPoint {
 
@@ -76,12 +79,12 @@ public class ContactPoint {
     @Schema(description = "Whether this is the primary contact point of its type", example = "true")
     private boolean isPrimary = false;
 
-    @CreationTimestamp
+    @CreatedDate
     @Column(name = "created_at", updatable = false, nullable = false)
     @Schema(description = "Timestamp when the contact point was created")
     private Instant createdAt;
 
-    @UpdateTimestamp
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     @Schema(description = "Timestamp when the contact point was last updated")
     private Instant updatedAt;

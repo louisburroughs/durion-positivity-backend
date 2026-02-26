@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -49,6 +50,7 @@ public class PartyServiceImpl implements PartyService {
     private final CommercialPartyRepository partyRepository;
     private final ContactRepository contactRepository;
     private final CacheManager cacheManager;
+    private final PeopleClient peopleClient;
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT.withLocale(Locale.US);
 
@@ -119,7 +121,7 @@ public class PartyServiceImpl implements PartyService {
         List<GetContactsWithRolesResponse.ContactWithRoles> contactDtos = new ArrayList<>();
         for (Contact contact : contacts) {
             GetContactsWithRolesResponse.ContactWithRoles dto = GetContactsWithRolesResponse.ContactWithRoles.builder()
-                    .contactId(String.valueOf(contact.getId()))
+                    .contactId(String.valueOf(contact.getContactId()))
                     .contactName(buildContactName(contact))
                     .email(contact.getEmail())
                     .phone(contact.getPhoneNumber())
@@ -151,7 +153,13 @@ public class PartyServiceImpl implements PartyService {
             nameFallback = request.getLegalName();
         }
         Contact contact = new Contact();
+        UUID personId = peopleClient.resolveOrCreatePersonId(
+                request.getEmail(),
+                request.getPhone(),
+                "Contact",
+                nameFallback);
         contact.setCommercialParty(party);
+        contact.setPersonId(personId);
         contact.setFirstName(nameFallback);
         contact.setLastName("Contact");
         contact.setEmail(request.getEmail());
@@ -265,7 +273,7 @@ public class PartyServiceImpl implements PartyService {
         // In a real implementation, would store roles in a separate ContactRole entity
         // For now, return success response
         return UpdateContactRolesResponse.builder()
-                .contactId(String.valueOf(contact.getId()))
+                .contactId(String.valueOf(contact.getContactId()))
                 .partyId(String.valueOf(party.getPartyId()))
                 .status("SUCCESS")
                 .build();
@@ -480,7 +488,7 @@ public class PartyServiceImpl implements PartyService {
 
     private com.positivity.customer.internal.dto.snapshot.ContactSummary convertContactToSummary(Contact contact) {
         com.positivity.customer.internal.dto.snapshot.ContactSummary summary = new com.positivity.customer.internal.dto.snapshot.ContactSummary();
-        summary.setContactId(contact.getId().toString());
+        summary.setContactId(contact.getContactId().toString());
         summary.setPrimary(false);
         summary.setName(formatContactName(contact));
         summary.setRoles(java.util.Collections.emptyList());

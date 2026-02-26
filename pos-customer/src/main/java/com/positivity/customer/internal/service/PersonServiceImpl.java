@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
@@ -43,6 +44,7 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonPartyRepository personRepository;
     private final ContactPointRepository contactPointRepository;
+    private final PeopleClient peopleClient;
 
     /**
      * Creates a new individual person record with optional contact points.
@@ -71,16 +73,33 @@ public class PersonServiceImpl implements PersonService {
         // fields
         validateCreateRequest(request);
 
-        // Create person entity
+        String primaryEmail = extractPrimaryEmail(request);
+        String primaryPhone = extractPrimaryPhone(request);
+        UUID peoplePersonId = peopleClient.resolveOrCreatePersonId(
+                primaryEmail,
+                primaryPhone,
+                request.getLastName(),
+                request.getFirstName());
+
+        // Reuse existing person-party if already associated to this canonical person
+        PersonParty existing = personRepository.findByPersonId(peoplePersonId).orElse(null);
+        if (existing != null) {
+            int existingContactPointCount = contactPointRepository.findByPersonPartyId(existing.getPersonPartyId()).size();
+            return CreatePersonResponse.from(existing, existingContactPointCount);
+        }
+
+        // Create person-party entity
         PersonParty person = new PersonParty();
         person.setFirstName(request.getFirstName().trim());
         person.setLastName(request.getLastName().trim());
+        person.setPersonId(peoplePersonId);
         person.setCustomerNumber("CUST-PER-" + UUID.randomUUID().toString().substring(0, 8));
         person.setPreferredContactMethod(request.getPreferredContactMethod());
 
         // Save person first to get ID
         PersonParty savedPerson = personRepository.save(person);
-        log.debug("Person created with ID: {}", savedPerson.getPersonId());
+        log.debug("PersonParty created with partyId={} mapped to personId={}",
+                savedPerson.getPersonPartyId(), savedPerson.getPersonId());
 
         // Create contact points
         List<ContactPoint> contactPoints = new ArrayList<>();
@@ -118,11 +137,12 @@ public class PersonServiceImpl implements PersonService {
         // Save all contact points
         if (!contactPoints.isEmpty()) {
             contactPointRepository.saveAll(contactPoints);
-            log.debug("Created {} contact points for person {}", contactPoints.size(), savedPerson.getPersonId());
+            log.debug("Created {} contact points for personPartyId={}", contactPoints.size(),
+                    savedPerson.getPersonPartyId());
         }
 
-        log.info("Successfully created person {} with {} contact points",
-                savedPerson.getPersonId(), contactPoints.size());
+        log.info("Successfully created person personId={} personPartyId={} with {} contact points",
+                savedPerson.getPersonId(), savedPerson.getPersonPartyId(), contactPoints.size());
 
         return CreatePersonResponse.from(savedPerson, contactPoints.size());
     }
@@ -139,14 +159,14 @@ public class PersonServiceImpl implements PersonService {
     public GetPersonResponse getPerson(@NonNull UUID personId) {
         log.debug("Getting person: {}", personId);
 
-        PersonParty person = personRepository.findById(personId)
+        PersonParty person = personRepository.findByPersonId(personId)
                 .orElseThrow(() -> {
                     log.warn("Person not found: {}", personId);
                     return new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found");
                 });
 
         // Load contact points
-        List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(personId);
+        List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(person.getPersonPartyId());
         person.getContactPoints().addAll(contactPoints);
 
         return toGetPersonResponse(person);
@@ -194,7 +214,7 @@ public class PersonServiceImpl implements PersonService {
         return persons.stream()
                 .map(person -> {
                     List<ContactPoint> contactPoints = contactPointRepository
-                            .findByPersonPartyId(person.getPersonId());
+                            .findByPersonPartyId(person.getPersonPartyId());
                     person.getContactPoints().addAll(contactPoints);
                     return toGetPersonResponse(person);
                 })
@@ -233,6 +253,28 @@ public class PersonServiceImpl implements PersonService {
         if (!email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid email format: " + email);
         }
+    }
+
+    private String extractPrimaryEmail(CreatePersonRequest request) {
+        if (request.getEmails() == null || request.getEmails().isEmpty()) {
+            return null;
+        }
+        return request.getEmails().stream()
+                .filter(CreatePersonRequest.EmailInput::isPrimary)
+                .map(CreatePersonRequest.EmailInput::getValue)
+                .findFirst()
+                .orElse(request.getEmails().get(0).getValue());
+    }
+
+    private String extractPrimaryPhone(CreatePersonRequest request) {
+        if (request.getPhones() == null || request.getPhones().isEmpty()) {
+            return null;
+        }
+        return request.getPhones().stream()
+                .filter(CreatePersonRequest.PhoneInput::isPrimary)
+                .map(CreatePersonRequest.PhoneInput::getValue)
+                .findFirst()
+                .orElse(request.getPhones().get(0).getValue());
     }
 
     /**

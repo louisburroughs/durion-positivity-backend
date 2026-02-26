@@ -6,8 +6,9 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.shared.id.UUIDv7Id;
@@ -17,6 +18,7 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -57,6 +59,7 @@ import lombok.ToString;
         @Index(name = "idx_party_rel_to_person", columnList = "to_person_id"),
         @Index(name = "idx_party_rel_primary_billing", columnList = "from_party_id, is_primary_billing_contact")
 })
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Relationship between a commercial account and an individual with roles")
 public class PartyRelationship {
 
@@ -100,7 +103,7 @@ public class PartyRelationship {
     @Schema(description = "Date when this relationship ends (null means currently active)", example = "2026-12-31")
     private LocalDate effectiveEndDate;
 
-    @CreationTimestamp
+    @CreatedDate
     @Column(name = "created_at", updatable = false, nullable = false)
     @Schema(description = "Timestamp when the relationship was created")
     private Instant createdAt;
@@ -109,7 +112,7 @@ public class PartyRelationship {
     @Schema(description = "User ID who created this relationship")
     private UUID createdBy;
 
-    @UpdateTimestamp
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     @Schema(description = "Timestamp when the relationship was last updated")
     private Instant updatedAt;

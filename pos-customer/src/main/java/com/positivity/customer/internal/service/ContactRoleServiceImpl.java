@@ -93,7 +93,7 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                         List<ContactRoleAssignment> contactAssignments = entry.getValue();
 
                         // Get person details
-                        personRepository.findById(contactId).ifPresent(person -> {
+                        personRepository.findByPersonId(contactId).ifPresent(person -> {
                                 var contactDto = GetContactsWithRolesResponse.ContactWithRoles.builder()
                                                 .contactId(contactId.toString())
                                                 .contactName(person.getFirstName() + " " + person.getLastName())
@@ -102,14 +102,14 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                                 // Get email and phone from contact points
                                 var emailOpt = Optional.ofNullable(contactPointRepository
                                                 .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                                                contactId,
+                                                                person.getPersonPartyId(),
                                                                 com.positivity.customer.internal.enums.ContactPointType.EMAIL));
                                 emailOpt.ifPresent(cp -> contactDto.setEmail(cp.getValue()));
                                 contactDto.setHasPrimaryEmail(emailOpt.isPresent());
 
                                 var phoneOpt = Optional.ofNullable(contactPointRepository
                                                 .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                                                contactId,
+                                                                person.getPersonPartyId(),
                                                                 com.positivity.customer.internal.enums.ContactPointType.PHONE_MOBILE));
                                 phoneOpt.ifPresent(cp -> contactDto.setPhone(cp.getValue()));
 
@@ -161,9 +161,9 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                                                 "Party not found: " + partyId));
 
                 // Verify contact (person) exists
-                personRepository.findById(contactId)
+                personRepository.findByPersonId(contactId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "PersonParty not found: " + contactId));
+                                                "Person not found for personId: " + contactId));
 
                 // Delete existing role assignments for this contact/party
                 roleAssignmentRepository.deleteByContactIdAndCustomerAccountId(contactId, partyId);

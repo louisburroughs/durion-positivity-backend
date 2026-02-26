@@ -17,15 +17,17 @@ public final class PeopleEventTypes {
 
         /**
          * All event type registrations for the people module.
-         * Total: 27 event types.
+         * Total: 28 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
-                                // PersonController - 2 events
+                                // PersonController - 3 events
                                 EventTypeRegistration.write("PEOPLE_PERSON_CREATE",
                                                 "Create a new person record").build(),
                                 EventTypeRegistration.write("PEOPLE_PERSON_UPDATE",
                                                 "Update an existing person record").build(),
+                                EventTypeRegistration.write("PEOPLE_PERSON_RESOLVE",
+                                                "Resolve person by weighted match or create a new record").build(),
 
                                 // StaffingAssignmentController - 3 events
                                 EventTypeRegistration.write("PEOPLE_STAFFING_ASSIGNMENT_CREATE",

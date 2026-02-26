@@ -5,8 +5,9 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.AccountTier;
@@ -16,6 +17,7 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Inheritance;
@@ -36,6 +38,7 @@ import com.positivity.shared.id.UUIDv7Id;
 @NoArgsConstructor
 @Entity
 @Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Abstract base class for an individual customer (person). Use CommercialParty for organizations.")
 public abstract class AbstractParty implements Party {
     @Id
@@ -81,12 +84,13 @@ public abstract class AbstractParty implements Party {
     @Schema(description = "Whether tier was manually assigned (true) or auto-calculated (false)")
     private boolean tierManualOverride = false;
 
-    @CreationTimestamp
-    @Column(updatable = false)
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @UpdateTimestamp
-    private Instant modifiedAt;
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
     /** Helper method to validate customer names */
     protected abstract void validateNames();
@@ -112,5 +116,17 @@ public abstract class AbstractParty implements Party {
     @Transient
     public Class<?> uuidv7Dependency() {
         return com.positivity.shared.id.UUIDv7Generator.class;
+    }
+
+    /**
+     * Backward-compatible accessor for legacy code paths that still reference
+     * modifiedAt.
+     */
+    public Instant getModifiedAt() {
+        return updatedAt;
+    }
+
+    public void setModifiedAt(Instant modifiedAt) {
+        this.updatedAt = modifiedAt;
     }
 }

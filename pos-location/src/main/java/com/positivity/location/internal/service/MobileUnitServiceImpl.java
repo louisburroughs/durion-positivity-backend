@@ -18,7 +18,6 @@ import com.positivity.location.internal.repository.MobileUnitRepository;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
 import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
-import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -126,15 +125,12 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         }
 
         MobileUnitEntity entity = MobileUnitEntity.builder()
-                .id(UUIDv7Generator.generate())
                 .name(request.getName())
                 .baseLocationId(request.getBaseLocationId())
                 .status(normalizedStatus)
                 .travelBufferPolicyId(request.getTravelBufferPolicyId())
                 .notes(request.getNotes())
                 .capabilityIds(resolvedCapabilityIds)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
                 .build();
 
         MobileUnitEntity persisted = entity;

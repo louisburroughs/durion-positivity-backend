@@ -1,6 +1,7 @@
 package com.positivity.customer.service;
 
 import com.positivity.customer.internal.config.CustomerCacheConfig;
+import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
@@ -60,12 +61,14 @@ class PartyServiceImplTest {
     private CacheManager cacheManager;
     @Mock
     private Cache cache;
+    @Mock
+    private PeopleClient peopleClient;
 
     private PartyServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new PartyServiceImpl(partyRepository, contactRepository, cacheManager);
+        service = new PartyServiceImpl(partyRepository, contactRepository, cacheManager, peopleClient);
     }
 
     private CommercialParty party(UUID id) {
