@@ -57,3 +57,34 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+
+pos:
+  inventory:
+    receiving:
+      # Optional explicit upstream name (query param: service) for source document line lookups.
+      # If blank, ReceivingServiceImpl falls back by source document type:
+      #   PO  -> pos-order
+      #   ASN -> pos-shipments
+      source-document-service: ${POS_INVENTORY_RECEIVING_SOURCE_DOCUMENT_SERVICE:}
+      stub:
+        # Enable/disable HTTP call to a stub source-document service.
+        enabled: ${POS_INVENTORY_RECEIVING_STUB_ENABLED:false}
+        # Base URL hosting the stub endpoint (gateway or direct service URL).
+        base-url: ${POS_INVENTORY_RECEIVING_STUB_BASE_URL:http://localhost:8080}
+        # GET path template used by SourceDocumentStubClient.
+        # Expected URI variables: {sourceDocumentType}, {sourceDocumentId}
+        # Expected JSON response:
+        # {
+        #   "sourceDocumentId": "PO-123",
+        #   "sourceDocumentType": "PO",
+        #   "sourceService": "pos-order",
+        #   "lines": [
+        #     {
+        #       "sourceLineId": "1",
+        #       "productId": "PROD-1001",
+        #       "expectedQuantity": 5,
+        #       "unitOfMeasure": "EA"
+        #     }
+        #   ]
+        # }
+        path: ${POS_INVENTORY_RECEIVING_STUB_PATH:/stub/v1/source-documents/{sourceDocumentType}/{sourceDocumentId}/lines}

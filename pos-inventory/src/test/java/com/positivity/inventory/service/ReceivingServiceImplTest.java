@@ -1,5 +1,6 @@
 package com.positivity.inventory.service;
 
+import com.positivity.inventory.internal.client.SourceDocumentStubClient;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
@@ -47,11 +48,15 @@ class ReceivingServiceImplTest {
     @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
+    @Mock
+    private SourceDocumentStubClient sourceDocumentStubClient;
+
     @InjectMocks
     private ReceivingServiceImpl receivingService;
 
     @Test
     void createReceivingSession_manualHappyPath() {
+        stubSourceDocumentLines();
         when(receivingSessionRepository.save(any(ReceivingSession.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -67,6 +72,7 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_scanHappyPath() {
+        stubSourceDocumentLines();
         when(receivingSessionRepository.save(any(ReceivingSession.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -81,6 +87,7 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_asnPrefix_setsSourceDocumentType() {
+        stubSourceDocumentLines();
         when(receivingSessionRepository.save(any(ReceivingSession.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -336,6 +343,7 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_withNullEntryMethod_defaultsToManual() {
+        stubSourceDocumentLines();
         when(receivingSessionRepository.save(any(ReceivingSession.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -343,6 +351,32 @@ class ReceivingServiceImplTest {
         ReceivingSessionResponse response = receivingService.createReceivingSession(request, "test-user");
 
         assertThat(response.getEntryMethod()).isEqualTo("MANUAL");
+    }
+
+    @Test
+    void createReceivingSession_sourceDocumentWithNoLines_throwsNotFound() {
+        when(sourceDocumentStubClient.fetchLines(any(), any(), any())).thenReturn(List.of());
+
+        CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-123", "MANUAL");
+
+        assertThrows(SourceDocumentNotFoundException.class,
+                () -> receivingService.createReceivingSession(request, "test-user"));
+    }
+
+    @Test
+    void createReceivingSession_sourceDocumentLineWithoutProduct_throwsIllegalState() {
+        SourceDocumentStubClient.SourceDocumentLineDto invalidLine = new SourceDocumentStubClient.SourceDocumentLineDto();
+        invalidLine.setProductId(" ");
+        invalidLine.setExpectedQuantity(new BigDecimal("5"));
+        when(sourceDocumentStubClient.fetchLines(any(), any(), any())).thenReturn(List.of(invalidLine));
+
+        CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-123", "MANUAL");
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> receivingService.createReceivingSession(request, "test-user"));
+
+        assertThat(exception.getMessage()).contains("productId is required");
     }
 
     @Test
@@ -669,5 +703,17 @@ class ReceivingServiceImplTest {
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
         assertThat(response.getSessionStatus()).isEqualTo("IN_PROGRESS");
+    }
+
+    private void stubSourceDocumentLines() {
+        SourceDocumentStubClient.SourceDocumentLineDto line1 = new SourceDocumentStubClient.SourceDocumentLineDto();
+        line1.setProductId("PROD-001");
+        line1.setExpectedQuantity(new BigDecimal("5"));
+
+        SourceDocumentStubClient.SourceDocumentLineDto line2 = new SourceDocumentStubClient.SourceDocumentLineDto();
+        line2.setProductId("PROD-002");
+        line2.setExpectedQuantity(new BigDecimal("10"));
+
+        when(sourceDocumentStubClient.fetchLines(any(), any(), any())).thenReturn(List.of(line1, line2));
     }
 }
