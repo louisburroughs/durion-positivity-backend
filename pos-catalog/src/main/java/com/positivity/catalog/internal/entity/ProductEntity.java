@@ -65,6 +65,7 @@ public class ProductEntity implements CatalogItem {
 
     @ElementCollection // Assuming images are a collection of strings (URLs or paths)
     @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Column(name = "image_url")
     @Schema(description = "List of image URLs for the product")
     private List<String> images;
