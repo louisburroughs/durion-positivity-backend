@@ -3,17 +3,21 @@ package com.positivity.customer.internal.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.shared.id.UUIDv7Id;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -36,6 +40,7 @@ import lombok.NoArgsConstructor;
         @Index(name = "idx_merge_audit_source", columnList = "source_party_id"),
         @Index(name = "idx_merge_audit_merged_at", columnList = "merged_at")
 })
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Audit record for party merge operations")
 public class MergeAudit {
 
@@ -66,10 +71,15 @@ public class MergeAudit {
     @Schema(description = "Reason/justification for the merge", example = "Duplicate customer records identified")
     private String mergeReason;
 
-    @CreationTimestamp
+    @CreatedDate
     @Column(name = "merged_at", updatable = false, nullable = false)
-    @Schema(description = "Timestamp when the merge was performed")
-    private Instant mergedAt;
+    @Schema(description = "Timestamp when the merge audit record was created")
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    @Schema(description = "Timestamp when the merge audit record was last updated")
+    private Instant updatedAt;
 
     @Column(name = "contacts_transferred")
     @Schema(description = "Number of contacts transferred from source to survivor")
@@ -99,5 +109,10 @@ public class MergeAudit {
         audit.setMergedByUserId(mergedByUserId);
         audit.setMergeReason(mergeReason);
         return audit;
+    }
+
+    @Transient
+    public Instant getMergedAt() {
+        return createdAt;
     }
 }

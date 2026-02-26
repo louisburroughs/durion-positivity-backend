@@ -818,6 +818,41 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BayResponse"
+  /v1/storage-locations/{storageLocationId}/validation:
+    get:
+      tags:
+      - storage-location-validation-controller
+      summary: Validate storage location reference
+      description: "Returns existence, active status, and site ownership for a storage\
+        \ location ID."
+      operationId: validateStorageLocation
+      parameters:
+      - name: storageLocationId
+        in: path
+        description: Storage location identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "403":
+          description: Forbidden - missing location:read authority
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
+        "400":
+          description: Invalid storageLocationId format
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
+        "200":
+          description: Validation payload returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StorageLocationValidationResponseDTO"
   /v1/mobile-units:eligible:
     get:
       tags:
@@ -1326,6 +1361,12 @@ components:
         parentStorageLocationId:
           type: string
           format: uuid
+        capacity:
+          type: object
+          additionalProperties: {}
+        temperature:
+          type: object
+          additionalProperties: {}
     StorageLocationResponse:
       type: object
       properties:
@@ -1352,6 +1393,12 @@ components:
         parentStorageLocationId:
           type: string
           format: uuid
+        capacity:
+          type: object
+          additionalProperties: {}
+        temperature:
+          type: object
+          additionalProperties: {}
         inventoryCount:
           type: integer
           format: int32
@@ -1457,6 +1504,12 @@ components:
         destinationStorageLocationId:
           type: string
           format: uuid
+        capacity:
+          type: object
+          additionalProperties: {}
+        temperature:
+          type: object
+          additionalProperties: {}
     LocationPatchRequest:
       type: object
       description: Partial location payload
@@ -1503,6 +1556,22 @@ components:
           type: array
           items:
             type: string
+    StorageLocationValidationResponseDTO:
+      type: object
+      properties:
+        storageLocationId:
+          type: string
+          format: uuid
+        siteId:
+          type: string
+          format: uuid
+        exists:
+          type: boolean
+        active:
+          type: boolean
+        maxUnitCapacity:
+          type: integer
+          format: int32
     PageMobileUnitResponse:
       type: object
       properties:

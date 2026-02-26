@@ -1,9 +1,10 @@
 package com.positivity.customer.internal.entity;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -29,8 +31,9 @@ import lombok.ToString;
 
 /**
  * PersonParty entity representing an individual in the CRM system.
- * Distinct from Party (which represents organizations) and Contact (which links
- * persons to parties).
+ * Distinct from CommercialParty (which represents organizations) and Contact
+ * (which links
+ * persons to CommercialParties).
  * <p>
  * This entity is the system of record for individual person master data per
  * domain:crm decisions.
@@ -45,8 +48,13 @@ import lombok.ToString;
 @NoArgsConstructor
 @Entity
 @Table(name = "person_party")
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Individual person party in the CRM system")
 public class PersonParty extends AbstractParty {
+
+    @Column(name = "person_id", nullable = false, unique = true, columnDefinition = "UUID")
+    @Schema(description = "Canonical person ID from pos-people", example = "550e8400-e29b-41d4-a716-446655440000")
+    private UUID personId;
 
     @NotBlank
     @Schema(description = "Last name of the customer", example = "Doe")
@@ -79,17 +87,13 @@ public class PersonParty extends AbstractParty {
     }
 
     @PrePersist
-    public void generateId() {
+    public void onPersist() {
         validateNames();
-        setCreatedAt(Instant.now());
-        setModifiedAt(Instant.now());
     }
 
     @PreUpdate
-    private void validateCustomer() {
+    private void onUpdate() {
         validateNames();
-        setModifiedAt(Instant.now());
-
     }
 
     /** Helper method to validate customer names */
@@ -107,33 +111,14 @@ public class PersonParty extends AbstractParty {
         return PartyType.PERSON;
     }
 
-    /**
-     * Compatibility accessor for person APIs that use personId naming.
-     *
-     * @return the party ID used as person ID
-     */
     @Transient
-    public UUID getPersonId() {
+    @Schema(description = "Primary key for person party record in pos-customer")
+    public UUID getPersonPartyId() {
         return getPartyId();
     }
 
-    /**
-     * Compatibility mutator for person APIs that use personId naming.
-     *
-     * @param personId the ID value to set
-     */
-    public void setPersonId(UUID personId) {
-        setPartyId(personId);
-    }
-
-    /**
-     * Compatibility accessor for APIs expecting updatedAt.
-     *
-     * @return last modified timestamp
-     */
-    @Transient
-    public Instant getUpdatedAt() {
-        return getModifiedAt();
+    public void setPersonPartyId(UUID personPartyId) {
+        setPartyId(personPartyId);
     }
 
     @Transient
