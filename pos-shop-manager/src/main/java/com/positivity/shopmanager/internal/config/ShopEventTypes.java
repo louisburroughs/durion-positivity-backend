@@ -17,7 +17,7 @@ public final class ShopEventTypes {
 
     /**
      * All event type registrations for the shop manager module.
-     * Total: 5 event types.
+     * Total: 7 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -26,12 +26,16 @@ public final class ShopEventTypes {
                         "Create a new bay for a specific shop location").build(),
                 EventTypeRegistration.write("SHOP_BAY_MANAGE",
                         "Create or update bays in bulk").build(),
+                EventTypeRegistration.write("SHOP_BAY_DELETE",
+                        "Delete a bay from a specific shop location").build(),
 
                 // ShopMobileUnitController - 2 events
                 EventTypeRegistration.write("SHOP_MOBILE_UNIT_CREATE",
                         "Create a new mobile unit for a specific shop location").build(),
                 EventTypeRegistration.write("SHOP_MOBILE_UNIT_MANAGE",
                         "Create or update mobile units in bulk").build(),
+                EventTypeRegistration.write("SHOP_MOBILE_UNIT_DELETE",
+                        "Delete a mobile unit from a specific shop location").build(),
 
                 // AppointmentsController - 1 event
                 EventTypeRegistration.write("SHOP_APPOINTMENT_CREATE",

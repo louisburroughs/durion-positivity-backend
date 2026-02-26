@@ -14,15 +14,15 @@ import org.slf4j.LoggerFactory;
  *
  * Implements Pattern A: External callers use domain paths + X-API-Version
  * header
- * Gateway automatically rewrites to /v{version}/{serviceId}/** for internal
+ * Gateway automatically rewrites to /{serviceId}/v{version}/** for internal
  * routing
  *
  * Example:
  * Client Request: GET /inventory/items/123
  * Header: X-API-Version: 1
- * Gateway Rewrites: /v1/inventory/items/123
+ * Gateway Rewrites: /inventory/v1/items/123
  * Forwarded To: lb://inventory (Eureka service discovery)
- * Service Receives: /items/123 (after gateway strips /v1/inventory)
+ * Service Receives: /v1/items/123 (after gateway strips /inventory)
  *
  * Validation (STRICT):
  * - X-API-Version header REQUIRED
@@ -82,8 +82,8 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
         var serviceId = parts[1].toLowerCase();
         var remainder = (parts.length == 3) ? "/" + parts[2] : "";
 
-        // Rewrite path: /v{version}/{serviceId}/{remainder}
-        var newPath = "/v" + version + "/" + serviceId + remainder;
+        // Rewrite path: /{serviceId}/v{version}/{remainder}
+        var newPath = "/" + serviceId + "/v" + version + remainder;
         log.debug("Rewriting {} -> {} (version header: {})", rawPath, newPath, version);
 
         var mutated = exchange.mutate()

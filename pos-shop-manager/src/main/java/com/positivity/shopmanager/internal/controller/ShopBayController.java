@@ -75,6 +75,7 @@ public class ShopBayController {
     })
     @DeleteMapping("/{locationId}/bays/{bayId}")
     @PreAuthorize("hasAuthority('shop:bay:edit')")
+    @EmitEvent(id = "SHOP_BAY_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteBay(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Bay ID", example = "1") @PathVariable Long bayId) {

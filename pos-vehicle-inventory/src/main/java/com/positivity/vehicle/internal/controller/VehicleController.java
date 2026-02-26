@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.vehicle.internal.dao.VehicleDao;
 import com.positivity.vehicle.internal.entity.VehicleEntity;
 
@@ -34,6 +35,7 @@ public class VehicleController {
 
     @Operation(summary = "Create a new vehicle", description = "Add a new vehicle to the inventory.")
     @ApiResponse(responseCode = "200", description = "Vehicle created successfully.")
+    @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<VehicleEntity> createVehicle(
             @Parameter(description = "Vehicle object to be created") @RequestBody VehicleEntity vehicle) {
@@ -62,6 +64,7 @@ public class VehicleController {
     @Operation(summary = "Update vehicle by ID", description = "Update an existing vehicle's details by its ID.")
     @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")
     public ResponseEntity<VehicleEntity> updateVehicle(
             @Parameter(description = "ID of the vehicle to update", example = "1") @PathVariable UUID id,
@@ -82,6 +85,7 @@ public class VehicleController {
     @Operation(summary = "Delete vehicle by ID", description = "Delete a vehicle from the inventory by its ID.")
     @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteVehicle(
             @Parameter(description = "ID of the vehicle to delete", example = "1") @PathVariable UUID id) {
@@ -95,6 +99,7 @@ public class VehicleController {
 
     @Operation(summary = "Create vehicle by VIN", description = "Add a new vehicle to the inventory using its VIN.")
     @ApiResponse(responseCode = "200", description = "Vehicle created successfully.")
+    @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
     @PostMapping("/vin")
     public ResponseEntity<VehicleEntity> createVehicleByVIN(
             @Parameter(description = "Vehicle object to be created") @RequestBody VehicleEntity vehicle) {
@@ -119,6 +124,7 @@ public class VehicleController {
     @Operation(summary = "Update vehicle by VIN", description = "Update an existing vehicle's details by its VIN.")
     @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/vin/{vin}")
     public ResponseEntity<VehicleEntity> updateVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to update", example = "1HGCM82633A004352") @PathVariable String vin,
@@ -140,6 +146,7 @@ public class VehicleController {
     @Operation(summary = "Delete vehicle by VIN", description = "Delete a vehicle from the inventory by its VIN.")
     @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
     @DeleteMapping("/vin/{vin}")
     public ResponseEntity<Void> deleteVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to delete", example = "1HGCM82633A004352") @PathVariable String vin) {

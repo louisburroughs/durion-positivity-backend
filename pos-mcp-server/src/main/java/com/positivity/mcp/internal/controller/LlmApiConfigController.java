@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.service.LlmApiConfigService;
@@ -44,12 +45,14 @@ class LlmApiConfigController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @EmitEvent(id = "MCP_LLM_API_CREATE", apiVersion = "1")
     ResponseEntity<LlmApiConfigResponse> create(@RequestBody @Validated @NonNull LlmApiConfigRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @EmitEvent(id = "MCP_LLM_API_UPDATE", apiVersion = "1")
     ResponseEntity<LlmApiConfigResponse> update(@PathVariable @NonNull UUID id,
                                                 @RequestBody @Validated @NonNull LlmApiConfigRequest request) {
         return ResponseEntity.ok(service.update(id, request));
@@ -57,6 +60,7 @@ class LlmApiConfigController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @EmitEvent(id = "MCP_LLM_API_DELETE", apiVersion = "1")
     ResponseEntity<Void> delete(@PathVariable @NonNull UUID id) {
         service.delete(id);
         return ResponseEntity.noContent().build();

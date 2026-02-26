@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
 import com.positivity.inventory.service.PutawayGenerationService;
@@ -34,6 +35,7 @@ public class PutawayController {
     private final PutawayGenerationService putawayGenerationService;
 
     @PostMapping("/generate")
+    @EmitEvent(id = "INVENTORY_PUTAWAY_TASK_GENERATE", apiVersion = "1")
     @Operation(
             summary = "Generate putaway tasks",
             description = "Generates putaway tasks for received inventory lines.")
@@ -65,6 +67,7 @@ public class PutawayController {
     }
 
     @PostMapping("/{taskId}/claim")
+    @EmitEvent(id = "INVENTORY_PUTAWAY_TASK_CLAIM", apiVersion = "1")
     @Operation(
             summary = "Claim a putaway task",
             description = "Claims an available putaway task for the current actor.")

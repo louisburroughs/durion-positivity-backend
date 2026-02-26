@@ -115,6 +115,7 @@ public class CustomerController {
     @ApiResponse(responseCode = "404", description = "Customer not found.")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_DEACTIVATE + "')")
+    @EmitEvent(id = "CUSTOMER_CUSTOMER_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteCustomer(
             @Parameter(description = "ID of the customer to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
         log.info("Deleting customer with id: {}", id);

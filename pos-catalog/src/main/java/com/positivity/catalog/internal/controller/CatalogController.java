@@ -87,6 +87,7 @@ public class CatalogController {
     @Operation(summary = "Delete a catalog", description = "Deletes a catalog by its ID.")
     @ApiResponse(responseCode = "204", description = "Catalog deleted successfully")
     @ApiResponse(responseCode = "404", description = "Catalog not found")
+    @EmitEvent(id = "CATALOG_CATALOG_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteCatalog(
             @Parameter(description = "ID of the catalog to delete") @PathVariable UUID catalogId) {
         return catalogService.deleteCatalog(catalogId)

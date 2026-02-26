@@ -15,15 +15,17 @@ public final class CustomerEventTypes {
 
         /**
          * All event type registrations for the customer module.
-         * Total: 24 event types.
+         * Total: 26 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
-                                // CustomerController - 2 events
+                                // CustomerController - 3 events
                                 EventTypeRegistration.write("CUSTOMER_CUSTOMER_CREATE",
                                                 "Create a new customer").build(),
                                 EventTypeRegistration.write("CUSTOMER_CUSTOMER_UPDATE",
                                                 "Update an existing customer").build(),
+                                EventTypeRegistration.write("CUSTOMER_CUSTOMER_DELETE",
+                                                "Delete an existing customer").build(),
 
                                 // CrmAccountsController - 8 events
                                 EventTypeRegistration.fastRead("CUSTOMER_ACCOUNT_TIER_GET",
@@ -43,11 +45,13 @@ public final class CustomerEventTypes {
                                 EventTypeRegistration.write("CUSTOMER_VEHICLE_CREATE",
                                                 "Associate a new vehicle with a party").build(),
 
-                                // CrmVehiclesController - 3 events
+                                // CrmVehiclesController - 4 events
                                 EventTypeRegistration.write("CUSTOMER_VEHICLE_CREATE_LEGACY",
                                                 "Create vehicle for customer (legacy path)").build(),
                                 EventTypeRegistration.write("CUSTOMER_VEHICLE_UPDATE",
                                                 "Update vehicle information").build(),
+                                EventTypeRegistration.write("CUSTOMER_VEHICLE_DELETE",
+                                                "Delete or deactivate vehicle association").build(),
                                 EventTypeRegistration.write("CUSTOMER_VEHICLE_TRANSFER",
                                                 "Transfer vehicle ownership between customers").build(),
 

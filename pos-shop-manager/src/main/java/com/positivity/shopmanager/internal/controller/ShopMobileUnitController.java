@@ -75,6 +75,7 @@ public class ShopMobileUnitController {
     })
     @DeleteMapping("/{locationId}/mobileUnit/{bayId}")
     @PreAuthorize("hasAuthority('shop:bay:edit')")
+    @EmitEvent(id = "SHOP_MOBILE_UNIT_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteMobileUnit(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Bay ID", example = "1") @PathVariable Long bayId) {

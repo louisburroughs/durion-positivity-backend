@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.service.SystemPromptService;
@@ -44,12 +45,14 @@ class SystemPromptController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @EmitEvent(id = "MCP_SYSTEM_PROMPT_CREATE", apiVersion = "1")
     ResponseEntity<SystemPromptResponse> create(@Validated @RequestBody @NonNull SystemPromptRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(systemPromptService.create(request));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @EmitEvent(id = "MCP_SYSTEM_PROMPT_UPDATE", apiVersion = "1")
     ResponseEntity<SystemPromptResponse> update(@PathVariable @NonNull UUID id,
                                                 @Validated @RequestBody @NonNull SystemPromptRequest request) {
         return ResponseEntity.ok(systemPromptService.update(id, request));
@@ -57,6 +60,7 @@ class SystemPromptController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @EmitEvent(id = "MCP_SYSTEM_PROMPT_DELETE", apiVersion = "1")
     ResponseEntity<Void> delete(@PathVariable @NonNull UUID id) {
         systemPromptService.delete(id);
         return ResponseEntity.noContent().build();

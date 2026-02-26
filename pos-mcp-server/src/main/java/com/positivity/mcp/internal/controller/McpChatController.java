@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -53,6 +54,7 @@ public class McpChatController {
     })
     @PostMapping("/chat")
     @PreAuthorize("hasAnyRole('ADMIN','AGENT')")
+    @EmitEvent(id = "MCP_CHAT_EXECUTE", apiVersion = "1")
     public ResponseEntity<?> chat(
             @RequestBody @Schema(name = "ChatRequest", description = "Request to execute an MCP tool", example = "{\"toolName\": \"positivity-ping\", \"arguments\": {}}") ChatRequest request) {
         if (request == null || request.toolName() == null || request.toolName().isBlank()) {

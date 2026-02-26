@@ -166,6 +166,7 @@ public class EventTypeController {
          */
 
         @PutMapping("/code/{typeCode}")
+        @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPSERT", apiVersion = "1")
         @Operation(summary = "Upsert event type", description = "Create or update an event type by its type code. Creates if not exists, updates if exists.")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Event type created or updated successfully", content = @Content(schema = @Schema(implementation = EventType.class))),
@@ -287,6 +288,7 @@ public class EventTypeController {
          */
 
         @DeleteMapping("/{id}")
+        @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_DELETE", apiVersion = "1")
         @Operation(summary = "Delete event type", description = "Delete an event type by its ID")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "204", description = "Event type deleted successfully"),

@@ -97,6 +97,7 @@ public class PersonController {
     @Operation(summary = "Delete a person", description = "Delete a person by their unique ID.")
     @ApiResponse(responseCode = "204", description = "Person deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Person not found.")
+    @EmitEvent(id = "PEOPLE_PERSON_DELETE", apiVersion = "1")
     @DeleteMapping("/{personId}")
     @PreAuthorize("hasAuthority('people:person:delete')")
     public ResponseEntity<Void> deletePerson(
