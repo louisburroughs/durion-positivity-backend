@@ -30,3 +30,5 @@ permissions:
     description: "Complete receiving operations including recording quantities"
   - name: "inventory:issue:parts"
     description: "Issue parts directly from a receiving session to a workorder (cross-dock)"
+  - name: "inventory:override:part-match"
+    description: "Override workorder part-match validation for cross-dock issuance"
