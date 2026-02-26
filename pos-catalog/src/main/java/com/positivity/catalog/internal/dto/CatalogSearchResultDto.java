@@ -11,9 +11,10 @@ import lombok.NoArgsConstructor;
  * Cursor-based search result for the catalog product search endpoint.
  *
  * <p>
- * Pagination is cursor-based (opaque Base64-encoded offset). Clients should
- * pass the returned {@code nextCursor} as the {@code cursor} query parameter
- * in the next request. A {@code null} nextCursor means no more results.
+ * Pagination is cursor-based (opaque token). The cursor encodes the next page
+ * number as a decimal string; treat it as opaque. Clients should pass the
+ * returned {@code nextCursor} as the {@code cursor} query parameter in the
+ * next request. A {@code null} nextCursor means no more results.
  *
  * Issue: CAP-247 Story #17
  */
