@@ -43,7 +43,7 @@ public class PriceOverrideController {
 
     /**
      * Apply a price override to an order line.
-     * Requires PRICE_OVERRIDE_APPLY permission.
+     * Requires order:price_override:apply permission.
      */
     @Operation(summary = "Apply price override", description = "Apply a price override to an order line. May require approval based on override amount.")
     @ApiResponse(responseCode = "201", description = "Override created", content = @Content(schema = @Schema(implementation = ApplyPriceOverrideResponse.class)))
@@ -65,7 +65,7 @@ public class PriceOverrideController {
 
     /**
      * Approve a pending price override.
-     * Requires PRICE_OVERRIDE_APPROVE permission.
+     * Requires order:price_override:approve permission.
      */
     @Operation(summary = "Approve price override", description = "Approve a pending price override. Validates approver permission level.")
     @ApiResponse(responseCode = "200", description = "Override approved", content = @Content(schema = @Schema(implementation = PriceOverrideView.class)))
@@ -93,7 +93,7 @@ public class PriceOverrideController {
 
     /**
      * Reject a pending price override.
-     * Requires PRICE_OVERRIDE_REJECT permission.
+     * Requires order:price_override:reject permission.
      */
     @Operation(summary = "Reject price override", description = "Reject a pending price override with a reason.")
     @ApiResponse(responseCode = "200", description = "Override rejected", content = @Content(schema = @Schema(implementation = PriceOverrideView.class)))
@@ -121,7 +121,7 @@ public class PriceOverrideController {
 
     /**
      * Get a specific price override by ID.
-     * Requires PRICE_OVERRIDE_VIEW permission.
+     * Requires order:price_override:view permission.
      */
     @Operation(summary = "Get price override", description = "Retrieve a specific price override by ID.")
     @ApiResponse(responseCode = "200", description = "Override found", content = @Content(schema = @Schema(implementation = PriceOverrideView.class)))
@@ -136,7 +136,7 @@ public class PriceOverrideController {
 
     /**
      * Get all price overrides for an order.
-     * Requires PRICE_OVERRIDE_VIEW permission.
+     * Requires order:price_override:view permission.
      */
     @Operation(summary = "Get price overrides", description = "Retrieve price overrides by order ID, status, or date range. At least one filter parameter is required.")
     @ApiResponse(responseCode = "200", description = "Overrides retrieved")
@@ -167,7 +167,7 @@ public class PriceOverrideController {
 
     /**
      * Get all pending approval overrides.
-     * Requires PRICE_OVERRIDE_APPROVE permission.
+     * Requires order:price_override:approve permission.
      */
     @Operation(summary = "Get pending approvals", description = "Retrieve all price overrides awaiting approval.")
     @ApiResponse(responseCode = "200", description = "Pending overrides retrieved")

@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.List;
 
+import static com.positivity.order.internal.security.OrderPermissions.*;
 import static com.positivity.order.internal.security.PriceOverridePermissions.*;
 
 /**
@@ -29,16 +30,16 @@ public class OrderPermissionRegistration extends PermissionRegistrationSupport {
     protected List<PermissionDefinition> getPermissions() {
         return List.of(
                 // Order Management
-                PermissionDefinition.of("order:order:view", "View orders"),
-                PermissionDefinition.of("order:order:create", "Create orders"),
-                PermissionDefinition.of("order:order:edit", "Edit orders"),
-                PermissionDefinition.of("order:order:cancel", "Cancel orders"),
+                PermissionDefinition.of(ORDER_VIEW, "View orders"),
+                PermissionDefinition.of(ORDER_CREATE, "Create orders"),
+                PermissionDefinition.of(ORDER_EDIT, "Edit orders"),
+                PermissionDefinition.of(ORDER_CANCEL, "Cancel orders"),
 
                 // Order Line Management
-                PermissionDefinition.of("order:line:view", "View order lines"),
-                PermissionDefinition.of("order:line:create", "Add order lines"),
-                PermissionDefinition.of("order:line:edit", "Edit order lines"),
-                PermissionDefinition.of("order:line:delete", "Remove order lines"),
+                PermissionDefinition.of(ORDER_LINE_VIEW, "View order lines"),
+                PermissionDefinition.of(ORDER_LINE_CREATE, "Add order lines"),
+                PermissionDefinition.of(ORDER_LINE_EDIT, "Edit order lines"),
+                PermissionDefinition.of(ORDER_LINE_DELETE, "Remove order lines"),
 
                 // Price Override (using existing constants)
                 PermissionDefinition.of(PRICE_OVERRIDE_VIEW, "View price override history and reports"),

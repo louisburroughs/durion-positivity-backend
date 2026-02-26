@@ -25,6 +25,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 
+import static com.positivity.order.internal.security.PriceOverridePermissions.*;
+
 /**
  * Test security configuration that replaces gateway-based authentication
  * with a permissive filter chain for integration tests.
@@ -39,10 +41,10 @@ public class TestSecurityConfig {
      * All order authorities needed by controller {@code @PreAuthorize} checks.
      */
     private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
-            new SimpleGrantedAuthority("order:price_override:view"),
-            new SimpleGrantedAuthority("order:price_override:create"),
-            new SimpleGrantedAuthority("order:price_override:approve"),
-            new SimpleGrantedAuthority("order:price_override:reject"),
+            new SimpleGrantedAuthority(PRICE_OVERRIDE_VIEW),
+            new SimpleGrantedAuthority(PRICE_OVERRIDE_APPLY),
+            new SimpleGrantedAuthority(PRICE_OVERRIDE_APPROVE),
+            new SimpleGrantedAuthority(PRICE_OVERRIDE_REJECT),
             new SimpleGrantedAuthority("order:price_override:admin"));
 
     /**
