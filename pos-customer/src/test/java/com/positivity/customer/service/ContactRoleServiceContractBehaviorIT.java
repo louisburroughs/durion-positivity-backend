@@ -70,6 +70,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 testParty.setLegalName("Test Party");
                 testParty.setDisplayName("Test Party");
                 testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());
+                testParty.setCustomerNumber("CUST-TEST-" + System.currentTimeMillis());
                 testParty.setStatus(AccountStatus.ACTIVE);
 
                 // Create and add a contact to the party before saving
@@ -81,12 +82,13 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 testParty.getContacts().add(contact);
 
                 testParty = partyRepository.save(testParty);
-                testPartyUuid = UUID.nameUUIDFromBytes(("party-" + testParty.getPartyId()).getBytes());
+                testPartyUuid = testParty.getPartyId();
 
                 // Create test person (independent entity for contact role assignments)
                 PersonParty contactPerson = new PersonParty();
                 contactPerson.setFirstName("John");
                 contactPerson.setLastName("Doe");
+                contactPerson.setCustomerNumber("CUST-PERSON-" + System.currentTimeMillis());
                 contactPerson.setPreferredContactMethod(
                                 com.positivity.customer.internal.enums.PreferredContactMethod.EMAIL);
                 contactPerson = personRepository.save(contactPerson);
@@ -167,6 +169,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 PersonParty contact2 = new PersonParty();
                 contact2.setFirstName("Jane");
                 contact2.setLastName("Smith");
+                contact2.setCustomerNumber("CUST-PERSON2-" + System.currentTimeMillis());
                 contact2.setPreferredContactMethod(com.positivity.customer.internal.enums.PreferredContactMethod.EMAIL);
                 contact2 = personRepository.save(contact2);
                 UUID contact2Uuid = contact2.getPersonId();

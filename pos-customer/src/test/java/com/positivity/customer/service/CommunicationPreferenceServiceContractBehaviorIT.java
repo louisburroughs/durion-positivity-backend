@@ -21,6 +21,7 @@ import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
@@ -60,9 +61,18 @@ class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractInteg
                 testParty.setLegalName("Test Party");
                 testParty.setDisplayName("Test Party");
                 testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());
+                testParty.setCustomerNumber("CUST-TEST-" + System.currentTimeMillis());
                 testParty.setStatus(AccountStatus.ACTIVE);
+
+                Contact contact = new Contact();
+                contact.setCommercialParty(testParty);
+                contact.setFirstName("Jane");
+                contact.setLastName("Doe");
+                contact.setActive(true);
+                testParty.getContacts().add(contact);
+
                 testParty = partyRepository.save(testParty);
-                testPartyUuid = UUID.nameUUIDFromBytes(("party-" + testParty.getPartyId()).getBytes());
+                testPartyUuid = testParty.getPartyId();
         }
 
         @AfterEach
