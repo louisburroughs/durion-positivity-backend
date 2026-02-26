@@ -23,57 +23,63 @@ import java.util.UUID;
 @Component
 public class PricingClientImpl implements PricingClient {
 
-    private final RestClient restClient;
+        private final RestClient restClient;
 
-    public PricingClientImpl(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.price.base-url:http://pos-price}") String baseUrl) {
-        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
-    }
-
-    @Override
-    public Optional<PriceQuoteClientResponse> fetchPrice(UUID productId, UUID locationId, UUID customerTierId) {
-        log.debug("Fetching price quote: productId={}, locationId={}", productId, locationId);
-        PriceQuoteRequest body = new PriceQuoteRequest(productId, 1, locationId, customerTierId);
-
-        PriceQuoteServiceResponse response = restClient.post()
-                .uri("/v1/price/quotes")
-                .body(body)
-                .retrieve()
-                .body(PriceQuoteServiceResponse.class);
-
-        if (response == null || response.msrp() == null) {
-            log.warn("Price service returned null for productId={}", productId);
-            return Optional.empty();
+        public PricingClientImpl(
+                        RestClient.Builder restClientBuilder,
+                        @Value("${pos.price.base-url:http://pos-price}") String baseUrl) {
+                this.restClient = restClientBuilder.baseUrl(baseUrl).build();
         }
 
-        BigDecimal msrpAmount = response.msrp().amount() != null ? response.msrp().amount() : BigDecimal.ZERO;
-        String msrpCurrency = response.msrp().currency() != null ? response.msrp().currency() : "USD";
-        BigDecimal unitPriceAmt = response.unitPrice() != null && response.unitPrice().amount() != null
-                ? response.unitPrice().amount()
-                : msrpAmount;
-        String priceSource = response.priceSource() != null ? response.priceSource() : "UNKNOWN";
+        @Override
+        public Optional<PriceQuoteClientResponse> fetchPrice(UUID productId, UUID locationId, UUID customerTierId) {
+                log.debug("Fetching price quote: productId={}, locationId={}", productId, locationId);
+                PriceQuoteRequest body = new PriceQuoteRequest(productId, 1, locationId, customerTierId);
 
-        return Optional.of(new PriceQuoteClientResponse(msrpAmount, msrpCurrency, unitPriceAmt, priceSource));
-    }
+                PriceQuoteServiceResponse response = restClient.post()
+                                .uri("/v1/price/quotes")
+                                .body(body)
+                                .retrieve()
+                                .body(PriceQuoteServiceResponse.class);
 
-    // -----------------------------------------------------------------------
-    // Internal request/response shapes (mirrors pos-price API contract)
-    // -----------------------------------------------------------------------
+                if (response == null || response.msrp() == null) {
+                        log.warn("Price service returned null for productId={}", productId);
+                        return Optional.empty();
+                }
 
-    private record PriceQuoteRequest(
-            UUID productId,
-            int quantity,
-            UUID locationId,
-            UUID customerTierId) {
-    }
+                if (response.msrp().amount() == null) {
+                        log.warn("Price service returned null msrp.amount for productId={}, degrading to unavailable",
+                                        productId);
+                        return Optional.empty();
+                }
 
-    private record MoneyValue(BigDecimal amount, String currency) {
-    }
+                BigDecimal msrpAmount = response.msrp().amount();
+                String msrpCurrency = response.msrp().currency() != null ? response.msrp().currency() : "USD";
+                BigDecimal unitPriceAmt = response.unitPrice() != null && response.unitPrice().amount() != null
+                                ? response.unitPrice().amount()
+                                : msrpAmount;
+                String priceSource = response.priceSource() != null ? response.priceSource() : "UNKNOWN";
 
-    private record PriceQuoteServiceResponse(
-            MoneyValue msrp,
-            MoneyValue unitPrice,
-            String priceSource) {
-    }
+                return Optional.of(new PriceQuoteClientResponse(msrpAmount, msrpCurrency, unitPriceAmt, priceSource));
+        }
+
+        // -----------------------------------------------------------------------
+        // Internal request/response shapes (mirrors pos-price API contract)
+        // -----------------------------------------------------------------------
+
+        private record PriceQuoteRequest(
+                        UUID productId,
+                        int quantity,
+                        UUID locationId,
+                        UUID customerTierId) {
+        }
+
+        private record MoneyValue(BigDecimal amount, String currency) {
+        }
+
+        private record PriceQuoteServiceResponse(
+                        MoneyValue msrp,
+                        MoneyValue unitPrice,
+                        String priceSource) {
+        }
 }

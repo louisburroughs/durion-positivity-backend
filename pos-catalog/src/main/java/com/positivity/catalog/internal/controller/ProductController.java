@@ -126,14 +126,14 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/search")
-    @Operation(summary = "Search catalog products", description = "Cursor-based product search with optional free-text query, brand, category, and SKU filters. SKU exact matches are ranked first.")
+    @Operation(summary = "Search catalog products", description = "Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU.")
     @ApiResponse(responseCode = "200", description = "Search results", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogSearchResultDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid limit parameter")
+    @ApiResponse(responseCode = "400", description = "Invalid request parameter (e.g., non-numeric limit)")
     public ResponseEntity<CatalogSearchResultDto> searchProducts(
             @Parameter(description = "Free-text search query") @RequestParam(required = false) String q,
             @Parameter(description = "Filter by manufacturer brand (exact, case-insensitive)") @RequestParam(required = false) String brand,
             @Parameter(description = "Filter by category name (exact, case-insensitive)") @RequestParam(required = false) String category,
-            @Parameter(description = "Filter/rank by SKU (exact, case-insensitive)") @RequestParam(required = false) String sku,
+            @Parameter(description = "Filter by SKU (exact match, case-insensitive)") @RequestParam(required = false) String sku,
             @Parameter(description = "Pagination cursor from previous response") @RequestParam(required = false) String cursor,
             @Parameter(description = "Maximum number of results (1–100)") @RequestParam(defaultValue = "20") int limit) {
         return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit));
