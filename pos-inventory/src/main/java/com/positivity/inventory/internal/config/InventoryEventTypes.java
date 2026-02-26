@@ -72,7 +72,7 @@ public final class InventoryEventTypes {
                                 EventTypeRegistration.approval("INVENTORY_ADJUSTMENT_REQUEST_APPROVE",
                                                 "Approve and post inventory adjustment request to ledger").build(),
 
-                                // ReceivingController - 2 events
+                                // ReceivingController - 4 events
                                 EventTypeRegistration.write("INVENTORY_RECEIVING_SESSION_CREATE",
                                                 "Create a receiving session from a PO or ASN").build(),
                                 EventTypeRegistration.fastRead("INVENTORY_RECEIVING_SESSION_GET",

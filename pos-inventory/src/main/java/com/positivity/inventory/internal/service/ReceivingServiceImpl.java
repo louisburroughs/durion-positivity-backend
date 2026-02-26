@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
+import com.positivity.inventory.internal.client.WorkorderValidationClient;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
@@ -19,6 +20,7 @@ import com.positivity.inventory.internal.enums.InventoryVarianceType;
 import com.positivity.inventory.internal.enums.ReceivingLineStatus;
 import com.positivity.inventory.internal.enums.ReceivingSessionStatus;
 import com.positivity.inventory.internal.enums.SourceDocumentType;
+import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
@@ -27,6 +29,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.service.ReceivingService;
+import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,13 +50,26 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class ReceivingServiceImpl implements ReceivingService {
 
+    private static final String PART_MATCH_OVERRIDE_PERMISSION = "inventory:override:part-match";
+    private static final UUID DEFAULT_STAGING_LOCATION_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID DEFAULT_CROSS_DOCK_LOCATION_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000003");
+
     private final ReceivingSessionRepository receivingSessionRepository;
     private final InventoryVarianceRepository inventoryVarianceRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final SourceDocumentStubClient sourceDocumentStubClient;
+    private final WorkorderValidationClient workorderValidationClient;
 
     @Value("${pos.inventory.receiving.source-document-service:}")
     private String configuredSourceDocumentService;
+
+    @Value("${pos.inventory.receiving.staging-location-id:}")
+    private String configuredStagingLocationId;
+
+    @Value("${pos.inventory.receiving.cross-dock-location-id:}")
+    private String configuredCrossDockLocationId;
 
     @Override
     public @NonNull ReceivingSessionResponse createReceivingSession(
@@ -198,30 +214,39 @@ public class ReceivingServiceImpl implements ReceivingService {
                         "Receiving line not found in session: " + lineId));
 
         String workorderId = request.getWorkorderId();
-        String normalizedWorkorderId = workorderId == null ? "" : workorderId.toUpperCase(Locale.ROOT);
-        if (normalizedWorkorderId.contains("CLOSED") || normalizedWorkorderId.endsWith("-CLOSED")) {
-            throw new WorkorderClosedException(workorderId);
+        WorkorderValidationClient.WorkorderLineValidation workorderValidation = workorderValidationClient
+                .getWorkorderLineValidation(workorderId, request.getWorkorderLineId());
+        if (isClosedWorkorderStatus(workorderValidation.status())) {
+            throw new WorkorderClosedException("Cannot issue parts to a closed workorder: " + workorderId);
         }
+        validatePartMatchOrOverride(line, actorUserId, request.getWorkorderLineId(), workorderValidation.demandedProductId());
 
-        int quantityDelta = request.getQuantity().intValue();
+        int quantityDelta = toWholeLedgerQuantity(request.getQuantity(), "quantity");
+        UUID crossDockLocationId = resolveCrossDockLocationId();
+        int receiptQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta);
 
         InventoryLedgerEntry receiptEntry = InventoryLedgerEntry.builder()
                 .stockItemId(line.getProductId())
+                .locationId(crossDockLocationId)
+                .toLocationId(crossDockLocationId)
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
                 .changeInQuantity(quantityDelta)
-                .quantityAfter(quantityDelta)
+                .quantityAfter(receiptQuantityAfter)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_RECEIPT for workorder " + workorderId)
                 .build();
 
         InventoryLedgerEntry savedReceiptEntry = inventoryLedgerEntryRepository.save(receiptEntry);
+        int issueQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, -quantityDelta);
 
         InventoryLedgerEntry issueEntry = InventoryLedgerEntry.builder()
                 .stockItemId(line.getProductId())
+                .locationId(crossDockLocationId)
+                .fromLocationId(crossDockLocationId)
                 .eventType(InventoryLedgerEventType.GOODS_ISSUE)
                 .changeInQuantity(-quantityDelta)
-                .quantityAfter(-quantityDelta)
+                .quantityAfter(issueQuantityAfter)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_ISSUE to workorder " + workorderId)
@@ -296,18 +321,115 @@ public class ReceivingServiceImpl implements ReceivingService {
             return;
         }
 
-        int quantityDelta = quantity.intValue();
+        int quantityDelta = toWholeLedgerQuantity(quantity, "receivedQuantity");
+        UUID stagingLocationId = resolveStagingLocationId();
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(productId)
+                .locationId(stagingLocationId)
+                .toLocationId(stagingLocationId)
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
                 .changeInQuantity(quantityDelta)
-                .quantityAfter(quantityDelta)
+                .quantityAfter(calculateQuantityAfter(productId, stagingLocationId, quantityDelta))
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId + ":" + lineId)
                 .notes("Receiving session " + sessionId + " line " + lineId)
                 .build();
 
         inventoryLedgerEntryRepository.save(entry);
+    }
+
+    private int toWholeLedgerQuantity(BigDecimal quantity, String fieldName) {
+        if (quantity == null) {
+            throw new IllegalArgumentException(fieldName + " is required");
+        }
+        try {
+            return quantity.intValueExact();
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException(
+                    fieldName + " must be a whole number within 32-bit integer range",
+                    ex);
+        }
+    }
+
+    private int calculateQuantityAfter(String stockItemId, UUID locationId, int quantityDelta) {
+        Integer currentOnHand = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId);
+        int onHand = currentOnHand != null ? currentOnHand : 0;
+        return onHand + quantityDelta;
+    }
+
+    private UUID resolveStagingLocationId() {
+        return resolveLocationId(
+                configuredStagingLocationId,
+                DEFAULT_STAGING_LOCATION_ID,
+                "pos.inventory.receiving.staging-location-id");
+    }
+
+    private UUID resolveCrossDockLocationId() {
+        return resolveLocationId(
+                configuredCrossDockLocationId,
+                DEFAULT_CROSS_DOCK_LOCATION_ID,
+                "pos.inventory.receiving.cross-dock-location-id");
+    }
+
+    private UUID resolveLocationId(String configuredValue, UUID defaultValue, String propertyName) {
+        if (configuredValue == null || configuredValue.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return UUID.fromString(configuredValue.trim());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException(propertyName + " must be a valid UUID: " + configuredValue, ex);
+        }
+    }
+
+    private void validatePartMatchOrOverride(
+            ReceivingLine line,
+            String actorUserId,
+            String workorderLineId,
+            String demandedProductId) {
+        if (workorderLineId == null || workorderLineId.isBlank()) {
+            throw new IllegalArgumentException("workorderLineId is required");
+        }
+        if (demandedProductId == null || demandedProductId.isBlank()) {
+            throw new IllegalStateException("Workorder line " + workorderLineId + " is missing demanded product");
+        }
+
+        if (isSameProduct(line.getProductId(), demandedProductId)) {
+            return;
+        }
+
+        if (SecurityContextHelper.hasAuthority(PART_MATCH_OVERRIDE_PERMISSION)) {
+            log.warn(
+                    "Part mismatch override accepted for workorderLineId={} by actor={} (requiredPermission={})",
+                    workorderLineId,
+                    actorUserId,
+                    PART_MATCH_OVERRIDE_PERMISSION);
+            return;
+        }
+
+        throw new PartMatchPermissionException(String.format(
+                "PART_MISMATCH_WITH_WORKORDER: received product %s does not match demanded product %s for workorderLineId %s. Required permission: %s",
+                line.getProductId(),
+                demandedProductId,
+                workorderLineId,
+                PART_MATCH_OVERRIDE_PERMISSION));
+    }
+
+    private boolean isClosedWorkorderStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+        String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
+        return "COMPLETED".equals(normalizedStatus)
+                || "CANCELLED".equals(normalizedStatus)
+                || "CLOSED".equals(normalizedStatus);
+    }
+
+    private boolean isSameProduct(String left, String right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        return left.trim().equalsIgnoreCase(right.trim());
     }
 
     private ReceiveItemsResponse buildReceiveItemsResponse(

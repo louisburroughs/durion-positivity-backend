@@ -8,6 +8,7 @@ import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
 import com.positivity.inventory.service.ReceivingService;
+import com.positivity.security.common.SecurityContextHelper;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,8 +35,9 @@ public class ReceivingController {
     @PreAuthorize("hasAuthority('inventory:receiving:create')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_CREATE", apiVersion = "1")
     public ResponseEntity<ReceivingSessionResponse> createReceivingSession(
-            @Valid @RequestBody CreateReceivingSessionRequest request,
-            @RequestHeader("X-User") String actorUserId) {
+            @Valid @RequestBody CreateReceivingSessionRequest request) {
+
+        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         ReceivingSessionResponse response = receivingService.createReceivingSession(request, actorUserId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -55,15 +56,16 @@ public class ReceivingController {
     /**
      * Records actual received quantities for a session, generating ledger entries.
      * ADR-0017: Returns 200 OK (updating existing resource).
-     * ADR-0018: actorUserId from X-User header.
+     * ADR-0018: actorUserId from authenticated security context.
      */
     @PostMapping("/sessions/{sessionId}/receive")
     @PreAuthorize("hasAuthority('inventory:receiving:complete')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_COMPLETE", apiVersion = "1")
     public ResponseEntity<ReceiveItemsResponse> receiveItemsIntoStaging(
             @PathVariable UUID sessionId,
-            @Valid @RequestBody ReceiveItemsRequest request,
-            @RequestHeader("X-User") String actorUserId) {
+            @Valid @RequestBody ReceiveItemsRequest request) {
+
+        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, actorUserId);
         return ResponseEntity.ok(response);
@@ -73,7 +75,7 @@ public class ReceivingController {
      * Cross-docks a receiving line directly to a workorder.
      * ADR-0017: 200 OK on success, 400 for closed workorder, 403 for part mismatch
      * without permission.
-     * ADR-0018: actorUserId from X-User header.
+     * ADR-0018: actorUserId from authenticated security context.
      * ADR-0001: Dual ledger entries (GOODS_RECEIVED + GOODS_ISSUE) created
      * atomically.
      */
@@ -83,8 +85,9 @@ public class ReceivingController {
     public ResponseEntity<CrossDockResponse> crossDockLineToWorkorder(
             @PathVariable UUID sessionId,
             @PathVariable UUID lineId,
-            @Valid @RequestBody CrossDockRequest request,
-            @RequestHeader("X-User") String actorUserId) {
+            @Valid @RequestBody CrossDockRequest request) {
+
+        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         CrossDockResponse response = receivingService.crossDockLineToWorkorder(sessionId, lineId, request, actorUserId);
         return ResponseEntity.ok(response);

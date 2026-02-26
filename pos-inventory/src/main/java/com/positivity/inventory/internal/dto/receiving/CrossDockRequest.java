@@ -16,6 +16,7 @@ public class CrossDockRequest {
     @NotBlank(message = "workorderId is required")
     private String workorderId;
 
+    @NotBlank(message = "workorderLineId is required")
     private String workorderLineId;
 
     @NotNull(message = "quantity is required")

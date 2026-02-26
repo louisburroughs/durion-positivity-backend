@@ -121,11 +121,12 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
         // workorderId present, sessionStatus not null
         UUID sessionId = UUID.randomUUID();
         UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
 
         CrossDockResponse response = CrossDockResponse.builder()
                 .lineId(lineId)
                 .workorderId("WO-001")
-                .workorderLineId(null)
+                .workorderLineId(workorderLineId.toString())
                 .crossDockedQuantity(new BigDecimal("10"))
                 .sessionStatus("COMPLETED")
                 .lineStatus("RECEIVED")
@@ -136,6 +137,7 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
 
         var reqBody = objectMapper.createObjectNode();
         reqBody.put("workorderId", "WO-001");
+        reqBody.put("workorderLineId", workorderLineId.toString());
         reqBody.put("quantity", 10);
 
         mockMvc.perform(withReceivingAuth(
@@ -173,11 +175,12 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
         // crossDockedQuantity=3
         UUID sessionId = UUID.randomUUID();
         UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
 
         CrossDockResponse response = CrossDockResponse.builder()
                 .lineId(lineId)
                 .workorderId("WO-002")
-                .workorderLineId(null)
+                .workorderLineId(workorderLineId.toString())
                 .crossDockedQuantity(new BigDecimal("3"))
                 .sessionStatus("IN_PROGRESS")
                 .lineStatus("PARTIALLY_RECEIVED")
@@ -188,6 +191,7 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
 
         var reqBody = objectMapper.createObjectNode();
         reqBody.put("workorderId", "WO-002");
+        reqBody.put("workorderLineId", workorderLineId.toString());
         reqBody.put("quantity", 3);
 
         mockMvc.perform(withReceivingAuth(
@@ -227,12 +231,14 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
         // WORKORDER_CLOSED
         UUID sessionId = UUID.randomUUID();
         UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
 
         when(receivingService.crossDockLineToWorkorder(eq(sessionId), eq(lineId), any(), any()))
                 .thenThrow(new WorkorderClosedException("Workorder WO-CLOSED is closed"));
 
         var reqBody = objectMapper.createObjectNode();
         reqBody.put("workorderId", "WO-CLOSED");
+        reqBody.put("workorderLineId", workorderLineId.toString());
         reqBody.put("quantity", 10);
 
         mockMvc.perform(withReceivingAuth(
@@ -275,11 +281,13 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
         // 403
         UUID sessionId = UUID.randomUUID();
         UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
 
         // No mock needed: Spring Security rejects before service is invoked.
 
         var reqBody = objectMapper.createObjectNode();
         reqBody.put("workorderId", "WO-001");
+        reqBody.put("workorderLineId", workorderLineId.toString());
         reqBody.put("quantity", 10);
 
         mockMvc.perform(withReceivingOnlyAuth(
@@ -288,5 +296,30 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(reqBody))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("AC5: POST cross-dock with part mismatch and no override permission returns 403")
+    void crossDock_partMismatchWithoutOverridePermission_returns403() throws Exception {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+
+        when(receivingService.crossDockLineToWorkorder(eq(sessionId), eq(lineId), any(), any()))
+                .thenThrow(new PartMatchPermissionException(
+                        "PART_MISMATCH_WITH_WORKORDER: override permission required"));
+
+        var reqBody = objectMapper.createObjectNode();
+        reqBody.put("workorderId", "WO-001");
+        reqBody.put("workorderLineId", workorderLineId.toString());
+        reqBody.put("quantity", 10);
+
+        mockMvc.perform(withReceivingAuth(
+                post("/v1/inventory/receiving/sessions/{sessionId}/lines/{lineId}/cross-dock",
+                        sessionId, lineId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(reqBody))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PART_MATCH_PERMISSION_REQUIRED"));
     }
 }

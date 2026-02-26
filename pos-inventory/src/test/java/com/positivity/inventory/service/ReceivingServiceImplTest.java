@@ -1,6 +1,7 @@
 package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
+import com.positivity.inventory.internal.client.WorkorderValidationClient;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
@@ -8,10 +9,12 @@ import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceiveLineRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ReceivingLine;
 import com.positivity.inventory.internal.entity.ReceivingSession;
 import com.positivity.inventory.internal.enums.ReceivingLineStatus;
 import com.positivity.inventory.internal.enums.ReceivingSessionStatus;
+import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
@@ -20,13 +23,19 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.internal.service.ReceivingServiceImpl;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,10 +43,15 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ReceivingServiceImplTest {
+
+    private static final UUID STAGING_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID CROSS_DOCK_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
     @Mock
     private ReceivingSessionRepository receivingSessionRepository;
@@ -51,8 +65,16 @@ class ReceivingServiceImplTest {
     @Mock
     private SourceDocumentStubClient sourceDocumentStubClient;
 
+    @Mock
+    private WorkorderValidationClient workorderValidationClient;
+
     @InjectMocks
     private ReceivingServiceImpl receivingService;
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     void createReceivingSession_manualHappyPath() {
@@ -437,6 +459,46 @@ class ReceivingServiceImplTest {
     }
 
     @Test
+    void receiveItemsIntoStaging_ledgerEntryUsesStagingLocationAndOnHandQuantityAfter() {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-123")
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(inventoryLedgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", STAGING_LOCATION_ID))
+                .thenReturn(7);
+
+        ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(
+                new ReceiveLineRequest(lineId, new BigDecimal("10"))));
+
+        receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        InventoryLedgerEntry savedLedgerEntry = ledgerCaptor.getValue();
+
+        assertThat(savedLedgerEntry.getLocationId()).isEqualTo(STAGING_LOCATION_ID);
+        assertThat(savedLedgerEntry.getToLocationId()).isEqualTo(STAGING_LOCATION_ID);
+        assertThat(savedLedgerEntry.getQuantityAfter()).isEqualTo(17);
+        assertThat(savedLedgerEntry.getChangeInQuantity()).isEqualTo(10);
+    }
+
+    @Test
     void receiveItemsIntoStaging_shortReceipt_shortageVariance() {
         UUID sessionId = UUID.randomUUID();
         UUID lineId = UUID.randomUUID();
@@ -544,6 +606,7 @@ class ReceivingServiceImplTest {
         // Arrange
         UUID sessionId = UUID.randomUUID();
         UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
 
         ReceivingLine line = ReceivingLine.builder()
                 .lineId(lineId)
@@ -563,8 +626,10 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
 
-        CrossDockRequest request = new CrossDockRequest("WO-001", null, new BigDecimal("10"), null);
+        CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null);
 
         // Act & Assert — RED: UnsupportedOperationException until Story #33 is
         // implemented
@@ -588,6 +653,7 @@ class ReceivingServiceImplTest {
         // Arrange
         UUID sessionId = UUID.randomUUID();
         UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
 
         ReceivingLine line = ReceivingLine.builder()
                 .lineId(lineId)
@@ -607,8 +673,10 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
 
-        CrossDockRequest request = new CrossDockRequest("WO-001", null, new BigDecimal("3"), null);
+        CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null);
 
         // Act & Assert — RED: UnsupportedOperationException until Story #33 is
         // implemented
@@ -631,6 +699,7 @@ class ReceivingServiceImplTest {
         // Arrange
         UUID sessionId = UUID.randomUUID();
         UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
 
         ReceivingLine line = ReceivingLine.builder()
                 .lineId(lineId)
@@ -650,9 +719,10 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
 
-        // Issue CAP-216 / Story #33: workorderId suffix "-CLOSED" signals a closed
-        // workorder
-        CrossDockRequest request = new CrossDockRequest("WO-CLOSED", null, new BigDecimal("10"), null);
+        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("CANCELLED", null));
+
+        CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null);
 
         // Act & Assert — RED: UnsupportedOperationException until Story #33 is
         // implemented
@@ -670,13 +740,171 @@ class ReceivingServiceImplTest {
     void crossDockLineToWorkorder_sessionNotFound_throwsNotFoundException() {
         // Arrange
         when(receivingSessionRepository.findById(any())).thenReturn(Optional.empty());
-        CrossDockRequest request = new CrossDockRequest("WO-001", null, new BigDecimal("10"), null);
+        CrossDockRequest request = new CrossDockRequest("WO-001", UUID.randomUUID().toString(), new BigDecimal("10"), null);
 
         // Act & Assert — RED: UnsupportedOperationException until Story #33 is
         // implemented
         assertThrows(ReceivingSessionNotFoundException.class,
                 () -> receivingService.crossDockLineToWorkorder(
                         UUID.randomUUID(), UUID.randomUUID(), request, "actor-user"));
+    }
+
+    @Test
+    void crossDockLineToWorkorder_fractionalQuantity_throwsIllegalArgumentException() {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-123")
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+
+        CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("1.5"), null);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user"));
+
+        assertThat(exception.getMessage()).contains("whole number");
+    }
+
+    @Test
+    void crossDockLineToWorkorder_partMismatchWithoutOverride_throwsPartMatchPermissionException() {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-123")
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation(
+                        "WORK_IN_PROGRESS",
+                        UUID.randomUUID().toString()));
+
+        CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("2"), null);
+
+        PartMatchPermissionException exception = assertThrows(
+                PartMatchPermissionException.class,
+                () -> receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user"));
+
+        assertThat(exception.getMessage()).contains("PART_MISMATCH_WITH_WORKORDER");
+    }
+
+    @Test
+    void crossDockLineToWorkorder_partMismatchWithOverride_allowsCrossDock() {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-123")
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation(
+                        "WORK_IN_PROGRESS",
+                        UUID.randomUUID().toString()));
+
+        authenticateAs("override-user", "inventory:override:part-match");
+        CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("2"), null);
+
+        CrossDockResponse result = receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "override-user");
+
+        assertThat(result.getWorkorderId()).isEqualTo("WO-001");
+        assertThat(result.getLineId()).isEqualTo(lineId);
+        assertThat(result.getCrossDockedQuantity()).isEqualByComparingTo("2");
+    }
+
+    @Test
+    void crossDockLineToWorkorder_ledgerEntriesUseCrossDockLocationAndOnHandQuantityAfter() {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-123")
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(inventoryLedgerEntryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", CROSS_DOCK_LOCATION_ID))
+                .thenReturn(4, 14);
+
+        CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null);
+
+        receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user");
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(inventoryLedgerEntryRepository, times(2)).save(ledgerCaptor.capture());
+        List<InventoryLedgerEntry> savedEntries = ledgerCaptor.getAllValues();
+
+        InventoryLedgerEntry receiptEntry = savedEntries.get(0);
+        assertThat(receiptEntry.getLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
+        assertThat(receiptEntry.getToLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
+        assertThat(receiptEntry.getQuantityAfter()).isEqualTo(14);
+        assertThat(receiptEntry.getChangeInQuantity()).isEqualTo(10);
+
+        InventoryLedgerEntry issueEntry = savedEntries.get(1);
+        assertThat(issueEntry.getLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
+        assertThat(issueEntry.getFromLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
+        assertThat(issueEntry.getQuantityAfter()).isEqualTo(4);
+        assertThat(issueEntry.getChangeInQuantity()).isEqualTo(-10);
     }
 
     @Test
@@ -705,6 +933,36 @@ class ReceivingServiceImplTest {
         assertThat(response.getSessionStatus()).isEqualTo("IN_PROGRESS");
     }
 
+    @Test
+    void receiveItemsIntoStaging_fractionalQuantity_throwsIllegalArgumentException() {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .lines(List.of(line))
+                .status(ReceivingSessionStatus.OPEN)
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+
+        ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(
+                new ReceiveLineRequest(lineId, new BigDecimal("2.75"))));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> receivingService.receiveItemsIntoStaging(sessionId, request, "test-user"));
+
+        assertThat(exception.getMessage()).contains("whole number");
+    }
+
     private void stubSourceDocumentLines() {
         SourceDocumentStubClient.SourceDocumentLineDto line1 = new SourceDocumentStubClient.SourceDocumentLineDto();
         line1.setProductId("PROD-001");
@@ -715,5 +973,13 @@ class ReceivingServiceImplTest {
         line2.setExpectedQuantity(new BigDecimal("10"));
 
         when(sourceDocumentStubClient.fetchLines(any(), any(), any())).thenReturn(List.of(line1, line2));
+    }
+
+    private void authenticateAs(String username, String... authorities) {
+        var authentication = new UsernamePasswordAuthenticationToken(
+                username,
+                "N/A",
+                Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList());
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 }
