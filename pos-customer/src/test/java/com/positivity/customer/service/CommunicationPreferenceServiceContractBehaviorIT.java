@@ -58,6 +58,7 @@ class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractInteg
                 // Create test party
                 testParty = new CommercialParty();
                 testParty.setLegalName("Test Party");
+                testParty.setDisplayName("Test Party");
                 testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());
                 testParty.setStatus(AccountStatus.ACTIVE);
                 testParty = partyRepository.save(testParty);
