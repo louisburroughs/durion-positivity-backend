@@ -1,0 +1,8 @@
+domain: invoice
+serviceName: pos-invoice
+version: "1.0"
+permissions:
+  - name: "invoice:manage"
+    description: "Manage invoice lifecycle operations"
+  - name: "invoice:billing-rules"
+    description: "Manage invoice billing rules and defaults"

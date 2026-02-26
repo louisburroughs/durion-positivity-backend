@@ -11,9 +11,9 @@ import java.util.Map;
 /**
  * CRM Permission Registry
  * 
- * Defines all CRM permissions per ADR 0002 (CRM Domain Permission Taxonomy).
- * Permissions are registered with the central Security Domain at service
- * startup.
+ * Defines CRM permission constants and legacy registration metadata.
+ * Registration policy is governed by ADR-0025 (`permissions.yaml` as the
+ * canonical source).
  * 
  * Permission Format: crm:resource:action
  * Risk Levels: LOW, MEDIUM, HIGH, CRITICAL

@@ -5,13 +5,13 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Support class for registering service permissions with pos-security-service
@@ -29,17 +29,9 @@ import lombok.extern.slf4j.Slf4j;
  *     public class CatalogPermissionRegistration extends PermissionRegistrationSupport {
  *
  *         public CatalogPermissionRegistration(RestClient.Builder builder,
- *                 &#64;Value("${pos.security.base-url}") String securityServiceUrl) {
- *             super(builder, securityServiceUrl, "catalog", "pos-catalog");
- *         }
- *
- *         @Override
- *         protected List<PermissionDefinition> getPermissions() {
- *             return List.of(
- *                     PermissionDefinition.of("catalog:product:view", "View products"),
- *                     PermissionDefinition.of("catalog:product:create", "Create products"),
- *                     PermissionDefinition.of("catalog:product:edit", "Edit products"),
- *                     PermissionDefinition.of("catalog:product:delete", "Delete products"));
+ *                 &#64;Value("${pos.security.base-url:http://pos-security-service:8086}") String securityServiceUrl,
+ *                 &#64;Value("${pos.security.permission-registration.enabled:true}") boolean enabled) {
+ *             super(builder, securityServiceUrl, enabled, "permissions.yaml");
  *         }
  *     }
  * }
@@ -57,16 +49,18 @@ import lombok.extern.slf4j.Slf4j;
  *
  * @see PermissionDefinition
  */
-@Slf4j
 public abstract class PermissionRegistrationSupport implements ApplicationRunner {
 
     private static final int MAX_RETRIES = 5;
     private static final long RETRY_DELAY_MS = 2000;
+    private static final Logger logger = LoggerFactory.getLogger(PermissionRegistrationSupport.class);
 
     private final RestClient restClient;
     private final String domain;
     private final String serviceName;
+    private final String version;
     private final boolean enabled;
+    private final List<PermissionDefinition> manifestPermissions;
 
     /**
      * Create a new permission registration support instance.
@@ -105,36 +99,88 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
             @NonNull String domain,
             @NonNull String serviceName,
             boolean enabled) {
+        this(restClientBuilder, securityServiceUrl, domain, serviceName, "1.0", enabled, null);
+    }
+
+    /**
+     * Create a permission registration support instance backed by a classpath
+     * manifest.
+     *
+     * @param restClientBuilder        RestClient builder for HTTP requests
+     * @param securityServiceUrl       Base URL of pos-security-service
+     * @param enabled                  Whether permission registration is enabled
+     * @param permissionsManifestPath  Classpath path to permissions manifest (for
+     *                                 example: {@code permissions.yaml})
+     */
+    protected PermissionRegistrationSupport(
+            RestClient.Builder restClientBuilder,
+            @NonNull String securityServiceUrl,
+            boolean enabled,
+            @NonNull String permissionsManifestPath) {
+        this(restClientBuilder, securityServiceUrl,
+                PermissionManifestLoader.loadFromClasspath(permissionsManifestPath), enabled);
+    }
+
+    private PermissionRegistrationSupport(
+            RestClient.Builder restClientBuilder,
+            @NonNull String securityServiceUrl,
+            PermissionManifestLoader.PermissionManifest manifest,
+            boolean enabled) {
+        this(restClientBuilder,
+                securityServiceUrl,
+                manifest.domain(),
+                manifest.serviceName(),
+                manifest.version(),
+                enabled,
+                manifest.permissions());
+    }
+
+    private PermissionRegistrationSupport(
+            RestClient.Builder restClientBuilder,
+            @NonNull String securityServiceUrl,
+            @NonNull String domain,
+            @NonNull String serviceName,
+            @NonNull String version,
+            boolean enabled,
+            List<PermissionDefinition> manifestPermissions) {
         this.restClient = restClientBuilder
                 .baseUrl(securityServiceUrl + "/v1/permissions/register")
                 .build();
         this.domain = domain;
         this.serviceName = serviceName;
+        this.version = version;
         this.enabled = enabled;
+        this.manifestPermissions = manifestPermissions == null ? null : List.copyOf(manifestPermissions);
     }
 
     /**
      * Get the list of permissions to register for this service.
-     * Subclasses must implement this method to define their permissions.
+     * Subclasses may override this method for inline registration definitions.
      *
      * @return list of permission definitions
      */
-    protected abstract List<PermissionDefinition> getPermissions();
+    protected List<PermissionDefinition> getPermissions() {
+        if (manifestPermissions != null) {
+            return manifestPermissions;
+        }
+        throw new IllegalStateException(
+                "No manifest permissions configured. Override getPermissions() or use manifest constructor.");
+    }
 
     @Override
     public void run(ApplicationArguments args) {
         if (!enabled) {
-            log.info("[{}] Permission registration is disabled", serviceName);
+            logger.info("[{}] Permission registration is disabled", serviceName);
             return;
         }
 
         List<PermissionDefinition> permissions = getPermissions();
         if (permissions == null || permissions.isEmpty()) {
-            log.info("[{}] No permissions to register", serviceName);
+            logger.info("[{}] No permissions to register", serviceName);
             return;
         }
 
-        log.info("[{}] Registering {} permissions with security service...",
+        logger.info("[{}] Registering {} permissions with security service...",
                 serviceName, permissions.size());
 
         registerWithRetry(permissions);
@@ -154,7 +200,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
                         .toList();
 
                 PermissionRegistrationRequest request = new PermissionRegistrationRequest(
-                        domain, serviceName, permissionDtos, "1.0");
+                        domain, serviceName, permissionDtos, version);
 
                 restClient.post()
                         .contentType(MediaType.APPLICATION_JSON)
@@ -162,17 +208,17 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
                         .retrieve()
                         .toBodilessEntity();
 
-                log.info("[{}] Successfully registered {} permissions",
+                logger.info("[{}] Successfully registered {} permissions",
                         serviceName, permissions.size());
                 return;
 
             } catch (RestClientException e) {
                 if (attempt.get() < MAX_RETRIES) {
-                    log.warn("[{}] Permission registration attempt {} failed: {}. Retrying in {}ms...",
+                    logger.warn("[{}] Permission registration attempt {} failed: {}. Retrying in {}ms...",
                             serviceName, attempt.get(), e.getMessage(), RETRY_DELAY_MS);
                     sleep(RETRY_DELAY_MS);
                 } else {
-                    log.error("[{}] Permission registration failed after {} attempts: {}. " +
+                    logger.error("[{}] Permission registration failed after {} attempts: {}. " +
                             "Service will start but permissions may need manual registration.",
                             serviceName, MAX_RETRIES, e.getMessage());
                 }

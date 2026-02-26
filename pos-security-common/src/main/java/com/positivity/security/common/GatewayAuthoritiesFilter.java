@@ -6,6 +6,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -16,7 +18,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Security filter that reads authentication headers injected by the API
@@ -55,9 +56,9 @@ import lombok.extern.slf4j.Slf4j;
  * @see GatewaySecurityConstants
  * @see GatewaySecurityConfig
  */
-@Slf4j
 @Order(1)
 public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
+    private static final Logger logger = LoggerFactory.getLogger(GatewayAuthoritiesFilter.class);
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -88,16 +89,16 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            if (log.isDebugEnabled()) {
-                log.debug("Authenticated user '{}' (userId='{}') with {} authorities from gateway headers",
+            if (logger.isDebugEnabled()) {
+                logger.debug("Authenticated user '{}' (userId='{}') with {} authorities from gateway headers",
                         username, userId, authorities.size());
             }
         } else {
             // No authentication headers - clear any existing context
             SecurityContextHolder.clearContext();
 
-            if (log.isTraceEnabled()) {
-                log.trace("No gateway authentication headers for request: {} {}",
+            if (logger.isTraceEnabled()) {
+                logger.trace("No gateway authentication headers for request: {} {}",
                         request.getMethod(), path);
             }
         }

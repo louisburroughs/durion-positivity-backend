@@ -1,0 +1,6 @@
+domain: documents
+serviceName: pos-documents
+version: "1.0"
+permissions:
+  - name: "documents:render"
+    description: "Render document content into supported output formats"

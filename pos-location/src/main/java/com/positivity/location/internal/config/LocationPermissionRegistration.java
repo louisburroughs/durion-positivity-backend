@@ -1,4 +1,4 @@
-package com.positivity.accounting.internal.config;
+package com.positivity.location.internal.config;
 
 import com.positivity.security.common.PermissionRegistrationSupport;
 import org.springframework.beans.factory.annotation.Value;
@@ -6,12 +6,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * Registers accounting permissions with pos-security-service at startup.
+ * Registers location service permissions with pos-security-service at startup.
  */
 @Component
-public class AccountingPermissionRegistration extends PermissionRegistrationSupport {
+public class LocationPermissionRegistration extends PermissionRegistrationSupport {
 
-    public AccountingPermissionRegistration(
+    public LocationPermissionRegistration(
             RestClient.Builder restClientBuilder,
             @Value("${pos.security.base-url:http://pos-security-service:8086}") String securityServiceUrl,
             @Value("${pos.security.permission-registration.enabled:true}") boolean enabled) {
