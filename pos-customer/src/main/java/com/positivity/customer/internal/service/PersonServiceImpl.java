@@ -75,6 +75,7 @@ public class PersonServiceImpl implements PersonService {
         PersonParty person = new PersonParty();
         person.setFirstName(request.getFirstName().trim());
         person.setLastName(request.getLastName().trim());
+        person.setCustomerNumber("CUST-PER-" + UUID.randomUUID().toString().substring(0, 8));
         person.setPreferredContactMethod(request.getPreferredContactMethod());
 
         // Save person first to get ID

@@ -129,7 +129,7 @@ public class PartyRelationship {
         if (effectiveEndDate == null) {
             return true;
         }
-        return effectiveEndDate.isAfter(LocalDate.now()) || effectiveEndDate.isEqual(LocalDate.now());
+        return effectiveEndDate.isAfter(LocalDate.now());
     }
 
     /**
