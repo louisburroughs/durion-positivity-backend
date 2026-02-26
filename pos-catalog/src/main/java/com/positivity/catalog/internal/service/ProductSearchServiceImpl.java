@@ -65,7 +65,11 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         log.debug("Catalog search: q={}, brand={}, category={}, sku={}, page={}, limit={}",
                 normalizedQ, normalizedBrand, normalizedCategory, normalizedSku, pageNumber, effectiveLimit);
 
-        PageRequest pageable = PageRequest.of(pageNumber, effectiveLimit, Sort.by("name").ascending());
+        PageRequest pageable = PageRequest.of(
+                pageNumber,
+                effectiveLimit,
+                Sort.by("name").ascending().and(Sort.by("id").ascending())
+        );
         Page<ProductEntity> page = productRepository.searchProductsFiltered(
                 normalizedQ, normalizedSku, normalizedBrand, normalizedCategory, pageable);
 
