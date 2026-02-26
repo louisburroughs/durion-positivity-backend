@@ -1,8 +1,11 @@
 package com.positivity.customer.contract;
 
+import com.positivity.customer.config.TestSecurityConfig;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -17,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(TestSecurityConfig.class)
 public abstract class BaseContractIntegrationTest {
 
     @Autowired
@@ -29,5 +33,5 @@ public abstract class BaseContractIntegrationTest {
      * Authority header granting PARTY_VIEW for authorized calls.
      * Reflects the gateway auth pattern per ADR-0011 / ADR-0014.
      */
-    protected static final String PARTY_VIEW_AUTHORITY = "PARTY_VIEW";
+    protected static final String PARTY_VIEW_AUTHORITY = "crm:party:view";
 }
