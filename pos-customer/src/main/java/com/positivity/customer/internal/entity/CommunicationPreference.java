@@ -5,8 +5,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.shared.id.UUIDv7Id;
 
@@ -15,6 +16,7 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -59,6 +61,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "communication_preference", indexes = {
                 @Index(name = "idx_comm_pref_party", columnList = "party_id")
 })
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Communication preferences and consent flags for a party")
 public class CommunicationPreference {
 
@@ -118,12 +121,12 @@ public class CommunicationPreference {
         @Schema(description = "Optimistic locking version")
         private Long version;
 
-        @CreationTimestamp
+        @CreatedDate
         @Column(name = "created_at", updatable = false, nullable = false)
         @Schema(description = "Timestamp when the preference was created")
         private Instant createdAt;
 
-        @UpdateTimestamp
+        @LastModifiedDate
         @Column(name = "updated_at", nullable = false)
         @Schema(description = "Timestamp when the preference was last updated")
         private Instant updatedAt;

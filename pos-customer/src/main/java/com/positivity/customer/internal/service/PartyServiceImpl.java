@@ -6,12 +6,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -27,6 +30,7 @@ import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
+import com.positivity.customer.internal.config.CustomerCacheConfig;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.enums.AccountStatus;
@@ -45,6 +49,8 @@ public class PartyServiceImpl implements PartyService {
 
     private final CommercialPartyRepository partyRepository;
     private final ContactRepository contactRepository;
+    private final CacheManager cacheManager;
+    private final PeopleClient peopleClient;
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT.withLocale(Locale.US);
 
@@ -115,7 +121,7 @@ public class PartyServiceImpl implements PartyService {
         List<GetContactsWithRolesResponse.ContactWithRoles> contactDtos = new ArrayList<>();
         for (Contact contact : contacts) {
             GetContactsWithRolesResponse.ContactWithRoles dto = GetContactsWithRolesResponse.ContactWithRoles.builder()
-                    .contactId(String.valueOf(contact.getId()))
+                    .contactId(String.valueOf(contact.getContactId()))
                     .contactName(buildContactName(contact))
                     .email(contact.getEmail())
                     .phone(contact.getPhoneNumber())
@@ -147,7 +153,13 @@ public class PartyServiceImpl implements PartyService {
             nameFallback = request.getLegalName();
         }
         Contact contact = new Contact();
+        UUID personId = peopleClient.resolveOrCreatePersonId(
+                request.getEmail(),
+                request.getPhone(),
+                "Contact",
+                nameFallback);
         contact.setCommercialParty(party);
+        contact.setPersonId(personId);
         contact.setFirstName(nameFallback);
         contact.setLastName("Contact");
         contact.setEmail(request.getEmail());
@@ -261,7 +273,7 @@ public class PartyServiceImpl implements PartyService {
         // In a real implementation, would store roles in a separate ContactRole entity
         // For now, return success response
         return UpdateContactRolesResponse.builder()
-                .contactId(String.valueOf(contact.getId()))
+                .contactId(String.valueOf(contact.getContactId()))
                 .partyId(String.valueOf(party.getPartyId()))
                 .status("SUCCESS")
                 .build();
@@ -385,13 +397,47 @@ public class PartyServiceImpl implements PartyService {
     @Transactional(readOnly = true)
     public com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO buildSnapshotForParty(UUID partyId) {
         log.debug("Building CRM snapshot for party: {}", partyId);
+        Cache snapshotCache = cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE);
+        if (snapshotCache != null) {
+            Cache.ValueWrapper wrapper = snapshotCache.get(partyId);
+            if (wrapper != null) {
+                com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO cached = (com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO) wrapper
+                        .get();
+                if (cached != null && cached.getSnapshotMetadata() != null) {
+                    cached.getSnapshotMetadata().setSource("CACHE");
+                }
+                if (cached != null) {
+                    return cached;
+                }
+            }
+        }
+
         CommercialParty party = findPartyById(partyId);
 
         if (party == null) {
             return null;
         }
 
-        return assembleSnapshot(party);
+        com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO fresh = assembleSnapshot(party);
+        if (fresh.getSnapshotMetadata() != null) {
+            fresh.getSnapshotMetadata().setSource("CRM_API");
+        }
+        if (snapshotCache != null) {
+            snapshotCache.put(partyId, fresh);
+        }
+        return fresh;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.positivity.customer.internal.dto.snapshot.BillingRuleRef getBillingRulesForParty(UUID partyId) {
+        log.debug("Fetching billing rules for party: {}", partyId);
+        CommercialParty party = findPartyById(partyId);
+        if (party == null) {
+            log.warn("Party not found when fetching billing rules: {}", partyId);
+            return null;
+        }
+        return com.positivity.customer.internal.dto.snapshot.BillingRuleRef.defaults();
     }
 
     private com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO assembleSnapshot(CommercialParty party) {
@@ -403,14 +449,17 @@ public class PartyServiceImpl implements PartyService {
                 party);
         com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.BillingPreferences prefs = buildBillingPreferences();
 
-        return new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO(meta, acct, contacts, vehicles, prefs);
+        return new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO(meta, acct, contacts, vehicles, prefs,
+                com.positivity.customer.internal.dto.snapshot.BillingRuleRef.defaults());
     }
 
     private com.positivity.customer.internal.dto.snapshot.SnapshotMetadata createMetadata() {
-        return new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
+        com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
                 java.util.UUID.randomUUID(),
                 java.time.Instant.now(),
                 "1.0.0");
+        meta.setSource("CRM_API");
+        return meta;
     }
 
     private com.positivity.customer.internal.dto.snapshot.AccountSummary buildAccountSummary(CommercialParty party) {
@@ -439,7 +488,7 @@ public class PartyServiceImpl implements PartyService {
 
     private com.positivity.customer.internal.dto.snapshot.ContactSummary convertContactToSummary(Contact contact) {
         com.positivity.customer.internal.dto.snapshot.ContactSummary summary = new com.positivity.customer.internal.dto.snapshot.ContactSummary();
-        summary.setContactId(contact.getId().toString());
+        summary.setContactId(contact.getContactId().toString());
         summary.setPrimary(false);
         summary.setName(formatContactName(contact));
         summary.setRoles(java.util.Collections.emptyList());

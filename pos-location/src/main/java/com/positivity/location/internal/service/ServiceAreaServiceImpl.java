@@ -9,8 +9,6 @@ import com.positivity.location.internal.entity.ServiceAreaPostalCodeValue;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
-import com.positivity.shared.id.UUIDv7Generator;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -64,13 +62,10 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
         validatePostalCodes(request.getPostalCodes());
 
         ServiceAreaEntity entity = ServiceAreaEntity.builder()
-                .id(UUIDv7Generator.generate())
                 .name(request.getName())
                 .description(request.getDescription())
                 .active(request.getActive() == null ? Boolean.TRUE : request.getActive())
                 .postalCodes(toPostalValues(request.getPostalCodes()))
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
                 .build();
 
         ServiceAreaEntity saved;
@@ -101,7 +96,6 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
         if (patch.containsKey(ACTIVE)) {
             entity.setActive(Boolean.valueOf(String.valueOf(patch.get(ACTIVE))));
         }
-        entity.setUpdatedAt(Instant.now());
 
         ServiceAreaEntity saved;
         try {

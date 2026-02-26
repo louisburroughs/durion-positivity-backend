@@ -6,8 +6,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.io.Serializable;
 import java.time.Instant;
@@ -46,6 +47,7 @@ import java.util.UUID;
         @Index(name = "idx_contact_role_role", columnList = "role_name")
 })
 @IdClass(ContactRoleAssignment.ContactRoleAssignmentId.class)
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Assignment of a role to a contact within a customer account")
 public class ContactRoleAssignment {
 
@@ -70,12 +72,12 @@ public class ContactRoleAssignment {
     @Schema(description = "Whether this is the primary contact for this role", example = "true")
     private boolean primary = false;
 
-    @CreationTimestamp
+    @CreatedDate
     @Column(name = "created_at", updatable = false, nullable = false)
     @Schema(description = "Timestamp when the role assignment was created")
     private Instant createdAt;
 
-    @UpdateTimestamp
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     @Schema(description = "Timestamp when the role assignment was last updated")
     private Instant updatedAt;

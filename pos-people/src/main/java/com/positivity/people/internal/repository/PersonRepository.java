@@ -5,10 +5,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface PersonRepository extends JpaRepository<Person, UUID> {
+    Optional<Person> findByPrimaryEmailIgnoreCase(String primaryEmail);
+
+    Optional<Person> findBySecondaryEmailIgnoreCase(String secondaryEmail);
+
     boolean existsByUsername(String username);
 
     boolean existsByEmployeeNumberIgnoreCase(String employeeNumber);
@@ -20,6 +25,10 @@ public interface PersonRepository extends JpaRepository<Person, UUID> {
     boolean existsByPrimaryEmailIgnoreCaseAndIdNot(String primaryEmail, UUID id);
 
     List<Person> findByLegalNameIgnoreCase(String legalName);
+
+    List<Person> findByLastNameIgnoreCase(String lastName);
+
+    List<Person> findByFirstNameIgnoreCase(String firstName);
 
     List<Person> findByPhoneNumbersContains(String phoneNumber);
 }

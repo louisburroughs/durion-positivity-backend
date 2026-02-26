@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.Person;
+import com.positivity.people.internal.dto.ResolvePersonRequest;
+import com.positivity.people.internal.dto.ResolvePersonResponse;
 import com.positivity.people.service.PersonService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -62,6 +64,17 @@ public class PersonController {
             @Parameter(description = "Person object to be created") @RequestBody Person person) {
         Person saved = personService.savePerson(person);
         return ResponseEntity.status(201).body(saved);
+    }
+
+    @Operation(summary = "Resolve person", description = "Find best matching person by score or create a new person")
+    @ApiResponse(responseCode = "200", description = "Person resolved successfully.")
+    @EmitEvent(id = "PEOPLE_PERSON_RESOLVE", apiVersion = "1")
+    @PostMapping("/resolve")
+    @PreAuthorize("hasAuthority('people:person:create')")
+    public ResponseEntity<ResolvePersonResponse> resolvePerson(
+            @Parameter(description = "Resolve criteria") @RequestBody ResolvePersonRequest request) {
+        ResolvePersonResponse resolved = personService.resolvePerson(request);
+        return ResponseEntity.ok(resolved);
     }
 
     @Operation(summary = "Update an existing person", description = "Update the details of an existing person.")

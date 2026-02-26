@@ -5,10 +5,12 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
+import java.time.Instant;
 import java.util.UUID;
 
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.shared.id.UUIDv7Id;
@@ -22,6 +24,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @Entity
 @Table(name = "contact")
+@EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Person that represents an organization-party.")
 public class Contact {
     @Id
@@ -29,7 +32,11 @@ public class Contact {
     @UUIDv7Id
     @Column(name = "contact_id", columnDefinition = "UUID", updatable = false, nullable = false)
     @Schema(description = "Unique identifier of the contact")
-    private UUID id;
+    private UUID contactId;
+
+    @Column(name = "person_id", nullable = false, columnDefinition = "UUID")
+    @Schema(description = "Canonical person ID from pos-people")
+    private UUID personId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "party_id", nullable = false)
@@ -56,12 +63,30 @@ public class Contact {
     @Schema(description = "Indicates if the contact is active for the party", example = "true")
     private boolean active = true;
 
-    @CreationTimestamp
-    @Column(updatable = false)
-    private java.time.Instant createdAt;
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
-    @UpdateTimestamp
-    private java.time.Instant modifiedAt;
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    public Instant getModifiedAt() {
+        return updatedAt;
+    }
+
+    public void setModifiedAt(Instant modifiedAt) {
+        this.updatedAt = modifiedAt;
+    }
+
+    @Transient
+    public UUID getId() {
+        return contactId;
+    }
+
+    public void setId(UUID id) {
+        this.contactId = id;
+    }
 
     public void setPreferredContactMethod(PreferredContactMethod email2) {
         // TODO Auto-generated method stub

@@ -12,6 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -71,7 +73,8 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
         public GetCommunicationPreferencesResponse getCommunicationPreferences(@NonNull UUID partyId) {
                 // Verify party exists
                 partyRepository.findById(partyId)
-                                .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Party not found: " + partyId));
 
                 // Get preferences or return defaults
                 return preferenceRepository.findByPartyId(partyId)
@@ -100,7 +103,8 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
 
                 // Verify party exists
                 partyRepository.findById(partyId)
-                                .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Party not found: " + partyId));
 
                 // Find existing preferences or create new
                 CommunicationPreference preference = preferenceRepository.findByPartyId(partyId)
@@ -138,18 +142,18 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
                 preference.setUpdateSource(updateSource);
 
                 // Save and return response
-                CommunicationPreference saved = preferenceRepository.save(preference);
-
                 boolean isCreate = preference.getPreferenceId() == null;
+                CommunicationPreference saved = preferenceRepository.save(preference);
+                Instant updatedAt = saved.getUpdatedAt() != null ? saved.getUpdatedAt() : Instant.now();
                 log.info("Upserted communication preferences: partyId={}, operation={}, source={}",
                                 partyId, isCreate ? "CREATE" : "UPDATE", updateSource);
 
                 return UpsertCommunicationPreferencesResponse.builder()
                                 .partyId(partyId.toString())
                                 .version(String.valueOf(saved.getVersion()))
-                                .operationType(isCreate ? "CREATE" : "UPDATE")
+                                .operationType(isCreate ? "CREATED" : "UPDATED")
                                 .status("SUCCESS")
-                                .updatedAt(saved.getUpdatedAt().toString())
+                                .updatedAt(updatedAt.toString())
                                 .build();
         }
 

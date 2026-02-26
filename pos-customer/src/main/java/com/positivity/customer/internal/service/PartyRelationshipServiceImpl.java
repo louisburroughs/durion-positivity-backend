@@ -90,7 +90,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                                                 "Party not found"));
 
                 // Validate person exists
-                PersonParty person = personRepository.findById(request.getPersonId())
+                PersonParty person = personRepository.findByPersonId(request.getPersonId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "Person not found"));
 
@@ -98,7 +98,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                 LocalDate today = LocalDate.now();
                 for (PartyRelationshipRole role : request.getRoles()) {
                         List<PartyRelationship> overlapping = partyRelationshipRepository.findOverlappingRelationships(
-                                        partyId, request.getPersonId(), role, today);
+                                        partyId, person.getPersonPartyId(), role, today);
                         if (!overlapping.isEmpty()) {
                                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                                                 "Active relationship already exists for party " + partyId +
@@ -204,12 +204,12 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                                 .map(rel -> {
                                         PersonParty person = rel.getToPerson();
                                         // Get primary contact points for the person
-                                        String email = getPrimaryContactValue(person.getPersonId(),
+                                        String email = getPrimaryContactValue(person.getPersonPartyId(),
                                                         ContactPointType.EMAIL);
-                                        String phone = getPrimaryContactValue(person.getPersonId(),
+                                        String phone = getPrimaryContactValue(person.getPersonPartyId(),
                                                         ContactPointType.PHONE_MOBILE);
                                         if (phone == null) {
-                                                phone = getPrimaryContactValue(person.getPersonId(),
+                                                phone = getPrimaryContactValue(person.getPersonPartyId(),
                                                                 ContactPointType.PHONE_WORK);
                                         }
 

@@ -1,6 +1,7 @@
 package com.positivity.catalog.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -53,7 +54,7 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.data").isArray())
                                 .andExpect(jsonPath("$.data").isEmpty())
-                                .andExpect(jsonPath("$.nextCursor").isNull());
+                                .andExpect(jsonPath("$.nextCursor").value(nullValue()));
         }
 
         // -----------------------------------------------------------------------

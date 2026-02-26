@@ -8,9 +8,7 @@ import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
-import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,13 +62,10 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         validateRequest(request.getBufferType(), request.getBufferValue(), true);
 
         TravelBufferPolicyEntity entity = TravelBufferPolicyEntity.builder()
-                .id(UUIDv7Generator.generate())
                 .name(request.getName())
                 .bufferType(request.getBufferType())
                 .bufferValue(request.getBufferValue())
                 .notes(request.getNotes())
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
                 .build();
 
         TravelBufferPolicyEntity saved = entity;
@@ -110,7 +105,6 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         }
 
         validateRequest(entity.getBufferType(), entity.getBufferValue(), false);
-        entity.setUpdatedAt(Instant.now());
 
         TravelBufferPolicyEntity saved = entity;
         if (repository != null) {

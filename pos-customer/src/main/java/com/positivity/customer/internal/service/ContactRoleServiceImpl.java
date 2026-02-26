@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
@@ -74,7 +76,8 @@ public class ContactRoleServiceImpl implements ContactRoleService {
         public GetContactsWithRolesResponse getContactsWithRoles(@NonNull UUID partyId) {
                 // Verify party exists
                 partyRepository.findById(partyId)
-                                .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Party not found: " + partyId));
 
                 // Get all role assignments for this party
                 List<ContactRoleAssignment> assignments = roleAssignmentRepository.findByCustomerAccountId(partyId);
@@ -90,7 +93,7 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                         List<ContactRoleAssignment> contactAssignments = entry.getValue();
 
                         // Get person details
-                        personRepository.findById(contactId).ifPresent(person -> {
+                        personRepository.findByPersonId(contactId).ifPresent(person -> {
                                 var contactDto = GetContactsWithRolesResponse.ContactWithRoles.builder()
                                                 .contactId(contactId.toString())
                                                 .contactName(person.getFirstName() + " " + person.getLastName())
@@ -99,14 +102,14 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                                 // Get email and phone from contact points
                                 var emailOpt = Optional.ofNullable(contactPointRepository
                                                 .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                                                contactId,
+                                                                person.getPersonPartyId(),
                                                                 com.positivity.customer.internal.enums.ContactPointType.EMAIL));
                                 emailOpt.ifPresent(cp -> contactDto.setEmail(cp.getValue()));
                                 contactDto.setHasPrimaryEmail(emailOpt.isPresent());
 
                                 var phoneOpt = Optional.ofNullable(contactPointRepository
                                                 .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                                                contactId,
+                                                                person.getPersonPartyId(),
                                                                 com.positivity.customer.internal.enums.ContactPointType.PHONE_MOBILE));
                                 phoneOpt.ifPresent(cp -> contactDto.setPhone(cp.getValue()));
 
@@ -154,11 +157,13 @@ public class ContactRoleServiceImpl implements ContactRoleService {
 
                 // Verify party exists
                 partyRepository.findById(partyId)
-                                .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Party not found: " + partyId));
 
                 // Verify contact (person) exists
-                personRepository.findById(contactId)
-                                .orElseThrow(() -> new IllegalArgumentException("Contact not found: " + contactId));
+                personRepository.findByPersonId(contactId)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Person not found for personId: " + contactId));
 
                 // Delete existing role assignments for this contact/party
                 roleAssignmentRepository.deleteByContactIdAndCustomerAccountId(contactId, partyId);
@@ -210,7 +215,7 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                 roleAssignmentRepository.findByCustomerAccountIdAndRoleNameAndPrimaryTrue(customerAccountId, role)
                                 .ifPresent(existingPrimary -> {
                                         existingPrimary.setPrimary(false);
-                                        roleAssignmentRepository.save(existingPrimary);
+                                        roleAssignmentRepository.saveAndFlush(existingPrimary);
                                         log.info("Demoted existing primary for role {} in account {}",
                                                         role, customerAccountId);
                                 });
