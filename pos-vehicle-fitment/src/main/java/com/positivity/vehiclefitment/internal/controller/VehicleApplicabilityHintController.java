@@ -79,6 +79,7 @@ public class VehicleApplicabilityHintController {
     @Operation(summary = "Delete a vehicle applicability hint", description = "Remove a hint and all its associated tags")
     @ApiResponse(responseCode = "204", description = "Hint deleted successfully")
     @ApiResponse(responseCode = "404", description = "Hint not found")
+    @EmitEvent(id = "FITMENT_HINT_DELETE", apiVersion = "1")
     @DeleteMapping("/{hintId}")
     public ResponseEntity<Void> deleteHint(
             @Parameter(description = "ID of the hint to delete") @PathVariable UUID hintId) {

@@ -142,6 +142,7 @@ public class LocationController {
     @ApiResponse(responseCode = "404", description = "Location not found.")
     @PreAuthorize("hasAuthority('location:write')")
     @DeleteMapping("/{locationId}")
+    @EmitEvent(id = "LOCATION_LOCATION_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteLocation(
             @Parameter(description = "ID of the location to delete", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
         if (locationService.getLocationByIdDto(locationId).isEmpty()) {

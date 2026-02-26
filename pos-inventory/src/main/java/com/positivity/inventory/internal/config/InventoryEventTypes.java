@@ -17,7 +17,7 @@ public final class InventoryEventTypes {
 
         /**
          * All event type registrations for the inventory module.
-         * Total: 12 event types.
+         * Total: 15 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -53,6 +53,16 @@ public final class InventoryEventTypes {
                                 // InventoryLocationDeactivationController - 1 event
                                 EventTypeRegistration.write("INVENTORY_LOCATION_DEACTIVATE",
                                                 "Deactivate a storage location with optional stock transfer").build(),
+
+                                // PutawayController - 2 events
+                                EventTypeRegistration.write("INVENTORY_PUTAWAY_TASK_GENERATE",
+                                                "Generate putaway tasks for received inventory lines").build(),
+                                EventTypeRegistration.write("INVENTORY_PUTAWAY_TASK_CLAIM",
+                                                "Claim a putaway task for execution").build(),
+
+                                // ReplenishmentController - 1 event
+                                EventTypeRegistration.write("INVENTORY_REPLENISHMENT_POLICY_CREATE",
+                                                "Create replenishment policy used for task generation").build(),
 
                                 // StockMovementController - 3 events
                                 EventTypeRegistration.write("INVENTORY_STOCK_MOVEMENT_CREATE",

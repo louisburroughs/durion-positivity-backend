@@ -21,6 +21,7 @@ import java.util.Set;
 @Configuration
 public class SecurityGatewayConfig {
     private static final String TOKEN2 = "token";
+    private static final String AUTHORIZATION = "Authorization";
     private static final Logger log = LoggerFactory.getLogger(SecurityGatewayConfig.class);
 
     /**
@@ -87,7 +88,7 @@ public class SecurityGatewayConfig {
                 return chain.filter(exchange);
             }
 
-            String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
+            String authHeader = exchange.getRequest().getHeaders().getFirst(AUTHORIZATION);
             if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
                 exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                 return exchange.getResponse().setComplete();
@@ -100,6 +101,7 @@ public class SecurityGatewayConfig {
                     .uri(uriBuilder -> uriBuilder.path("/v1/auth/validate")
                             .queryParam(TOKEN2, token)
                             .build())
+                    .header(AUTHORIZATION, authHeader)
                     .retrieve()
                     .bodyToMono(new ParameterizedTypeReference<java.util.Map<String, Boolean>>() {
                     })
@@ -114,6 +116,7 @@ public class SecurityGatewayConfig {
                                 .uri(uriBuilder -> uriBuilder.path("/v1/auth/authorities")
                                         .queryParam(TOKEN2, token)
                                         .build())
+                                .header(AUTHORIZATION, authHeader)
                                 .retrieve()
                                 .bodyToMono(new ParameterizedTypeReference<Set<String>>() {
                                 });
@@ -123,6 +126,7 @@ public class SecurityGatewayConfig {
                                 .uri(uriBuilder -> uriBuilder.path("/v1/auth/subject")
                                         .queryParam(TOKEN2, token)
                                         .build())
+                                .header(AUTHORIZATION, authHeader)
                                 .retrieve()
                                 .bodyToMono(String.class)
                                 .onErrorReturn("unknown");
@@ -131,6 +135,7 @@ public class SecurityGatewayConfig {
                                 .uri(uriBuilder -> uriBuilder.path("/v1/auth/person-id")
                                         .queryParam(TOKEN2, token)
                                         .build())
+                                .header(AUTHORIZATION, authHeader)
                                 .retrieve()
                                 .bodyToMono(String.class)
                                 .onErrorReturn("unknown");

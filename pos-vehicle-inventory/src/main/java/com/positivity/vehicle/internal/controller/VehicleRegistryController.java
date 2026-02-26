@@ -112,6 +112,7 @@ public class VehicleRegistryController {
             @ApiResponse(responseCode = "404", description = "Vehicle not found")
     })
     @DeleteMapping("/{vehicleId}")
+    @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteVehicle(
             @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId) {
 

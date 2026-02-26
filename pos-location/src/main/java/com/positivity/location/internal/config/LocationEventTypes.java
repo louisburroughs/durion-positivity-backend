@@ -22,6 +22,9 @@ public final class LocationEventTypes {
         public static final EventTypeRegistration LOCATION_LOCATION_UPDATE = EventTypeRegistration
                         .write("LOCATION_LOCATION_UPDATE", "Update an existing location").build();
 
+        public static final EventTypeRegistration LOCATION_LOCATION_DELETE = EventTypeRegistration
+                        .write("LOCATION_LOCATION_DELETE", "Delete an existing location").build();
+
         public static final EventTypeRegistration LOCATION_PATCH = EventTypeRegistration
                         .write("LOCATION_PATCH", "Patch a location").build();
 
@@ -51,8 +54,15 @@ public final class LocationEventTypes {
         public static final EventTypeRegistration LOCATION_SERVICE_AREA_CREATE = EventTypeRegistration
                         .write("LOCATION_SERVICE_AREA_CREATE", "Create a new service area").build();
 
+        public static final EventTypeRegistration LOCATION_SERVICE_AREA_PATCH = EventTypeRegistration
+                        .write("LOCATION_SERVICE_AREA_PATCH", "Patch an existing service area").build();
+
         public static final EventTypeRegistration LOCATION_TRAVEL_BUFFER_POLICY_CREATE = EventTypeRegistration
                         .write("LOCATION_TRAVEL_BUFFER_POLICY_CREATE", "Create a new travel buffer policy").build();
+
+        public static final EventTypeRegistration LOCATION_TRAVEL_BUFFER_POLICY_PATCH = EventTypeRegistration
+                        .write("LOCATION_TRAVEL_BUFFER_POLICY_PATCH", "Patch an existing travel buffer policy")
+                        .build();
 
         public static final EventTypeRegistration LOCATION_COVERAGE_RULES_REPLACE = EventTypeRegistration
                         .write("LOCATION_COVERAGE_RULES_REPLACE", "Replace mobile unit coverage rules").build();
@@ -90,6 +100,7 @@ public final class LocationEventTypes {
                                 // Location events
                                 LOCATION_LOCATION_CREATE,
                                 LOCATION_LOCATION_UPDATE,
+                                LOCATION_LOCATION_DELETE,
                                 LOCATION_PATCH,
                                 LOCATION_PARENT_ADD,
                                 LOCATION_ROSTER_GET,
@@ -101,7 +112,9 @@ public final class LocationEventTypes {
                                 LOCATION_MOBILE_UNIT_UPDATE,
                                 LOCATION_MOBILE_UNIT_MANAGE,
                                 LOCATION_SERVICE_AREA_CREATE,
+                                LOCATION_SERVICE_AREA_PATCH,
                                 LOCATION_TRAVEL_BUFFER_POLICY_CREATE,
+                                LOCATION_TRAVEL_BUFFER_POLICY_PATCH,
                                 LOCATION_COVERAGE_RULES_REPLACE,
                                 // Storage Location events
                                 LOCATION_STORAGE_LOCATION_LIST,

@@ -92,6 +92,7 @@ public class CrmVehiclesController {
         })
         @DeleteMapping("/{customerId}/vehicles/{vehicleId}")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_DEACTIVATE + "')")
+        @EmitEvent(id = "CUSTOMER_VEHICLE_DELETE", apiVersion = "1")
         public ResponseEntity<Void> deleteVehicle(
                         @Parameter(description = "Customer ID", required = true) @PathVariable UUID customerId,
                         @Parameter(description = "Vehicle ID", required = true) @PathVariable UUID vehicleId) {

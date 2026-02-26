@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.replenishment.CreateReplenishmentPolicyRequest;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
@@ -60,6 +61,7 @@ public class ReplenishmentController {
     }
 
     @PostMapping("/policies")
+    @EmitEvent(id = "INVENTORY_REPLENISHMENT_POLICY_CREATE", apiVersion = "1")
     @Operation(
             summary = "Create replenishment policy",
             description = "Creates a replenishment policy used to generate replenishment tasks.")

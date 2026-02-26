@@ -9,12 +9,6 @@ import java.util.List;
  * Each event type is registered with appropriate performance thresholds
  * based on expected operation latency characteristics.
  *
- * <p>
- * Note: The upsert endpoint (PUT /v1/eventTypes/code/{typeCode}) is
- * intentionally
- * excluded to avoid recursive event emission, as that endpoint is used by other
- * modules to register their event types.
- * </p>
  */
 public final class EventReceiverEventTypes {
 
@@ -24,15 +18,19 @@ public final class EventReceiverEventTypes {
 
     /**
      * All event type registrations for the event-receiver module.
-     * Total: 3 event types.
+     * Total: 5 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
-                // EventTypeController - 2 events (excluding upsert to avoid recursion)
+                // EventTypeController - 4 events
                 EventTypeRegistration.write("EVENT_RECEIVER_EVENT_TYPE_CREATE",
                         "Create a new event type for PreregisteredEvents").build(),
+                EventTypeRegistration.write("EVENT_RECEIVER_EVENT_TYPE_UPSERT",
+                        "Create or update an event type by type code").build(),
                 EventTypeRegistration.write("EVENT_RECEIVER_EVENT_TYPE_UPDATE",
                         "Update an existing event type").build(),
+                EventTypeRegistration.write("EVENT_RECEIVER_EVENT_TYPE_DELETE",
+                        "Delete an event type").build(),
 
                 // EmitEventController - 1 event
                 EventTypeRegistration.write("EVENT_RECEIVER_EVENT_RECEIVE",

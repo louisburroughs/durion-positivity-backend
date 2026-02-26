@@ -17,7 +17,7 @@ public final class FitmentEventTypes {
 
     /**
      * All event type registrations for the vehicle fitment module.
-     * Total: 3 event types.
+     * Total: 4 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -26,6 +26,8 @@ public final class FitmentEventTypes {
                         "Create a new vehicle applicability hint with fitment tags for a product").build(),
                 EventTypeRegistration.write("FITMENT_HINT_UPDATE",
                         "Update the fitment tags for an existing vehicle applicability hint").build(),
+                EventTypeRegistration.write("FITMENT_HINT_DELETE",
+                        "Delete an existing vehicle applicability hint").build(),
                 EventTypeRegistration.search("FITMENT_PRODUCTS_FILTER",
                         "Filter products by vehicle attributes to find matching products").build());
     }

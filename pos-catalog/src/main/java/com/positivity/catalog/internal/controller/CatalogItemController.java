@@ -65,6 +65,7 @@ public class CatalogItemController {
     @ApiResponse(responseCode = "204", description = "Catalog item deleted successfully")
     @ApiResponse(responseCode = "400", description = "Invalid item type")
     @ApiResponse(responseCode = "404", description = "Catalog item not found")
+    @EmitEvent(id = "CATALOG_ITEM_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
             @Parameter(description = "ID of the catalog item to delete") @PathVariable UUID catalogId) {
