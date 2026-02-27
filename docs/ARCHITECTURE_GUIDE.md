@@ -161,7 +161,7 @@ pos-catalog:
 ┌──────────────────────────────────────────────────────────────┐
 │                    API Gateway (port 8080)                    │
 │  • ApiVersionHeaderToPathFilter                              │
-│  • Discovery Locator: Routes to lb://SERVICE_NAME            │
+│  • Explicit route whitelist (discovery locator disabled)      │
 └──────────────────────────────────────────────────────────────┘
                                 │
          ┌──────────────────────┼──────────────────────┐
@@ -172,9 +172,16 @@ pos-catalog:
    └───────────┘          └───────────┘          └───────────┘
 ```
 
-### Strategy 1: Through API Gateway (Recommended)
+### Security Ownership Model
 
-Services call each other through the gateway at `http://localhost:8080`:
+- `pos-security-service` is the source of truth for identities, roles, permissions, and assignments.
+- API Gateway is the authentication enforcement boundary for external traffic.
+- Backend services perform authorization with `@PreAuthorize` using gateway-established authority context.
+- See [ADR-0011](../../durion/docs/adr/0011-api-gateway-security-architecture.adr.md) for the canonical trust model.
+
+### Strategy 1: Through API Gateway
+
+Use the gateway for client-facing traffic and for calls that must pass through gateway-level controls:
 
 ```yaml
 gateway:
@@ -199,7 +206,7 @@ public class ServiceClientConfig {
 
 ### Strategy 2: Direct Eureka Load-Balanced Calls
 
-For performance-critical internal calls:
+For performance-critical internal service-to-service calls:
 
 ```java
 @Configuration

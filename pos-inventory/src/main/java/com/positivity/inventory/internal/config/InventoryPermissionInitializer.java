@@ -23,7 +23,7 @@ public class InventoryPermissionInitializer extends PermissionRegistrationSuppor
             RestClient.Builder restClientBuilder,
             @Value("${pos.security.base-url:http://pos-security-service:8086}") String securityServiceUrl,
             @Value("${pos.security.permission-registration.enabled:true}") boolean enabled) {
-        super(restClientBuilder, securityServiceUrl, enabled, "permissions.yaml");
+        super(restClientBuilder, securityServiceUrl, String.valueOf(enabled), "permissions.yaml");
         this.permissions = loadPermissions();
     }
 
