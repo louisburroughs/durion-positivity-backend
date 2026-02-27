@@ -370,7 +370,7 @@ class AppointmentsServiceImplTest {
                 assertEquals(AppointmentStatus.SCHEDULED.name(), response.getStatus());
                 assertEquals(List.of(serviceRequestId), response.getServiceRequestIds());
                 verify(appointmentRepository).save(any(Appointment.class));
-                verify(appointmentServiceRequestRepository).saveAll(anyIterable());
+        verify(appointmentServiceRequestRepository).saveAll(anyIterable());
         }
 
         @Test
