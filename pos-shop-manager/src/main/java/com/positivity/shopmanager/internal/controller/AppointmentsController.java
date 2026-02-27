@@ -113,7 +113,7 @@ public class AppointmentsController {
      * @deprecated since 0.1.0, for removal in a future release.
      *             Use {@code DELETE /v1/appointments/{appointmentId}/cancel}.
      */
-    @Deprecated(since = "0.1.0", forRemoval = false)
+    @Deprecated(since = "0.1.0", forRemoval = true)
     @Operation(summary = "Cancel appointment (deprecated — use DELETE)", deprecated = true, description = "Use DELETE /v1/appointments/{appointmentId}/cancel instead. "
             + "This PATCH endpoint will be removed in a future release.")
     @PatchMapping("/appointments/{appointmentId}/cancel")
