@@ -1,7 +1,15 @@
-package com.positivity.posimage.controller;
+package com.positivity.image.internal.controller;
 
 import java.util.Optional;
 
+import com.positivity.image.internal.dto.ImageFileView;
+import com.positivity.image.service.ImageService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -12,23 +20,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.positivity.posimage.dao.ImageDao;
-import com.positivity.posimage.model.ImageEntity;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
 @Slf4j
 @Tag(name = "Image API", description = "Operations related to image retrieval and serving")
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/images")
 public class ImageController {
-    private final ImageDao imageDao;
+    private final ImageService imageService;
 
     @Operation(summary = "Get image by ID", description = "Retrieve an image file by its unique database ID.")
     @ApiResponse(responseCode = "200", description = "Image file returned successfully.")
@@ -36,11 +34,11 @@ public class ImageController {
     @GetMapping("/id/{id}")
     public ResponseEntity<Resource> getImageById(
             @Parameter(description = "ID of the image to retrieve", example = "1") @PathVariable Long id) {
-        Optional<ImageEntity> imageOpt = imageDao.findById(id);
+        Optional<ImageFileView> imageOpt = imageService.findById(id);
         if (imageOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        ImageEntity image = imageOpt.get();
+        ImageFileView image = imageOpt.get();
         return serveImageFile(image);
     }
 
@@ -50,21 +48,21 @@ public class ImageController {
     @GetMapping("/filename/{filename}")
     public ResponseEntity<Resource> getImageByFilename(
             @Parameter(description = "Filename of the image to retrieve", example = "logo.png") @PathVariable String filename) {
-        Optional<ImageEntity> imageOpt = imageDao.findByFilename(filename);
+        Optional<ImageFileView> imageOpt = imageService.findByFilename(filename);
         if (imageOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        ImageEntity image = imageOpt.get();
+        ImageFileView image = imageOpt.get();
         return serveImageFile(image);
     }
 
-    private ResponseEntity<Resource> serveImageFile(ImageEntity image) {
-        FileSystemResource fileResource = new FileSystemResource(image.getUrl());
+    private ResponseEntity<Resource> serveImageFile(ImageFileView image) {
+        FileSystemResource fileResource = new FileSystemResource(image.url());
         if (!fileResource.exists()) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + image.getFilename())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + image.filename())
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(fileResource);
     }
