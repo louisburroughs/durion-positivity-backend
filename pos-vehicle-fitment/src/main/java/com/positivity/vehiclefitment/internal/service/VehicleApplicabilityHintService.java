@@ -1,4 +1,4 @@
-package com.positivity.vehiclefitment.service;
+package com.positivity.vehiclefitment.internal.service;
 
 import com.positivity.vehiclefitment.internal.dto.*;
 import com.positivity.vehiclefitment.internal.entity.FitmentTag;

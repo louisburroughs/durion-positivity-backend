@@ -1,7 +1,7 @@
 package com.positivity.vehicle.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
@@ -14,9 +14,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.positivity.events.EmitEvent;
 import com.positivity.vehicle.internal.dao.VehicleDao;
-import com.positivity.vehicle.internal.entity.VehicleEntity;
+import com.positivity.vehicle.internal.dto.VehicleLegacyMapper;
+import com.positivity.vehicle.internal.dto.VehicleLegacyRequest;
+import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -37,28 +38,32 @@ public class VehicleController {
     @ApiResponse(responseCode = "200", description = "Vehicle created successfully.")
     @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
     @PostMapping
-    public ResponseEntity<VehicleEntity> createVehicle(
-            @Parameter(description = "Vehicle object to be created") @RequestBody VehicleEntity vehicle) {
-        VehicleEntity saved = vehicleDao.save(vehicle);
+    public ResponseEntity<VehicleLegacyResponse> createVehicle(
+            @Parameter(description = "Vehicle object to be created") @RequestBody VehicleLegacyRequest vehicle) {
+        var saved = vehicleDao.save(VehicleLegacyMapper.toEntity(vehicle));
         log.info("Created vehicle with id {}", saved.getId());
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
     @Operation(summary = "Get vehicle by ID", description = "Retrieve a vehicle by its unique ID.")
     @ApiResponse(responseCode = "200", description = "Vehicle found and returned.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @GetMapping("/{id}")
-    public ResponseEntity<VehicleEntity> getVehicle(
+    public ResponseEntity<VehicleLegacyResponse> getVehicle(
             @Parameter(description = "ID of the vehicle to retrieve", example = "1") @PathVariable UUID id) {
-        Optional<VehicleEntity> vehicle = vehicleDao.findById(id);
-        return vehicle.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        return vehicleDao.findById(id)
+                .map(VehicleLegacyMapper::toResponse)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Operation(summary = "Get all vehicles", description = "Retrieve a list of all vehicles in the inventory.")
     @ApiResponse(responseCode = "200", description = "List of vehicles returned successfully.")
     @GetMapping
-    public List<VehicleEntity> getAllVehicles() {
-        return vehicleDao.findAll();
+    public List<VehicleLegacyResponse> getAllVehicles() {
+        return vehicleDao.findAll().stream()
+                .map(VehicleLegacyMapper::toResponse)
+                .toList();
     }
 
     @Operation(summary = "Update vehicle by ID", description = "Update an existing vehicle's details by its ID.")
@@ -66,20 +71,18 @@ public class VehicleController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")
-    public ResponseEntity<VehicleEntity> updateVehicle(
+    public ResponseEntity<VehicleLegacyResponse> updateVehicle(
             @Parameter(description = "ID of the vehicle to update", example = "1") @PathVariable UUID id,
-            @Parameter(description = "Updated vehicle object") @RequestBody VehicleEntity updated) {
-        Optional<VehicleEntity> existing = vehicleDao.findById(id);
+            @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
+        var existing = vehicleDao.findById(id);
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        VehicleEntity vehicle = existing.get();
-        vehicle.setMake(updated.getMake());
-        vehicle.setModel(updated.getModel());
-        vehicle.setYear(updated.getYear());
-        VehicleEntity saved = vehicleDao.save(vehicle);
+        var vehicle = existing.get();
+        VehicleLegacyMapper.applyCoreFields(vehicle, updated);
+        var saved = vehicleDao.save(vehicle);
         log.info("Updated vehicle with id {}", saved.getId());
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
     @Operation(summary = "Delete vehicle by ID", description = "Delete a vehicle from the inventory by its ID.")
@@ -101,24 +104,26 @@ public class VehicleController {
     @ApiResponse(responseCode = "200", description = "Vehicle created successfully.")
     @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
     @PostMapping("/vin")
-    public ResponseEntity<VehicleEntity> createVehicleByVIN(
-            @Parameter(description = "Vehicle object to be created") @RequestBody VehicleEntity vehicle) {
-        if (vehicle.getVIN() == null || vehicle.getVIN().isBlank()) {
+    public ResponseEntity<VehicleLegacyResponse> createVehicleByVIN(
+            @Parameter(description = "Vehicle object to be created") @RequestBody VehicleLegacyRequest vehicle) {
+        if (vehicle.getVin() == null || vehicle.getVin().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        VehicleEntity saved = vehicleDao.save(vehicle);
+        var saved = vehicleDao.save(VehicleLegacyMapper.toEntity(vehicle));
         log.info("Created vehicle with VIN {}", saved.getVIN());
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
     @Operation(summary = "Get vehicle by VIN", description = "Retrieve a vehicle by its VIN.")
     @ApiResponse(responseCode = "200", description = "Vehicle found and returned.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @GetMapping("/vin/{vin}")
-    public ResponseEntity<VehicleEntity> getVehicleByVIN(
+    public ResponseEntity<VehicleLegacyResponse> getVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable String vin) {
-        Optional<VehicleEntity> vehicle = vehicleDao.findByVIN(vin);
-        return vehicle.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        return vehicleDao.findByVIN(vin)
+                .map(VehicleLegacyMapper::toResponse)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Operation(summary = "Update vehicle by VIN", description = "Update an existing vehicle's details by its VIN.")
@@ -126,21 +131,19 @@ public class VehicleController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/vin/{vin}")
-    public ResponseEntity<VehicleEntity> updateVehicleByVIN(
+    public ResponseEntity<VehicleLegacyResponse> updateVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to update", example = "1HGCM82633A004352") @PathVariable String vin,
-            @Parameter(description = "Updated vehicle object") @RequestBody VehicleEntity updated) {
-        Optional<VehicleEntity> existing = vehicleDao.findByVIN(vin);
+            @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
+        var existing = vehicleDao.findByVIN(vin);
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        VehicleEntity vehicle = existing.get();
-        vehicle.setMake(updated.getMake());
-        vehicle.setModel(updated.getModel());
-        vehicle.setYear(updated.getYear());
+        var vehicle = existing.get();
+        VehicleLegacyMapper.applyCoreFields(vehicle, updated);
         vehicle.setVIN(vin);
-        VehicleEntity saved = vehicleDao.save(vehicle);
+        var saved = vehicleDao.save(vehicle);
         log.info("Updated vehicle with VIN {}", saved.getVIN());
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
     @Operation(summary = "Delete vehicle by VIN", description = "Delete a vehicle from the inventory by its VIN.")

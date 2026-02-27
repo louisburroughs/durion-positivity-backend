@@ -3,6 +3,7 @@ package com.positivity.poseventreceiver.internal.dao;
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import com.positivity.poseventreceiver.internal.entity.EventType;
 import com.positivity.poseventreceiver.internal.entity.PreregisteredEvent;
+import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.internal.repository.EmittedEventRepository;
 import com.positivity.poseventreceiver.internal.repository.EventTypeRepository;
 import com.positivity.poseventreceiver.internal.repository.PreregisteredEventRepository;
@@ -46,6 +47,17 @@ public class EventDaoImpl implements EventDao {
         eventBatch.offer(event);
         log.debug("Event queued for batch save: {} (queue size: {})", event.getId(), eventBatch.size());
         return event;
+    }
+
+    @Override
+    public EmittedEvent saveEmittedEvent(@NonNull EmitEventRequest request) {
+        EmittedEvent event = new EmittedEvent(
+                request.id(),
+                request.apiVersion(),
+                request.timestamp(),
+                request.elapsedMs(),
+                request.publishedAt());
+        return saveEmittedEvent(event);
     }
 
     /**

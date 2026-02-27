@@ -1,4 +1,4 @@
-package com.positivity.vehiclereferencecarapi.service;
+package com.positivity.vehiclereferencecarapi.internal.service;
 
 import com.positivity.vehiclereferencecarapi.internal.entity.CarApiMake;
 import com.positivity.vehiclereferencecarapi.internal.entity.CarApiModel;

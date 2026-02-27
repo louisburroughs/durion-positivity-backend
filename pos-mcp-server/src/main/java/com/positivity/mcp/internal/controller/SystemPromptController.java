@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
-import com.positivity.mcp.service.SystemPromptService;
+import com.positivity.mcp.internal.service.SystemPromptService;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
