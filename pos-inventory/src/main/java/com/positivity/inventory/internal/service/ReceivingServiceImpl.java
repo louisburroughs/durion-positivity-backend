@@ -173,11 +173,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                         .recordedByUserId(actorUserId)
                         .build();
 
-                if (inventoryVarianceRepository != null) {
-                    variances.add(inventoryVarianceRepository.save(variance));
-                } else {
-                    variances.add(variance);
-                }
+                variances.add(inventoryVarianceRepository.save(variance));
             }
 
             linesProcessed++;
@@ -337,13 +333,6 @@ public class ReceivingServiceImpl implements ReceivingService {
             String productId,
             BigDecimal quantity,
             String actorUserId) {
-        if (inventoryLedgerEntryRepository == null) {
-            log.debug(
-                    "Skipping GOODS_RECEIPT ledger entry creation because repository is unavailable for session {}",
-                    sessionId);
-            return;
-        }
-
         int quantityDelta = toWholeLedgerQuantity(quantity, "receivedQuantity");
         UUID stagingLocationId = resolveStagingLocationId();
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
