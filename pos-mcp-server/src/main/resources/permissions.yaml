@@ -1,0 +1,20 @@
+domain: mcp
+serviceName: pos-mcp-server
+version: "1.0"
+permissions:
+  - name: "mcp:llm_api:view"
+    description: "View registered LLM API configurations"
+  - name: "mcp:llm_api:create"
+    description: "Create LLM API configuration entries"
+  - name: "mcp:llm_api:update"
+    description: "Update existing LLM API configuration entries"
+  - name: "mcp:llm_api:delete"
+    description: "Delete LLM API configuration entries"
+  - name: "mcp:system_prompt:view"
+    description: "View configured MCP system prompts"
+  - name: "mcp:system_prompt:create"
+    description: "Create MCP system prompts"
+  - name: "mcp:system_prompt:update"
+    description: "Update MCP system prompts"
+  - name: "mcp:system_prompt:delete"
+    description: "Delete MCP system prompts"
