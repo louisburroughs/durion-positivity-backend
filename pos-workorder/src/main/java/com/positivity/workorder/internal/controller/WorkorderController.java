@@ -14,10 +14,7 @@ import com.positivity.workorder.internal.dto.StartWorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
-import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
-import com.positivity.workorder.internal.entity.WorkorderSnapshot;
 import com.positivity.workorder.service.WorkorderInvoiceService;
 import com.positivity.workorder.service.WorkorderService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -84,7 +81,7 @@ public class WorkorderController {
             @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request,
             @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)", example = "workorder-create-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         // Service handles entity creation internally, including idempotency check
-        Workorder created = workorderService.createWorkorderWithIdempotency(
+        var created = workorderService.createWorkorderWithIdempotency(
                 request.getEstimateId(),
                 request.getCustomerId(),
                 idempotencyKey);
@@ -142,7 +139,7 @@ public class WorkorderController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<WorkorderStateTransitionResponse>> getTransitionHistory(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
-        List<WorkorderStateTransition> history = workorderService.getTransitionHistory(workorderId);
+        var history = workorderService.getTransitionHistory(workorderId);
         return ResponseEntity.ok(history.stream()
                 .map(WorkorderStateTransitionResponse::fromEntity)
                 .toList());
@@ -154,7 +151,7 @@ public class WorkorderController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<WorkorderSnapshotResponse>> getSnapshotHistory(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
-        List<WorkorderSnapshot> history = workorderService.getSnapshotHistory(workorderId);
+        var history = workorderService.getSnapshotHistory(workorderId);
         return ResponseEntity.ok(history.stream()
                 .map(WorkorderSnapshotResponse::fromEntity)
                 .toList());
@@ -175,7 +172,7 @@ public class WorkorderController {
             @Parameter(description = "ID of the work order to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveWorkorderRequest request) {
         try {
-            Workorder approved = workorderService.approveWorkorder(
+            var approved = workorderService.approveWorkorder(
                     workorderId,
                     request.getCustomerId(),
                     request.getSignatureData(),

@@ -1,4 +1,4 @@
-package com.positivity.vehicle.service;
+package com.positivity.vehicle.internal.service;
 
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 import com.positivity.vehicle.internal.repository.VehicleCarePreferenceRepository;

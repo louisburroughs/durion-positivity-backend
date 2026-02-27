@@ -1,26 +1,40 @@
-package com.positivity.nhtsa.service;
+package com.positivity.vehiclefitment.internal.service;
 
-import com.positivity.nhtsa.internal.entity.*;
-import com.positivity.nhtsa.internal.exception.CarApiException;
-import com.positivity.nhtsa.internal.repository.*;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
-import java.time.LocalDateTime;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+
+import com.positivity.vehiclefitment.internal.entity.Make;
+import com.positivity.vehiclefitment.internal.entity.Manufacturer;
+import com.positivity.vehiclefitment.internal.entity.Model;
+import com.positivity.vehiclefitment.internal.entity.VehicleType;
+import com.positivity.vehiclefitment.internal.entity.VehicleVariable;
+import com.positivity.vehiclefitment.internal.entity.VehicleVariableValue;
+import com.positivity.vehiclefitment.internal.exception.VehicleFitmentException;
+import com.positivity.vehiclefitment.internal.repository.MakeRepository;
+import com.positivity.vehiclefitment.internal.repository.ManufacturerRepository;
+import com.positivity.vehiclefitment.internal.repository.ModelRepository;
+import com.positivity.vehiclefitment.internal.repository.VehicleTypeRepository;
+import com.positivity.vehiclefitment.internal.repository.VehicleVariableRepository;
+import com.positivity.vehiclefitment.internal.repository.VehicleVariableValueRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @RequiredArgsConstructor
 @Service
-public class VehicleReferenceService {
+public class VehicleFitmentService {
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
     private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
+    public static final String RESULTS = "Results";
+    public static final String FORMAT_JSON = "?format=json";
 
     private final ManufacturerRepository manufacturerRepository;
     private final MakeRepository makeRepository;
@@ -43,7 +57,7 @@ public class VehicleReferenceService {
                 .body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             vehicleVariableRepository.deleteAll();
             for (JsonNode node : results) {
                 VehicleVariable variable = new VehicleVariable();
@@ -53,7 +67,7 @@ public class VehicleReferenceService {
                 vehicleVariableRepository.save(variable);
             }
         } catch (Exception e) {
-            throw new CarApiException("Failed to parse vehicle variables", e);
+            throw new VehicleFitmentException("Failed to parse vehicle variables", e);
         }
         return vehicleVariableRepository.findAll();
     }
@@ -63,14 +77,14 @@ public class VehicleReferenceService {
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + FORMAT_JSON;
         String response = restClient.get()
                 .uri(url)
                 .retrieve()
                 .body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             vehicleVariableValueRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 VehicleVariableValue value = new VehicleVariableValue();
@@ -81,7 +95,7 @@ public class VehicleReferenceService {
                 vehicleVariableValueRepository.save(value);
             }
         } catch (Exception e) {
-            throw new CarApiException("Failed to parse vehicle variable values", e);
+            throw new VehicleFitmentException("Failed to parse vehicle variable values", e);
         }
         return vehicleVariableValueRepository.findByVariableId(variableId);
     }
@@ -98,19 +112,19 @@ public class VehicleReferenceService {
                 .body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             manufacturerRepository.deleteAll();
             for (JsonNode node : results) {
                 Manufacturer m = new Manufacturer();
                 // Generate UUID from NHTSA ID for consistency
-                long nhtsaId = node.path("Mfr_ID").asLong();
+                UUID nhtsaId = UUID.fromString(node.path("Mfr_ID").asString());
                 m.setId(java.util.UUID.nameUUIDFromBytes(("manufacturer-" + nhtsaId).getBytes()));
                 m.setName(node.path("Mfr_CommonName").asString(""));
                 m.setCacheTimestamp(LocalDateTime.now());
                 manufacturerRepository.save(m);
             }
         } catch (Exception e) {
-            throw new CarApiException("Failed to parse manufacturers", e);
+            throw new VehicleFitmentException("Failed to parse manufacturers", e);
         }
         return manufacturerRepository.findAll();
     }
@@ -122,19 +136,19 @@ public class VehicleReferenceService {
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + FORMAT_JSON;
         String response = restClient.get()
                 .uri(url)
                 .retrieve()
                 .body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             makeRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Make make = new Make();
                 // Generate UUID from NHTSA ID for consistency
-                long nhtsaId = node.path("Make_ID").asLong();
+                UUID nhtsaId = UUID.fromString(node.path("Make_ID").asString());
                 make.setId(java.util.UUID.nameUUIDFromBytes(("make-" + nhtsaId).getBytes()));
                 make.setName(node.path("Make_Name").asString(""));
                 make.setManufacturer(manufacturer);
@@ -142,7 +156,7 @@ public class VehicleReferenceService {
                 makeRepository.save(make);
             }
         } catch (Exception e) {
-            throw new CarApiException("Failed to parse makes", e);
+            throw new VehicleFitmentException("Failed to parse makes", e);
         }
         return makeRepository.findByManufacturerId(manufacturerId);
     }
@@ -154,19 +168,19 @@ public class VehicleReferenceService {
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + FORMAT_JSON;
         String response = restClient.get()
                 .uri(url)
                 .retrieve()
                 .body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             modelRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Model model = new Model();
                 // Generate UUID from NHTSA ID for consistency
-                long nhtsaId = node.path("Model_ID").asLong();
+                UUID nhtsaId = UUID.fromString(node.path("Model_ID").asString());
                 model.setId(java.util.UUID.nameUUIDFromBytes(("model-" + nhtsaId).getBytes()));
                 model.setName(node.path("Model_Name").asString(""));
                 model.setMake(make);
@@ -174,7 +188,7 @@ public class VehicleReferenceService {
                 modelRepository.save(model);
             }
         } catch (Exception e) {
-            throw new CarApiException("Failed to parse models", e);
+            throw new VehicleFitmentException("Failed to parse models", e);
         }
         return modelRepository.findByMakeId(makeId);
     }
@@ -186,14 +200,14 @@ public class VehicleReferenceService {
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + FORMAT_JSON;
         String response = restClient.get()
                 .uri(url)
                 .retrieve()
                 .body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             vehicleTypeRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 VehicleType vt = new VehicleType();
@@ -204,7 +218,7 @@ public class VehicleReferenceService {
                 vehicleTypeRepository.save(vt);
             }
         } catch (Exception e) {
-            throw new CarApiException("Failed to parse vehicle types for make", e);
+            throw new VehicleFitmentException("Failed to parse vehicle types for make", e);
         }
         return vehicleTypeRepository.findByMakeId(makeId);
     }

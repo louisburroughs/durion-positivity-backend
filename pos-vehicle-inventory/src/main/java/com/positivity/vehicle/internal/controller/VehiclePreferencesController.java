@@ -1,9 +1,10 @@
 package com.positivity.vehicle.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.vehicle.internal.entity.VehicleCarePreference;
-import com.positivity.vehicle.service.VehiclePreferencesService;
-import com.positivity.vehicle.service.VehiclePreferencesService.UpsertPreferencesRequest;
+import com.positivity.vehicle.internal.dto.VehicleCarePreferenceMapper;
+import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
+import com.positivity.vehicle.internal.service.VehiclePreferencesService;
+import com.positivity.vehicle.internal.service.VehiclePreferencesService.UpsertPreferencesRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -34,29 +35,30 @@ public class VehiclePreferencesController {
 
     @Operation(summary = "Get vehicle care preferences", description = "Retrieves the care preferences for a vehicle. Returns 404 if no preferences exist.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Preferences found and returned", content = @Content(schema = @Schema(implementation = VehicleCarePreference.class))),
+            @ApiResponse(responseCode = "200", description = "Preferences found and returned", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class))),
             @ApiResponse(responseCode = "404", description = "No preferences found for this vehicle")
     })
     @GetMapping
-    public ResponseEntity<VehicleCarePreference> getPreferences(
+    public ResponseEntity<VehicleCarePreferenceResponse> getPreferences(
             @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId) {
 
         log.info("GET /v1/vehicles/{}/preferences", vehicleId);
         return preferencesService.getPreferences(vehicleId)
+                .map(VehicleCarePreferenceMapper::toResponse)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @Operation(summary = "Create or update vehicle care preferences", description = "Upserts preferences for a vehicle. If preferences exist, replaces them entirely. Use PATCH for partial updates.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Preferences updated successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreference.class))),
-            @ApiResponse(responseCode = "201", description = "Preferences created successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreference.class))),
+            @ApiResponse(responseCode = "200", description = "Preferences updated successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class))),
+            @ApiResponse(responseCode = "201", description = "Preferences created successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class))),
             @ApiResponse(responseCode = "404", description = "Vehicle not found"),
             @ApiResponse(responseCode = "400", description = "Invalid preference data")
     })
     @PutMapping
     @EmitEvent(id = "VEHICLE_PREFERENCES_UPSERT", apiVersion = "1")
-    public ResponseEntity<VehicleCarePreference> upsertPreferences(
+    public ResponseEntity<VehicleCarePreferenceResponse> upsertPreferences(
             @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId,
             @RequestBody PreferencesUpsertDto request) {
 
@@ -70,17 +72,17 @@ public class VehiclePreferencesController {
                 request.updatedByUserId());
 
         var preference = preferencesService.upsertPreferences(serviceRequest);
-        return ResponseEntity.ok(preference);
+        return ResponseEntity.ok(VehicleCarePreferenceMapper.toResponse(preference));
     }
 
     @Operation(summary = "Partially update vehicle care preferences", description = "Merges provided preference fields into existing preferences without replacing the entire map")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Preferences merged successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreference.class))),
+            @ApiResponse(responseCode = "200", description = "Preferences merged successfully", content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class))),
             @ApiResponse(responseCode = "404", description = "No existing preferences to merge into")
     })
     @PatchMapping
     @EmitEvent(id = "VEHICLE_PREFERENCES_MERGE", apiVersion = "1")
-    public ResponseEntity<VehicleCarePreference> mergePreferences(
+    public ResponseEntity<VehicleCarePreferenceResponse> mergePreferences(
             @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId,
             @RequestBody PreferencesMergeDto request) {
 
@@ -91,7 +93,7 @@ public class VehiclePreferencesController {
                 vehicleId,
                 request.partialPreferences(),
                 request.updatedByUserId());
-        return ResponseEntity.ok(preference);
+        return ResponseEntity.ok(VehicleCarePreferenceMapper.toResponse(preference));
     }
 
     @Operation(summary = "Delete vehicle care preferences", description = "Removes all preferences for a vehicle")

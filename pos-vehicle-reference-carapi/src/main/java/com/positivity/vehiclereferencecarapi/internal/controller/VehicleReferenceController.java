@@ -1,8 +1,9 @@
 package com.positivity.vehiclereferencecarapi.internal.controller;
 
-import com.positivity.vehiclereferencecarapi.internal.entity.CarApiMake;
-import com.positivity.vehiclereferencecarapi.internal.entity.CarApiModel;
-import com.positivity.vehiclereferencecarapi.service.VehicleReferenceService;
+import com.positivity.vehiclereferencecarapi.internal.dto.CarApiMakeResponse;
+import com.positivity.vehiclereferencecarapi.internal.dto.CarApiModelResponse;
+import com.positivity.vehiclereferencecarapi.internal.dto.VehicleReferenceMapper;
+import com.positivity.vehiclereferencecarapi.internal.service.VehicleReferenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -17,12 +18,16 @@ public class VehicleReferenceController {
     private final VehicleReferenceService vehicleReferenceService;
 
     @GetMapping("/makes")
-    public List<CarApiMake> getMakes() {
-        return vehicleReferenceService.getMakes();
+    public List<CarApiMakeResponse> getMakes() {
+        return vehicleReferenceService.getMakes().stream()
+                .map(VehicleReferenceMapper::toMakeResponse)
+                .toList();
     }
 
     @GetMapping("/models/{makeId}")
-    public List<CarApiModel> getModelsByMakeId(@PathVariable UUID makeId) {
-        return vehicleReferenceService.getModelsByMakeId(makeId);
+    public List<CarApiModelResponse> getModelsByMakeId(@PathVariable UUID makeId) {
+        return vehicleReferenceService.getModelsByMakeId(makeId).stream()
+                .map(VehicleReferenceMapper::toModelResponse)
+                .toList();
     }
 }

@@ -1,4 +1,4 @@
-package com.positivity.vehicle.service;
+package com.positivity.vehicle.internal.service;
 
 import java.util.ArrayList;
 import java.util.List;

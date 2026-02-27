@@ -8,11 +8,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.positivity.vehiclefitment.internal.entity.Make;
-import com.positivity.vehiclefitment.internal.entity.Manufacturer;
-import com.positivity.vehiclefitment.internal.entity.Model;
-import com.positivity.vehiclefitment.internal.entity.VehicleType;
-import com.positivity.vehiclefitment.service.VehicleFitmentService;
+import com.positivity.vehiclefitment.internal.dto.MakeResponse;
+import com.positivity.vehiclefitment.internal.dto.ManufacturerResponse;
+import com.positivity.vehiclefitment.internal.dto.ModelResponse;
+import com.positivity.vehiclefitment.internal.dto.VehicleFitmentMapper;
+import com.positivity.vehiclefitment.internal.dto.VehicleTypeResponse;
+import com.positivity.vehiclefitment.internal.service.VehicleFitmentService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -33,31 +34,39 @@ public class VehicleFitmentController {
     @Operation(summary = "Get all manufacturers", description = "Retrieve a list of all vehicle manufacturers.")
     @ApiResponse(responseCode = "200", description = "List of manufacturers returned successfully.")
     @GetMapping("/manufacturers")
-    public List<Manufacturer> getManufacturers() {
-        return vehicleFitmentService.getManufacturers();
+    public List<ManufacturerResponse> getManufacturers() {
+        return vehicleFitmentService.getManufacturers().stream()
+                .map(VehicleFitmentMapper::toManufacturerResponse)
+                .toList();
     }
 
     @Operation(summary = "Get makes by manufacturer", description = "Retrieve all makes for a given manufacturer.")
     @ApiResponse(responseCode = "200", description = "List of makes returned successfully.")
     @GetMapping("/makes/{manufacturerId}")
-    public List<Make> getMakesByManufacturer(
+    public List<MakeResponse> getMakesByManufacturer(
             @Parameter(description = "ID of the manufacturer", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable UUID manufacturerId) {
-        return vehicleFitmentService.getMakesByManufacturer(manufacturerId);
+        return vehicleFitmentService.getMakesByManufacturer(manufacturerId).stream()
+                .map(VehicleFitmentMapper::toMakeResponse)
+                .toList();
     }
 
     @Operation(summary = "Get models by make", description = "Retrieve all models for a given make.")
     @ApiResponse(responseCode = "200", description = "List of models returned successfully.")
     @GetMapping("/models/{makeId}")
-    public List<Model> getModelsByMake(
+    public List<ModelResponse> getModelsByMake(
             @Parameter(description = "ID of the make", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable UUID makeId) {
-        return vehicleFitmentService.getModelsByMake(makeId);
+        return vehicleFitmentService.getModelsByMake(makeId).stream()
+                .map(VehicleFitmentMapper::toModelResponse)
+                .toList();
     }
 
     @Operation(summary = "Get vehicle types for make", description = "Retrieve all vehicle types for a given make.")
     @ApiResponse(responseCode = "200", description = "List of vehicle types returned successfully.")
     @GetMapping("/vehicle-types/{makeId}")
-    public List<VehicleType> getVehicleTypesForMake(
+    public List<VehicleTypeResponse> getVehicleTypesForMake(
             @Parameter(description = "ID of the make", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable UUID makeId) {
-        return vehicleFitmentService.getVehicleTypesForMake(makeId);
+        return vehicleFitmentService.getVehicleTypesForMake(makeId).stream()
+                .map(VehicleFitmentMapper::toVehicleTypeResponse)
+                .toList();
     }
 }
