@@ -36,17 +36,18 @@ import tools.jackson.databind.node.ObjectNode;
  * <p>
  * Verifies {@code POST /v1/inventory/receiving/sessions} per:
  * <ul>
- * <li>ADR-0011: gateway security — X-User and X-Authorities headers
- * required</li>
+ * <li>ADR-0011: gateway security — authenticated gateway headers and
+ * required receiving authorities</li>
  * <li>ADR-0017: HTTP response codes — 201 for creation, 400 for invalid input,
  * 404 for not-found</li>
- * <li>ADR-0018: actor fields (createdByUserId) populated from X-User
- * header</li>
+ * <li>ADR-0018: actor identity resolved from gateway auth context
+ * ({@code X-User-Id} preferred, {@code X-User} fallback)</li>
  * </ul>
  *
  * <p>
- * Tests are intentionally RED: {@code ReceivingController} does not yet exist,
- * so all requests will receive 404 instead of the expected status codes.
+ * These are controller-level contract tests with {@link ReceivingService}
+ * mocked via {@code @MockitoBean}. Assertions validate HTTP contract mapping
+ * for service success/error outcomes.
  *
  * Issue: #35
  */

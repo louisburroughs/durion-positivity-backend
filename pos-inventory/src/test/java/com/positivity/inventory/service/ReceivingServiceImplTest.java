@@ -1,5 +1,6 @@
 package com.positivity.inventory.service;
 
+import com.positivity.inventory.internal.client.SiteDefaultsClient;
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
 import com.positivity.inventory.internal.client.WorkorderValidationClient;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
@@ -33,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -43,6 +45,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,6 +67,9 @@ class ReceivingServiceImplTest {
 
     @Mock
     private SourceDocumentStubClient sourceDocumentStubClient;
+
+    @Mock
+    private SiteDefaultsClient siteDefaultsClient;
 
     @Mock
     private WorkorderValidationClient workorderValidationClient;
@@ -129,6 +135,11 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentAlreadyReceived() {
+        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument = new SourceDocumentStubClient.SourceDocumentLinesResponse();
+        sourceDocument.setAlreadyReceived(true);
+        sourceDocument.setLines(List.of());
+        when(sourceDocumentStubClient.fetchDocument(any(), any(), any())).thenReturn(sourceDocument);
+
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-456", "MANUAL");
 
         assertThrows(SourceDocumentAlreadyReceivedException.class,
@@ -377,7 +388,9 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentWithNoLines_throwsNotFound() {
-        when(sourceDocumentStubClient.fetchLines(any(), any(), any())).thenReturn(List.of());
+        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument = new SourceDocumentStubClient.SourceDocumentLinesResponse();
+        sourceDocument.setLines(List.of());
+        when(sourceDocumentStubClient.fetchDocument(any(), any(), any())).thenReturn(sourceDocument);
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-123", "MANUAL");
 
@@ -390,7 +403,9 @@ class ReceivingServiceImplTest {
         SourceDocumentStubClient.SourceDocumentLineDto invalidLine = new SourceDocumentStubClient.SourceDocumentLineDto();
         invalidLine.setProductId(" ");
         invalidLine.setExpectedQuantity(new BigDecimal("5"));
-        when(sourceDocumentStubClient.fetchLines(any(), any(), any())).thenReturn(List.of(invalidLine));
+        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument = new SourceDocumentStubClient.SourceDocumentLinesResponse();
+        sourceDocument.setLines(List.of(invalidLine));
+        when(sourceDocumentStubClient.fetchDocument(any(), any(), any())).thenReturn(sourceDocument);
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-123", "MANUAL");
 
@@ -496,6 +511,50 @@ class ReceivingServiceImplTest {
         assertThat(savedLedgerEntry.getToLocationId()).isEqualTo(STAGING_LOCATION_ID);
         assertThat(savedLedgerEntry.getQuantityAfter()).isEqualTo(17);
         assertThat(savedLedgerEntry.getChangeInQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    void receiveItemsIntoStaging_ledgerEntryUsesSiteDefaultStagingLocationWhenConfigured() {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        UUID siteId = UUID.randomUUID();
+        UUID siteDefaultStagingLocationId = UUID.randomUUID();
+
+        ReflectionTestUtils.setField(receivingService, "configuredSiteId", siteId.toString());
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-123")
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(siteDefaultsClient.getDefaultStagingLocationId(siteId)).thenReturn(Optional.of(siteDefaultStagingLocationId));
+        when(inventoryLedgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteDefaultStagingLocationId))
+                .thenReturn(7);
+
+        ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(
+                new ReceiveLineRequest(lineId, new BigDecimal("10"))));
+
+        receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        InventoryLedgerEntry savedLedgerEntry = ledgerCaptor.getValue();
+
+        assertThat(savedLedgerEntry.getLocationId()).isEqualTo(siteDefaultStagingLocationId);
+        assertThat(savedLedgerEntry.getToLocationId()).isEqualTo(siteDefaultStagingLocationId);
+        assertThat(savedLedgerEntry.getQuantityAfter()).isEqualTo(17);
     }
 
     @Test
@@ -687,6 +746,76 @@ class ReceivingServiceImplTest {
         assertThat(result.getLineId()).isEqualTo(lineId);
         // Partial cross-dock must not set line to RECEIVED
         assertThat(result.getLineStatus()).isNotEqualTo(ReceivingLineStatus.RECEIVED.name());
+    }
+
+    @Test
+    void crossDockLineToWorkorder_accumulatesReceivedQuantity() {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(new BigDecimal("2"))
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-123")
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+
+        CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null);
+
+        CrossDockResponse result = receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user");
+
+        assertThat(line.getReceivedQuantity()).isEqualByComparingTo("5");
+        assertThat(result.getLineStatus()).isEqualTo(ReceivingLineStatus.RECEIVED_SHORT.name());
+    }
+
+    @Test
+    void crossDockLineToWorkorder_exceedsExpectedQuantity_throwsAndDoesNotCreateLedgerEntries() {
+        UUID sessionId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(new BigDecimal("8"))
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-123")
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+
+        CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user"));
+
+        assertThat(exception.getMessage()).contains("exceeds expected quantity");
+        verify(inventoryLedgerEntryRepository, never()).save(any());
+        verify(receivingSessionRepository, never()).save(any(ReceivingSession.class));
     }
 
     /**
@@ -972,7 +1101,9 @@ class ReceivingServiceImplTest {
         line2.setProductId("PROD-002");
         line2.setExpectedQuantity(new BigDecimal("10"));
 
-        when(sourceDocumentStubClient.fetchLines(any(), any(), any())).thenReturn(List.of(line1, line2));
+        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument = new SourceDocumentStubClient.SourceDocumentLinesResponse();
+        sourceDocument.setLines(List.of(line1, line2));
+        when(sourceDocumentStubClient.fetchDocument(any(), any(), any())).thenReturn(sourceDocument);
     }
 
     private void authenticateAs(String username, String... authorities) {

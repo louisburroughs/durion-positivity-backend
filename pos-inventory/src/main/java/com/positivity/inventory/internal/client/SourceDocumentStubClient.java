@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.client;
 import com.positivity.inventory.internal.enums.SourceDocumentType;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 import lombok.Data;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -36,8 +37,20 @@ public class SourceDocumentStubClient {
             @NonNull String sourceService,
             @NonNull SourceDocumentType sourceDocumentType,
             @NonNull String sourceDocumentId) {
-        if (!enabled) {
+        SourceDocumentLinesResponse response = fetchDocument(sourceService, sourceDocumentType, sourceDocumentId);
+        if (response.getLines() == null) {
             return List.of();
+        }
+        return response.getLines();
+    }
+
+    @NonNull
+    public SourceDocumentLinesResponse fetchDocument(
+            @NonNull String sourceService,
+            @NonNull SourceDocumentType sourceDocumentType,
+            @NonNull String sourceDocumentId) {
+        if (!enabled) {
+            return emptyResponse(sourceDocumentId, sourceDocumentType, sourceService);
         }
 
         try {
@@ -48,10 +61,10 @@ public class SourceDocumentStubClient {
                     .retrieve()
                     .body(SourceDocumentLinesResponse.class);
 
-            if (response == null || response.getLines() == null) {
-                return List.of();
+            if (response == null) {
+                return emptyResponse(sourceDocumentId, sourceDocumentType, sourceService);
             }
-            return response.getLines();
+            return response;
         } catch (Exception ex) {
             log.warn(
                     "Stub source-document lookup failed for service={}, type={}, id={}: {}",
@@ -59,8 +72,20 @@ public class SourceDocumentStubClient {
                     sourceDocumentType,
                     sourceDocumentId,
                     ex.getMessage());
-            return List.of();
+            return emptyResponse(sourceDocumentId, sourceDocumentType, sourceService);
         }
+    }
+
+    private SourceDocumentLinesResponse emptyResponse(
+            String sourceDocumentId,
+            SourceDocumentType sourceDocumentType,
+            String sourceService) {
+        SourceDocumentLinesResponse response = new SourceDocumentLinesResponse();
+        response.setSourceDocumentId(sourceDocumentId);
+        response.setSourceDocumentType(sourceDocumentType.name());
+        response.setSourceService(sourceService);
+        response.setLines(List.of());
+        return response;
     }
 
     @Data
@@ -68,7 +93,22 @@ public class SourceDocumentStubClient {
         private String sourceDocumentId;
         private String sourceDocumentType;
         private String sourceService;
+        private String status;
+        private Boolean alreadyReceived;
         private List<SourceDocumentLineDto> lines;
+
+        public boolean indicatesAlreadyReceived() {
+            if (Boolean.TRUE.equals(alreadyReceived)) {
+                return true;
+            }
+            if (status == null || status.isBlank()) {
+                return false;
+            }
+            String normalized = status.trim().toUpperCase(Locale.ROOT);
+            return "RECEIVED".equals(normalized)
+                    || "COMPLETED".equals(normalized)
+                    || "CLOSED".equals(normalized);
+        }
     }
 
     @Data
