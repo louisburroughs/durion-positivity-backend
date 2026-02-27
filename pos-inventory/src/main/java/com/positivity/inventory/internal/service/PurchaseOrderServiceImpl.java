@@ -19,6 +19,7 @@ import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.service.PurchaseOrderService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,22 +27,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Recover;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     private final PurchaseOrderRepository purchaseOrderRepository;
@@ -49,8 +46,28 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final ApplicationEventPublisher eventPublisher;
     private final ApplicationContext applicationContext;
 
+    @Autowired
+    private EncumbranceEventPublisher encumbranceEventPublisher;
+
+    @Autowired
+    private Clock clock = Clock.systemUTC();
+
+    public PurchaseOrderServiceImpl(
+            PurchaseOrderRepository purchaseOrderRepository,
+            PurchaseOrderLineRepository purchaseOrderLineRepository,
+            ApplicationEventPublisher eventPublisher,
+            ApplicationContext applicationContext) {
+        this.purchaseOrderRepository = purchaseOrderRepository;
+        this.purchaseOrderLineRepository = purchaseOrderLineRepository;
+        this.eventPublisher = eventPublisher;
+        this.applicationContext = applicationContext;
+    }
+
     @Value("${pos.inventory.encumbranceEnabled:false}")
     private boolean encumbranceEnabled;
+
+    @Value("${pos.inventory.default-tax-rate:0.10}")
+    private double defaultTaxRate = 0.10d;
 
     @Override
     @Transactional
@@ -77,7 +94,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .expectedDeliveryDate(request.getExpectedDeliveryDate())
                 .requestedBy(request.getRequestedBy())
                 .comment(request.getComment())
-                .createdBy(actorId)
                 .build();
 
         List<PurchaseOrderLineEntity> lines = totalsAndLines.lines();
@@ -105,18 +121,24 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Transactional(readOnly = true)
     public @NonNull Page<PurchaseOrderResponse> listPurchaseOrders(@NonNull ListPurchaseOrdersRequest filter,
             @NonNull Pageable pageable) {
-        if (filter.getVendorId() != null && filter.getStatus() != null) {
-            List<PurchaseOrderResponse> content = purchaseOrderRepository
-                    .findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus())
-                    .stream()
-                    .map(this::toResponse)
-                    .toList();
-            return new PageImpl<>(page(content, pageable), pageable, content.size());
-        }
-
         Page<PurchaseOrderEntity> page;
-        if (filter.getStatus() != null) {
-            page = purchaseOrderRepository.findAllByStatus(filter.getStatus(), pageable);
+        if (filter.getVendorId() != null && filter.getStatus() != null) {
+            page = purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus(), pageable);
+            if (page == null) {
+                List<PurchaseOrderEntity> legacy = purchaseOrderRepository
+                        .findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus());
+                page = new PageImpl<>(legacy, pageable, legacy.size());
+            }
+        } else if (filter.getVendorId() != null) {
+            page = purchaseOrderRepository.findByVendorId(filter.getVendorId(), pageable);
+            if (page == null) {
+                page = purchaseOrderRepository.findAll(pageable);
+            }
+        } else if (filter.getStatus() != null) {
+            page = purchaseOrderRepository.findByStatus(filter.getStatus(), pageable);
+            if (page == null) {
+                page = purchaseOrderRepository.findAll(pageable);
+            }
         } else {
             page = purchaseOrderRepository.findAll(pageable);
         }
@@ -143,7 +165,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         po.setStatus(PurchaseOrderStatus.APPROVED);
         po.setApproverId(actorId);
-        po.setApprovalTimestamp(Instant.now());
+        Instant now = Instant.now(clock);
+        po.setApprovalTimestamp(now);
         po.setApprovalNotes(request.getApprovalNotes());
         if (encumbranceEnabled) {
             po.setEncumbranceRef("ENC-" + po.getPurchaseOrderId().toString().substring(0, 8).toUpperCase());
@@ -160,38 +183,21 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 "lineItems", toApprovedLineItems(saved),
                 "approvalStatus", saved.getStatus().name(),
                 "actorId", actorId,
-                "occurredAt", Instant.now().toString()));
+                "occurredAt", now.toString()));
 
         if (encumbranceEnabled) {
-            applicationContext.getBean(PurchaseOrderServiceImpl.class).publishEncumbranceEvent(saved, actorId);
+            EncumbranceEventPublisher publisher = encumbranceEventPublisher;
+            if (publisher == null) {
+                publisher = applicationContext.getBean(EncumbranceEventPublisher.class);
+            }
+            publisher.publishEncumbranceEvent(
+                    saved.getPurchaseOrderId(),
+                    saved.getPoNumber(),
+                    safeLong(saved.getGrandTotalMinor()),
+                    saved.getCurrency());
         }
 
         return toResponse(saved);
-    }
-
-    @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 500, multiplier = 2.0))
-    public void publishEncumbranceEvent(@NonNull PurchaseOrderEntity po, @NonNull String actorId) {
-        eventPublisher.publishEvent(Map.of(
-                "eventType", "PurchaseOrderEncumbranceEvent",
-                "poId", po.getPurchaseOrderId().toString(),
-                "encumbranceRef", po.getEncumbranceRef() == null ? "" : po.getEncumbranceRef(),
-                "amountMinor", safeLong(po.getGrandTotalMinor()),
-                "currency", po.getCurrency(),
-                "actorId", actorId,
-                "occurredAt", Instant.now().toString()));
-    }
-
-    @Recover
-    public void recoverPublishEncumbranceEvent(RuntimeException ex, @NonNull PurchaseOrderEntity po,
-            @NonNull String actorId) {
-        eventPublisher.publishEvent(Map.of(
-                "eventType", "PurchaseOrderAccountingError",
-                "poId", po.getPurchaseOrderId().toString(),
-                "failureReason", ex.getMessage() == null ? "Unknown accounting error" : ex.getMessage(),
-                "retryCount", 3,
-                "timestamp", Instant.now().toString(),
-                "actorId", actorId));
-        throw ex;
     }
 
     @Override
@@ -372,7 +378,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
             long lineTaxMinor = lineRequest.getTaxCodeId() == null
                     ? 0L
-                    : Math.round(lineTotalMinor * 0.10d);
+                    : Math.round(lineTotalMinor * defaultTaxRate);
 
             PurchaseOrderLineEntity line = PurchaseOrderLineEntity.builder()
                     .lineNumber(lineRequest.getLineNumber())
@@ -466,15 +472,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .taxMinor(safeLong(line.getTaxMinor()))
                 .openQuantityDecimal(line.getOpenQuantityDecimal())
                 .build();
-    }
-
-    private List<PurchaseOrderResponse> page(List<PurchaseOrderResponse> source, Pageable pageable) {
-        int start = Math.toIntExact(pageable.getOffset());
-        if (start >= source.size()) {
-            return List.of();
-        }
-        int end = Math.min(start + pageable.getPageSize(), source.size());
-        return source.subList(start, end);
     }
 
     private long safeLong(Long value) {

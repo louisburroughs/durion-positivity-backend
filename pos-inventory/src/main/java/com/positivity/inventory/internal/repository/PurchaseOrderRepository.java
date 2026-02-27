@@ -15,5 +15,11 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrderEnti
 
     List<PurchaseOrderEntity> findByVendorIdAndStatus(UUID vendorId, PurchaseOrderStatus status);
 
-    Page<PurchaseOrderEntity> findAllByStatus(PurchaseOrderStatus status, Pageable pageable);
+    Page<PurchaseOrderEntity> findByVendorIdAndStatus(UUID vendorId, PurchaseOrderStatus status, Pageable pageable);
+
+    Page<PurchaseOrderEntity> findByVendorId(UUID vendorId, Pageable pageable);
+
+    Page<PurchaseOrderEntity> findByStatus(PurchaseOrderStatus status, Pageable pageable);
+
+    Page<PurchaseOrderEntity> findAll(Pageable pageable);
 }

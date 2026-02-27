@@ -35,14 +35,14 @@ paths:
           type: string
           format: uuid
       responses:
+        "404":
+          description: Vehicle not found
         "200":
           description: Vehicle found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Vehicle not found
     put:
       tags:
       - Vehicle Registry
@@ -65,16 +65,16 @@ paths:
               $ref: "#/components/schemas/CreateVehicleRequest"
         required: true
       responses:
+        "400":
+          description: Invalid request
+        "404":
+          description: Vehicle not found
         "200":
           description: Vehicle updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
-        "400":
-          description: Invalid request
-        "404":
-          description: Vehicle not found
     delete:
       tags:
       - Vehicle Registry
@@ -116,13 +116,13 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleCarePreference"
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "200":
           description: Preferences found and returned
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleCarePreference"
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
     put:
       tags:
       - Vehicle Preferences
@@ -150,25 +150,25 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleCarePreference"
-        "400":
-          description: Invalid preference data
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleCarePreference"
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "200":
           description: Preferences updated successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleCarePreference"
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+        "400":
+          description: Invalid preference data
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "404":
           description: Vehicle not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleCarePreference"
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
     delete:
       tags:
       - Vehicle Preferences
@@ -215,13 +215,13 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleCarePreference"
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "200":
           description: Preferences merged successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleCarePreference"
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
   /v1/vehicles-legacy/{id}:
     get:
       tags:
@@ -244,13 +244,13 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
         "404":
           description: Vehicle not found.
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
     put:
       tags:
       - Vehicle API
@@ -270,7 +270,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VehicleEntity"
+              $ref: "#/components/schemas/VehicleLegacyRequest"
         required: true
       responses:
         "200":
@@ -278,13 +278,13 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
         "404":
           description: Vehicle not found.
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
     delete:
       tags:
       - Vehicle API
@@ -326,13 +326,13 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
         "404":
           description: Vehicle not found.
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
     put:
       tags:
       - Vehicle API
@@ -351,7 +351,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VehicleEntity"
+              $ref: "#/components/schemas/VehicleLegacyRequest"
         required: true
       responses:
         "200":
@@ -359,13 +359,13 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
         "404":
           description: Vehicle not found.
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
     delete:
       tags:
       - Vehicle API
@@ -496,7 +496,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/VehicleEntity"
+                  $ref: "#/components/schemas/VehicleLegacyResponse"
     post:
       tags:
       - Vehicle API
@@ -507,7 +507,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VehicleEntity"
+              $ref: "#/components/schemas/VehicleLegacyRequest"
         required: true
       responses:
         "200":
@@ -515,7 +515,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
   /v1/vehicles-legacy/vin:
     post:
       tags:
@@ -527,7 +527,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VehicleEntity"
+              $ref: "#/components/schemas/VehicleLegacyRequest"
         required: true
       responses:
         "200":
@@ -535,7 +535,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleEntity"
+                $ref: "#/components/schemas/VehicleLegacyResponse"
   /v1/vehicles/vin/{vin}:
     get:
       tags:
@@ -552,14 +552,14 @@ paths:
           type: string
         example: 1HGCM82633A004352
       responses:
+        "404":
+          description: Vehicle not found
         "200":
           description: Vehicle found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Vehicle not found
 components:
   schemas:
     CreateVehicleRequest:
@@ -643,7 +643,7 @@ components:
         updatedByUserId:
           type: string
           format: uuid
-    VehicleCarePreference:
+    VehicleCarePreferenceResponse:
       type: object
       properties:
         id:
@@ -672,7 +672,7 @@ components:
         version:
           type: integer
           format: int64
-    VehicleEntity:
+    VehicleLegacyRequest:
       type: object
       description: Vehicle object to be created
       properties:
@@ -687,6 +687,25 @@ components:
           type: integer
           format: int32
         vin:
+          type: string
+        vehicleType:
+          type: string
+    VehicleLegacyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        make:
+          type: string
+        model:
+          type: string
+        year:
+          type: integer
+          format: int32
+        vin:
+          type: string
+        vehicleType:
           type: string
         createdAt:
           type: string
