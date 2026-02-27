@@ -14,10 +14,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -48,10 +48,18 @@ class StockMovementServiceImplTest {
     @Mock
     private InventoryAdjustmentRequestRepository adjustmentRepository;
 
-    @InjectMocks
+    @Mock
+    private Clock clock;
+
     private StockMovementServiceImpl service;
 
+    @BeforeEach
+    void setUp() {
+        service = new StockMovementServiceImpl(ledgerRepository, adjustmentRepository, clock);
+    }
+
     private void setupClock() {
+        when(clock.instant()).thenReturn(Instant.parse("2026-02-26T00:00:00Z"));
     }
 
     @Test

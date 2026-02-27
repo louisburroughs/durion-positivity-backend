@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.entity;
 
-import com.github.f4b6a3.uuid.UuidCreator;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -35,7 +35,7 @@ public class SystemPrompt {
     @PrePersist
     void onCreate() {
         if (id == null) {
-            id = UuidCreator.getTimeOrdered();
+            id = UUIDv7Generator.generate();
         }
         var now = OffsetDateTime.now();
         createdAt = now;
@@ -87,4 +87,3 @@ public class SystemPrompt {
         this.updatedAt = updatedAt;
     }
 }
-

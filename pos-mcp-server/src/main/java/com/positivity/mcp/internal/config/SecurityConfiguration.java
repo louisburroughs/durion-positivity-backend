@@ -20,12 +20,10 @@ public class SecurityConfiguration {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/v1/llm-apis/**", "/v1/prompts/**").hasRole("ADMIN")
-                        .requestMatchers("/v1/mcp/**").hasAnyRole("ADMIN", "AGENT")
+                        .requestMatchers("/v1/llm-apis/**", "/v1/prompts/**", "/v1/mcp/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .httpBasic(Customizer.withDefaults());
         return http.build();
     }
 }
-

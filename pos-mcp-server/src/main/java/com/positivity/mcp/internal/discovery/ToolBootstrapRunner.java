@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.discovery;
 
-import com.positivity.mcp.service.ToolRegistrationService;
+import com.positivity.mcp.internal.service.ToolRegistrationService;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -9,11 +9,14 @@ import org.jspecify.annotations.NonNull;
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import com.positivity.poseventreceiver.internal.entity.EventType;
 import com.positivity.poseventreceiver.internal.entity.PreregisteredEvent;
+import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 
 public interface EventDao {
     boolean isPreregistered(@NonNull String id);
 
     EmittedEvent saveEmittedEvent(@NonNull EmittedEvent event);
+
+    EmittedEvent saveEmittedEvent(@NonNull EmitEventRequest request);
 
     Optional<PreregisteredEvent> getPreregisteredEvent(@NonNull String id);
 

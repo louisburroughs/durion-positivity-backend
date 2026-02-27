@@ -2,8 +2,9 @@ package com.positivity.poseventreceiver.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.poseventreceiver.internal.dao.EventDao;
+import com.positivity.poseventreceiver.internal.dto.EventTypeMapper;
 import com.positivity.poseventreceiver.internal.dto.EventTypeRequest;
-import com.positivity.poseventreceiver.internal.entity.EventType;
+import com.positivity.poseventreceiver.internal.dto.EventTypeResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -15,14 +16,20 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
 
 /**
- * REST controller for managing EventTypes used by PreregisteredEvents.
- * Provides endpoints for creating, retrieving, and deleting event types.
+ * REST controller for managing EventTypes used by preregistered events.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -30,281 +37,162 @@ import java.util.UUID;
 @RequestMapping("/v1/eventTypes")
 @Tag(name = "Event Types", description = "Manage EventTypes for PreregisteredEvents")
 public class EventTypeController {
-        private final EventDao eventDao;
 
-        /**
-         * Get all EventTypes.
-         *
-         * @return List of all EventTypes
-         */
-        @GetMapping
-        @Operation(summary = "Get all event types", description = "Retrieve all available event types")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "List of event types returned successfully", content = @Content(schema = @Schema(implementation = EventType.class)))
-        })
-        public ResponseEntity<List<EventType>> getAllEventTypes() {
-                log.info("Fetching all event types");
-                List<EventType> eventTypes = eventDao.getAllEventTypes();
-                return ResponseEntity.ok(eventTypes);
+    private final EventDao eventDao;
+
+    @GetMapping
+    @Operation(summary = "Get all event types", description = "Retrieve all available event types")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "List of event types returned successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    })
+    public ResponseEntity<List<EventTypeResponse>> getAllEventTypes() {
+        log.info("Fetching all event types");
+        List<EventTypeResponse> eventTypes = eventDao.getAllEventTypes().stream()
+                .map(EventTypeMapper::toResponse)
+                .toList();
+        return ResponseEntity.ok(eventTypes);
+    }
+
+    @GetMapping("/active")
+    @Operation(summary = "Get active event types", description = "Retrieve only active event types")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "List of active event types returned successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    })
+    public ResponseEntity<List<EventTypeResponse>> getActiveEventTypes() {
+        log.info("Fetching active event types");
+        List<EventTypeResponse> eventTypes = eventDao.getActiveEventTypes().stream()
+                .map(EventTypeMapper::toResponse)
+                .toList();
+        return ResponseEntity.ok(eventTypes);
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Get event type by ID", description = "Retrieve a specific event type by its unique ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Event type not found")
+    })
+    public ResponseEntity<EventTypeResponse> getEventTypeById(
+            @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id) {
+        log.info("Fetching event type with id: {}", id);
+        return eventDao.getEventType(id)
+                .map(EventTypeMapper::toResponse)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/code/{typeCode}")
+    @Operation(summary = "Get event type by code", description = "Retrieve a specific event type by its unique type code")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Event type not found")
+    })
+    public ResponseEntity<EventTypeResponse> getEventTypeByCode(
+            @Parameter(description = "Event type code", required = true, example = "ORDER_CREATED") @PathVariable String typeCode) {
+        log.info("Fetching event type with code: {}", typeCode);
+        return eventDao.getEventTypeByCode(typeCode)
+                .map(EventTypeMapper::toResponse)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PostMapping
+    @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_CREATE", apiVersion = "1")
+    @Operation(summary = "Create event type", description = "Create a new event type for preregistered events")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Event type created successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters")
+    })
+    public ResponseEntity<EventTypeResponse> createEventType(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
+        log.info("Creating new event type: typeCode={}", request.getTypeCode());
+
+        if (eventDao.getEventTypeByCode(request.getTypeCode()).isPresent()) {
+            log.warn("Event type with code already exists: {}", request.getTypeCode());
+            return ResponseEntity.badRequest().build();
         }
 
-        /**
-         * Get active EventTypes only.
-         *
-         * @return List of active EventTypes
-         */
-        @GetMapping("/active")
-        @Operation(summary = "Get active event types", description = "Retrieve only active event types")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "List of active event types returned successfully", content = @Content(schema = @Schema(implementation = EventType.class)))
-        })
-        public ResponseEntity<List<EventType>> getActiveEventTypes() {
-                log.info("Fetching active event types");
-                List<EventType> eventTypes = eventDao.getActiveEventTypes();
-                return ResponseEntity.ok(eventTypes);
+        var eventType = EventTypeMapper.toNewEntity(request.getTypeCode(), request);
+        var created = eventDao.saveEventType(eventType);
+        log.info("Event type created successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
+                created.getId(), created.getApiVersion(), created.getP50Micros(),
+                created.getP95Micros(), created.getP99Micros());
+        return ResponseEntity.status(HttpStatus.CREATED).body(EventTypeMapper.toResponse(created));
+    }
+
+    @PutMapping("/code/{typeCode}")
+    @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPSERT", apiVersion = "1")
+    @Operation(summary = "Upsert event type", description = "Create or update an event type by type code")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Event type created or updated successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters")
+    })
+    public ResponseEntity<EventTypeResponse> upsertEventType(
+            @Parameter(description = "Event type code", required = true, example = "ORDER_ORDER_CREATE") @PathVariable String typeCode,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
+        log.info("Upserting event type: typeCode={}", typeCode);
+
+        return eventDao.getEventTypeByCode(typeCode)
+                .map(existingType -> {
+                    EventTypeMapper.applyRequest(existingType, request);
+                    var updated = eventDao.saveEventType(existingType);
+                    log.info("Event type updated via upsert: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
+                            updated.getId(), updated.getApiVersion(), updated.getP50Micros(),
+                            updated.getP95Micros(), updated.getP99Micros());
+                    return ResponseEntity.ok(EventTypeMapper.toResponse(updated));
+                })
+                .orElseGet(() -> {
+                    var eventType = EventTypeMapper.toNewEntity(typeCode, request);
+                    var created = eventDao.saveEventType(eventType);
+                    log.info("Event type created via upsert: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
+                            created.getId(), created.getApiVersion(), created.getP50Micros(),
+                            created.getP95Micros(), created.getP99Micros());
+                    return ResponseEntity.ok(EventTypeMapper.toResponse(created));
+                });
+    }
+
+    @PutMapping("/{id}")
+    @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPDATE", apiVersion = "1")
+    @Operation(summary = "Update event type", description = "Update an existing event type")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Event type updated successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Event type not found")
+    })
+    public ResponseEntity<EventTypeResponse> updateEventType(
+            @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
+        log.info("Updating event type: id={}", id);
+
+        return eventDao.getEventType(id)
+                .map(eventType -> {
+                    EventTypeMapper.applyRequest(eventType, request);
+                    var updated = eventDao.saveEventType(eventType);
+                    log.info("Event type updated successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
+                            id, updated.getApiVersion(), updated.getP50Micros(),
+                            updated.getP95Micros(), updated.getP99Micros());
+                    return ResponseEntity.ok(EventTypeMapper.toResponse(updated));
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_DELETE", apiVersion = "1")
+    @Operation(summary = "Delete event type", description = "Delete an event type by ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Event type deleted successfully"),
+            @ApiResponse(responseCode = "404", description = "Event type not found")
+    })
+    public ResponseEntity<Void> deleteEventType(
+            @Parameter(description = "EventType ID to delete", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id) {
+        log.info("Deleting event type: id={}", id);
+
+        if (!eventDao.eventTypeExists(id)) {
+            log.warn("Event type not found: id={}", id);
+            return ResponseEntity.notFound().build();
         }
 
-        /**
-         * Get EventType by ID.
-         *
-         * @param id EventType ID
-         * @return EventType with the specified ID
-         */
-
-        @GetMapping("/{id}")
-        @Operation(summary = "Get event type by ID", description = "Retrieve a specific event type by its unique ID")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventType.class))),
-                        @ApiResponse(responseCode = "404", description = "Event type not found")
-        })
-        public ResponseEntity<EventType> getEventTypeById(
-                        @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id) {
-                log.info("Fetching event type with id: {}", id);
-                return eventDao.getEventType(id)
-                                .map(ResponseEntity::ok)
-                                .orElseGet(() -> ResponseEntity.notFound().build());
-        }
-
-        /**
-         * Get EventType by type code.
-         *
-         * @param typeCode Event type code
-         * @return EventType with the specified code
-         */
-
-        @GetMapping("/code/{typeCode}")
-        @Operation(summary = "Get event type by code", description = "Retrieve a specific event type by its unique type code")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventType.class))),
-                        @ApiResponse(responseCode = "404", description = "Event type not found")
-        })
-        public ResponseEntity<EventType> getEventTypeByCode(
-                        @Parameter(description = "Event type code", required = true, example = "ORDER_CREATED") @PathVariable String typeCode) {
-                log.info("Fetching event type with code: {}", typeCode);
-                return eventDao.getEventTypeByCode(typeCode)
-                                .map(ResponseEntity::ok)
-                                .orElseGet(() -> ResponseEntity.notFound().build());
-        }
-
-        /**
-         * Create a new EventType.
-         *
-         * @param request EventType details
-         * @return Created EventType
-         */
-
-        @PostMapping
-        @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_CREATE", apiVersion = "1")
-        @Operation(summary = "Create event type", description = "Create a new event type for PreregisteredEvents")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "201", description = "Event type created successfully", content = @Content(schema = @Schema(implementation = EventType.class))),
-                        @ApiResponse(responseCode = "400", description = "Invalid request parameters")
-        })
-        public ResponseEntity<EventType> createEventType(
-                        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
-                log.info("Creating new event type: typeCode={}", request.getTypeCode());
-
-                // Check if type code already exists
-                if (eventDao.getEventTypeByCode(request.getTypeCode()).isPresent()) {
-                        log.warn("Event type with code already exists: {}", request.getTypeCode());
-                        return ResponseEntity.badRequest().build();
-                }
-
-                EventType eventType = new EventType(request.getTypeCode(), request.getDescription());
-                eventType.setActive(request.isActive());
-
-                // Apply apiVersion if provided
-                if (request.getApiVersion() != null) {
-                        eventType.setApiVersion(request.getApiVersion());
-                }
-
-                // Apply custom thresholds if provided, otherwise defaults apply
-                if (request.getP50Micros() != null) {
-                        eventType.setP50Micros(request.getP50Micros());
-                }
-                if (request.getP95Micros() != null) {
-                        eventType.setP95Micros(request.getP95Micros());
-                }
-                if (request.getP99Micros() != null) {
-                        eventType.setP99Micros(request.getP99Micros());
-                }
-
-                EventType created = eventDao.saveEventType(eventType);
-                log.info("Event type created successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                                created.getId(), created.getApiVersion(), created.getP50Micros(),
-                                created.getP95Micros(), created.getP99Micros());
-                return ResponseEntity.status(HttpStatus.CREATED).body(created);
-        }
-
-        /**
-         * Upsert an EventType by type code.
-         * Creates the event type if it doesn't exist, updates it if it does.
-         *
-         * @param typeCode Event type code
-         * @param request  EventType details
-         * @return Created or updated EventType
-         */
-
-        @PutMapping("/code/{typeCode}")
-        @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPSERT", apiVersion = "1")
-        @Operation(summary = "Upsert event type", description = "Create or update an event type by its type code. Creates if not exists, updates if exists.")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Event type created or updated successfully", content = @Content(schema = @Schema(implementation = EventType.class))),
-                        @ApiResponse(responseCode = "400", description = "Invalid request parameters")
-        })
-        public ResponseEntity<EventType> upsertEventType(
-                        @Parameter(description = "Event type code", required = true, example = "ORDER_ORDER_CREATE") @PathVariable String typeCode,
-                        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
-                log.info("Upserting event type: typeCode={}", typeCode);
-
-                return eventDao.getEventTypeByCode(typeCode)
-                                .map(existingType -> {
-                                        // Update existing
-                                        existingType.setDescription(request.getDescription());
-                                        existingType.setActive(request.isActive());
-
-                                        if (request.getApiVersion() != null) {
-                                                existingType.setApiVersion(request.getApiVersion());
-                                        }
-                                        if (request.getP50Micros() != null) {
-                                                existingType.setP50Micros(request.getP50Micros());
-                                        }
-                                        if (request.getP95Micros() != null) {
-                                                existingType.setP95Micros(request.getP95Micros());
-                                        }
-                                        if (request.getP99Micros() != null) {
-                                                existingType.setP99Micros(request.getP99Micros());
-                                        }
-
-                                        EventType updated = eventDao.saveEventType(existingType);
-                                        log.info("Event type updated via upsert: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                                                        updated.getId(), updated.getApiVersion(),
-                                                        updated.getP50Micros(),
-                                                        updated.getP95Micros(), updated.getP99Micros());
-                                        return ResponseEntity.ok(updated);
-                                })
-                                .orElseGet(() -> {
-                                        // Create new
-                                        EventType eventType = new EventType(typeCode, request.getDescription());
-                                        eventType.setActive(request.isActive());
-
-                                        if (request.getApiVersion() != null) {
-                                                eventType.setApiVersion(request.getApiVersion());
-                                        }
-                                        if (request.getP50Micros() != null) {
-                                                eventType.setP50Micros(request.getP50Micros());
-                                        }
-                                        if (request.getP95Micros() != null) {
-                                                eventType.setP95Micros(request.getP95Micros());
-                                        }
-                                        if (request.getP99Micros() != null) {
-                                                eventType.setP99Micros(request.getP99Micros());
-                                        }
-
-                                        EventType created = eventDao.saveEventType(eventType);
-                                        log.info("Event type created via upsert: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                                                        created.getId(), created.getApiVersion(),
-                                                        created.getP50Micros(),
-                                                        created.getP95Micros(), created.getP99Micros());
-                                        return ResponseEntity.ok(created);
-                                });
-        }
-
-        /**
-         * Update an existing EventType.
-         *
-         * @param id      EventType ID
-         * @param request Updated EventType details
-         * @return Updated EventType
-         */
-
-        @PutMapping("/{id}")
-        @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPDATE", apiVersion = "1")
-        @Operation(summary = "Update event type", description = "Update an existing event type")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Event type updated successfully", content = @Content(schema = @Schema(implementation = EventType.class))),
-                        @ApiResponse(responseCode = "404", description = "Event type not found")
-        })
-        public ResponseEntity<EventType> updateEventType(
-                        @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id,
-                        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
-                log.info("Updating event type: id={}", id);
-
-                return eventDao.getEventType(id)
-                                .map(eventType -> {
-                                        eventType.setDescription(request.getDescription());
-                                        eventType.setActive(request.isActive());
-
-                                        // Update apiVersion if provided
-                                        if (request.getApiVersion() != null) {
-                                                eventType.setApiVersion(request.getApiVersion());
-                                        }
-
-                                        // Update thresholds if provided
-                                        if (request.getP50Micros() != null) {
-                                                eventType.setP50Micros(request.getP50Micros());
-                                        }
-                                        if (request.getP95Micros() != null) {
-                                                eventType.setP95Micros(request.getP95Micros());
-                                        }
-                                        if (request.getP99Micros() != null) {
-                                                eventType.setP99Micros(request.getP99Micros());
-                                        }
-
-                                        EventType updated = eventDao.saveEventType(eventType);
-                                        log.info("Event type updated successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                                                        id, updated.getApiVersion(), updated.getP50Micros(),
-                                                        updated.getP95Micros(), updated.getP99Micros());
-                                        return ResponseEntity.ok(updated);
-                                })
-                                .orElseGet(() -> ResponseEntity.notFound().build());
-        }
-
-        /**
-         * Delete an EventType by ID.
-         *
-         * @param id EventType ID to delete
-         * @return No content response
-         */
-
-        @DeleteMapping("/{id}")
-        @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_DELETE", apiVersion = "1")
-        @Operation(summary = "Delete event type", description = "Delete an event type by its ID")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "204", description = "Event type deleted successfully"),
-                        @ApiResponse(responseCode = "404", description = "Event type not found")
-        })
-        public ResponseEntity<Void> deleteEventType(
-                        @Parameter(description = "EventType ID to delete", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id) {
-                log.info("Deleting event type: id={}", id);
-
-                if (!eventDao.eventTypeExists(id)) {
-                        log.warn("Event type not found: id={}", id);
-                        return ResponseEntity.notFound().build();
-                }
-
-                eventDao.deleteEventType(id);
-                log.info("Event type deleted successfully: id={}", id);
-                return ResponseEntity.noContent().build();
-        }
+        eventDao.deleteEventType(id);
+        log.info("Event type deleted successfully: id={}", id);
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -1,10 +1,11 @@
 package com.positivity.nhtsa.internal.controller;
 
-import com.positivity.nhtsa.internal.entity.Manufacturer;
-import com.positivity.nhtsa.internal.entity.Make;
-import com.positivity.nhtsa.internal.entity.Model;
-import com.positivity.nhtsa.internal.entity.VehicleType;
-import com.positivity.nhtsa.service.VehicleReferenceService;
+import com.positivity.nhtsa.internal.dto.MakeResponse;
+import com.positivity.nhtsa.internal.dto.ManufacturerResponse;
+import com.positivity.nhtsa.internal.dto.ModelResponse;
+import com.positivity.nhtsa.internal.dto.VehicleReferenceMapper;
+import com.positivity.nhtsa.internal.dto.VehicleTypeResponse;
+import com.positivity.nhtsa.internal.service.VehicleReferenceService;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
@@ -20,22 +21,30 @@ public class VehicleReferenceController {
     }
 
     @GetMapping("/manufacturers")
-    public List<Manufacturer> getManufacturers() {
-        return vehicleReferenceService.getManufacturers();
+    public List<ManufacturerResponse> getManufacturers() {
+        return vehicleReferenceService.getManufacturers().stream()
+                .map(VehicleReferenceMapper::toManufacturerResponse)
+                .toList();
     }
 
     @GetMapping("/makes/{manufacturerId}")
-    public List<Make> getMakesByManufacturer(@PathVariable UUID manufacturerId) {
-        return vehicleReferenceService.getMakesByManufacturer(manufacturerId);
+    public List<MakeResponse> getMakesByManufacturer(@PathVariable UUID manufacturerId) {
+        return vehicleReferenceService.getMakesByManufacturer(manufacturerId).stream()
+                .map(VehicleReferenceMapper::toMakeResponse)
+                .toList();
     }
 
     @GetMapping("/models/{makeId}")
-    public List<Model> getModelsByMake(@PathVariable UUID makeId) {
-        return vehicleReferenceService.getModelsByMake(makeId);
+    public List<ModelResponse> getModelsByMake(@PathVariable UUID makeId) {
+        return vehicleReferenceService.getModelsByMake(makeId).stream()
+                .map(VehicleReferenceMapper::toModelResponse)
+                .toList();
     }
 
     @GetMapping("/vehicle-types/{makeId}")
-    public List<VehicleType> getVehicleTypesForMake(@PathVariable UUID makeId) {
-        return vehicleReferenceService.getVehicleTypesForMake(makeId);
+    public List<VehicleTypeResponse> getVehicleTypesForMake(@PathVariable UUID makeId) {
+        return vehicleReferenceService.getVehicleTypesForMake(makeId).stream()
+                .map(VehicleReferenceMapper::toVehicleTypeResponse)
+                .toList();
     }
 }

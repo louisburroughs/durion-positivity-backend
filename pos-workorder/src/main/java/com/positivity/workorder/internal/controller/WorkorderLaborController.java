@@ -21,7 +21,6 @@ import com.positivity.workorder.internal.dto.AdjustLaborRequest;
 import com.positivity.workorder.internal.dto.StartLaborRequest;
 import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
 import com.positivity.workorder.internal.dto.WorkorderLaborMapper;
-import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.service.WorkorderLaborService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -79,7 +78,7 @@ public class WorkorderLaborController {
             // Check if this is an idempotent replay
             boolean isIdempotent = idempotencyKey != null && !idempotencyKey.isBlank();
 
-            WorkorderLaborEntry entry = laborService.startLaborSession(
+            var entry = laborService.startLaborSession(
                     workorderId,
                     serviceId,
                     request.getTechnicianId(),
@@ -153,7 +152,7 @@ public class WorkorderLaborController {
     public ResponseEntity<List<WorkorderLaborEntryResponse>> getLaborHistory(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId) {
 
-        List<WorkorderLaborEntry> entries = laborService.getLaborHistory(workorderId);
+        var entries = laborService.getLaborHistory(workorderId);
 
         List<WorkorderLaborEntryResponse> responses = entries.stream()
                 .map(WorkorderLaborEntryResponse::fromEntity)
@@ -184,7 +183,7 @@ public class WorkorderLaborController {
             @Parameter(description = "Optional idempotency key to prevent duplicate adjustments", example = "labor-adjust-550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         try {
-            WorkorderLaborEntry entry = laborService.adjustLaborHours(
+            var entry = laborService.adjustLaborHours(
                     entryId,
                     request.getHoursWorked(),
                     request.getAdjustmentReason(),
