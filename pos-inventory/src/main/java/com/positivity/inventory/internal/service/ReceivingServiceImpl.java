@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.client.SiteDefaultsClient;
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
 import com.positivity.inventory.internal.client.WorkorderValidationClient;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
@@ -30,11 +31,13 @@ import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.service.ReceivingService;
 import com.positivity.security.common.SecurityContextHelper;
+import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +46,9 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.servlet.HandlerMapping;
 
 @Service
 @RequiredArgsConstructor
@@ -60,10 +66,14 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final InventoryVarianceRepository inventoryVarianceRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final SourceDocumentStubClient sourceDocumentStubClient;
+    private final SiteDefaultsClient siteDefaultsClient;
     private final WorkorderValidationClient workorderValidationClient;
 
     @Value("${pos.inventory.receiving.source-document-service:}")
     private String configuredSourceDocumentService;
+
+    @Value("${pos.inventory.receiving.site-id:}")
+    private String configuredSiteId;
 
     @Value("${pos.inventory.receiving.staging-location-id:}")
     private String configuredStagingLocationId;
@@ -79,9 +89,6 @@ public class ReceivingServiceImpl implements ReceivingService {
         String sourceDocumentId = request.getSourceDocumentId();
         EntryMethod entryMethod = parseEntryMethod(request.getEntryMethod());
         SourceDocumentType sourceDocumentType = detectSourceDocumentType(sourceDocumentId);
-
-        validateSourceDocumentExists(sourceDocumentId);
-        validateSourceDocumentNotAlreadyReceived(sourceDocumentId);
 
         ReceivingSession session = ReceivingSession.builder()
                 .sourceDocumentId(sourceDocumentId)
@@ -222,6 +229,22 @@ public class ReceivingServiceImpl implements ReceivingService {
         validatePartMatchOrOverride(line, actorUserId, request.getWorkorderLineId(), workorderValidation.demandedProductId());
 
         int quantityDelta = toWholeLedgerQuantity(request.getQuantity(), "quantity");
+        BigDecimal existingReceivedQuantity = line.getReceivedQuantity() != null ? line.getReceivedQuantity() : BigDecimal.ZERO;
+        BigDecimal expectedQuantity = line.getExpectedQuantity() != null ? line.getExpectedQuantity() : BigDecimal.ZERO;
+        BigDecimal cumulativeReceivedQuantity = existingReceivedQuantity.add(request.getQuantity());
+        if (cumulativeReceivedQuantity.compareTo(expectedQuantity) > 0) {
+            throw new IllegalArgumentException(
+                    "Cross-dock quantity exceeds expected quantity for line "
+                            + lineId
+                            + " (expected="
+                            + expectedQuantity
+                            + ", currentReceived="
+                            + existingReceivedQuantity
+                            + ", requested="
+                            + request.getQuantity()
+                            + ")");
+        }
+
         UUID crossDockLocationId = resolveCrossDockLocationId();
         int receiptQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta);
 
@@ -256,9 +279,9 @@ public class ReceivingServiceImpl implements ReceivingService {
 
         line.setWorkorderId(workorderId);
         line.setWorkorderLineId(request.getWorkorderLineId());
-        line.setReceivedQuantity(request.getQuantity());
+        line.setReceivedQuantity(cumulativeReceivedQuantity);
 
-        int quantityCompare = request.getQuantity().compareTo(line.getExpectedQuantity());
+        int quantityCompare = cumulativeReceivedQuantity.compareTo(expectedQuantity);
         if (quantityCompare == 0) {
             line.setStatus(ReceivingLineStatus.RECEIVED);
         } else if (quantityCompare < 0) {
@@ -358,10 +381,39 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private UUID resolveStagingLocationId() {
-        return resolveLocationId(
+        UUID fallbackStagingLocationId = resolveLocationId(
                 configuredStagingLocationId,
                 DEFAULT_STAGING_LOCATION_ID,
                 "pos.inventory.receiving.staging-location-id");
+
+        UUID siteId = resolveRequestScopedSiteId().orElseGet(this::resolveConfiguredSiteId);
+        if (siteId == null) {
+            return fallbackStagingLocationId;
+        }
+
+        return siteDefaultsClient.getDefaultStagingLocationId(siteId).orElse(fallbackStagingLocationId);
+    }
+
+    private Optional<UUID> resolveRequestScopedSiteId() {
+        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes requestAttributes)) {
+            return Optional.empty();
+        }
+
+        HttpServletRequest request = requestAttributes.getRequest();
+        Optional<UUID> fromHeader = parseSiteId(request.getHeader("X-Site-Id"));
+        if (fromHeader.isPresent()) {
+            return fromHeader;
+        }
+
+        Object uriVars = request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+        if (uriVars instanceof Map<?, ?> values) {
+            Object value = values.get("siteId");
+            if (value instanceof String siteIdValue) {
+                return parseSiteId(siteIdValue);
+            }
+        }
+
+        return Optional.empty();
     }
 
     private UUID resolveCrossDockLocationId() {
@@ -379,6 +431,31 @@ public class ReceivingServiceImpl implements ReceivingService {
             return UUID.fromString(configuredValue.trim());
         } catch (IllegalArgumentException ex) {
             throw new IllegalStateException(propertyName + " must be a valid UUID: " + configuredValue, ex);
+        }
+    }
+
+    private UUID resolveConfiguredSiteId() {
+        if (configuredSiteId == null || configuredSiteId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(configuredSiteId.trim());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException(
+                    "pos.inventory.receiving.site-id must be a valid UUID: " + configuredSiteId,
+                    ex);
+        }
+    }
+
+    private Optional<UUID> parseSiteId(String rawSiteId) {
+        if (rawSiteId == null || rawSiteId.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(UUID.fromString(rawSiteId.trim()));
+        } catch (IllegalArgumentException ex) {
+            log.debug("Ignoring invalid request-scoped siteId value: {}", rawSiteId);
+            return Optional.empty();
         }
     }
 
@@ -455,20 +532,6 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .build();
     }
 
-    private void validateSourceDocumentExists(String sourceDocumentId) {
-        String normalized = sourceDocumentId == null ? "" : sourceDocumentId.toUpperCase(Locale.ROOT);
-        if (normalized.startsWith("UNKNOWN-") || normalized.contains("999")) {
-            throw new SourceDocumentNotFoundException("Source document " + sourceDocumentId + " not found");
-        }
-    }
-
-    private void validateSourceDocumentNotAlreadyReceived(String sourceDocumentId) {
-        String normalized = sourceDocumentId == null ? "" : sourceDocumentId.toUpperCase(Locale.ROOT);
-        if (normalized.endsWith("-456") || normalized.endsWith("CLOSED")) {
-            throw new SourceDocumentAlreadyReceivedException(sourceDocumentId + " has already been fully received");
-        }
-    }
-
     private EntryMethod parseEntryMethod(String entryMethodStr) {
         if (entryMethodStr == null || entryMethodStr.isBlank()) {
             return EntryMethod.MANUAL;
@@ -520,10 +583,16 @@ public class ReceivingServiceImpl implements ReceivingService {
                 sourceDocumentType,
                 sourceDocumentId);
 
-        List<SourceDocumentStubClient.SourceDocumentLineDto> stubLines = sourceDocumentStubClient.fetchLines(
+        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument = sourceDocumentStubClient.fetchDocument(
                 sourceService,
                 sourceDocumentType,
                 sourceDocumentId);
+        if (sourceDocument != null && sourceDocument.indicatesAlreadyReceived()) {
+            throw new SourceDocumentAlreadyReceivedException(sourceDocumentId + " has already been fully received");
+        }
+
+        List<SourceDocumentStubClient.SourceDocumentLineDto> stubLines =
+                sourceDocument != null ? sourceDocument.getLines() : null;
 
         if (stubLines == null || stubLines.isEmpty()) {
             throw new SourceDocumentNotFoundException(

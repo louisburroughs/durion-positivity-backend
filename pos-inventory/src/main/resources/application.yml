@@ -66,12 +66,16 @@ pos:
       #   PO  -> pos-order
       #   ASN -> pos-shipments
       source-document-service: ${POS_INVENTORY_RECEIVING_SOURCE_DOCUMENT_SERVICE:}
+      # Optional site identifier used to resolve default staging location from pos-location.
+      site-id: ${POS_INVENTORY_RECEIVING_SITE_ID:}
       # Inventory location used for standard receiving into staging.
       staging-location-id: ${POS_INVENTORY_RECEIVING_STAGING_LOCATION_ID:00000000-0000-0000-0000-000000000002}
       # Virtual location used for cross-dock receive+issue balancing.
       cross-dock-location-id: ${POS_INVENTORY_RECEIVING_CROSS_DOCK_LOCATION_ID:00000000-0000-0000-0000-000000000003}
       stub:
         # Enable/disable HTTP call to a stub source-document service.
+        # If false, receiving session creation requires a real upstream source-document client/path;
+        # otherwise no lines are returned and createReceivingSession fails as not found.
         enabled: ${POS_INVENTORY_RECEIVING_STUB_ENABLED:false}
         # Base URL hosting the stub endpoint (gateway or direct service URL).
         base-url: ${POS_INVENTORY_RECEIVING_STUB_BASE_URL:http://localhost:8080}

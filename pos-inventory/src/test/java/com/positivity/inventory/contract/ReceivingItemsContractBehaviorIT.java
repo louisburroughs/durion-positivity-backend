@@ -34,11 +34,12 @@ import tools.jackson.databind.node.ObjectNode;
  * Verifies {@code POST /v1/inventory/receiving/sessions/{sessionId}/receive}
  * per:
  * <ul>
- * <li>ADR-0011: gateway security — X-User and X-Authorities headers required;
- * {@code inventory:receiving:complete} authority used</li>
- * <li>ADR-0017: HTTP response codes — 200 OK for successful receipt,
- * 422 for validation failures, 404 for session not found</li>
- * <li>ADR-0018: actorUserId sourced from X-User gateway header</li>
+ * <li>ADR-0011: gateway security — authenticated gateway headers and
+ * {@code inventory:receiving:complete} authority required</li>
+ * <li>ADR-0017: HTTP response contract — 200 OK for successful receipt paths
+ * covered in this suite</li>
+ * <li>ADR-0018: actor identity resolved from gateway auth context
+ * ({@code X-User-Id} preferred, {@code X-User} fallback)</li>
  * </ul>
  *
  * Issue: #34
@@ -65,7 +66,8 @@ class ReceivingItemsContractBehaviorIT extends BaseContractIntegrationTest {
      * ADR-0011: {@code inventory:receiving:complete} authority supplied via gateway
      * header.
      * ADR-0017: successful receive action returns 200 OK.
-     * ADR-0018: actorUserId propagated from X-User header.
+     * ADR-0018: actor identity resolved from gateway auth context
+     * ({@code X-User-Id} preferred, {@code X-User} fallback).
      *
      * Issue: #34
      */

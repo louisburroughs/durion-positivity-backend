@@ -50,13 +50,10 @@ import tools.jackson.databind.ObjectMapper;
  * </ul>
  *
  * <p>
- * Tests are intentionally RED for AC1–AC3:
- * {@link com.positivity.inventory.internal.service.ReceivingServiceImpl#crossDockLineToWorkorder}
- * is an {@code UnsupportedOperationException} stub → returns HTTP 500,
- * while tests expect 200/400 respectively.
- * AC4 is expected GREEN: Spring Security {@code @PreAuthorize} denies the
- * request
- * before the service stub is reached, returning 403.
+ * These are controller-level contract tests with {@link ReceivingService}
+ * mocked via {@code @MockitoBean}. AC1-AC3 assert HTTP contract mapping for
+ * successful and business-error service outcomes; AC4 asserts security denial
+ * from {@code @PreAuthorize} before service invocation.
  *
  * Issue: #33
  */
@@ -109,8 +106,7 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
      * transaction.
      *
      * <p>
-     * RED reason: service stub throws {@code UnsupportedOperationException} → 500,
-     * assertion expects 200.
+     * Service behavior is mocked to isolate controller-level HTTP contract checks.
      *
      * Issue: #33
      */
@@ -163,8 +159,7 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
      * ADR-0017: 200 OK for partial cross-dock; session remains open.
      *
      * <p>
-     * RED reason: service stub throws {@code UnsupportedOperationException} → 500,
-     * assertion expects 200.
+     * Service behavior is mocked to isolate controller-level HTTP contract checks.
      *
      * Issue: #33
      */
@@ -218,9 +213,8 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
      * {@code InventoryGlobalExceptionHandler#handleWorkorderClosed}.
      *
      * <p>
-     * RED reason: service stub throws {@code UnsupportedOperationException} (not
-     * {@code WorkorderClosedException}), so the exception handler maps it to 500,
-     * while the assertion expects 400.
+     * Service behavior is mocked to throw {@code WorkorderClosedException} so the
+     * exception-handler mapping can be validated as 400.
      *
      * Issue: #33
      */
@@ -268,9 +262,7 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
      * ADR-0017: 403 Forbidden for authorization failures.
      *
      * <p>
-     * Expected GREEN immediately: security layer evaluates before service is
-     * called,
-     * so the {@code UnsupportedOperationException} stub is never reached.
+     * Security is evaluated before service invocation.
      *
      * Issue: #33
      */
