@@ -45,6 +45,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
+    private static final String OCCURRED_AT = "occurredAt";
+    private static final String ACTOR_ID = "actorId";
+    private static final String EVENT_TYPE = "eventType";
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -91,11 +94,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(purchaseOrder);
         eventPublisher.publishEvent(Map.of(
-                "eventType", "PurchaseOrderCreated",
+                EVENT_TYPE, "PurchaseOrderCreated",
                 "poId", saved.getPurchaseOrderId().toString(),
                 "vendorId", saved.getVendorId().toString(),
-                "actorId", actorId,
-                "occurredAt", Instant.now().toString()));
+                ACTOR_ID, actorId,
+                OCCURRED_AT, Instant.now(clock).toString()));
         return toResponse(saved);
     }
 
@@ -164,15 +167,15 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
 
         eventPublisher.publishEvent(Map.of(
-                "eventType", "PurchaseOrderApproved",
+                EVENT_TYPE, "PurchaseOrderApproved",
                 "poId", saved.getPurchaseOrderId().toString(),
                 "vendorId", saved.getVendorId().toString(),
                 "totalAmountMinor", saved.getGrandTotalMinor(),
                 "currency", saved.getCurrency(),
                 "lineItems", toApprovedLineItems(saved),
                 "approvalStatus", saved.getStatus().name(),
-                "actorId", actorId,
-                "occurredAt", now.toString()));
+                ACTOR_ID, actorId,
+                OCCURRED_AT, now.toString()));
 
         if (encumbranceEnabled) {
             EncumbranceEventPublisher publisher = encumbranceEventPublisher;
@@ -237,14 +240,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
         eventPublisher.publishEvent(Map.of(
-                "eventType", "PurchaseOrderRevised",
+                EVENT_TYPE, "PurchaseOrderRevised",
                 "poId", saved.getPurchaseOrderId().toString(),
                 "priorVersion", priorVersion,
                 "newVersion", saved.getVersionNumber(),
                 "revisionReason", request.getRevisionReason(),
                 "delta", delta,
-                "actorId", actorId,
-                "occurredAt", Instant.now().toString()));
+                ACTOR_ID, actorId,
+                OCCURRED_AT, Instant.now(clock).toString()));
         return toResponse(saved);
     }
 
@@ -258,10 +261,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
         eventPublisher.publishEvent(Map.of(
-                "eventType", "PurchaseOrderCancelled",
+                EVENT_TYPE, "PurchaseOrderCancelled",
                 "poId", saved.getPurchaseOrderId().toString(),
-                "actorId", actorId,
-                "occurredAt", Instant.now().toString()));
+                ACTOR_ID, actorId,
+                OCCURRED_AT, Instant.now(clock).toString()));
         return toResponse(saved);
     }
 
@@ -271,74 +274,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             @NonNull ReceivePurchaseOrderRequest request,
             @NonNull String actorId) {
         PurchaseOrderEntity po = getPoOrThrow(poId);
-        if (po.getStatus() == PurchaseOrderStatus.DRAFT || po.getStatus() == PurchaseOrderStatus.CANCELLED) {
-            throw new PurchaseOrderNotApprovedException("Purchase order must be approved before receiving");
-        }
-
-        Map<UUID, PurchaseOrderLineEntity> poLinesById = new HashMap<>();
-        for (PurchaseOrderLineEntity line : po.getLines()) {
-            if (line.getLineId() != null) {
-                poLinesById.put(line.getLineId(), line);
-            }
-        }
-
-        long openBalanceMinor = safeLong(po.getOpenBalanceMinor());
-        for (ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineRequest : request.getLines()) {
-            PurchaseOrderLineEntity line = poLinesById.get(lineRequest.getLineId());
-            if (line == null) {
-                line = purchaseOrderLineRepository.findById(lineRequest.getLineId())
-                        .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrderLine",
-                                lineRequest.getLineId().toString()));
-            }
-
-            BigDecimal currentOpenQty = line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO
-                    : line.getOpenQuantityDecimal();
-            BigDecimal nextOpenQty = currentOpenQty.subtract(lineRequest.getQuantityReceived());
-            if (nextOpenQty.signum() < 0) {
-                nextOpenQty = BigDecimal.ZERO;
-            }
-            line.setOpenQuantityDecimal(nextOpenQty);
-
-            long effectiveUnitCost = lineRequest.getUnitCostMinor() == null
-                    ? safeLong(line.getUnitCostMinor())
-                    : lineRequest.getUnitCostMinor();
-            long receivedValueMinor = lineRequest.getQuantityReceived()
-                    .multiply(BigDecimal.valueOf(effectiveUnitCost))
-                    .setScale(0, RoundingMode.HALF_EVEN)
-                    .longValue();
-            openBalanceMinor = Math.max(0L, openBalanceMinor - receivedValueMinor);
-        }
-
-        boolean allReceived = po.getLines().stream()
-                .allMatch(line -> {
-                    BigDecimal openQty = line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO
-                            : line.getOpenQuantityDecimal();
-                    return openQty.compareTo(BigDecimal.ZERO) <= 0;
-                });
-
-        if (allReceived) {
-            po.setStatus(PurchaseOrderStatus.FULLY_RECEIVED);
-            po.setOpenBalanceMinor(0L);
-        } else {
-            po.setStatus(PurchaseOrderStatus.PARTIALLY_RECEIVED);
-            po.setOpenBalanceMinor(openBalanceMinor);
-        }
-
+        validateReceivableStatus(po);
+        Map<UUID, PurchaseOrderLineEntity> poLinesById = mapPoLinesById(po.getLines());
+        long openBalanceMinor = applyReceiptLines(request.getLines(), poLinesById, safeLong(po.getOpenBalanceMinor()));
+        updateReceiptStatus(po, openBalanceMinor);
         purchaseOrderRepository.save(po);
-        eventPublisher.publishEvent(Map.of(
-                "eventType", "PurchaseOrderReceiptEvent",
-                "poId", po.getPurchaseOrderId().toString(),
-                "status", po.getStatus().name(),
-                "openBalanceMinor", safeLong(po.getOpenBalanceMinor()),
-                "actorId", actorId,
-                "occurredAt", Instant.now().toString()));
-
-        List<ReceivePurchaseOrderResponse.ReceivePurchaseOrderLineDetail> lineDetails = po.getLines().stream()
-                .sorted(Comparator.comparing(PurchaseOrderLineEntity::getLineNumber))
-                .map(line -> new ReceivePurchaseOrderResponse.ReceivePurchaseOrderLineDetail(
-                        line.getLineId(),
-                        line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO : line.getOpenQuantityDecimal()))
-                .toList();
+        publishReceiptEvent(po, actorId);
+        List<ReceivePurchaseOrderResponse.ReceivePurchaseOrderLineDetail> lineDetails = buildReceiveLineDetails(po);
 
         return ReceivePurchaseOrderResponse.builder()
                 .poId(po.getPurchaseOrderId())
@@ -347,6 +289,101 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .message("Purchase order receipt recorded")
                 .lines(lineDetails)
                 .build();
+    }
+
+    private void validateReceivableStatus(PurchaseOrderEntity po) {
+        if (po.getStatus() == PurchaseOrderStatus.DRAFT || po.getStatus() == PurchaseOrderStatus.CANCELLED) {
+            throw new PurchaseOrderNotApprovedException("Purchase order must be approved before receiving");
+        }
+    }
+
+    private Map<UUID, PurchaseOrderLineEntity> mapPoLinesById(List<PurchaseOrderLineEntity> lines) {
+        Map<UUID, PurchaseOrderLineEntity> poLinesById = new HashMap<>();
+        for (PurchaseOrderLineEntity line : lines) {
+            if (line.getLineId() != null) {
+                poLinesById.put(line.getLineId(), line);
+            }
+        }
+        return poLinesById;
+    }
+
+    private long applyReceiptLines(
+            List<ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest> lineRequests,
+            Map<UUID, PurchaseOrderLineEntity> poLinesById,
+            long openBalanceMinor) {
+        long updatedOpenBalanceMinor = openBalanceMinor;
+        for (ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineRequest : lineRequests) {
+            PurchaseOrderLineEntity line = resolvePurchaseOrderLine(lineRequest.getLineId(), poLinesById);
+            updateOpenQuantity(line, lineRequest.getQuantityReceived());
+            long receivedValueMinor = calculateReceivedValueMinor(line, lineRequest);
+            updatedOpenBalanceMinor = Math.max(0L, updatedOpenBalanceMinor - receivedValueMinor);
+        }
+        return updatedOpenBalanceMinor;
+    }
+
+    private PurchaseOrderLineEntity resolvePurchaseOrderLine(UUID lineId,
+            Map<UUID, PurchaseOrderLineEntity> poLinesById) {
+        PurchaseOrderLineEntity line = poLinesById.get(lineId);
+        if (line != null) {
+            return line;
+        }
+        return purchaseOrderLineRepository.findById(lineId)
+                .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrderLine", lineId.toString()));
+    }
+
+    private void updateOpenQuantity(PurchaseOrderLineEntity line, BigDecimal quantityReceived) {
+        BigDecimal currentOpenQty = line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO
+                : line.getOpenQuantityDecimal();
+        BigDecimal nextOpenQty = currentOpenQty.subtract(quantityReceived);
+        line.setOpenQuantityDecimal(nextOpenQty.signum() < 0 ? BigDecimal.ZERO : nextOpenQty);
+    }
+
+    private long calculateReceivedValueMinor(
+            PurchaseOrderLineEntity line,
+            ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineRequest) {
+        long effectiveUnitCost = lineRequest.getUnitCostMinor() == null
+                ? safeLong(line.getUnitCostMinor())
+                : lineRequest.getUnitCostMinor();
+        return lineRequest.getQuantityReceived()
+                .multiply(BigDecimal.valueOf(effectiveUnitCost))
+                .setScale(0, RoundingMode.HALF_EVEN)
+                .longValue();
+    }
+
+    private void updateReceiptStatus(PurchaseOrderEntity po, long openBalanceMinor) {
+        if (isFullyReceived(po.getLines())) {
+            po.setStatus(PurchaseOrderStatus.FULLY_RECEIVED);
+            po.setOpenBalanceMinor(0L);
+            return;
+        }
+        po.setStatus(PurchaseOrderStatus.PARTIALLY_RECEIVED);
+        po.setOpenBalanceMinor(openBalanceMinor);
+    }
+
+    private boolean isFullyReceived(List<PurchaseOrderLineEntity> lines) {
+        return lines.stream()
+                .map(line -> line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO : line.getOpenQuantityDecimal())
+                .allMatch(openQty -> openQty.compareTo(BigDecimal.ZERO) <= 0);
+    }
+
+    private void publishReceiptEvent(PurchaseOrderEntity po, String actorId) {
+        eventPublisher.publishEvent(Map.of(
+                EVENT_TYPE, "PurchaseOrderReceiptEvent",
+                "poId", po.getPurchaseOrderId().toString(),
+                "status", po.getStatus().name(),
+                "openBalanceMinor", safeLong(po.getOpenBalanceMinor()),
+                ACTOR_ID, actorId,
+                OCCURRED_AT, Instant.now(clock).toString()));
+    }
+
+    private List<ReceivePurchaseOrderResponse.ReceivePurchaseOrderLineDetail> buildReceiveLineDetails(
+            PurchaseOrderEntity po) {
+        return po.getLines().stream()
+                .sorted(Comparator.comparing(PurchaseOrderLineEntity::getLineNumber))
+                .map(line -> new ReceivePurchaseOrderResponse.ReceivePurchaseOrderLineDetail(
+                        line.getLineId(),
+                        line.getOpenQuantityDecimal() == null ? BigDecimal.ZERO : line.getOpenQuantityDecimal()))
+                .toList();
     }
 
     private PurchaseOrderEntity getPoOrThrow(UUID poId) {
