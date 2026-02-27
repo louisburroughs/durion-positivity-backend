@@ -77,6 +77,7 @@ import org.springframework.web.client.RestClientException;
 @Service
 @RequiredArgsConstructor
 public class AppointmentsServiceImpl implements AppointmentsService {
+    private static final String SYSTEM = "system";
     private final AppointmentRepository appointmentRepository;
     private final AppointmentAuditRepository appointmentAuditRepository;
     private final AppointmentServiceRequestRepository appointmentServiceRequestRepository;
@@ -97,7 +98,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             throw new AppointmentValidationException("serviceRequestIds must contain at least one entry");
         }
         validateCrmIdentifiers(request.getCrmCustomerId(), request.getCrmVehicleId());
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         Map<String, Object> customerSnapshot;
         Map<String, Object> vehicleSnapshot;
         try {
@@ -128,7 +129,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
 
         Appointment appointment = Appointment.builder()
-                .appointmentId(UUIDv7Generator.generate())
                 .status(AppointmentStatus.SCHEDULED)
                 .locationId(request.getLocationId())
                 .resourceId(request.getResourceId())
@@ -208,7 +208,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         appointment.setEndAt(request.getNewEndAt());
         Appointment saved = appointmentRepository.save(appointment);
 
-        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         AppointmentAudit audit = AppointmentAudit.builder()
                 .appointmentId(appointmentId)
                 .action(AppointmentAction.RESCHEDULED)
@@ -248,7 +248,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         appointment.setCancellationNotes(request.getNotes());
         Appointment saved = appointmentRepository.save(appointment);
 
-        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         AppointmentAudit audit = AppointmentAudit.builder()
                 .appointmentId(appointmentId)
                 .action(AppointmentAction.CANCELLED)
