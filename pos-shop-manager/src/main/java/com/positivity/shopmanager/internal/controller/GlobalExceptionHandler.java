@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 @RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
+        private static final String CODE_CRM_UNAVAILABLE = "CRM_UNAVAILABLE";
         private final Clock clock;
 
         @ExceptionHandler(CrmCustomerNotFoundException.class)
@@ -124,7 +125,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleCrmUnavailable(Exception exception, HttpServletRequest request) {
                 String correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                                .body(error("CRM_UNAVAILABLE", "CRM service is unavailable", correlationId));
+                                .body(error(CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId));
         }
 
         @ExceptionHandler(CrmUnavailableException.class)
@@ -133,7 +134,7 @@ public class GlobalExceptionHandler {
                         HttpServletRequest request) {
                 String correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                                .body(error("CRM_UNAVAILABLE", "CRM service is unavailable", correlationId));
+                                .body(error(CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId));
         }
 
         @ExceptionHandler(UnsupportedOperationException.class)
@@ -168,7 +169,7 @@ public class GlobalExceptionHandler {
                                         "RESOURCE_NOT_FOUND" ->
                                 HttpStatus.NOT_FOUND.value();
                         case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE" -> HttpStatus.CONFLICT.value();
-                        case "CRM_UNAVAILABLE" -> HttpStatus.SERVICE_UNAVAILABLE.value();
+                        case CODE_CRM_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE.value();
                         case "NOT_IMPLEMENTED" -> HttpStatus.NOT_IMPLEMENTED.value();
                         default -> HttpStatus.BAD_REQUEST.value();
                 };
