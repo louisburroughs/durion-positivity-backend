@@ -53,7 +53,7 @@ public class McpChatController {
             @ApiResponse(responseCode = "500", description = "Tool execution failed", content = @Content(mediaType = "text/plain", examples = @ExampleObject(value = "Failed to execute MCP tool: Tool not found")))
     })
     @PostMapping("/chat")
-    @PreAuthorize("hasAnyRole('ADMIN','AGENT')")
+    @PreAuthorize("isAuthenticated()")
     @EmitEvent(id = "MCP_CHAT_EXECUTE", apiVersion = "1")
     public ResponseEntity<?> chat(
             @RequestBody @Schema(name = "ChatRequest", description = "Request to execute an MCP tool", example = "{\"toolName\": \"positivity-ping\", \"arguments\": {}}") ChatRequest request) {
