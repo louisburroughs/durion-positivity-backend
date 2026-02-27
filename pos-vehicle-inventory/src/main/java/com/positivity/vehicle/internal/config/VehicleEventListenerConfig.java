@@ -1,13 +1,15 @@
 package com.positivity.vehicle.internal.config;
 
-import com.positivity.vehicle.internal.dto.VehicleUpdatedEvent;
-import com.positivity.vehicle.internal.service.VehicleEventIngestionService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+
+import com.positivity.vehicle.internal.dto.VehicleUpdatedEvent;
+import com.positivity.vehicle.service.VehicleEventIngestionService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 
 /**

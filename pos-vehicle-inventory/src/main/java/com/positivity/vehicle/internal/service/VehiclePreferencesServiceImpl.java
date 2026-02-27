@@ -1,8 +1,11 @@
 package com.positivity.vehicle.internal.service;
 
+import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 import com.positivity.vehicle.internal.repository.VehicleCarePreferenceRepository;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
+import com.positivity.vehicle.service.VehiclePreferencesService;
+
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +25,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class VehiclePreferencesService {
+public class VehiclePreferencesServiceImpl implements VehiclePreferencesService {
 
     private final VehicleCarePreferenceRepository preferencesRepository;
     private final VehicleRecordRepository vehicleRepository;
@@ -30,6 +33,7 @@ public class VehiclePreferencesService {
     /**
      * Gets preferences for a vehicle. Returns empty Optional if not found.
      */
+    @Override
     @Transactional(readOnly = true)
     public Optional<VehicleCarePreference> getPreferences(@NonNull UUID vehicleId) {
         log.debug("Fetching preferences for vehicleId={}", vehicleId);
@@ -39,44 +43,45 @@ public class VehiclePreferencesService {
     /**
      * Creates or updates preferences for a vehicle (upsert operation).
      */
+    @Override
     @Transactional
     public VehicleCarePreference upsertPreferences(@NonNull UpsertPreferencesRequest request) {
-        log.info("Upserting preferences for vehicleId={}", request.vehicleId());
+        log.info("Upserting preferences for vehicleId={}", request.getVehicleId());
 
         // Validate vehicle exists
-        if (!vehicleRepository.existsById(request.vehicleId())) {
-            throw new EntityNotFoundException("Vehicle not found: " + request.vehicleId());
+        if (!vehicleRepository.existsById(request.getVehicleId())) {
+            throw new EntityNotFoundException("Vehicle not found: " + request.getVehicleId());
         }
 
         // Validate preferences map is not null (can be empty)
-        if (request.preferences() == null) {
+        if (request.getPreferences() == null) {
             throw new IllegalArgumentException("Preferences map cannot be null (use empty map instead)");
         }
 
-        var existing = preferencesRepository.findByVehicleId(request.vehicleId());
+        var existing = preferencesRepository.findByVehicleId(request.getVehicleId());
 
         VehicleCarePreference preference;
         if (existing.isPresent()) {
             // Update existing
             preference = existing.get();
-            preference.setPreferences(request.preferences());
-            if (request.serviceNotes() != null) {
-                preference.setServiceNotes(request.serviceNotes());
+            preference.setPreferences(request.getPreferences());
+            if (request.getServiceNotes() != null) {
+                preference.setServiceNotes(request.getServiceNotes());
             }
-            if (request.updatedByUserId() != null) {
-                preference.setUpdatedByUserId(request.updatedByUserId());
+            if (request.getUpdatedByUserId() != null) {
+                preference.setUpdatedByUserId(request.getUpdatedByUserId());
             }
             log.info("Updating existing preferences: id={}", preference.getId());
         } else {
             // Create new
             preference = VehicleCarePreference.builder()
-                    .vehicleId(request.vehicleId())
-                    .preferences(request.preferences())
-                    .serviceNotes(request.serviceNotes())
-                    .createdByUserId(request.createdByUserId())
-                    .updatedByUserId(request.updatedByUserId())
+                    .vehicleId(request.getVehicleId())
+                    .preferences(request.getPreferences())
+                    .serviceNotes(request.getServiceNotes())
+                    .createdByUserId(request.getCreatedByUserId())
+                    .updatedByUserId(request.getUpdatedByUserId())
                     .build();
-            log.info("Creating new preferences for vehicleId={}", request.vehicleId());
+            log.info("Creating new preferences for vehicleId={}", request.getVehicleId());
         }
 
         var saved = preferencesRepository.save(preference);
@@ -88,6 +93,7 @@ public class VehiclePreferencesService {
     /**
      * Updates specific preference fields without replacing the entire map.
      */
+    @Override
     @Transactional
     public VehicleCarePreference mergePreferences(
             @NonNull UUID vehicleId,
@@ -118,6 +124,7 @@ public class VehiclePreferencesService {
     /**
      * Deletes preferences for a vehicle.
      */
+    @Override
     @Transactional
     public void deletePreferences(@NonNull UUID vehicleId) {
         log.info("Deleting preferences for vehicleId={}", vehicleId);
@@ -127,16 +134,5 @@ public class VehiclePreferencesService {
                     preferencesRepository.delete(preference);
                     log.info("Deleted preferences: id={}", preference.getId());
                 });
-    }
-
-    /**
-     * Request record for upserting preferences.
-     */
-    public record UpsertPreferencesRequest(
-            @NonNull UUID vehicleId,
-            @NonNull Map<String, Object> preferences,
-            String serviceNotes,
-            UUID createdByUserId,
-            UUID updatedByUserId) {
     }
 }

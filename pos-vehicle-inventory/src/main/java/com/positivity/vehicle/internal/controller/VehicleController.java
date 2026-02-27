@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 @Tag(name = "Vehicle API", description = "Endpoints for vehicle CRUD and VIN-based operations")
 @RequiredArgsConstructor
 @RestController
+@PreAuthorize("isAuthenticated()")
 @RequestMapping("/v1/vehicles-legacy")
 public class VehicleController {
     private final VehicleDao vehicleDao;
@@ -41,7 +43,7 @@ public class VehicleController {
     public ResponseEntity<VehicleLegacyResponse> createVehicle(
             @Parameter(description = "Vehicle object to be created") @RequestBody VehicleLegacyRequest vehicle) {
         var saved = vehicleDao.save(VehicleLegacyMapper.toEntity(vehicle));
-        log.info("Created vehicle with id {}", saved.getId());
+        log.info("Created legacy vehicle");
         return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
@@ -81,7 +83,7 @@ public class VehicleController {
         var vehicle = existing.get();
         VehicleLegacyMapper.applyCoreFields(vehicle, updated);
         var saved = vehicleDao.save(vehicle);
-        log.info("Updated vehicle with id {}", saved.getId());
+        log.info("Updated legacy vehicle with id {}", id);
         return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
@@ -110,7 +112,7 @@ public class VehicleController {
             return ResponseEntity.badRequest().build();
         }
         var saved = vehicleDao.save(VehicleLegacyMapper.toEntity(vehicle));
-        log.info("Created vehicle with VIN {}", saved.getVIN());
+        log.info("Created legacy vehicle with VIN {}", vehicle.getVin());
         return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
@@ -140,9 +142,8 @@ public class VehicleController {
         }
         var vehicle = existing.get();
         VehicleLegacyMapper.applyCoreFields(vehicle, updated);
-        vehicle.setVIN(vin);
         var saved = vehicleDao.save(vehicle);
-        log.info("Updated vehicle with VIN {}", saved.getVIN());
+        log.info("Updated legacy vehicle with VIN {}", vin);
         return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
