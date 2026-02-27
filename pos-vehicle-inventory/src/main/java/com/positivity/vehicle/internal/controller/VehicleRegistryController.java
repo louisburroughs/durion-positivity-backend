@@ -1,7 +1,16 @@
 package com.positivity.vehicle.internal.controller;
 
+import com.positivity.events.EmitEvent;
+import com.positivity.shared.dto.CreateVehicleRequest;
+import com.positivity.shared.dto.VehicleResponse;
+import com.positivity.vehicle.service.VehicleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,30 +23,82 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.positivity.events.EmitEvent;
-import com.positivity.shared.dto.CreateVehicleRequest;
-import com.positivity.shared.dto.VehicleResponse;
-import com.positivity.vehicle.service.VehicleService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
 /**
- * REST controller for vehicle CRUD operations - CAP:091 Story #105.
+ * REST controller for vehicle registry CRUD operations.
  */
-@Slf4j    "onses(value = {@ApiR          VehicleResose response = vt vehicle by ID", descripin =@    @ApiResp ummary = "Get vehicle by VIN", description @         @ApiResponeresponseCode = "44", descripin = "Vehicle  not found", content = @Content)})ing("/vin/{vin}")esonseEntiyVehiceRespne etehicleByVin@Parameer(description = Vhicle I Reso@ApiResponse(responseCod  "200", description = "Vehicle updated uccessful@ApiResponse(responseCode = "404",    @ApResponse(responseCode = "400,ing("/{vehicleId}")tp
-        @Parameterdscription = "Vehile update rqest", required = true) @RequestBody CreateVehicleReq{VehicleResponse response  ehicleervice.updaeehicle(vehicleId, re      } catch (IllegalArgumentEx        log.wr("Failed to updat vehicle {:{}",        return ResponseEntiy.notFound().b
+@Slf4j
+@Tag(name = "Vehicle Registry API", description = "Operations for creating and maintaining vehicle registry records")
+@RequiredArgsConstructor
+@RestController
+@PreAuthorize("isAuthenticated()")
+@RequestMapping("/v1/vehicle-registry")
+public class VehicleRegistryController {
 
-on(summary = "Delete vehicle", descriptionses(value = {   @ApResponse(responseCode = "204,@ApiResponse(responseCode = "404", descripton = "Vehile not found")e@    public ResponseEntity<Void> deleteVehicle(
+    private final VehicleService vehicleService;
+
+    @Operation(summary = "Create vehicle", description = "Create a new vehicle registry record")
+    @ApiResponse(responseCode = "201", description = "Vehicle created successfully.")
+    @ApiResponse(responseCode = "400", description = "Invalid vehicle request.")
+    @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
+    @PostMapping
+    public ResponseEntity<VehicleResponse> createVehicle(
+            @Parameter(description = "Vehicle creation request", required = true) @RequestBody CreateVehicleRequest request) {
+        try {
+            VehicleResponse response = vehicleService.createVehicle(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Failed to create vehicle: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @Operation(summary = "Get vehicle by ID", description = "Retrieve a vehicle by its unique ID")
+    @ApiResponse(responseCode = "200", description = "Vehicle retrieved successfully.")
+    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @GetMapping("/{vehicleId}")
+    public ResponseEntity<VehicleResponse> getVehicle(
             @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId) {
+        return vehicleService.getVehicle(vehicleId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
 
+    @Operation(summary = "Get vehicle by VIN", description = "Retrieve a vehicle by VIN")
+    @ApiResponse(responseCode = "200", description = "Vehicle retrieved successfully.")
+    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @GetMapping("/vin/{vin}")
+    public ResponseEntity<VehicleResponse> getVehicleByVin(
+            @Parameter(description = "Vehicle VIN", required = true) @PathVariable String vin) {
+        return vehicleService.getVehicleByVin(vin)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @Operation(summary = "Update vehicle", description = "Update an existing vehicle by ID")
+    @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
+    @ApiResponse(responseCode = "400", description = "Invalid vehicle request.")
+    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
+    @PutMapping("/{vehicleId}")
+    public ResponseEntity<VehicleResponse> updateVehicle(
+            @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId,
+            @Parameter(description = "Vehicle update request", required = true) @RequestBody CreateVehicleRequest request) {
+        try {
+            VehicleResponse response = vehicleService.updateVehicle(vehicleId, request);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Failed to update vehicle {}: {}", vehicleId, e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @Operation(summary = "Delete vehicle", description = "Deactivate a vehicle by ID")
+    @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
+    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
+    @DeleteMapping("/{vehicleId}")
+    public ResponseEntity<Void> deleteVehicle(
+            @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId) {
         try {
             vehicleService.deleteVehicle(vehicleId);
             return ResponseEntity.noContent().build();
