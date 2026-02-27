@@ -1,9 +1,30 @@
 package com.positivity.inventory.service;
 
-import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
-import com.positivity.inventory.internal.dto.RecordMovementRequest;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
+import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryLedgerEntryResponse;
+import com.positivity.inventory.internal.dto.RecordMovementRequest;
 import com.positivity.inventory.internal.entity.InventoryAdjustmentRequest;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.AdjustmentRequestStatus;
@@ -13,20 +34,6 @@ import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.StockMovementServiceImpl;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class StockMovementServiceImplTest {
@@ -44,8 +51,12 @@ class StockMovementServiceImplTest {
     @InjectMocks
     private StockMovementServiceImpl service;
 
+    private void setupClock() {
+    }
+
     @Test
     void recordMovement_receive_setsGoodsReceipt_positiveDelta_andSavesEntry() {
+        setupClock();
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.RECEIVE, 5);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
@@ -60,6 +71,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_pick_withSufficientStock_setsGoodsIssue_negativeDelta() {
+        setupClock();
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.PICK, 4);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
@@ -121,6 +133,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_transfer_savesTransferInAndTransferOut_withLocations() {
+        setupClock();
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.TRANSFER, 6);
         request.setToLocationId(LOC_2);
@@ -164,6 +177,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_putAway_setsPutaway_positiveDelta() {
+        setupClock();
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.PUT_AWAY, 3);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
@@ -178,6 +192,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_return_setsReturnToStock_positiveDelta() {
+        setupClock();
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.RETURN, 2);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
@@ -192,6 +207,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_storesActorUserIdInTransactionUserId() {
+        setupClock();
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.RECEIVE, 1);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
@@ -206,6 +222,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void createAdjustmentRequest_happyPath_savesPendingRequest_withRequestedByActor() {
+        setupClock();
         stubAdjustmentSaveReturnsRequest();
         CreateAdjustmentRequestDto request = baseAdjustmentRequest(7);
 
@@ -221,6 +238,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void createAdjustmentRequest_returnsRequestMatchingInputFields() {
+        setupClock();
         stubAdjustmentSaveReturnsRequest();
         CreateAdjustmentRequestDto request = baseAdjustmentRequest(11);
 
@@ -234,6 +252,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void approveAdjustmentRequest_positiveQuantity_savesAdjustmentInLedgerEntry() {
+        setupClock();
         stubLedgerSaveReturnsEntry();
         stubAdjustmentSaveReturnsRequest();
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(4);
@@ -250,6 +269,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void approveAdjustmentRequest_negativeQuantity_savesAdjustmentOutLedgerEntry() {
+        setupClock();
         stubLedgerSaveReturnsEntry();
         stubAdjustmentSaveReturnsRequest();
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(-3);
@@ -290,6 +310,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void approveAdjustmentRequest_setsApprovedStatusAndApproverUserId() {
+        setupClock();
         stubLedgerSaveReturnsEntry();
         stubAdjustmentSaveReturnsRequest();
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(5);

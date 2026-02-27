@@ -11,13 +11,18 @@ import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
+import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
+import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
+import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
+import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
@@ -87,7 +92,8 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
-    @ExceptionHandler({ ResourceNotFoundException.class, ProductNotFoundException.class, LocationNotFoundException.class })
+    @ExceptionHandler({ ResourceNotFoundException.class, ProductNotFoundException.class,
+            LocationNotFoundException.class })
     public ResponseEntity<Map<String, String>> handleResourceNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
@@ -162,9 +168,33 @@ public class InventoryGlobalExceptionHandler {
                 putawayContext(ex));
     }
 
+    @ExceptionHandler({
+            SourceDocumentNotFoundException.class,
+            ReceivingSessionNotFoundException.class
+    })
+    public ResponseEntity<Map<String, String>> handleReceivingNotFound(RuntimeException ex) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
+    }
+
+    @ExceptionHandler(SourceDocumentAlreadyReceivedException.class)
+    public ResponseEntity<Map<String, String>> handleSourceDocumentAlreadyReceived(
+            SourceDocumentAlreadyReceivedException ex) {
+        return build(HttpStatus.BAD_REQUEST, "SOURCE_DOCUMENT_ALREADY_RECEIVED", ex.getMessage());
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException ex) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+    }
+
+    @ExceptionHandler(WorkorderClosedException.class)
+    public ResponseEntity<Map<String, String>> handleWorkorderClosed(WorkorderClosedException ex) {
+        return build(HttpStatus.BAD_REQUEST, "WORKORDER_CLOSED", ex.getMessage());
+    }
+
+    @ExceptionHandler(PartMatchPermissionException.class)
+    public ResponseEntity<Map<String, String>> handlePartMatchPermission(PartMatchPermissionException ex) {
+        return build(HttpStatus.FORBIDDEN, "PART_MATCH_PERMISSION_REQUIRED", ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

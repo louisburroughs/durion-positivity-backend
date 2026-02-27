@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,6 +22,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.service.CycleCountPlanService;
+import com.positivity.security.common.SecurityContextHelper;
 
 import lombok.RequiredArgsConstructor;
 
@@ -49,10 +49,8 @@ public class CycleCountPlanController {
     @ApiResponse(responseCode = "400", description = "Validation failure")
     @ApiResponse(responseCode = "403", description = "User lacks required permission")
     public ResponseEntity<CycleCountPlanResponse> createPlan(
-            @RequestBody CreateCycleCountPlanRequest request,
-            @Parameter(description = "Actor identifier from gateway context")
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        String createdBy = userId == null || userId.isBlank() ? "system" : userId;
+            @RequestBody CreateCycleCountPlanRequest request) {
+        String createdBy = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         CycleCountPlanResponse response = cycleCountPlanService.createPlan(request, createdBy);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
