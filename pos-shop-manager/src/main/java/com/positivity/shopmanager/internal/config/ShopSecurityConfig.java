@@ -36,7 +36,7 @@ public class ShopSecurityConfig {
         return RestClient.create();
     }
 
-    @Bean
+    @Bean(name = "crmRestClient")
     public RestClient crmRestClient(
             RestClient.Builder builder,
             @Value("${pos.crm.connect-timeout-ms:200}") int connectTimeoutMs,

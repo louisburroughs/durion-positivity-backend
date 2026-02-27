@@ -82,21 +82,6 @@ public class AppointmentsController {
         return ResponseEntity.ok(appointmentsService.rescheduleAppointment(appointmentId, request));
     }
 
-    /**
-     * @deprecated since 0.1.0, for removal in a future release.
-     *             Use {@code PUT /v1/appointments/{appointmentId}/reschedule}.
-     */
-    @Deprecated(since = "0.1.0", forRemoval = false)
-    @Operation(summary = "Reschedule appointment (deprecated — use PUT)", deprecated = true, description = "Use PUT /v1/appointments/{appointmentId}/reschedule instead. "
-            + "This PATCH endpoint will be removed in a future release.")
-    @PatchMapping("/appointments/{appointmentId}/reschedule")
-    @PreAuthorize("hasAuthority('appointments:reschedule')")
-    public ResponseEntity<AppointmentResponse> rescheduleAppointmentPatch(
-            @PathVariable UUID appointmentId,
-            @Valid @RequestBody RescheduleAppointmentRequest request) {
-        return ResponseEntity.ok(appointmentsService.rescheduleAppointment(appointmentId, request));
-    }
-
     @Operation(summary = "Cancel appointment", description = "Cancel a scheduled appointment")
     @ApiResponse(responseCode = "200", description = "Appointment cancelled successfully.")
     @ApiResponse(responseCode = "409", description = "Appointment state conflict.")
@@ -109,18 +94,4 @@ public class AppointmentsController {
         return ResponseEntity.ok(appointmentsService.cancelAppointment(appointmentId, request));
     }
 
-    /**
-     * @deprecated since 0.1.0, for removal in a future release.
-     *             Use {@code DELETE /v1/appointments/{appointmentId}/cancel}.
-     */
-    @Deprecated(since = "0.1.0", forRemoval = true)
-    @Operation(summary = "Cancel appointment (deprecated — use DELETE)", deprecated = true, description = "Use DELETE /v1/appointments/{appointmentId}/cancel instead. "
-            + "This PATCH endpoint will be removed in a future release.")
-    @PatchMapping("/appointments/{appointmentId}/cancel")
-    @PreAuthorize("hasAuthority('appointments:cancel')")
-    public ResponseEntity<AppointmentResponse> cancelAppointmentPatch(
-            @PathVariable UUID appointmentId,
-            @Valid @RequestBody CancelAppointmentRequest request) {
-        return ResponseEntity.ok(appointmentsService.cancelAppointment(appointmentId, request));
-    }
 }
