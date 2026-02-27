@@ -57,19 +57,19 @@ paths:
           type: string
           format: uuid
       responses:
-        "501":
-          description: Not implemented
+        "200":
+          description: Default locations returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
-        "200":
-          description: Default locations returned
+        "501":
+          description: Not implemented
           content:
-            application/json:
+            '*/*':
               schema:
                 type: array
                 items:
@@ -225,6 +225,80 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReplenishmentPolicyResponse"
+  /v1/inventory/receiving/sessions:
+    post:
+      tags:
+      - receiving-controller
+      operationId: createReceivingSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReceivingSessionRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReceivingSessionResponse"
+  /v1/inventory/receiving/sessions/{sessionId}/receive:
+    post:
+      tags:
+      - receiving-controller
+      operationId: receiveItemsIntoStaging
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiveItemsRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReceiveItemsResponse"
+  /v1/inventory/receiving/sessions/{sessionId}/lines/{lineId}/cross-dock:
+    post:
+      tags:
+      - receiving-controller
+      operationId: crossDockLineToWorkorder
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: lineId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrossDockRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CrossDockResponse"
   /v1/inventory/putaway/tasks/{taskId}/execute:
     post:
       tags:
@@ -253,12 +327,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
-        "200":
-          description: Putaway executed successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PutawayExecutionResponse"
         "404":
           description: Putaway task not found
           content:
@@ -269,6 +337,12 @@ paths:
           description: Forbidden - insufficient authority
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/PutawayExecutionResponse"
+        "200":
+          description: Putaway executed successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
         "400":
@@ -289,18 +363,6 @@ paths:
         in: path
         description: Putaway task identifier
         required: true
-        schema:
-          type: string
-      - name: X-User-Id
-        in: header
-        description: Preferred actor identifier from gateway context
-        required: false
-        schema:
-          type: string
-      - name: X-User
-        in: header
-        description: Fallback actor identifier from gateway context
-        required: false
         schema:
           type: string
       responses:
@@ -330,14 +392,6 @@ paths:
               $ref: "#/components/schemas/GeneratePutawayTasksRequest"
         required: true
       responses:
-        "201":
-          description: Putaway tasks generated
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PutawayTaskResponse"
         "400":
           description: Validation failure
           content:
@@ -346,6 +400,148 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PutawayTaskResponse"
+        "201":
+          description: Putaway tasks generated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PutawayTaskResponse"
+  /v1/inventory/purchase-orders:
+    get:
+      tags:
+      - purchase-order-controller
+      operationId: listPurchaseOrders
+      parameters:
+      - name: filter
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/ListPurchaseOrdersRequest"
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PagePurchaseOrderResponse"
+    post:
+      tags:
+      - purchase-order-controller
+      operationId: createPurchaseOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePurchaseOrderRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PurchaseOrderResponse"
+  /v1/inventory/purchase-orders/{poId}/revisions:
+    post:
+      tags:
+      - purchase-order-controller
+      operationId: revisePurchaseOrder
+      parameters:
+      - name: poId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevisePurchaseOrderRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PurchaseOrderResponse"
+  /v1/inventory/purchase-orders/{poId}/receive:
+    post:
+      tags:
+      - purchase-order-controller
+      operationId: receivePurchaseOrder
+      parameters:
+      - name: poId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceivePurchaseOrderRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReceivePurchaseOrderResponse"
+  /v1/inventory/purchase-orders/{poId}/cancel:
+    post:
+      tags:
+      - purchase-order-controller
+      operationId: cancelPurchaseOrder
+      parameters:
+      - name: poId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PurchaseOrderResponse"
+  /v1/inventory/purchase-orders/{poId}/approve:
+    post:
+      tags:
+      - purchase-order-controller
+      operationId: approvePurchaseOrder
+      parameters:
+      - name: poId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovePurchaseOrderRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PurchaseOrderResponse"
   /v1/inventory/pickingLists/{id}/confirm:
     post:
       tags:
@@ -457,6 +653,24 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PickListResponse"
+  /v1/inventory/goods-receipts:
+    post:
+      tags:
+      - asn-controller
+      operationId: createGoodsReceipt
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGoodsReceiptRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GoodsReceiptResponse"
   /v1/inventory/cycleCountPlans:
     post:
       tags:
@@ -464,13 +678,6 @@ paths:
       summary: Create cycle count plan
       description: Creates a cycle count plan and returns its configuration details.
       operationId: createPlan
-      parameters:
-      - name: X-User-Id
-        in: header
-        description: Actor identifier from gateway context
-        required: false
-        schema:
-          type: string
       requestBody:
         content:
           application/json:
@@ -707,18 +914,36 @@ paths:
           application/json:
             schema: {}
       responses:
-        "200":
-          description: Availability updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryAvailabilityResponse"
         "501":
           description: Not implemented
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InventoryAvailabilityResponse"
+        "200":
+          description: Availability updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryAvailabilityResponse"
+  /v1/inventory/asns:
+    post:
+      tags:
+      - asn-controller
+      operationId: createAsn
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAsnRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AsnResponse"
   /v1/inventory/adjustments:
     post:
       tags:
@@ -734,12 +959,6 @@ paths:
               $ref: "#/components/schemas/CreateAdjustmentRequestDto"
         required: true
       responses:
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required create permission
           content:
@@ -752,6 +971,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentRequestResponse"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/adjustments/{adjustmentRequestId}/approve:
     post:
       tags:
@@ -768,26 +993,20 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: User lacks required approval permission
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "409":
           description: Adjustment request is in a conflicting state
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "200":
-          description: Adjustment approved
-        "400":
-          description: Validation failure
+        "403":
+          description: User lacks required approval permission
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "200":
+          description: Adjustment approved
         "404":
           description: Referenced resource not found
           content:
@@ -796,6 +1015,12 @@ paths:
                 $ref: "#/components/schemas/InventoryErrorResponse"
         "422":
           description: Business rule validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "400":
+          description: Validation failure
           content:
             application/json:
               schema:
@@ -823,16 +1048,16 @@ paths:
             schema:
               $ref: "#/components/schemas/DeactivateLocationRequest"
       responses:
-        "400":
-          description: Bad request - invalid parameters or destination required
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DeactivateLocationResponse"
         "200":
           description: Deactivation completed
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/DeactivateLocationResponse"
+        "400":
+          description: Bad request - invalid parameters or destination required
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/DeactivateLocationResponse"
         "404":
@@ -909,16 +1134,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CountResponse"
-        "403":
-          description: Insufficient permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CountResponse"
         "200":
           description: Recount submitted successfully
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/CountResponse"
+        "403":
+          description: Insufficient permission
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/CountResponse"
   /v1/inventory/pick-lists/{pickListId}/status:
@@ -962,6 +1187,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ReplenishmentTaskResponse"
+  /v1/inventory/receiving/sessions/{sessionId}:
+    get:
+      tags:
+      - receiving-controller
+      operationId: getReceivingSession
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReceivingSessionResponse"
   /v1/inventory/putaway/tasks:
     get:
       tags:
@@ -978,6 +1222,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PutawayTaskResponse"
+  /v1/inventory/purchase-orders/{poId}:
+    get:
+      tags:
+      - purchase-order-controller
+      operationId: getPurchaseOrder
+      parameters:
+      - name: poId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PurchaseOrderResponse"
   /v1/inventory/pick-lists/{pickListId}:
     get:
       tags:
@@ -1048,18 +1311,37 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
-          description: Invalid location identifier
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationInventoryInquiryResponse"
         "200":
           description: Location inventory returned
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LocationInventoryInquiryResponse"
+        "400":
+          description: Invalid location identifier
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationInventoryInquiryResponse"
+  /v1/inventory/goods-receipts/{receiptId}:
+    get:
+      tags:
+      - asn-controller
+      operationId: getGoodsReceipt
+      parameters:
+      - name: receiptId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GoodsReceiptResponse"
   /v1/inventory/cycleCountPlans/{planId}:
     get:
       tags:
@@ -1190,12 +1472,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AvailabilityView"
-        "400":
-          description: Invalid request parameters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required read permission
           content:
@@ -1208,6 +1484,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+  /v1/inventory/asns/{asnId}:
+    get:
+      tags:
+      - asn-controller
+      operationId: getAsn
+      parameters:
+      - name: asnId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AsnResponse"
   /api/inventory/cycleCount/task/{taskId}:
     get:
       tags:
@@ -1225,16 +1526,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Task retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CycleCountTaskResponse"
         "404":
           description: Task not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CycleCountTaskResponse"
+        "200":
+          description: Task retrieved successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountTaskResponse"
   /api/inventory/cycleCount/task/{taskId}/history:
@@ -1462,6 +1763,148 @@ components:
           format: int32
         createdAt:
           type: string
+    CreateReceivingSessionRequest:
+      type: object
+      properties:
+        sourceDocumentId:
+          type: string
+        entryMethod:
+          type: string
+      required:
+      - sourceDocumentId
+    ReceivingLineResponse:
+      type: object
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+        expectedQuantity:
+          type: number
+        receivedQuantity:
+          type: number
+        status:
+          type: string
+        workorderId:
+          type: string
+        workorderLineId:
+          type: string
+    ReceivingSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        sourceDocumentId:
+          type: string
+        sourceDocumentType:
+          type: string
+        supplierId:
+          type: string
+        shipmentReference:
+          type: string
+        status:
+          type: string
+        entryMethod:
+          type: string
+        createdByUserId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReceivingLineResponse"
+    ReceiveItemsRequest:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReceiveLineRequest"
+      required:
+      - lines
+    ReceiveLineRequest:
+      type: object
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        receivedQuantity:
+          type: number
+          minimum: 0.0
+      required:
+      - lineId
+      - receivedQuantity
+    ReceiveItemsResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        sessionStatus:
+          type: string
+        linesProcessed:
+          type: integer
+          format: int32
+        variances:
+          type: array
+          items:
+            $ref: "#/components/schemas/VarianceSummaryResponse"
+    VarianceSummaryResponse:
+      type: object
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+        varianceType:
+          type: string
+        varianceQuantity:
+          type: number
+        expectedQuantity:
+          type: number
+        receivedQuantity:
+          type: number
+    CrossDockRequest:
+      type: object
+      properties:
+        workorderId:
+          type: string
+        workorderLineId:
+          type: string
+        quantity:
+          type: number
+          minimum: 0.01
+        notes:
+          type: string
+      required:
+      - quantity
+      - workorderId
+      - workorderLineId
+    CrossDockResponse:
+      type: object
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        workorderId:
+          type: string
+        workorderLineId:
+          type: string
+        crossDockedQuantity:
+          type: number
+        ledgerEntryIds:
+          type: array
+          items:
+            type: string
+        sessionStatus:
+          type: string
+        lineStatus:
+          type: string
     PutawayExecutionRequest:
       type: object
       description: Putaway execution request payload
@@ -1587,6 +2030,253 @@ components:
       required:
       - productId
       - quantity
+    CreatePurchaseOrderRequest:
+      type: object
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+        poDate:
+          type: string
+          format: date
+        currency:
+          type: string
+        paymentTermsId:
+          type: string
+        expectedDeliveryDate:
+          type: string
+          format: date
+        shipToLocationId:
+          type: string
+          format: uuid
+        requestedBy:
+          type: string
+        comment:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseOrderLineRequest"
+      required:
+      - currency
+      - lines
+      - poDate
+      - vendorId
+    PurchaseOrderLineRequest:
+      type: object
+      properties:
+        lineNumber:
+          type: integer
+          format: int32
+        skuId:
+          type: string
+          format: uuid
+        description:
+          type: string
+        quantity:
+          type: number
+        unitCostMinor:
+          type: integer
+          format: int64
+        taxCodeId:
+          type: string
+        glAccountId:
+          type: string
+      required:
+      - description
+      - lineNumber
+      - quantity
+      - unitCostMinor
+    PurchaseOrderLineResponse:
+      type: object
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        lineNumber:
+          type: integer
+          format: int32
+        skuId:
+          type: string
+          format: uuid
+        description:
+          type: string
+        quantityDecimal:
+          type: number
+        unitCostMinor:
+          type: integer
+          format: int64
+        lineTotalMinor:
+          type: integer
+          format: int64
+        taxMinor:
+          type: integer
+          format: int64
+        openQuantityDecimal:
+          type: number
+    PurchaseOrderResponse:
+      type: object
+      properties:
+        purchaseOrderId:
+          type: string
+          format: uuid
+        vendorId:
+          type: string
+          format: uuid
+        poNumber:
+          type: string
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - APPROVED
+          - PARTIALLY_RECEIVED
+          - FULLY_RECEIVED
+          - CLOSED
+          - CANCELLED
+        versionNumber:
+          type: integer
+          format: int32
+        currency:
+          type: string
+        subtotalMinor:
+          type: integer
+          format: int64
+        taxMinor:
+          type: integer
+          format: int64
+        grandTotalMinor:
+          type: integer
+          format: int64
+        openBalanceMinor:
+          type: integer
+          format: int64
+        shipToLocationId:
+          type: string
+          format: uuid
+        paymentTermsId:
+          type: string
+        poDate:
+          type: string
+          format: date
+        expectedDeliveryDate:
+          type: string
+          format: date
+        requestedBy:
+          type: string
+        comment:
+          type: string
+        approverId:
+          type: string
+        approvalTimestamp:
+          type: string
+          format: date-time
+        approvalNotes:
+          type: string
+        encumbranceRef:
+          type: string
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseOrderLineResponse"
+    RevisePurchaseOrderRequest:
+      type: object
+      properties:
+        poDate:
+          type: string
+          format: date
+        paymentTermsId:
+          type: string
+        expectedDeliveryDate:
+          type: string
+          format: date
+        shipToLocationId:
+          type: string
+          format: uuid
+        requestedBy:
+          type: string
+        comment:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseOrderLineRequest"
+        revisionReason:
+          type: string
+      required:
+      - lines
+      - poDate
+      - revisionReason
+    ReceivePurchaseOrderLineRequest:
+      type: object
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        quantityReceived:
+          type: number
+        unitCostMinor:
+          type: integer
+          format: int64
+      required:
+      - lineId
+      - quantityReceived
+    ReceivePurchaseOrderRequest:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReceivePurchaseOrderLineRequest"
+      required:
+      - lines
+    ReceivePurchaseOrderLineDetail:
+      type: object
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        openQuantityDecimal:
+          type: number
+    ReceivePurchaseOrderResponse:
+      type: object
+      properties:
+        poId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - APPROVED
+          - PARTIALLY_RECEIVED
+          - FULLY_RECEIVED
+          - CLOSED
+          - CANCELLED
+        openBalanceMinor:
+          type: integer
+          format: int64
+        message:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReceivePurchaseOrderLineDetail"
+    ApprovePurchaseOrderRequest:
+      type: object
+      properties:
+        approvalNotes:
+          type: string
     CreatePickListRequest:
       type: object
       properties:
@@ -1680,6 +2370,93 @@ components:
         sortOrder:
           type: integer
           format: int32
+    CreateGoodsReceiptLineRequest:
+      type: object
+      properties:
+        poLineId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        quantityReceived:
+          type: number
+        unitCostMinor:
+          type: integer
+          format: int64
+        lotNumber:
+          type: string
+      required:
+      - quantityReceived
+      - sku
+      - unitCostMinor
+    CreateGoodsReceiptRequest:
+      type: object
+      properties:
+        poId:
+          type: string
+          format: uuid
+        asnId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateGoodsReceiptLineRequest"
+      required:
+      - lines
+      - locationId
+      - poId
+    GoodsReceiptLineResponse:
+      type: object
+      properties:
+        receiptLineId:
+          type: string
+          format: uuid
+        poLineId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        quantityReceived:
+          type: number
+        unitCostMinor:
+          type: integer
+          format: int64
+        lineAccruedAmountMinor:
+          type: integer
+          format: int64
+    GoodsReceiptResponse:
+      type: object
+      properties:
+        receiptId:
+          type: string
+          format: uuid
+        receiptNumber:
+          type: string
+        poId:
+          type: string
+          format: uuid
+        asnId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        totalAccruedAmountMinor:
+          type: integer
+          format: int64
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/GoodsReceiptLineResponse"
     CreateCycleCountPlanRequest:
       type: object
       properties:
@@ -1934,6 +2711,111 @@ components:
       - onHandQty
       - productId
       - uom
+    CreateAsnLineRequest:
+      type: object
+      properties:
+        poId:
+          type: string
+          format: uuid
+        poLineId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        quantityShipped:
+          type: number
+        unitOfMeasure:
+          type: string
+        unitCostMinor:
+          type: integer
+          format: int64
+        lotNumber:
+          type: string
+      required:
+      - poId
+      - quantityShipped
+      - sku
+    CreateAsnRequest:
+      type: object
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+        asnReferenceNumber:
+          type: string
+        relatedPoIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        shipDate:
+          type: string
+          format: date
+        expectedArrivalDate:
+          type: string
+          format: date
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateAsnLineRequest"
+      required:
+      - asnReferenceNumber
+      - lineItems
+      - relatedPoIds
+      - vendorId
+    AsnLineResponse:
+      type: object
+      properties:
+        asnLineId:
+          type: string
+          format: uuid
+        poId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        quantityShipped:
+          type: number
+        quantityReceived:
+          type: number
+        unitOfMeasure:
+          type: string
+        lotNumber:
+          type: string
+    AsnResponse:
+      type: object
+      properties:
+        asnId:
+          type: string
+          format: uuid
+        asnReferenceNumber:
+          type: string
+        vendorId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - LOADED
+          - READY_FOR_RECEIPT
+          - PARTIALLY_RECEIVED
+          - FULLY_RECEIVED
+          - CANCELLED
+        shipDate:
+          type: string
+          format: date
+        expectedArrivalDate:
+          type: string
+          format: date
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/AsnLineResponse"
     CreateAdjustmentRequestDto:
       type: object
       properties:
@@ -2140,6 +3022,100 @@ components:
           type: string
         createdAt:
           type: string
+    ListPurchaseOrdersRequest:
+      type: object
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - APPROVED
+          - PARTIALLY_RECEIVED
+          - FULLY_RECEIVED
+          - CLOSED
+          - CANCELLED
+        currency:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+    Pageable:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+        sort:
+          type: array
+          items:
+            type: string
+    PagePurchaseOrderResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseOrderResponse"
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sortnull"
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    Pageablenull:
+      type: object
+      properties:
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int64
+        sort:
+          $ref: "#/components/schemas/Sortnull"
+        unpaged:
+          type: boolean
+    Sortnull:
+      type: object
+      properties:
+        sorted:
+          type: boolean
+        empty:
+          type: boolean
+        unsorted:
+          type: boolean
     LocationInventoryInquiryResponse:
       type: object
       description: Inventory summary for a storage location

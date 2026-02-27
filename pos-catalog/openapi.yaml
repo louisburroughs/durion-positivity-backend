@@ -44,16 +44,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "200":
           description: Successfully retrieved product
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+        "404":
+          description: Product not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
     put:
@@ -77,16 +77,16 @@ paths:
               $ref: "#/components/schemas/ProductUpdateRequestDto"
         required: true
       responses:
-        "200":
-          description: Product updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "400":
           description: Validation error
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+        "200":
+          description: Product updated
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
         "409":
@@ -128,12 +128,6 @@ paths:
               $ref: "#/components/schemas/UpdateMsrpRequestDto"
         required: true
       responses:
-        "200":
-          description: MSRP updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "400":
           description: Invalid payload
           content:
@@ -150,6 +144,12 @@ paths:
           description: Forbidden
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "200":
+          description: MSRP updated
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
         "409":
@@ -455,16 +455,16 @@ paths:
               $ref: "#/components/schemas/PriceBookRuleCreateRequestDto"
         required: true
       responses:
-        "409":
-          description: Rule conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookRuleDto"
         "200":
           description: Price book rule updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/PriceBookRuleDto"
+        "409":
+          description: Rule conflict
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
     delete:
@@ -703,16 +703,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
-        "201":
-          description: Product created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "409":
           description: Business conflict
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+        "201":
+          description: Product created
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
   /v1/products/{productId}/replacements:
@@ -825,6 +825,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+        "201":
+          description: MSRP created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
         "400":
           description: Invalid payload
           content:
@@ -835,12 +841,6 @@ paths:
           description: Forbidden
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
-        "201":
-          description: MSRP created
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/uom-conversions:
@@ -889,16 +889,16 @@ paths:
               $ref: "#/components/schemas/SupplierItemCostCreateRequestDto"
         required: true
       responses:
-        "400":
-          description: Invalid payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
         "201":
           description: Created
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
+        "400":
+          description: Invalid payload
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
         "409":
@@ -963,16 +963,16 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "200":
-          description: Override rejected
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "404":
           description: Override or approval request not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "200":
+          description: Override rejected
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "400":
@@ -1204,16 +1204,16 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        "201":
-          description: Catalog item created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
         "400":
           description: Invalid item type or request body
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+        "201":
+          description: Catalog item created successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
   /v1/products/{productId}/substitutes:
@@ -1261,16 +1261,16 @@ paths:
           type: string
           format: date
       responses:
-        "404":
-          description: No active MSRP for date
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "200":
           description: Active MSRP returned
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "404":
+          description: No active MSRP for date
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/{productId}/detail:
@@ -1298,13 +1298,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Successfully retrieved product details (may be partial if some
-            services unavailable)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductDetailView"
         "400":
           description: Invalid location ID
           content:
@@ -1321,6 +1314,13 @@ paths:
           description: Unexpected server error while retrieving product details
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDetailView"
+        "200":
+          description: Successfully retrieved product details (may be partial if some
+            services unavailable)
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
   /v1/products/services/{serviceId}:
@@ -1456,16 +1456,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: No pricing context found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
         "200":
           description: Effective price returned
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
+        "404":
+          description: No pricing context found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
   /v1/products/noninventory/{productId}:
@@ -1484,16 +1484,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Non-inventory product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/NonInventoryProductDto"
         "200":
           description: Successfully retrieved non-inventory product
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/NonInventoryProductDto"
+        "404":
+          description: Non-inventory product not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/NonInventoryProductDto"
   /v1/products/noninventory/name/{name}:

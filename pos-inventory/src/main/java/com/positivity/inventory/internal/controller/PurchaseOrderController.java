@@ -93,7 +93,7 @@ public class PurchaseOrderController {
     }
 
     @PostMapping("/{poId}/receive")
-    @PreAuthorize("hasAnyAuthority('inventory:purchase_order:receive','inventory:purchase_order:create')")
+    @PreAuthorize("hasAuthority('inventory:purchase_order:receive')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_RECEIVE", apiVersion = "1")
     public ResponseEntity<ReceivePurchaseOrderResponse> receivePurchaseOrder(
             @PathVariable UUID poId,

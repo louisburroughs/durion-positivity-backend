@@ -2,6 +2,7 @@ package com.positivity.inventory.cap315;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -74,6 +75,7 @@ class PurchaseOrderServiceImplTest {
                 eventPublisher,
                 applicationContext);
         ReflectionTestUtils.setField(purchaseOrderService, "encumbranceEnabled", false);
+        ReflectionTestUtils.setField(purchaseOrderService, "defaultTaxRate", 0.10d);
     }
 
     @Test
@@ -118,7 +120,7 @@ class PurchaseOrderServiceImplTest {
         assertEquals(11000L, savedPO.getGrandTotalMinor());
         assertEquals(11000L, savedPO.getOpenBalanceMinor());
         assertEquals(PurchaseOrderStatus.DRAFT, savedPO.getStatus());
-        assertEquals("test-actor", savedPO.getCreatedBy());
+        assertNull(savedPO.getCreatedBy());
 
         assertNotNull(response);
         assertEquals(11000L, response.getGrandTotalMinor());

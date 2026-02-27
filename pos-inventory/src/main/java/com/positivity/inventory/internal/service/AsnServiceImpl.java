@@ -74,15 +74,16 @@ public class AsnServiceImpl implements AsnService {
                 .asnReferenceNumber(request.getAsnReferenceNumber())
                 .vendorId(request.getVendorId())
                 .status(AsnStatus.LOADED)
+                .poId(request.getRelatedPoIds().get(0))
                 .shipDate(request.getShipDate())
                 .expectedArrivalDate(request.getExpectedArrivalDate())
-                .createdBy(actorId)
                 .build();
         AdvanceShippingNoticeEntity savedAsn = asnRepository.save(asnEntity);
+        AdvanceShippingNoticeEntity savedAsnRef = savedAsn;
 
         List<AsnLineEntity> lineEntities = request.getLineItems().stream()
                 .map(line -> AsnLineEntity.builder()
-                        .asn(savedAsn)
+                        .asn(savedAsnRef)
                         .poId(line.getPoId())
                         .poLineId(line.getPoLineId())
                         .sku(line.getSku())
@@ -94,17 +95,18 @@ public class AsnServiceImpl implements AsnService {
                         .build())
                 .toList();
         List<AsnLineEntity> savedLines = asnLineRepository.saveAll(lineEntities);
-        savedAsn.setLines(savedLines);
+        savedAsnRef.setLines(savedLines);
+        AdvanceShippingNoticeEntity persistedAsn = savedAsnRef;
 
         eventPublisher.publishEvent(Map.of(
                 "type", "ASNLoaded",
                 "eventType", "ASNLoaded",
-                "asnId", savedAsn.getAsnId().toString(),
-                "vendorId", savedAsn.getVendorId().toString(),
+                "asnId", persistedAsn.getAsnId().toString(),
+                "vendorId", persistedAsn.getVendorId().toString(),
                 "actorId", actorId,
                 "occurredAt", Instant.now().toString()));
 
-        return toAsnResponse(savedAsn);
+        return toAsnResponse(persistedAsn);
     }
 
     @Override
@@ -127,7 +129,9 @@ public class AsnServiceImpl implements AsnService {
         }
 
         UUID poId = asn != null
-                ? asn.getLines().stream().findFirst().map(AsnLineEntity::getPoId).orElse(request.getPoId())
+                ? (asn.getPoId() != null
+                        ? asn.getPoId()
+                        : asn.getLines().stream().findFirst().map(AsnLineEntity::getPoId).orElse(request.getPoId()))
                 : request.getPoId();
 
         PurchaseOrderEntity purchaseOrder = purchaseOrderRepository.findById(poId)
@@ -154,16 +158,32 @@ public class AsnServiceImpl implements AsnService {
                 .asnId(asn != null ? asn.getAsnId() : request.getAsnId())
                 .locationId(request.getLocationId())
                 .totalAccruedAmountMinor(receiptTotalMinor)
-                .createdBy(actorId)
                 .build();
-        GoodsReceiptEntity savedReceipt = goodsReceiptRepository.save(receiptEntity);
+
+        List<GoodsReceiptLineEntity> lineEntities = new ArrayList<>();
+        for (CreateGoodsReceiptLineRequest line : request.getLines()) {
+            long lineAccruedMinor = lineAccruedAmountMinor(line);
+            GoodsReceiptLineEntity receiptLine = GoodsReceiptLineEntity.builder()
+                    .goodsReceipt(receiptEntity)
+                    .poLineId(line.getPoLineId())
+                    .sku(line.getSku())
+                    .quantityReceived(line.getQuantityReceived())
+                    .unitCostMinor(line.getUnitCostMinor())
+                    .lineAccruedAmountMinor(lineAccruedMinor)
+                    .lotNumber(line.getLotNumber())
+                    .build();
+            lineEntities.add(receiptLine);
+        }
+
+        receiptEntity.setLines(lineEntities);
+        GoodsReceiptEntity persistedReceipt = goodsReceiptRepository.save(receiptEntity);
 
         eventPublisher.publishEvent(Map.of(
                 "type", "ReceiptCreated",
                 "eventType", "ReceiptCreated",
-                "receiptId", savedReceipt.getReceiptId().toString(),
+                "receiptId", persistedReceipt.getReceiptId().toString(),
                 "poId", poId.toString(),
-                "asnId", savedReceipt.getAsnId() == null ? "" : savedReceipt.getAsnId().toString(),
+                "asnId", persistedReceipt.getAsnId() == null ? "" : persistedReceipt.getAsnId().toString(),
                 "lineItems", request.getLines().stream()
                         .map(line -> Map.of(
                                 "sku", line.getSku(),
@@ -173,20 +193,7 @@ public class AsnServiceImpl implements AsnService {
                 "createdBy", actorId,
                 "occurredAt", Instant.now().toString()));
 
-        List<GoodsReceiptLineEntity> lineEntities = new ArrayList<>();
         for (CreateGoodsReceiptLineRequest line : request.getLines()) {
-            long lineAccruedMinor = lineAccruedAmountMinor(line);
-            GoodsReceiptLineEntity receiptLine = GoodsReceiptLineEntity.builder()
-                    .goodsReceipt(savedReceipt)
-                    .poLineId(line.getPoLineId())
-                    .sku(line.getSku())
-                    .quantityReceived(line.getQuantityReceived())
-                    .unitCostMinor(line.getUnitCostMinor())
-                    .lineAccruedAmountMinor(lineAccruedMinor)
-                    .lotNumber(line.getLotNumber())
-                    .build();
-            lineEntities.add(receiptLine);
-
             InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                     .stockItemId(line.getSku())
                     .locationId(request.getLocationId())
@@ -196,13 +203,11 @@ public class AsnServiceImpl implements AsnService {
                     .quantityAfter(
                             calculateQuantityAfter(line.getSku(), request.getLocationId(), line.getQuantityReceived()))
                     .transactionUserId(actorId)
-                    .sourceTransactionId(savedReceipt.getReceiptId().toString())
-                    .notes("Goods receipt " + savedReceipt.getReceiptNumber())
+                    .sourceTransactionId(persistedReceipt.getReceiptId().toString())
+                    .notes("Goods receipt " + persistedReceipt.getReceiptNumber())
                     .build();
             inventoryLedgerEntryRepository.save(entry);
         }
-        savedReceipt.setLines(lineEntities);
-        GoodsReceiptEntity persistedReceipt = goodsReceiptRepository.save(savedReceipt);
 
         long nextOpenBalance = Math.max(0L, currentOpenBalance - receiptTotalMinor);
         purchaseOrder.setOpenBalanceMinor(nextOpenBalance);
@@ -276,8 +281,7 @@ public class AsnServiceImpl implements AsnService {
         try {
             return quantity.intValueExact();
         } catch (ArithmeticException ex) {
-            throw new IllegalArgumentException("quantityReceived must be a whole number within 32-bit integer range",
-                    ex);
+            throw new IllegalArgumentException("quantity must be a whole number", ex);
         }
     }
 

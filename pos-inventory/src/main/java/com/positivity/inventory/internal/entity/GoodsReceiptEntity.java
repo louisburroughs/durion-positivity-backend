@@ -16,8 +16,10 @@ import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -25,7 +27,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Table(name = "goods_receipt")
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -50,7 +53,8 @@ public class GoodsReceiptEntity {
 
     private Long totalAccruedAmountMinor;
 
-    @Column(nullable = false)
+    @CreatedBy
+    @Column(nullable = false, updatable = false)
     private String createdBy;
 
     @LastModifiedBy

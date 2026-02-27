@@ -297,7 +297,7 @@ class AsnServiceImplTest {
         GoodsReceiptResponse response = asnService.createGoodsReceipt(request, actor);
 
         assertNotNull(response);
-        verify(goodsReceiptRepository, times(2)).save(any(GoodsReceiptEntity.class));
+        verify(goodsReceiptRepository, times(1)).save(any(GoodsReceiptEntity.class));
         verify(applicationEventPublisher, times(2)).publishEvent(any(Map.class));
     }
 
