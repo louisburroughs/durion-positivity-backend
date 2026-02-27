@@ -17,7 +17,7 @@ public final class InventoryEventTypes {
 
         /**
          * All event type registrations for the inventory module.
-         * Total: 15 event types.
+         * Total: 20 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -70,6 +70,16 @@ public final class InventoryEventTypes {
                                 EventTypeRegistration.write("INVENTORY_ADJUSTMENT_REQUEST_CREATE",
                                                 "Create a pending inventory adjustment request").build(),
                                 EventTypeRegistration.approval("INVENTORY_ADJUSTMENT_REQUEST_APPROVE",
-                                                "Approve and post inventory adjustment request to ledger").build());
+                                                "Approve and post inventory adjustment request to ledger").build(),
+
+                                // ReceivingController - 4 events
+                                EventTypeRegistration.write("INVENTORY_RECEIVING_SESSION_CREATE",
+                                                "Create a receiving session from a PO or ASN").build(),
+                                EventTypeRegistration.fastRead("INVENTORY_RECEIVING_SESSION_GET",
+                                                "Get a receiving session by ID").build(),
+                                EventTypeRegistration.write("INVENTORY_RECEIVING_SESSION_COMPLETE",
+                                                "Complete receive items into staging").build(),
+                                EventTypeRegistration.write("INVENTORY_RECEIVING_CROSSDOCK",
+                                                "Cross-dock receiving line directly to workorder").build());
         }
 }

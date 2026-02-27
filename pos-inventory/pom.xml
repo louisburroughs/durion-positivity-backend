@@ -57,6 +57,11 @@
             <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
+        <!-- YAML parsing used by InventoryPermissionInitializer -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+        </dependency>
 
         <!-- OpenAPI / Swagger UI -->
         <dependency>

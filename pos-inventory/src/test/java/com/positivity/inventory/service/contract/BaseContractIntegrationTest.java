@@ -34,4 +34,16 @@ public abstract class BaseContractIntegrationTest {
                 .header("X-User", "contract-test-user")
                 .header("X-Authorities", "inventory:adjustment:create");
     }
+
+    protected MockHttpServletRequestBuilder withReceivingAuth(MockHttpServletRequestBuilder requestBuilder) {
+        return requestBuilder
+                .header("X-User", "contract-test-user")
+                .header("X-Authorities",
+                        String.join(",",
+                                "inventory:receiving:create",
+                                "inventory:receiving:complete",
+                                "inventory:receiving:view",
+                                "inventory:issue:parts",
+                                "inventory:override:part-match"));
+    }
 }
