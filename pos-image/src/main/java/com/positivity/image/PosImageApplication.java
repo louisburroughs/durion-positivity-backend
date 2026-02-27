@@ -1,4 +1,4 @@
-package com.positivity.posimage;
+package com.positivity.image;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.info.Info;

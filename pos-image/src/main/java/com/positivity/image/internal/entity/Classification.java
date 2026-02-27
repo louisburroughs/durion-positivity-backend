@@ -1,4 +1,4 @@
-package com.positivity.posimage.model;
+package com.positivity.image.internal.entity;
 
 public enum Classification {
     PUBLIC,
