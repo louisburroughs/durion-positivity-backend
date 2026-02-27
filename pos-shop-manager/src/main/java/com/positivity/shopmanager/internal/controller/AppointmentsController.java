@@ -82,7 +82,11 @@ public class AppointmentsController {
         return ResponseEntity.ok(appointmentsService.rescheduleAppointment(appointmentId, request));
     }
 
-    @Deprecated
+    /**
+     * @deprecated since 0.1.0, for removal in a future release.
+     *             Use {@code PUT /v1/appointments/{appointmentId}/reschedule}.
+     */
+    @Deprecated(since = "0.1.0", forRemoval = false)
     @Operation(summary = "Reschedule appointment (deprecated — use PUT)", deprecated = true, description = "Use PUT /v1/appointments/{appointmentId}/reschedule instead. "
             + "This PATCH endpoint will be removed in a future release.")
     @PatchMapping("/appointments/{appointmentId}/reschedule")
@@ -105,7 +109,11 @@ public class AppointmentsController {
         return ResponseEntity.ok(appointmentsService.cancelAppointment(appointmentId, request));
     }
 
-    @Deprecated
+    /**
+     * @deprecated since 0.1.0, for removal in a future release.
+     *             Use {@code DELETE /v1/appointments/{appointmentId}/cancel}.
+     */
+    @Deprecated(since = "0.1.0", forRemoval = false)
     @Operation(summary = "Cancel appointment (deprecated — use DELETE)", deprecated = true, description = "Use DELETE /v1/appointments/{appointmentId}/cancel instead. "
             + "This PATCH endpoint will be removed in a future release.")
     @PatchMapping("/appointments/{appointmentId}/cancel")
