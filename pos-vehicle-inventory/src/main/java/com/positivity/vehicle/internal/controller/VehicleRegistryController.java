@@ -10,12 +10,17 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Vehicle Registry API", description = "Operations for creating and maintaining vehicle registry records")
 @RequiredArgsConstructor
 @RestController
+@Validated
 @PreAuthorize("isAuthenticated()")
 @RequestMapping("/v1/vehicle-registry")
 public class VehicleRegistryController {
@@ -44,7 +50,7 @@ public class VehicleRegistryController {
     @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<VehicleResponse> createVehicle(
-            @Parameter(description = "Vehicle creation request", required = true) @RequestBody CreateVehicleRequest request) {
+            @Parameter(description = "Vehicle creation request", required = true) @Valid @NotNull @RequestBody CreateVehicleRequest request) {
         try {
             VehicleResponse response = vehicleService.createVehicle(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -59,7 +65,7 @@ public class VehicleRegistryController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @GetMapping("/{vehicleId}")
     public ResponseEntity<VehicleResponse> getVehicle(
-            @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId) {
+            @Parameter(description = "Vehicle UUID", required = true) @PathVariable @NotNull UUID vehicleId) {
         return vehicleService.getVehicle(vehicleId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -70,7 +76,7 @@ public class VehicleRegistryController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @GetMapping("/vin/{vin}")
     public ResponseEntity<VehicleResponse> getVehicleByVin(
-            @Parameter(description = "Vehicle VIN", required = true) @PathVariable String vin) {
+            @Parameter(description = "Vehicle VIN", required = true) @PathVariable @NotBlank @Size(min = 17, max = 17) String vin) {
         return vehicleService.getVehicleByVin(vin)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -83,8 +89,8 @@ public class VehicleRegistryController {
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/{vehicleId}")
     public ResponseEntity<VehicleResponse> updateVehicle(
-            @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId,
-            @Parameter(description = "Vehicle update request", required = true) @RequestBody UpdateVehicleRequest request) {
+            @Parameter(description = "Vehicle UUID", required = true) @PathVariable @NotNull UUID vehicleId,
+            @Parameter(description = "Vehicle update request", required = true) @Valid @NotNull @RequestBody UpdateVehicleRequest request) {
         try {
             VehicleResponse response = vehicleService.updateVehicle(vehicleId, request);
             return ResponseEntity.ok(response);
@@ -103,7 +109,7 @@ public class VehicleRegistryController {
     @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
     @DeleteMapping("/{vehicleId}")
     public ResponseEntity<Void> deleteVehicle(
-            @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId) {
+            @Parameter(description = "Vehicle UUID", required = true) @PathVariable @NotNull UUID vehicleId) {
         try {
             vehicleService.deleteVehicle(vehicleId);
             return ResponseEntity.noContent().build();
