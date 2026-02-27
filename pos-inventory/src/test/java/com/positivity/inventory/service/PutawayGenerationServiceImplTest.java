@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.service;
+package com.positivity.inventory.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -15,6 +15,8 @@ import com.positivity.inventory.internal.enums.PutawayTaskStatus;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
+import com.positivity.inventory.internal.service.PutawayGenerationServiceImpl;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;

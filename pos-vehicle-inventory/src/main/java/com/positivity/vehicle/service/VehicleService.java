@@ -4,6 +4,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.positivity.shared.dto.CreateVehicleRequest;
+import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 
 public interface VehicleService {
@@ -26,7 +27,7 @@ public interface VehicleService {
     /**
      * Updates a vehicle.
      */
-    VehicleResponse updateVehicle(UUID vehicleId, CreateVehicleRequest request);
+    VehicleResponse updateVehicle(UUID vehicleId, UpdateVehicleRequest request);
 
     /**
      * Deletes (deactivates) a vehicle.

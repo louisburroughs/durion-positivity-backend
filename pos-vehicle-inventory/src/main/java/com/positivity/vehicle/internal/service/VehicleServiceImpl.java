@@ -1,12 +1,14 @@
 package com.positivity.vehicle.internal.service;
 
 import com.positivity.shared.dto.CreateVehicleRequest;
+import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.internal.util.VinUtils;
 import com.positivity.vehicle.service.VehicleService;
 
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -93,21 +95,37 @@ public class VehicleServiceImpl implements VehicleService {
      */
     @Override
     @Transactional
-    public VehicleResponse updateVehicle(@NonNull UUID vehicleId, @NonNull CreateVehicleRequest request) {
+    public VehicleResponse updateVehicle(@NonNull UUID vehicleId, @NonNull UpdateVehicleRequest request) {
         log.info("Updating vehicle {}", vehicleId);
 
         VehicleRecord vehicle = vehicleRepository.findByVehicleId(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
+                .orElseThrow(() -> new EntityNotFoundException("Vehicle not found: " + vehicleId));
 
-        // Update fields
-        vehicle.setDescription(request.getDescription());
-        vehicle.setUnitNumber(request.getUnitNumber());
-        vehicle.setLicensePlate(request.getLicensePlate());
-        vehicle.setLicensePlateJurisdiction(request.getLicensePlateJurisdiction());
-        vehicle.setYear(request.getYear());
-        vehicle.setMake(request.getMake());
-        vehicle.setModel(request.getModel());
-        vehicle.setTrim(request.getTrim());
+        // Patch semantics: only update fields that are explicitly provided.
+        if (request.getDescription() != null) {
+            vehicle.setDescription(request.getDescription());
+        }
+        if (request.getUnitNumber() != null) {
+            vehicle.setUnitNumber(request.getUnitNumber());
+        }
+        if (request.getLicensePlate() != null) {
+            vehicle.setLicensePlate(request.getLicensePlate());
+        }
+        if (request.getLicensePlateJurisdiction() != null) {
+            vehicle.setLicensePlateJurisdiction(request.getLicensePlateJurisdiction());
+        }
+        if (request.getYear() != null) {
+            vehicle.setYear(request.getYear());
+        }
+        if (request.getMake() != null) {
+            vehicle.setMake(request.getMake());
+        }
+        if (request.getModel() != null) {
+            vehicle.setModel(request.getModel());
+        }
+        if (request.getTrim() != null) {
+            vehicle.setTrim(request.getTrim());
+        }
 
         VehicleRecord saved = vehicleRepository.save(vehicle);
         log.info("Updated vehicle {}", vehicleId);
@@ -124,7 +142,7 @@ public class VehicleServiceImpl implements VehicleService {
         log.info("Deactivating vehicle {}", vehicleId);
 
         VehicleRecord vehicle = vehicleRepository.findByVehicleId(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
+                .orElseThrow(() -> new EntityNotFoundException("Vehicle not found: " + vehicleId));
 
         vehicle.setIsActive(false);
         vehicleRepository.save(vehicle);

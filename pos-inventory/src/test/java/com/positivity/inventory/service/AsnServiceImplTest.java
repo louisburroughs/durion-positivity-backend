@@ -1,4 +1,4 @@
-package com.positivity.inventory.cap315;
+package com.positivity.inventory.service;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
