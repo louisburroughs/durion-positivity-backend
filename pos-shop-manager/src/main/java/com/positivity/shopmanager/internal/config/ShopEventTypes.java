@@ -38,7 +38,13 @@ public final class ShopEventTypes {
                         "Delete a mobile unit from a specific shop location").build(),
 
                 // AppointmentsController - 1 event
-                EventTypeRegistration.write("SHOP_APPOINTMENT_CREATE",
-                        "Create a new appointment for shop scheduling").build());
+                EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATE",
+                        "Create an appointment").build(),
+                EventTypeRegistration.write("SHOPMGR_APPOINTMENT_RESCHEDULE",
+                        "Reschedule an appointment").build(),
+                EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CANCEL",
+                        "Cancel an appointment").build(),
+                EventTypeRegistration.fastRead("SHOPMGR_SCHEDULE_VIEW",
+                        "View schedule by location and resource filters").build());
     }
 }

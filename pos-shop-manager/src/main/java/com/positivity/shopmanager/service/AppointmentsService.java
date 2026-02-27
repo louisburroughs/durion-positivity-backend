@@ -3,8 +3,20 @@ package com.positivity.shopmanager.service;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
+import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
+import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
+import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
+import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface AppointmentsService {
+
+    AppointmentResponse createAppointment(@NonNull AppointmentCreateRequest request);
+
+    AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId, @NonNull RescheduleAppointmentRequest request);
+
+    AppointmentResponse cancelAppointment(@NonNull UUID appointmentId, @NonNull CancelAppointmentRequest request);
 
     /**
      * Creates an appointment from an Estimate or Work Order.
@@ -28,7 +40,7 @@ public interface AppointmentsService {
      *                                                                                   detection
      *                                                                                   (409)
      */
-    AppointmentResponse create(AppointmentCreateRequest request, String idempotencyKey, String correlationId);
+    AppointmentResponse create(@NonNull AppointmentCreateRequest request, String idempotencyKey, String correlationId);
 
     /**
      * Loads the appointment creation form model for a source document.
@@ -53,5 +65,8 @@ public interface AppointmentsService {
      * @return AppointmentResponse with appointment details
      */
     AppointmentResponse getById(String appointmentId, String correlationId);
+
+    @NonNull
+    ScheduleViewResponse getScheduleView(@NonNull ScheduleViewRequest request, String correlationId);
 
 }

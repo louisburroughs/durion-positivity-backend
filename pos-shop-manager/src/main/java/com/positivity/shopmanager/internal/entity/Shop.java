@@ -47,6 +47,8 @@ public class Shop {
 
     private String name;
     private String address;
+    @Column(length = 64)
+    private String timezone;
 
     @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Technician> technicians;
