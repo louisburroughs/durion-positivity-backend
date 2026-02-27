@@ -198,7 +198,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .accountName("Account with Balance")
                                 .accountType(AccountType.ASSET)
                                 .build();
-                GLAccountResponse created = glAccountService.createGLAccount(request);
+                glAccountService.createGLAccount(request);
 
                 // NOTE: In a real test, you would create journal entries to give this account a
                 // balance.

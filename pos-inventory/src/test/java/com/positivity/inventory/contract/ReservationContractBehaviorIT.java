@@ -3,7 +3,6 @@ package com.positivity.inventory.contract;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -200,7 +199,7 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/reservations/{allocationId}/promote", allocationId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
-                                .andExpect(status().isUnprocessableEntity())
+                                .andExpect(status().is(422))
                                 .andExpect(jsonPath("$.code").value("INSUFFICIENT_ATP"));
         }
 

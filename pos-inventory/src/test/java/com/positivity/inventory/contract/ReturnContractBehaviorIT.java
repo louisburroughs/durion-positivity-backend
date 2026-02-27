@@ -210,6 +210,6 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(requestBody)))
-                                .andExpect(status().isUnprocessableEntity());
+                                .andExpect(status().is(422));
         }
 }

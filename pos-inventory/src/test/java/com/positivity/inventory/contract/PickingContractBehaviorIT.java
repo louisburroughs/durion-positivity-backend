@@ -218,7 +218,7 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
                                 post("/v1/inventory/pick-lists/{id}/tasks/{taskId}/confirm", pickListId, taskId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
-                                .andExpect(status().isUnprocessableEntity());
+                                .andExpect(status().is(422));
         }
 
         // ─── CH5: GET /v1/inventory/pick-lists/{id}/tasks — 200 OK with list ─────────
