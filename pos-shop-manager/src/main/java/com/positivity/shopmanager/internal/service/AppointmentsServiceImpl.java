@@ -106,11 +106,11 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .resourceId(request.getResourceId())
                 .crmCustomerId(request.getCrmCustomerId())
                 .crmVehicleId(request.getCrmVehicleId())
-            .customerSnapshot(writeSnapshot(customerSnapshot))
-            .vehicleSnapshot(writeSnapshot(vehicleSnapshot))
+                .customerSnapshot(writeSnapshot(customerSnapshot))
+                .vehicleSnapshot(writeSnapshot(vehicleSnapshot))
                 .startAt(request.getStartAt())
                 .endAt(request.getEndAt())
-            .createdBy(actor)
+                .createdBy(actor)
                 .build();
 
         Appointment saved = appointmentRepository.save(appointment);
@@ -147,7 +147,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
     @Override
     @Transactional
-    public AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId, @NonNull RescheduleAppointmentRequest request) {
+    public AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId,
+            @NonNull RescheduleAppointmentRequest request) {
         if (request.getNewStartAt() == null || request.getNewEndAt() == null) {
             throw new AppointmentValidationException("newStartAt and newEndAt are required");
         }
@@ -182,21 +183,22 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .build();
         appointmentAuditRepository.save(audit);
 
-            if (saved.getWorkorderLinkRef() != null) {
-                eventPublisher.publishEvent(new AppointmentRescheduledEvent(
+        if (saved.getWorkorderLinkRef() != null) {
+            eventPublisher.publishEvent(new AppointmentRescheduledEvent(
                     saved.getAppointmentId(),
                     saved.getWorkorderLinkRef(),
                     previousStartAt,
                     request.getNewStartAt(),
                     actorId));
-            }
+        }
 
         return toResponse(saved);
     }
 
     @Override
     @Transactional
-    public AppointmentResponse cancelAppointment(@NonNull UUID appointmentId, @NonNull CancelAppointmentRequest request) {
+    public AppointmentResponse cancelAppointment(@NonNull UUID appointmentId,
+            @NonNull CancelAppointmentRequest request) {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
 
@@ -218,13 +220,13 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .build();
         appointmentAuditRepository.save(audit);
 
-            if (saved.getWorkorderLinkRef() != null) {
-                eventPublisher.publishEvent(new AppointmentCancelledEvent(
+        if (saved.getWorkorderLinkRef() != null) {
+            eventPublisher.publishEvent(new AppointmentCancelledEvent(
                     saved.getAppointmentId(),
                     saved.getWorkorderLinkRef(),
                     request.getCancellationReason().name(),
                     actorId));
-            }
+        }
 
         return toResponse(saved);
     }
@@ -277,10 +279,11 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         TimeWindow dayWindow = resolveDayWindow(targetDate, zoneId, request.getRange());
 
-        List<Appointment> locationAppointments = appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-                request.getLocationId(),
-                dayWindow.dayEndAt(),
-                dayWindow.dayStartAt());
+        List<Appointment> locationAppointments = appointmentRepository
+                .findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
+                        request.getLocationId(),
+                        dayWindow.dayEndAt(),
+                        dayWindow.dayStartAt());
 
         if (locationAppointments.isEmpty() && !locationLooksKnown(request.getLocationId())) {
             throw new LocationNotFoundException(request.getLocationId());
@@ -295,7 +298,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                     .add(toScheduleEvent(appointment));
         }
 
-        Map<ResourceLaneKey, List<ScheduleViewResponse.ScheduleEventView>> filteredByType = eventsByLane.entrySet().stream()
+        Map<ResourceLaneKey, List<ScheduleViewResponse.ScheduleEventView>> filteredByType = eventsByLane.entrySet()
+                .stream()
                 .filter(entry -> matchesResourceType(entry.getKey(), request.getResourceType()))
                 .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
@@ -345,7 +349,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .filter(timezone -> timezone != null && !timezone.isBlank())
                 .orElse(null);
         if (configuredTimezone == null) {
-            // Fallback: location has no configured timezone; using UTC. TODO: ensure all locations have timezone set.
+            // Fallback: location has no configured timezone; using UTC. TODO: ensure all
+            // locations have timezone set.
             return ZoneOffset.UTC;
         }
         return ZoneId.of(configuredTimezone);
@@ -386,7 +391,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         ScheduleViewResponse.ScheduleResourceView resourceView = new ScheduleViewResponse.ScheduleResourceView();
         resourceView.setResourceId(laneKey.resourceId());
         resourceView.setResourceType(laneKey.resourceType());
-        // TODO(#74-resourceName): Resolve resource display name from shop resource entity; using resourceId as fallback.
+        // TODO(#74-resourceName): Resolve resource display name from shop resource
+        // entity; using resourceId as fallback.
         resourceView.setResourceName(laneKey.resourceId());
         resourceView.setEvents(sorted);
         return resourceView;
@@ -603,7 +609,9 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         response.setStartAt(appointment.getStartAt());
         response.setEndAt(appointment.getEndAt());
         response.setCreatedAt(appointment.getCreatedAt());
-        response.setCancellationReason(appointment.getCancellationReasonCode() != null ? appointment.getCancellationReasonCode().name() : null);
+        response.setCancellationReason(
+                appointment.getCancellationReasonCode() != null ? appointment.getCancellationReasonCode().name()
+                        : null);
         response.setCancellationNotes(appointment.getCancellationNotes());
         response.setServiceRequestIds(loadServiceRequestIds(appointment.getAppointmentId()));
         response.setCustomerSnapshot(readSnapshot(appointment.getCustomerSnapshot()));

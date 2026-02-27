@@ -49,15 +49,15 @@ public class AppointmentsController {
         log.info("Create appointment requested.");
         AppointmentResponse response = appointmentsService.createAppointment(request);
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
-            .path("/{appointmentId}")
-            .buildAndExpand(response.getAppointmentId())
-            .toUri()).body(response);
+                .path("/{appointmentId}")
+                .buildAndExpand(response.getAppointmentId())
+                .toUri()).body(response);
     }
 
     @Operation(summary = "Load appointment", description = "Retrieve an appointment by ID")
-        @ApiResponse(responseCode = "200", description = "Appointment retrieved successfully.")
-        @ApiResponse(responseCode = "404", description = "Appointment not found.")
-        @ApiResponse(responseCode = "501", description = "Not implemented.")
+    @ApiResponse(responseCode = "200", description = "Appointment retrieved successfully.")
+    @ApiResponse(responseCode = "404", description = "Appointment not found.")
+    @ApiResponse(responseCode = "501", description = "Not implemented.")
     @GetMapping("/appointments/{appointmentId}")
     @PreAuthorize("hasAuthority('shop:schedule:view')")
     public ResponseEntity<AppointmentResponse> getAppointment(

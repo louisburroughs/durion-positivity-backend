@@ -109,14 +109,16 @@ public class AppointmentsServiceImplTest {
         Instant newStart = Instant.parse("2026-03-11T10:00:00Z");
         Instant newEnd = Instant.parse("2026-03-11T11:00:00Z");
 
-        Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED, originalStart, originalEnd);
+        Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED, originalStart,
+                originalEnd);
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
         request.setNewStartAt(newStart);
         request.setNewEndAt(newEnd);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId)).thenReturn(List.<AppointmentServiceRequest>of());
+        when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
+                .thenReturn(List.<AppointmentServiceRequest>of());
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
 
@@ -183,7 +185,8 @@ public class AppointmentsServiceImplTest {
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId)).thenReturn(List.<AppointmentServiceRequest>of());
+        when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
+                .thenReturn(List.<AppointmentServiceRequest>of());
 
         AppointmentResponse response = appointmentsService.cancelAppointment(appointmentId, request);
 
@@ -229,14 +232,14 @@ public class AppointmentsServiceImplTest {
                 () -> appointmentsService.cancelAppointment(appointmentId, request));
     }
 
-        @Test
-        void getScheduleView_returnsEmptyResources_whenLocationExistsAndNoAppointments() {
+    @Test
+    void getScheduleView_returnsEmptyResources_whenLocationExistsAndNoAppointments() {
         UUID locationId = UUID.randomUUID();
         ScheduleViewRequest request = scheduleRequest(locationId, LocalDate.of(2026, 3, 10), false);
 
         when(shopRepository.findById(locationId)).thenReturn(Optional.empty());
         when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-            any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of());
+                any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of());
         when(shopRepository.existsById(locationId)).thenReturn(true);
 
         ScheduleViewResponse response = appointmentsService.getScheduleView(request, "corr-1");
@@ -248,47 +251,47 @@ public class AppointmentsServiceImplTest {
         assertTrue(response.getResources().isEmpty());
         assertNotNull(response.getWarnings());
         assertTrue(response.getWarnings().isEmpty());
-        }
+    }
 
-        @Test
-        void getScheduleView_throwsLocationNotFoundException_whenNoAppointmentsAndLocationUnknown() {
+    @Test
+    void getScheduleView_throwsLocationNotFoundException_whenNoAppointmentsAndLocationUnknown() {
         UUID locationId = UUID.randomUUID();
         ScheduleViewRequest request = scheduleRequest(locationId, LocalDate.of(2026, 3, 10), false);
 
         when(shopRepository.findById(locationId)).thenReturn(Optional.empty());
         when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-            any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of());
+                any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of());
         when(shopRepository.existsById(locationId)).thenReturn(false);
 
         assertThrows(LocationNotFoundException.class, () -> appointmentsService.getScheduleView(request, "corr-2"));
-        }
+    }
 
-        @Test
-        void getScheduleView_marksConflicts_whenTwoAppointmentsOverlapForSameResource() {
+    @Test
+    void getScheduleView_marksConflicts_whenTwoAppointmentsOverlapForSameResource() {
         UUID locationId = UUID.randomUUID();
         ScheduleViewRequest request = scheduleRequest(locationId, LocalDate.of(2026, 3, 10), false);
 
         Appointment first = buildAppointment(
-            UUID.fromString("00000000-0000-0000-0000-000000000011"),
-            AppointmentStatus.SCHEDULED,
-            Instant.parse("2026-03-10T10:00:00Z"),
-            Instant.parse("2026-03-10T11:00:00Z"));
+                UUID.fromString("00000000-0000-0000-0000-000000000011"),
+                AppointmentStatus.SCHEDULED,
+                Instant.parse("2026-03-10T10:00:00Z"),
+                Instant.parse("2026-03-10T11:00:00Z"));
         first.setLocationId(locationId);
         first.setResourceId("tech-1");
         first.setResourceType("TECHNICIAN");
 
         Appointment second = buildAppointment(
-            UUID.fromString("00000000-0000-0000-0000-000000000022"),
-            AppointmentStatus.SCHEDULED,
-            Instant.parse("2026-03-10T10:30:00Z"),
-            Instant.parse("2026-03-10T11:30:00Z"));
+                UUID.fromString("00000000-0000-0000-0000-000000000022"),
+                AppointmentStatus.SCHEDULED,
+                Instant.parse("2026-03-10T10:30:00Z"),
+                Instant.parse("2026-03-10T11:30:00Z"));
         second.setLocationId(locationId);
         second.setResourceId("tech-1");
         second.setResourceType("TECHNICIAN");
 
         when(shopRepository.findById(locationId)).thenReturn(Optional.empty());
         when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-            any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of(first, second));
+                any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of(first, second));
 
         ScheduleViewResponse response = appointmentsService.getScheduleView(request, "corr-3");
 
@@ -300,22 +303,22 @@ public class AppointmentsServiceImplTest {
         assertEquals("BLOCKING", events.get(0).getSeverity());
         assertEquals("BLOCKING", events.get(1).getSeverity());
         assertEquals(List.of("APT-00000000-0000-0000-0000-000000000022"),
-            events.get(0).getConflictDetails().getConflictingEventIds());
+                events.get(0).getConflictDetails().getConflictingEventIds());
         assertEquals(List.of("APT-00000000-0000-0000-0000-000000000011"),
-            events.get(1).getConflictDetails().getConflictingEventIds());
-        }
+                events.get(1).getConflictDetails().getConflictingEventIds());
+    }
 
-        @Test
-        void getScheduleView_setsUnavailableOverlay_whenHrOverlayFails() {
+    @Test
+    void getScheduleView_setsUnavailableOverlay_whenHrOverlayFails() {
         UUID locationId = UUID.randomUUID();
         ScheduleViewRequest request = scheduleRequest(locationId, LocalDate.of(2026, 3, 10), true);
 
         when(shopRepository.findById(locationId)).thenReturn(Optional.empty());
         when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-            any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of());
+                any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of());
         when(shopRepository.existsById(locationId)).thenReturn(true);
         when(hrAvailabilityClient.getAvailabilityOverlay(anyString(), any(LocalDate.class)))
-            .thenThrow(new RuntimeException("HR unavailable"));
+                .thenThrow(new RuntimeException("HR unavailable"));
 
         ScheduleViewResponse response = appointmentsService.getScheduleView(request, "corr-4");
 
@@ -324,7 +327,7 @@ public class AppointmentsServiceImplTest {
         assertNotNull(response.getResources());
         assertTrue(response.getResources().isEmpty());
         assertFalse(response.getWarnings().isEmpty());
-        }
+    }
 
     @Test
     void createAppointment_succeeds_andPersistsServiceRequests() {
@@ -343,15 +346,18 @@ public class AppointmentsServiceImplTest {
         request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
         request.setServiceRequestIds(List.of(serviceRequestId));
 
-        when(crmCustomerClient.getCustomerById(customerId)).thenReturn(java.util.Map.of("firstName", "Jane", "lastName", "Doe"));
-        when(crmVehicleClient.getVehicleById(vehicleId)).thenReturn(java.util.Map.of("ownerCustomerId", customerId.toString()));
+        when(crmCustomerClient.getCustomerById(customerId))
+                .thenReturn(java.util.Map.of("firstName", "Jane", "lastName", "Doe"));
+        when(crmVehicleClient.getVehicleById(vehicleId))
+                .thenReturn(java.util.Map.of("ownerCustomerId", customerId.toString()));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> {
             Appointment saved = invocation.getArgument(0);
             saved.setAppointmentId(appointmentId);
             return saved;
         });
         when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
-                .thenReturn(List.of(AppointmentServiceRequest.builder().appointmentId(appointmentId).serviceEntityId(serviceRequestId).build()));
+                .thenReturn(List.of(AppointmentServiceRequest.builder().appointmentId(appointmentId)
+                        .serviceEntityId(serviceRequestId).build()));
 
         AppointmentResponse response = appointmentsService.createAppointment(request);
 
@@ -386,8 +392,10 @@ public class AppointmentsServiceImplTest {
         request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.randomUUID()));
 
-        when(crmCustomerClient.getCustomerById(request.getCrmCustomerId())).thenReturn(java.util.Map.of("firstName", "Jane"));
-        when(crmVehicleClient.getVehicleById(request.getCrmVehicleId())).thenReturn(java.util.Map.of("ownerCustomerId", UUID.randomUUID().toString()));
+        when(crmCustomerClient.getCustomerById(request.getCrmCustomerId()))
+                .thenReturn(java.util.Map.of("firstName", "Jane"));
+        when(crmVehicleClient.getVehicleById(request.getCrmVehicleId()))
+                .thenReturn(java.util.Map.of("ownerCustomerId", UUID.randomUUID().toString()));
 
         assertThrows(VehicleCustomerMismatchException.class, () -> appointmentsService.createAppointment(request));
     }
@@ -404,14 +412,14 @@ public class AppointmentsServiceImplTest {
         verify(appointmentLoadService).loadCreateModel("WORKORDER", "wo-1", "fac-1", "corr-5");
     }
 
-        private ScheduleViewRequest scheduleRequest(UUID locationId, LocalDate date, boolean includeAvailabilityOverlay) {
+    private ScheduleViewRequest scheduleRequest(UUID locationId, LocalDate date, boolean includeAvailabilityOverlay) {
         ScheduleViewRequest request = new ScheduleViewRequest();
         request.setLocationId(locationId);
         request.setDate(date);
         request.setIncludeAvailabilityOverlay(includeAvailabilityOverlay);
         request.setRange("FULL_DAY");
         return request;
-        }
+    }
 
     private Appointment buildAppointment(UUID appointmentId, AppointmentStatus status, Instant startAt, Instant endAt) {
         Appointment appointment = new Appointment();

@@ -34,26 +34,28 @@ import org.springframework.test.web.servlet.MockMvc;
  * Contract behavioral integration tests for CAP-137 Story #73:
  * Reschedule and Cancel Appointment with Audit.
  *
- * <p>Validates the HTTP REST contract for:
+ * <p>
+ * Validates the HTTP REST contract for:
  * <ul>
- *   <li>PATCH /v1/appointments/{id}/reschedule</li>
- *   <li>PATCH /v1/appointments/{id}/cancel</li>
+ * <li>PATCH /v1/appointments/{id}/reschedule</li>
+ * <li>PATCH /v1/appointments/{id}/cancel</li>
  * </ul>
  *
- * <p>Assertions align with:
+ * <p>
+ * Assertions align with:
  * <ul>
- *   <li>ADR-0017: HTTP response code matrix (200/400/404/409)</li>
- *   <li>ADR-0018: Audit actor fields sourced from security context (X-User header)</li>
+ * <li>ADR-0017: HTTP response code matrix (200/400/404/409)</li>
+ * <li>ADR-0018: Audit actor fields sourced from security context (X-User
+ * header)</li>
  * </ul>
  *
  * Issue: #73
  */
-@SpringBootTest(
-        classes = PosShopManagerApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(classes = PosShopManagerApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-// Issue #73: H2 in-memory datasource + disable external startup dependencies for isolated integration tests
+// Issue #73: H2 in-memory datasource + disable external startup dependencies
+// for isolated integration tests
 @TestPropertySource(properties = {
         "spring.datasource.url=jdbc:h2:mem:shopmgr_rs_cancel;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.driver-class-name=org.h2.Driver",
@@ -73,13 +75,13 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
 
     private static final UUID TEST_LOCATION_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID TEST_CUSTOMER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final UUID TEST_VEHICLE_ID  = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final UUID NON_EXISTENT_ID  = UUID.fromString("00000000-0000-0000-0000-000000000099");
+    private static final UUID TEST_VEHICLE_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID NON_EXISTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
     private static final Instant BASE_START = Instant.parse("2026-05-01T09:00:00Z");
-    private static final Instant BASE_END   = Instant.parse("2026-05-01T10:00:00Z");
-    private static final Instant NEW_START  = Instant.parse("2026-05-02T09:00:00Z");
-    private static final Instant NEW_END    = Instant.parse("2026-05-02T10:00:00Z");
+    private static final Instant BASE_END = Instant.parse("2026-05-01T10:00:00Z");
+    private static final Instant NEW_START = Instant.parse("2026-05-02T09:00:00Z");
+    private static final Instant NEW_END = Instant.parse("2026-05-02T10:00:00Z");
 
     @Autowired
     private MockMvc mockMvc;
@@ -90,7 +92,8 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     @Autowired
     private AppointmentAuditRepository appointmentAuditRepository;
 
-    // Mocked to prevent context-startup failures; not invoked by reschedule/cancel stubs
+    // Mocked to prevent context-startup failures; not invoked by reschedule/cancel
+    // stubs
     @MockitoBean
     private CrmCustomerClient crmCustomerClient;
 
@@ -99,7 +102,8 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
 
     /**
      * Wipes appointment and audit tables before each test to ensure full isolation.
-     * Audit records must be deleted first to satisfy any implicit ordering constraints.
+     * Audit records must be deleted first to satisfy any implicit ordering
+     * constraints.
      */
     @BeforeEach
     void cleanDatabase() {
@@ -133,11 +137,13 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     }
 
     /**
-     * Core factory: builds and saves an {@link Appointment} with the supplied status and optional
+     * Core factory: builds and saves an {@link Appointment} with the supplied
+     * status and optional
      * workorder link reference. appointmentId is generated via {@code @PrePersist}.
      *
-     * @param status          the desired {@link AppointmentStatus}
-     * @param workorderLinkRef optional workorder link reference; may be {@code null}
+     * @param status           the desired {@link AppointmentStatus}
+     * @param workorderLinkRef optional workorder link reference; may be
+     *                         {@code null}
      * @return the persisted {@link Appointment}
      */
     private Appointment saveAppointment(AppointmentStatus status, String workorderLinkRef) {
@@ -174,7 +180,8 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     // ─── RESCHEDULE Tests ────────────────────────────────────────────────────────
 
     /**
-     * RS1 → AC1 (Reschedule): Verifies 200 OK with updated startAt/endAt and SCHEDULED status
+     * RS1 → AC1 (Reschedule): Verifies 200 OK with updated startAt/endAt and
+     * SCHEDULED status
      * when rescheduling a SCHEDULED appointment with valid new times.
      */
     @Test
@@ -183,11 +190,12 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
             throws Exception {
         Appointment appt = saveScheduledAppointment();
 
-        // Issue #73: RS1 — core reschedule happy path (ADR-0017: 200 for successful mutation)
+        // Issue #73: RS1 — core reschedule happy path (ADR-0017: 200 for successful
+        // mutation)
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
+                patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.appointmentId").value(appt.getAppointmentId().toString()))
                 .andExpect(jsonPath("$.status").value("SCHEDULED"))
@@ -196,9 +204,12 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     }
 
     /**
-     * RS2 → Audit & Observability: Verifies that an AppointmentAudit record is created with
-     * action=RESCHEDULED, previous/new times recorded, after a successful reschedule.
-     * Uses direct repository access to assert the audit trail per AGENTS.md mandate.
+     * RS2 → Audit & Observability: Verifies that an AppointmentAudit record is
+     * created with
+     * action=RESCHEDULED, previous/new times recorded, after a successful
+     * reschedule.
+     * Uses direct repository access to assert the audit trail per AGENTS.md
+     * mandate.
      */
     @Test
     @DisplayName("RS2: should_create_AppointmentAudit_with_action_RESCHEDULED_and_previous_and_new_times_recorded")
@@ -208,13 +219,13 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
 
         // Issue #73: RS2 — audit trail after reschedule
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
+                patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
                 .andExpect(status().isOk());
 
-        List<AppointmentAudit> audits =
-                appointmentAuditRepository.findByAppointmentIdOrderByCreatedAtDesc(appt.getAppointmentId());
+        List<AppointmentAudit> audits = appointmentAuditRepository
+                .findByAppointmentIdOrderByCreatedAtDesc(appt.getAppointmentId());
         assertThat(audits).hasSize(1);
         AppointmentAudit audit = audits.get(0);
         assertThat(audit.getAction().name()).isEqualTo("RESCHEDULED");
@@ -226,9 +237,12 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     }
 
     /**
-     * RS3 → AC3 (Domain Event): Verifies 200 OK when rescheduling an appointment that has a
-     * workorderLinkRef set. Event emission is handled by pos-events AOP; no direct assertion
-     * is made on the event bus — 200 proves the integration path executed without error.
+     * RS3 → AC3 (Domain Event): Verifies 200 OK when rescheduling an appointment
+     * that has a
+     * workorderLinkRef set. Event emission is handled by pos-events AOP; no direct
+     * assertion
+     * is made on the event bus — 200 proves the integration path executed without
+     * error.
      */
     @Test
     @DisplayName("RS3: should_return_200_when_rescheduling_appointment_with_workorderLinkRef_so_event_fires_via_AOP")
@@ -236,35 +250,39 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
             throws Exception {
         Appointment appt = saveAppointmentWithWorkorderRef();
 
-        // Issue #73: RS3 — event firing is proxied by AOP; 200 is the observable contract evidence
+        // Issue #73: RS3 — event firing is proxied by AOP; 200 is the observable
+        // contract evidence
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
+                patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.appointmentId").isNotEmpty());
     }
 
-        /**
-         * RS3b → AC4 (No Domain Event): Verifies 200 OK when rescheduling an appointment without
-         * workorderLinkRef. The behavior remains successful and must not require event publication.
-         */
-        @Test
-        @DisplayName("RS3b: should_return_200_when_rescheduling_appointment_without_workorderLinkRef_and_no_domain_event")
-        void RS3b_should_return_200_when_rescheduling_appointment_without_workorderLinkRef_and_no_domain_event()
-                        throws Exception {
-                Appointment appt = saveScheduledAppointment();
+    /**
+     * RS3b → AC4 (No Domain Event): Verifies 200 OK when rescheduling an
+     * appointment without
+     * workorderLinkRef. The behavior remains successful and must not require event
+     * publication.
+     */
+    @Test
+    @DisplayName("RS3b: should_return_200_when_rescheduling_appointment_without_workorderLinkRef_and_no_domain_event")
+    void RS3b_should_return_200_when_rescheduling_appointment_without_workorderLinkRef_and_no_domain_event()
+            throws Exception {
+        Appointment appt = saveScheduledAppointment();
 
-                mockMvc.perform(withGatewayAuth(
-                                                patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
-                                                                .contentType(MediaType.APPLICATION_JSON)
-                                                                .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.appointmentId").value(appt.getAppointmentId().toString()));
-        }
+        mockMvc.perform(withGatewayAuth(
+                patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.appointmentId").value(appt.getAppointmentId().toString()));
+    }
 
     /**
-     * RS4 → AC5: Verifies 409 INVALID_APPOINTMENT_STATE when attempting to reschedule a
+     * RS4 → AC5: Verifies 409 INVALID_APPOINTMENT_STATE when attempting to
+     * reschedule a
      * COMPLETED appointment. Per ADR-0017: 409 for invalid lifecycle transitions.
      */
     @Test
@@ -275,15 +293,16 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
 
         // Issue #73: RS4 — lifecycle guard for COMPLETED state
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
+                patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVALID_APPOINTMENT_STATE"));
     }
 
     /**
-     * RS5 → AC5: Verifies 409 INVALID_APPOINTMENT_STATE when attempting to reschedule a
+     * RS5 → AC5: Verifies 409 INVALID_APPOINTMENT_STATE when attempting to
+     * reschedule a
      * CANCELLED appointment.
      */
     @Test
@@ -294,9 +313,9 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
 
         // Issue #73: RS5 — lifecycle guard for CANCELLED state
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
+                patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVALID_APPOINTMENT_STATE"));
     }
@@ -310,9 +329,9 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     void RS6_should_return_404_when_rescheduling_non_existent_appointment() throws Exception {
         // Issue #73: RS6 — not-found guard
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/reschedule", NON_EXISTENT_ID)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
+                patch("/v1/appointments/{id}/reschedule", NON_EXISTENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reschedulePayload(NEW_START.toString(), NEW_END.toString()))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("APPOINTMENT_NOT_FOUND"));
     }
@@ -326,11 +345,12 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     void RS7_should_return_400_VALIDATION_ERROR_when_newStartAt_is_not_before_newEndAt() throws Exception {
         Appointment appt = saveScheduledAppointment();
 
-        // Issue #73: RS7 — newEndAt sent as start, newStartAt sent as end (reversed/invalid range)
+        // Issue #73: RS7 — newEndAt sent as start, newStartAt sent as end
+        // (reversed/invalid range)
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(reschedulePayload(NEW_END.toString(), NEW_START.toString()))))
+                patch("/v1/appointments/{id}/reschedule", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reschedulePayload(NEW_END.toString(), NEW_START.toString()))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -338,7 +358,8 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     // ─── CANCEL Tests ─────────────────────────────────────────────────────────
 
     /**
-     * CA1 → AC2 (Cancel): Verifies 200 OK with status=CANCELLED when cancelling a SCHEDULED
+     * CA1 → AC2 (Cancel): Verifies 200 OK with status=CANCELLED when cancelling a
+     * SCHEDULED
      * appointment with a valid cancellationReason.
      */
     @Test
@@ -348,18 +369,21 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
 
         // Issue #73: CA1 — core cancel happy path
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(cancelPayload("CUSTOMER_REQUEST"))))
+                patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cancelPayload("CUSTOMER_REQUEST"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"))
                 .andExpect(jsonPath("$.cancellationReason").value("CUSTOMER_REQUEST"));
     }
 
     /**
-     * CA2 → Audit & Observability: Verifies that an AppointmentAudit record is created with
-     * action=CANCELLED, cancellationReason recorded, and actorId populated from the security context.
-     * Per ADR-0018: actor fields are derived from authenticated principal (X-User header via gateway).
+     * CA2 → Audit & Observability: Verifies that an AppointmentAudit record is
+     * created with
+     * action=CANCELLED, cancellationReason recorded, and actorId populated from the
+     * security context.
+     * Per ADR-0018: actor fields are derived from authenticated principal (X-User
+     * header via gateway).
      */
     @Test
     @DisplayName("CA2: should_create_AppointmentAudit_with_action_CANCELLED_cancellationReason_and_actorId_from_security_context")
@@ -367,15 +391,16 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
             throws Exception {
         Appointment appt = saveScheduledAppointment();
 
-        // Issue #73: CA2 — audit trail after cancel (ADR-0018: actorId from security context)
+        // Issue #73: CA2 — audit trail after cancel (ADR-0018: actorId from security
+        // context)
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(cancelPayload("CUSTOMER_REQUEST"))))
+                patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cancelPayload("CUSTOMER_REQUEST"))))
                 .andExpect(status().isOk());
 
-        List<AppointmentAudit> audits =
-                appointmentAuditRepository.findByAppointmentIdOrderByCreatedAtDesc(appt.getAppointmentId());
+        List<AppointmentAudit> audits = appointmentAuditRepository
+                .findByAppointmentIdOrderByCreatedAtDesc(appt.getAppointmentId());
         assertThat(audits).hasSize(1);
         AppointmentAudit audit = audits.get(0);
         assertThat(audit.getAction().name()).isEqualTo("CANCELLED");
@@ -384,44 +409,50 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
         assertThat(audit.getActorId()).isNotBlank();
     }
 
-        /**
-         * CA2b → AC4 (No Domain Event): Verifies 200 OK when cancelling an appointment without
-         * workorderLinkRef. The cancellation succeeds and no domain event should be required.
-         */
-        @Test
-        @DisplayName("CA2b: should_return_200_when_cancelling_appointment_without_workorderLinkRef_and_no_domain_event")
-        void CA2b_should_return_200_when_cancelling_appointment_without_workorderLinkRef_and_no_domain_event()
-                        throws Exception {
-                Appointment appt = saveScheduledAppointment();
+    /**
+     * CA2b → AC4 (No Domain Event): Verifies 200 OK when cancelling an appointment
+     * without
+     * workorderLinkRef. The cancellation succeeds and no domain event should be
+     * required.
+     */
+    @Test
+    @DisplayName("CA2b: should_return_200_when_cancelling_appointment_without_workorderLinkRef_and_no_domain_event")
+    void CA2b_should_return_200_when_cancelling_appointment_without_workorderLinkRef_and_no_domain_event()
+            throws Exception {
+        Appointment appt = saveScheduledAppointment();
 
-                mockMvc.perform(withGatewayAuth(
-                                                patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
-                                                                .contentType(MediaType.APPLICATION_JSON)
-                                                                .content(cancelPayload("CUSTOMER_REQUEST"))))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.appointmentId").value(appt.getAppointmentId().toString()))
-                                .andExpect(jsonPath("$.status").value("CANCELLED"));
-        }
+        mockMvc.perform(withGatewayAuth(
+                patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cancelPayload("CUSTOMER_REQUEST"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.appointmentId").value(appt.getAppointmentId().toString()))
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
 
     /**
-     * CA3: Verifies 400 when an unknown string is sent for the cancellationReason enum field.
-     * Jackson fails deserialization before the controller is invoked, producing 400 automatically.
+     * CA3: Verifies 400 when an unknown string is sent for the cancellationReason
+     * enum field.
+     * Jackson fails deserialization before the controller is invoked, producing 400
+     * automatically.
      */
     @Test
     @DisplayName("CA3: should_return_400_when_cancellationReason_is_unrecognised_enum_value")
     void CA3_should_return_400_when_cancellationReason_is_unrecognised_enum_value() throws Exception {
         Appointment appt = saveScheduledAppointment();
 
-        // Issue #73: CA3 — enum deserialization guard (Jackson HttpMessageNotReadableException → 400)
+        // Issue #73: CA3 — enum deserialization guard (Jackson
+        // HttpMessageNotReadableException → 400)
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(cancelPayload("INVALID_VALUE"))))
+                patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cancelPayload("INVALID_VALUE"))))
                 .andExpect(status().isBadRequest());
     }
 
     /**
-     * CA4 → AC5: Verifies 409 INVALID_APPOINTMENT_STATE when attempting to cancel a COMPLETED
+     * CA4 → AC5: Verifies 409 INVALID_APPOINTMENT_STATE when attempting to cancel a
+     * COMPLETED
      * appointment. Per ADR-0017: 409 for invalid lifecycle transitions.
      */
     @Test
@@ -431,9 +462,9 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
 
         // Issue #73: CA4 — lifecycle guard for COMPLETED state
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(cancelPayload("CUSTOMER_REQUEST"))))
+                patch("/v1/appointments/{id}/cancel", appt.getAppointmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cancelPayload("CUSTOMER_REQUEST"))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVALID_APPOINTMENT_STATE"));
     }
@@ -446,9 +477,9 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     void CA5_should_return_404_when_cancelling_non_existent_appointment() throws Exception {
         // Issue #73: CA5 — not-found guard for cancel
         mockMvc.perform(withGatewayAuth(
-                        patch("/v1/appointments/{id}/cancel", NON_EXISTENT_ID)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(cancelPayload("CUSTOMER_REQUEST"))))
+                patch("/v1/appointments/{id}/cancel", NON_EXISTENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cancelPayload("CUSTOMER_REQUEST"))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("APPOINTMENT_NOT_FOUND"));
     }

@@ -57,19 +57,19 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Default locations returned
+        "501":
+          description: Not implemented
           content:
-            application/json:
+            '*/*':
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
-        "501":
-          description: Not implemented
+        "200":
+          description: Default locations returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -366,16 +366,16 @@ paths:
         schema:
           type: string
       responses:
-        "404":
-          description: Putaway task not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PutawayTaskResponse"
         "200":
           description: Putaway task claimed
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/PutawayTaskResponse"
+        "404":
+          description: Putaway task not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/PutawayTaskResponse"
   /v1/inventory/putaway/tasks/generate:
@@ -691,16 +691,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
-        "403":
-          description: User lacks required permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CycleCountPlanResponse"
         "201":
           description: Cycle count plan created
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/CycleCountPlanResponse"
+        "403":
+          description: User lacks required permission
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
   /v1/inventory/cycleCountAdjustments:
@@ -959,6 +959,12 @@ paths:
               $ref: "#/components/schemas/CreateAdjustmentRequestDto"
         required: true
       responses:
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required create permission
           content:
@@ -971,12 +977,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentRequestResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/adjustments/{adjustmentRequestId}/approve:
     post:
       tags:
@@ -993,22 +993,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "409":
-          description: Adjustment request is in a conflicting state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required approval permission
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "200":
-          description: Adjustment approved
-        "404":
-          description: Referenced resource not found
+        "400":
+          description: Validation failure
           content:
             application/json:
               schema:
@@ -1019,8 +1005,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
+        "200":
+          description: Adjustment approved
+        "403":
+          description: User lacks required approval permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "409":
+          description: Adjustment request is in a conflicting state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "404":
+          description: Referenced resource not found
           content:
             application/json:
               schema:
@@ -1048,16 +1048,16 @@ paths:
             schema:
               $ref: "#/components/schemas/DeactivateLocationRequest"
       responses:
-        "200":
-          description: Deactivation completed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeactivateLocationResponse"
         "400":
           description: Bad request - invalid parameters or destination required
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/DeactivateLocationResponse"
+        "200":
+          description: Deactivation completed
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/DeactivateLocationResponse"
         "404":
@@ -1128,16 +1128,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CountResponse"
-        "400":
-          description: Invalid request or recount limit exceeded
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CountResponse"
         "200":
           description: Recount submitted successfully
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/CountResponse"
+        "400":
+          description: Invalid request or recount limit exceeded
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/CountResponse"
         "403":
@@ -1311,16 +1311,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Location inventory returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationInventoryInquiryResponse"
         "400":
           description: Invalid location identifier
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationInventoryInquiryResponse"
+        "200":
+          description: Location inventory returned
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationInventoryInquiryResponse"
   /v1/inventory/goods-receipts/{receiptId}:
@@ -1460,8 +1460,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "500":
-          description: Unexpected server error
+        "400":
+          description: Invalid request parameters
           content:
             application/json:
               schema:
@@ -1472,6 +1472,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AvailabilityView"
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required read permission
           content:
@@ -1480,12 +1486,6 @@ paths:
                 $ref: "#/components/schemas/InventoryErrorResponse"
         "404":
           description: Product SKU or location not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Invalid request parameters
           content:
             application/json:
               schema:

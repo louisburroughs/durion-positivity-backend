@@ -700,14 +700,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
+        "201":
+          description: Parts returned successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "201":
-          description: Parts returned successfully
+        "404":
+          description: Workorder or part not found
           content:
             '*/*':
               schema:
@@ -753,14 +753,14 @@ paths:
                   notes: Returned to stock
         required: true
       responses:
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
+        "201":
+          description: Unused quantity returned successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "201":
-          description: Unused quantity returned successfully
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
           content:
             '*/*':
               schema:
@@ -811,6 +811,12 @@ paths:
                   quantity: 2
         required: true
       responses:
+        "201":
+          description: Parts issued successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "409":
           description: Idempotency conflict (duplicate key)
           content:
@@ -825,12 +831,6 @@ paths:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "400":
           description: "Invalid request (negative quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "201":
-          description: Parts issued successfully
           content:
             '*/*':
               schema:
@@ -934,6 +934,12 @@ paths:
                   quantity: 1
         required: true
       responses:
+        "201":
+          description: Parts consumption recorded successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "400":
           description: "Invalid request (exceeds issued quantity, etc.)"
           content:
@@ -942,12 +948,6 @@ paths:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "404":
           description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "201":
-          description: Parts consumption recorded successfully
           content:
             '*/*':
               schema:
@@ -2217,12 +2217,6 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
-        "200":
-          description: Adjustment history retrieved successfully (newest first)
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "404":
           description: Workorder or part not found
           content:
@@ -2231,6 +2225,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "200":
+          description: Adjustment history retrieved successfully (newest first)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
   /v1/workorders/{workorderId}/labor:
     get:
       tags:
