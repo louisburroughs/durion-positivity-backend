@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
@@ -37,8 +36,7 @@ public class ShopSecurityConfig {
         return RestClient.create();
     }
 
-    @Bean
-    @Qualifier("crmRestClient")
+    @Bean(name = "crmRestClient")
     public RestClient crmRestClient(
             RestClient.Builder builder,
             @Value("${pos.crm.connect-timeout-ms:200}") int connectTimeoutMs,
