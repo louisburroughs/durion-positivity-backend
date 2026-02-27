@@ -129,14 +129,22 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_pick_usesSourceLocationOnHand_notGlobalOnHand() {
+        setupClock();
+        stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.PICK, 5);
-        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
-                .thenReturn(3);
+        request.setFromLocationId(LOC_2);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2))
+                .thenReturn(8);
 
-        Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
+        InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
-        assertThat(exception).isInstanceOf(InsufficientStockException.class);
-        verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
+        assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_ISSUE);
+        assertThat(result.getChangeInQuantity()).isEqualTo(-5);
+        verify(ledgerRepository, times(2))
+                .calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2);
+        verify(ledgerRepository, never())
+                .calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1);
+        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
     }
 
     @Test
