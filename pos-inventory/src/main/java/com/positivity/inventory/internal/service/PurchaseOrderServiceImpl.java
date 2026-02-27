@@ -48,6 +48,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private static final String OCCURRED_AT = "occurredAt";
     private static final String ACTOR_ID = "actorId";
     private static final String EVENT_TYPE = "eventType";
+
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final ApplicationEventPublisher eventPublisher;

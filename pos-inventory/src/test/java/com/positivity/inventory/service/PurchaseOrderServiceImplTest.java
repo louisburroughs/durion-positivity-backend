@@ -9,7 +9,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -46,6 +49,7 @@ import com.positivity.inventory.internal.exception.PurchaseOrderNotApprovedExcep
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
+import com.positivity.inventory.internal.service.EncumbranceEventPublisher;
 import com.positivity.inventory.internal.service.PurchaseOrderServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
@@ -65,7 +69,12 @@ class PurchaseOrderServiceImplTest {
         @Mock
         private ApplicationContext applicationContext;
 
+        @Mock
+        private EncumbranceEventPublisher encumbranceEventPublisher;
+
         private PurchaseOrderServiceImpl purchaseOrderService;
+
+        private Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @BeforeEach
         void setUp() {
@@ -73,7 +82,7 @@ class PurchaseOrderServiceImplTest {
                                 purchaseOrderRepository,
                                 purchaseOrderLineRepository,
                                 eventPublisher,
-                                applicationContext);
+                                applicationContext, encumbranceEventPublisher, fixedClock);
                 ReflectionTestUtils.setField(purchaseOrderService, "encumbranceEnabled", false);
                 ReflectionTestUtils.setField(purchaseOrderService, "defaultTaxRate", 0.10d);
         }
