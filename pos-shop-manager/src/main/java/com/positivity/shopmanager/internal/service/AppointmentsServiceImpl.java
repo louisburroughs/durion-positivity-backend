@@ -1,5 +1,10 @@
 package com.positivity.shopmanager.internal.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -7,10 +12,55 @@ import org.springframework.stereotype.Service;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
+import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
+import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
+import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
+import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
+import com.positivity.shopmanager.internal.client.CrmCustomerClient;
+import com.positivity.shopmanager.internal.client.CrmVehicleClient;
+import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
+import com.positivity.shopmanager.internal.entity.Appointment;
+import com.positivity.shopmanager.internal.entity.AppointmentAudit;
+import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
+import com.positivity.shopmanager.internal.entity.Shop;
+import com.positivity.shopmanager.internal.event.AppointmentCancelledEvent;
+import com.positivity.shopmanager.internal.event.AppointmentRescheduledEvent;
+import com.positivity.shopmanager.internal.enums.AppointmentAction;
+import com.positivity.shopmanager.internal.enums.AppointmentStatus;
+import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
+import com.positivity.shopmanager.internal.exception.AppointmentStateException;
+import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
+import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
+import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
+import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
+import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
+import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ShopRepository;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shopmanager.service.AppointmentLoadService;
 import com.positivity.shopmanager.service.AppointmentsService;
-import com.positivity.shopmanager.service.ConflictDetectionService;
-import com.positivity.shopmanager.service.SourceEligibilityService;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Orchestration service for appointment operations.
@@ -24,13 +74,52 @@ import com.positivity.shopmanager.service.SourceEligibilityService;
 @Service
 @RequiredArgsConstructor
 public class AppointmentsServiceImpl implements AppointmentsService {
-
-    private final SourceEligibilityService sourceEligibilityService;
-    private final ConflictDetectionService conflictDetectionService;
+    private final AppointmentRepository appointmentRepository;
+    private final AppointmentAuditRepository appointmentAuditRepository;
+    private final AppointmentServiceRequestRepository appointmentServiceRequestRepository;
+    private final ObjectMapper objectMapper;
     private final AppointmentLoadService appointmentLoadService;
+    private final CrmCustomerClient crmCustomerClient;
+    private final CrmVehicleClient crmVehicleClient;
+    private final HrAvailabilityClient hrAvailabilityClient;
+    private final ApplicationEventPublisher eventPublisher;
+    private final ShopRepository shopRepository;
+    private final Clock clock;
+
+    @Override
+    @Transactional
+    public AppointmentResponse createAppointment(@NonNull AppointmentCreateRequest request) {
+        validateTimeRange(request.getStartAt(), request.getEndAt());
+        if (request.getServiceRequestIds() == null || request.getServiceRequestIds().isEmpty()) {
+            throw new AppointmentValidationException("serviceRequestIds must contain at least one entry");
+        }
+        validateCrmIdentifiers(request.getCrmCustomerId(), request.getCrmVehicleId());
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        Map<String, Object> customerSnapshot = crmCustomerClient.getCustomerById(request.getCrmCustomerId());
+        Map<String, Object> vehicleSnapshot = crmVehicleClient.getVehicleById(request.getCrmVehicleId());
+        validateCrmRelationship(request.getCrmCustomerId(), request.getCrmVehicleId(), vehicleSnapshot);
+
+        Appointment appointment = Appointment.builder()
+                .appointmentId(UUIDv7Generator.generate())
+                .status(AppointmentStatus.SCHEDULED)
+                .locationId(request.getLocationId())
+                .resourceId(request.getResourceId())
+                .crmCustomerId(request.getCrmCustomerId())
+                .crmVehicleId(request.getCrmVehicleId())
+            .customerSnapshot(writeSnapshot(customerSnapshot))
+            .vehicleSnapshot(writeSnapshot(vehicleSnapshot))
+                .startAt(request.getStartAt())
+                .endAt(request.getEndAt())
+            .createdBy(actor)
+                .build();
+
+        Appointment saved = appointmentRepository.save(appointment);
+        saveServiceRequests(saved.getAppointmentId(), request.getServiceRequestIds());
+        return toResponse(saved);
+    }
 
     /**
-     * Creates an appointment from an Estimate or Work Order.
+     * Creates an appointment from an Estimate or workorder.
      * Performs eligibility checks and conflict detection.
      * 
      * Per DECISION-SHOPMGMT-014: supports idempotency via idempotencyKey.
@@ -53,26 +142,91 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      */
     @Override
     public AppointmentResponse create(AppointmentCreateRequest request, String idempotencyKey, String correlationId) {
-        log.info(
-                "[AppointmentsService] create idempotencyKey={}, correlationId={}, sourceType={}, sourceId={}, facilityId={}",
-                idempotencyKey, correlationId, request.getSourceType(), request.getSourceId(), request.getFacilityId());
+        throw new UnsupportedOperationException("not yet implemented");
+    }
 
-        // TODO: Implementation phases:
-        // Phase 1: Validate source eligibility (estimate status APPROVED/QUOTED;
-        // workorder not COMPLETED/CANCELLED)
-        // Phase 2: Detect scheduling conflicts (hard and soft)
-        // Phase 3: Check idempotency (if clientRequestId provided, check for existing
-        // appointment)
-        // Phase 4: Create appointment in database
-        // Phase 5: Trigger notification service (fire-and-forget per
-        // DECISION-SHOPMGMT-016)
-        // Phase 6: Return AppointmentResponse with facility timezone
-        //
-        // Per DECISION-SHOPMGMT-011: propagate correlationId to all downstream service
-        // calls
-        // Per DECISION-SHOPMGMT-012: verify facility scoping on all cross-domain calls
+    @Override
+    @Transactional
+    public AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId, @NonNull RescheduleAppointmentRequest request) {
+        if (request.getNewStartAt() == null || request.getNewEndAt() == null) {
+            throw new AppointmentValidationException("newStartAt and newEndAt are required");
+        }
+        if (!request.getNewStartAt().isBefore(request.getNewEndAt())) {
+            throw new AppointmentValidationException("newStartAt must be before newEndAt");
+        }
 
-        return null; // Placeholder, controller will return 501
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
+
+        if (appointment.getStatus() != AppointmentStatus.SCHEDULED) {
+            throw new AppointmentStateException(
+                    "Appointment must be SCHEDULED to reschedule, current status: " + appointment.getStatus());
+        }
+
+        Instant previousStartAt = appointment.getStartAt();
+        Instant previousEndAt = appointment.getEndAt();
+
+        appointment.setStartAt(request.getNewStartAt());
+        appointment.setEndAt(request.getNewEndAt());
+        Appointment saved = appointmentRepository.save(appointment);
+
+        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        AppointmentAudit audit = AppointmentAudit.builder()
+                .appointmentId(appointmentId)
+                .action(AppointmentAction.RESCHEDULED)
+                .actorId(actorId)
+                .previousStartAt(previousStartAt)
+                .previousEndAt(previousEndAt)
+                .newStartAt(request.getNewStartAt())
+                .newEndAt(request.getNewEndAt())
+                .build();
+        appointmentAuditRepository.save(audit);
+
+            if (saved.getWorkorderLinkRef() != null) {
+                eventPublisher.publishEvent(new AppointmentRescheduledEvent(
+                    saved.getAppointmentId(),
+                    saved.getWorkorderLinkRef(),
+                    previousStartAt,
+                    request.getNewStartAt(),
+                    actorId));
+            }
+
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public AppointmentResponse cancelAppointment(@NonNull UUID appointmentId, @NonNull CancelAppointmentRequest request) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
+
+        if (appointment.getStatus() != AppointmentStatus.SCHEDULED) {
+            throw new AppointmentStateException("Appointment must be SCHEDULED to cancel");
+        }
+
+        appointment.setStatus(AppointmentStatus.CANCELLED);
+        appointment.setCancellationReasonCode(request.getCancellationReason());
+        appointment.setCancellationNotes(request.getNotes());
+        Appointment saved = appointmentRepository.save(appointment);
+
+        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        AppointmentAudit audit = AppointmentAudit.builder()
+                .appointmentId(appointmentId)
+                .action(AppointmentAction.CANCELLED)
+                .actorId(actorId)
+                .cancellationReason(request.getCancellationReason().name())
+                .build();
+        appointmentAuditRepository.save(audit);
+
+            if (saved.getWorkorderLinkRef() != null) {
+                eventPublisher.publishEvent(new AppointmentCancelledEvent(
+                    saved.getAppointmentId(),
+                    saved.getWorkorderLinkRef(),
+                    request.getCancellationReason().name(),
+                    actorId));
+            }
+
+        return toResponse(saved);
     }
 
     /**
@@ -112,13 +266,368 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      */
     @Override
     public AppointmentResponse getById(String appointmentId, String correlationId) {
-        log.info("[AppointmentsService] getById appointmentId={}, correlationId={}", appointmentId, correlationId);
+        throw new UnsupportedOperationException("not yet implemented");
+    }
 
-        // TODO: Implementation:
-        // 1. Load appointment from database
-        // 2. Verify facility scoping (user has access to the appointment's facility)
-        // 3. Return AppointmentResponse with facility timezone
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull ScheduleViewResponse getScheduleView(@NonNull ScheduleViewRequest request, String correlationId) {
+        ZoneId zoneId = resolveZoneId(request.getLocationId());
+        LocalDate targetDate = request.getDate();
 
-        return null; // Placeholder, controller will return 501
+        TimeWindow dayWindow = resolveDayWindow(targetDate, zoneId, request.getRange());
+
+        List<Appointment> locationAppointments = appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
+                request.getLocationId(),
+                dayWindow.dayEndAt(),
+                dayWindow.dayStartAt());
+
+        if (locationAppointments.isEmpty() && !locationLooksKnown(request.getLocationId())) {
+            throw new LocationNotFoundException(request.getLocationId());
+        }
+
+        Map<ResourceLaneKey, List<ScheduleViewResponse.ScheduleEventView>> eventsByLane = new HashMap<>();
+        for (Appointment appointment : locationAppointments) {
+            ResourceLaneKey laneKey = new ResourceLaneKey(
+                    defaultResourceId(appointment.getResourceId()),
+                    defaultResourceType(appointment.getResourceType()));
+            eventsByLane.computeIfAbsent(laneKey, key -> new ArrayList<>())
+                    .add(toScheduleEvent(appointment));
+        }
+
+        Map<ResourceLaneKey, List<ScheduleViewResponse.ScheduleEventView>> filteredByType = eventsByLane.entrySet().stream()
+                .filter(entry -> matchesResourceType(entry.getKey(), request.getResourceType()))
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        if (request.getResourceId() != null && !request.getResourceId().isBlank()) {
+            filteredByType = filteredByType.entrySet().stream()
+                    .filter(entry -> request.getResourceId().equals(entry.getKey().resourceId()))
+                    .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+            if (filteredByType.isEmpty()) {
+                throw new ResourceNotFoundException(request.getResourceId());
+            }
+        }
+
+        List<ScheduleViewResponse.ScheduleResourceView> resources = filteredByType.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> toResourceView(entry.getKey(), entry.getValue()))
+                .toList();
+
+        ScheduleViewResponse response = new ScheduleViewResponse();
+        response.setLocationId(request.getLocationId());
+        response.setDate(targetDate);
+        response.setViewGeneratedAt(Instant.now(clock));
+        response.setDayStartAt(dayWindow.dayStartAt());
+        response.setDayEndAt(dayWindow.dayEndAt());
+        response.setResources(resources);
+
+        List<String> warnings = new ArrayList<>();
+        if (request.isIncludeAvailabilityOverlay()) {
+            try {
+                hrAvailabilityClient.getAvailabilityOverlay(request.getLocationId().toString(), targetDate);
+                response.setAvailabilityOverlayStatus("AVAILABLE");
+            } catch (Exception exception) {
+                response.setAvailabilityOverlayStatus("UNAVAILABLE");
+                warnings.add("HR_SYSTEM_UNAVAILABLE");
+                log.warn("HR overlay unavailable for location {}: {}", request.getLocationId(), exception.getMessage());
+            }
+        } else {
+            response.setAvailabilityOverlayStatus("NOT_REQUESTED");
+        }
+        response.setWarnings(warnings);
+        return response;
+    }
+
+    private ZoneId resolveZoneId(UUID locationId) {
+        String configuredTimezone = shopRepository.findById(locationId)
+                .map(Shop::getTimezone)
+                .filter(timezone -> timezone != null && !timezone.isBlank())
+                .orElse(null);
+        if (configuredTimezone == null) {
+            // Fallback: location has no configured timezone; using UTC. TODO: ensure all locations have timezone set.
+            return ZoneOffset.UTC;
+        }
+        return ZoneId.of(configuredTimezone);
+    }
+
+    private TimeWindow resolveDayWindow(LocalDate date, ZoneId zoneId, String range) {
+        LocalDateTime startLocal;
+        LocalDateTime endLocal;
+        if ("FULL_DAY".equalsIgnoreCase(range)) {
+            startLocal = date.atStartOfDay();
+            endLocal = date.plusDays(1).atStartOfDay();
+        } else {
+            LocalTime openTime = LocalTime.of(6, 0);
+            LocalTime closeTime = LocalTime.of(18, 0);
+            startLocal = date.atTime(openTime);
+            endLocal = date.atTime(closeTime);
+        }
+        return new TimeWindow(
+                ZonedDateTime.of(startLocal, zoneId).toInstant(),
+                ZonedDateTime.of(endLocal, zoneId).toInstant());
+    }
+
+    private boolean locationLooksKnown(UUID locationId) {
+        return shopRepository.existsById(locationId);
+    }
+
+    private ScheduleViewResponse.ScheduleResourceView toResourceView(
+            ResourceLaneKey laneKey,
+            List<ScheduleViewResponse.ScheduleEventView> events) {
+        List<ScheduleViewResponse.ScheduleEventView> sorted = events.stream()
+                .sorted(Comparator.comparing(ScheduleViewResponse.ScheduleEventView::getStartTime)
+                        .thenComparing(ScheduleViewResponse.ScheduleEventView::getEndTime)
+                        .thenComparing(ScheduleViewResponse.ScheduleEventView::getEventId))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+
+        detectConflicts(sorted);
+
+        ScheduleViewResponse.ScheduleResourceView resourceView = new ScheduleViewResponse.ScheduleResourceView();
+        resourceView.setResourceId(laneKey.resourceId());
+        resourceView.setResourceType(laneKey.resourceType());
+        // TODO(#74-resourceName): Resolve resource display name from shop resource entity; using resourceId as fallback.
+        resourceView.setResourceName(laneKey.resourceId());
+        resourceView.setEvents(sorted);
+        return resourceView;
+    }
+
+    private ScheduleViewResponse.ScheduleEventView toScheduleEvent(Appointment appointment) {
+        ScheduleViewResponse.ScheduleEventView event = new ScheduleViewResponse.ScheduleEventView();
+        event.setEventId("APT-" + appointment.getAppointmentId());
+        event.setEventType("APPOINTMENT");
+        event.setSubType(null);
+        event.setStartTime(appointment.getStartAt());
+        event.setEndTime(appointment.getEndAt());
+        event.setTitle(resolveEventTitle(appointment));
+        event.setHasConflict(false);
+        event.setSeverity(null);
+        event.setConflictDetails(null);
+        return event;
+    }
+
+    private String resolveEventTitle(Appointment appointment) {
+        try {
+            if (appointment.getCustomerSnapshot() != null) {
+                JsonNode node = objectMapper.readTree(appointment.getCustomerSnapshot());
+                String lastName = node.path("lastName").asText("");
+                String firstName = node.path("firstName").asText("");
+                if (!lastName.isEmpty()) {
+                    return lastName + (firstName.isEmpty() ? "" : ", " + firstName);
+                }
+            }
+        } catch (Exception exception) {
+            log.debug("Could not parse customer snapshot for title: {}", exception.getMessage());
+        }
+        return "Appointment";
+    }
+
+    private void detectConflicts(List<ScheduleViewResponse.ScheduleEventView> events) {
+        Map<String, Set<String>> conflictsByEvent = new HashMap<>();
+        for (int i = 0; i < events.size(); i++) {
+            ScheduleViewResponse.ScheduleEventView current = events.get(i);
+            if (isConflictExempt(current)) {
+                continue;
+            }
+
+            for (int j = i + 1; j < events.size(); j++) {
+                ScheduleViewResponse.ScheduleEventView candidate = events.get(j);
+                if (!candidate.getStartTime().isBefore(current.getEndTime())) {
+                    break;
+                }
+                if (isConflictExempt(candidate)) {
+                    continue;
+                }
+                if (!hasBlockingOverlap(current, candidate)) {
+                    continue;
+                }
+
+                conflictsByEvent.computeIfAbsent(current.getEventId(), ignored -> new HashSet<>())
+                        .add(candidate.getEventId());
+                conflictsByEvent.computeIfAbsent(candidate.getEventId(), ignored -> new HashSet<>())
+                        .add(current.getEventId());
+            }
+        }
+
+        for (ScheduleViewResponse.ScheduleEventView event : events) {
+            Set<String> conflictIds = conflictsByEvent.getOrDefault(event.getEventId(), Set.of());
+            if (conflictIds.isEmpty()) {
+                event.setHasConflict(false);
+                event.setSeverity(null);
+                event.setConflictDetails(null);
+                continue;
+            }
+
+            event.setHasConflict(true);
+            event.setSeverity("BLOCKING");
+            ScheduleViewResponse.ConflictDetails details = new ScheduleViewResponse.ConflictDetails();
+            details.setConflictingEventIds(conflictIds.stream().sorted().toList());
+            event.setConflictDetails(details);
+        }
+    }
+
+    private boolean hasBlockingOverlap(
+            ScheduleViewResponse.ScheduleEventView left,
+            ScheduleViewResponse.ScheduleEventView right) {
+        Instant overlapStart = left.getStartTime().isAfter(right.getStartTime())
+                ? left.getStartTime()
+                : right.getStartTime();
+        Instant overlapEnd = left.getEndTime().isBefore(right.getEndTime())
+                ? left.getEndTime()
+                : right.getEndTime();
+        if (!overlapStart.isBefore(overlapEnd)) {
+            return false;
+        }
+        long overlapMinutes = ChronoUnit.MINUTES.between(overlapStart, overlapEnd);
+        return overlapMinutes >= 1;
+    }
+
+    private boolean isConflictExempt(ScheduleViewResponse.ScheduleEventView event) {
+        if (event.getSubType() == null) {
+            return false;
+        }
+        return "NOTE_BLOCK".equals(event.getSubType())
+                || "SOFT_HOLD".equals(event.getSubType())
+                || "BUFFER".equals(event.getSubType());
+    }
+
+    private String defaultResourceId(String resourceId) {
+        if (resourceId == null || resourceId.isBlank()) {
+            return "UNASSIGNED";
+        }
+        return resourceId;
+    }
+
+    private String defaultResourceType(String resourceType) {
+        if (resourceType == null || resourceType.isBlank()) {
+            return "UNKNOWN";
+        }
+        return resourceType;
+    }
+
+    private boolean matchesResourceType(ResourceLaneKey laneKey, String requestedType) {
+        if (requestedType == null || requestedType.isBlank()) {
+            return true;
+        }
+        return Objects.equals(laneKey.resourceType(), requestedType);
+    }
+
+    private record ResourceLaneKey(String resourceId, String resourceType) implements Comparable<ResourceLaneKey> {
+        @Override
+        public int compareTo(ResourceLaneKey other) {
+            int typeCompare = this.resourceType.compareTo(other.resourceType);
+            if (typeCompare != 0) {
+                return typeCompare;
+            }
+            return this.resourceId.compareTo(other.resourceId);
+        }
+    }
+
+    private record TimeWindow(Instant dayStartAt, Instant dayEndAt) {
+    }
+
+    private void validateTimeRange(Instant startAt, Instant endAt) {
+        if (startAt == null || endAt == null) {
+            throw new AppointmentValidationException("startAt and endAt are required");
+        }
+
+        if (!startAt.isBefore(endAt)) {
+            throw new AppointmentValidationException("startAt must be before endAt");
+        }
+    }
+
+    private void validateCrmIdentifiers(UUID crmCustomerId, UUID crmVehicleId) {
+        if (crmCustomerId == null) {
+            throw new AppointmentValidationException("crmCustomerId is required");
+        }
+
+        if (crmVehicleId == null) {
+            throw new AppointmentValidationException("crmVehicleId is required");
+        }
+    }
+
+    private void validateCrmRelationship(UUID crmCustomerId, UUID crmVehicleId, Map<String, Object> vehicleSnapshot) {
+
+        UUID ownerCustomerId = extractOwnerCustomerId(vehicleSnapshot);
+        if (ownerCustomerId != null && !ownerCustomerId.equals(crmCustomerId)) {
+            throw new VehicleCustomerMismatchException(crmVehicleId, crmCustomerId);
+        }
+    }
+
+    private UUID extractOwnerCustomerId(Map<String, Object> vehicleSnapshot) {
+        Object ownerCustomerId = vehicleSnapshot.get("ownerCustomerId");
+        if (ownerCustomerId == null) {
+            ownerCustomerId = vehicleSnapshot.get("customerId");
+        }
+        if (ownerCustomerId == null) {
+            ownerCustomerId = vehicleSnapshot.get("crmCustomerId");
+        }
+        if (ownerCustomerId instanceof UUID uuid) {
+            return uuid;
+        }
+        if (ownerCustomerId instanceof String ownerCustomerIdText && !ownerCustomerIdText.isBlank()) {
+            return UUID.fromString(ownerCustomerIdText);
+        }
+        return null;
+    }
+
+    private String writeSnapshot(Map<String, Object> payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException exception) {
+            throw new AppointmentValidationException("Failed to serialize appointment snapshot");
+        }
+    }
+
+    private Map<String, Object> readSnapshot(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return Map.of();
+        }
+
+        try {
+            return objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {
+            });
+        } catch (JsonProcessingException exception) {
+            return Map.of();
+        }
+    }
+
+    private AppointmentResponse toResponse(Appointment appointment) {
+        AppointmentResponse response = new AppointmentResponse();
+        response.setAppointmentId(appointment.getAppointmentId());
+        response.setStatus(appointment.getStatus().name());
+        response.setLocationId(appointment.getLocationId());
+        response.setResourceId(appointment.getResourceId());
+        response.setCrmCustomerId(appointment.getCrmCustomerId());
+        response.setCrmVehicleId(appointment.getCrmVehicleId());
+        response.setStartAt(appointment.getStartAt());
+        response.setEndAt(appointment.getEndAt());
+        response.setCreatedAt(appointment.getCreatedAt());
+        response.setCancellationReason(appointment.getCancellationReasonCode() != null ? appointment.getCancellationReasonCode().name() : null);
+        response.setCancellationNotes(appointment.getCancellationNotes());
+        response.setServiceRequestIds(loadServiceRequestIds(appointment.getAppointmentId()));
+        response.setCustomerSnapshot(readSnapshot(appointment.getCustomerSnapshot()));
+        response.setVehicleSnapshot(readSnapshot(appointment.getVehicleSnapshot()));
+        return response;
+    }
+
+    private void saveServiceRequests(UUID appointmentId, List<UUID> serviceRequestIds) {
+        if (serviceRequestIds == null || serviceRequestIds.isEmpty()) {
+            return;
+        }
+
+        List<AppointmentServiceRequest> entries = serviceRequestIds.stream()
+                .map(serviceEntityId -> AppointmentServiceRequest.builder()
+                        .appointmentId(appointmentId)
+                        .serviceEntityId(serviceEntityId)
+                        .build())
+                .toList();
+        appointmentServiceRequestRepository.saveAll(entries);
+    }
+
+    private List<UUID> loadServiceRequestIds(UUID appointmentId) {
+        return appointmentServiceRequestRepository.findByAppointmentId(appointmentId).stream()
+                .map(AppointmentServiceRequest::getServiceEntityId)
+                .toList();
     }
 }
