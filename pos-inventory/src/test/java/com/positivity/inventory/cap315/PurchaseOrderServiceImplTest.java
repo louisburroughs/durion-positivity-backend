@@ -7,6 +7,31 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
+
 import com.positivity.inventory.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
@@ -21,31 +46,6 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.internal.service.PurchaseOrderServiceImpl;
-import java.math.BigDecimal;
-
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -68,11 +68,11 @@ class PurchaseOrderServiceImplTest {
 
     @BeforeEach
     void setUp() {
-                purchaseOrderService = new PurchaseOrderServiceImpl(
-                                purchaseOrderRepository,
-                                purchaseOrderLineRepository,
-                                eventPublisher,
-                                applicationContext);
+        purchaseOrderService = new PurchaseOrderServiceImpl(
+                purchaseOrderRepository,
+                purchaseOrderLineRepository,
+                eventPublisher,
+                applicationContext);
         ReflectionTestUtils.setField(purchaseOrderService, "encumbranceEnabled", false);
     }
 
@@ -94,13 +94,13 @@ class PurchaseOrderServiceImplTest {
                 "Test PO",
                 List.of(lineRequest));
 
-                when(purchaseOrderRepository.save(any(PurchaseOrderEntity.class))).thenAnswer(invocation -> {
-                        PurchaseOrderEntity entity = invocation.getArgument(0);
-                        if (entity.getPurchaseOrderId() == null) {
-                                entity.setPurchaseOrderId(UUID.randomUUID());
-                        }
-                        return entity;
-                });
+        when(purchaseOrderRepository.save(any(PurchaseOrderEntity.class))).thenAnswer(invocation -> {
+            PurchaseOrderEntity entity = invocation.getArgument(0);
+            if (entity.getPurchaseOrderId() == null) {
+                entity.setPurchaseOrderId(UUID.randomUUID());
+            }
+            return entity;
+        });
 
         // Act
         var response = purchaseOrderService.createPurchaseOrder(request, "test-actor");
