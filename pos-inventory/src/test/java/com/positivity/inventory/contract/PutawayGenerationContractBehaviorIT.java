@@ -22,7 +22,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
 import com.positivity.inventory.service.PutawayGenerationService;
-import com.positivity.inventory.service.contract.BaseContractIntegrationTest;
 
 import tools.jackson.databind.ObjectMapper;
 
