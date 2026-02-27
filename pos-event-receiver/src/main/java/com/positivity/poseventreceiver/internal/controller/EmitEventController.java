@@ -3,7 +3,6 @@ package com.positivity.poseventreceiver.internal.controller;
 // NOTE: Do NOT import EmitEvent here - see warning in class below
 import com.positivity.poseventreceiver.internal.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
-import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,18 +63,7 @@ public class EmitEventController {
         if (!eventDao.isPreregistered(request.id())) {
             return ResponseEntity.badRequest().body("ID not preregistered");
         }
-        storeEvent(request);
+        eventDao.saveEmittedEvent(request);
         return ResponseEntity.ok("Event stored");
-    }
-
-    /**
-     * Common method to store an event in the persistence layer.
-     *
-     * @param request The event request containing id and timestamp
-     */
-    private void storeEvent(EmitEventRequest request) {
-        EmittedEvent event = new EmittedEvent(request.id(), request.apiVersion(), request.timestamp(),
-                request.elapsedMs(), request.publishedAt());
-        eventDao.saveEmittedEvent(event);
     }
 }

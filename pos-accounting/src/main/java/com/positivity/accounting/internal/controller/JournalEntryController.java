@@ -5,7 +5,6 @@ import com.positivity.accounting.internal.dto.JournalEntryMapper;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
 import com.positivity.accounting.internal.dto.PagedResponse;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.service.JournalEntryService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,7 +15,6 @@ import jakarta.validation.Valid;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -63,7 +61,7 @@ public class JournalEntryController {
                 log.debug("Listing journal entries: page={}, size={}", page, size);
 
                 Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, sort));
-                Page<JournalEntry> entryPage = journalEntryService.listJournalEntries(pageable);
+                var entryPage = journalEntryService.listJournalEntries(pageable);
 
                 PagedResponse<JournalEntryResponse> response = new PagedResponse<>(
                                 entryPage.getContent().stream()
@@ -83,7 +81,7 @@ public class JournalEntryController {
         public ResponseEntity<JournalEntryResponse> getJournalEntry(
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId) {
                 log.debug("Getting journal entry: {}", journalEntryId);
-                JournalEntry entry = journalEntryService.getJournalEntry(journalEntryId);
+                var entry = journalEntryService.getJournalEntry(journalEntryId);
                 return ResponseEntity.ok(JournalEntryMapper.toResponse(entry));
         }
 
@@ -96,8 +94,8 @@ public class JournalEntryController {
         public ResponseEntity<JournalEntryResponse> createJournalEntry(
                         @Valid @RequestBody JournalEntryCreateRequest request) {
                 log.debug("Creating journal entry: {}", request.getDescription());
-                JournalEntry entity = JournalEntryMapper.toEntity(request);
-                JournalEntry created = journalEntryService.createJournalEntry(entity);
+                var entity = JournalEntryMapper.toEntity(request);
+                var created = journalEntryService.createJournalEntry(entity);
                 return ResponseEntity.status(HttpStatus.CREATED).body(JournalEntryMapper.toResponse(created));
         }
 
@@ -111,8 +109,8 @@ public class JournalEntryController {
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
                         @Valid @RequestBody JournalEntryCreateRequest request) {
                 log.debug("Updating journal entry: {}", journalEntryId);
-                JournalEntry updates = JournalEntryMapper.toEntity(request);
-                JournalEntry updated = journalEntryService.updateJournalEntry(journalEntryId, updates);
+                var updates = JournalEntryMapper.toEntity(request);
+                var updated = journalEntryService.updateJournalEntry(journalEntryId, updates);
                 return ResponseEntity.ok(JournalEntryMapper.toResponse(updated));
         }
 
@@ -126,7 +124,7 @@ public class JournalEntryController {
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
                         @RequestBody(required = false) Object request) {
                 log.info("Posting journal entry: {}", journalEntryId);
-                JournalEntry posted = journalEntryService.postJournalEntry(journalEntryId);
+                var posted = journalEntryService.postJournalEntry(journalEntryId);
                 return ResponseEntity.ok(JournalEntryMapper.toResponse(posted));
         }
 
@@ -140,7 +138,7 @@ public class JournalEntryController {
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
                         @Valid @RequestBody JournalEntryReversalRequest request) {
                 log.info("Reversing journal entry: {} with reason: {}", journalEntryId, request.getReason());
-                JournalEntry reversed = journalEntryService.reverseJournalEntry(journalEntryId, request.getReason());
+                var reversed = journalEntryService.reverseJournalEntry(journalEntryId, request.getReason());
                 return ResponseEntity.ok(JournalEntryMapper.toResponse(reversed));
         }
 }

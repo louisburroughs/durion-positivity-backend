@@ -2,11 +2,13 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
+import com.positivity.inventory.internal.exception.DuplicateAsnException;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.exception.InvalidCountQuantityException;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
+import com.positivity.inventory.internal.exception.InvalidPoReferenceException;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
@@ -14,10 +16,12 @@ import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationExcep
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
+import com.positivity.inventory.internal.exception.PurchaseOrderNotApprovedException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
+import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
@@ -25,8 +29,10 @@ import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +41,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -54,10 +62,13 @@ public class InventoryGlobalExceptionHandler {
     private static final String TIMESTAMP = "timestamp";
     private static final String CODE = "code";
     private static final String MESSAGE = "message";
+    private static final String STATUS = "status";
+    private static final String CORRELATION_ID = "correlationId";
+    private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidationError(MethodArgumentNotValidException ex) {
+    public ResponseEntity<Map<String, Object>> handleValidationError(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
                 .map(fieldError -> fieldError.getField() + " " + fieldError.getDefaultMessage())
@@ -73,38 +84,58 @@ public class InventoryGlobalExceptionHandler {
             InvalidInventoryAvailabilityRequestException.class,
             IllegalArgumentException.class
     })
-    public ResponseEntity<Map<String, String>> handleBadRequest(Exception ex) {
+    public ResponseEntity<Map<String, Object>> handleBadRequest(Exception ex) {
         return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage());
     }
 
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
+    public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException ex) {
         return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage());
     }
 
+    @ExceptionHandler(PurchaseOrderNotApprovedException.class)
+    public ResponseEntity<Map<String, Object>> handlePurchaseOrderNotApproved(PurchaseOrderNotApprovedException ex) {
+        return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidPoReferenceException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidPoReference(InvalidPoReferenceException ex) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage());
+    }
+
+    @ExceptionHandler(DuplicateAsnException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateAsn(DuplicateAsnException ex) {
+        return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage());
+    }
+
+    @ExceptionHandler(OverReceiptNotPermittedException.class)
+    public ResponseEntity<Map<String, Object>> handleOverReceiptNotPermitted(OverReceiptNotPermittedException ex) {
+        return build(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage());
+    }
+
     @ExceptionHandler(TaskNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleTaskNotFound(TaskNotFoundException ex) {
+    public ResponseEntity<Map<String, Object>> handleTaskNotFound(TaskNotFoundException ex) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
     @ExceptionHandler(CycleCountPlanNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleCycleCountPlanNotFound(CycleCountPlanNotFoundException ex) {
+    public ResponseEntity<Map<String, Object>> handleCycleCountPlanNotFound(CycleCountPlanNotFoundException ex) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
     @ExceptionHandler({ ResourceNotFoundException.class, ProductNotFoundException.class,
             LocationNotFoundException.class })
-    public ResponseEntity<Map<String, String>> handleResourceNotFound(RuntimeException ex) {
+    public ResponseEntity<Map<String, Object>> handleResourceNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
     @ExceptionHandler(InvalidCountQuantityException.class)
-    public ResponseEntity<Map<String, String>> handleInvalidCountQuantity(InvalidCountQuantityException ex) {
+    public ResponseEntity<Map<String, Object>> handleInvalidCountQuantity(InvalidCountQuantityException ex) {
         return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage());
     }
 
     @ExceptionHandler(InsufficientStockException.class)
-    public ResponseEntity<Map<String, String>> handleInsufficientStock(InsufficientStockException ex) {
+    public ResponseEntity<Map<String, Object>> handleInsufficientStock(InsufficientStockException ex) {
         return build(HttpStatus.valueOf(422), "INSUFFICIENT_STOCK", ex.getMessage());
     }
 
@@ -121,27 +152,27 @@ public class InventoryGlobalExceptionHandler {
     }
 
     @ExceptionHandler(InsufficientPermissionException.class)
-    public ResponseEntity<Map<String, String>> handleInsufficientPermission(InsufficientPermissionException ex) {
+    public ResponseEntity<Map<String, Object>> handleInsufficientPermission(InsufficientPermissionException ex) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage());
     }
 
     @ExceptionHandler(InsufficientAtpException.class)
-    public ResponseEntity<Map<String, String>> handleInsufficientAtp(InsufficientAtpException ex) {
+    public ResponseEntity<Map<String, Object>> handleInsufficientAtp(InsufficientAtpException ex) {
         return build(HttpStatus.valueOf(422), "INSUFFICIENT_ATP", ex.getMessage());
     }
 
     @ExceptionHandler(PickScanMismatchException.class)
-    public ResponseEntity<Map<String, String>> handlePickScanMismatch(PickScanMismatchException ex) {
+    public ResponseEntity<Map<String, Object>> handlePickScanMismatch(PickScanMismatchException ex) {
         return build(HttpStatus.valueOf(422), "PICK_SCAN_MISMATCH", ex.getMessage());
     }
 
     @ExceptionHandler(WorkorderConsumptionException.class)
-    public ResponseEntity<Map<String, String>> handleWorkorderConsumption(WorkorderConsumptionException ex) {
+    public ResponseEntity<Map<String, Object>> handleWorkorderConsumption(WorkorderConsumptionException ex) {
         return build(HttpStatus.valueOf(422), "WORKORDER_CONSUMPTION_ERROR", ex.getMessage());
     }
 
     @ExceptionHandler(ReturnQuantityExceededException.class)
-    public ResponseEntity<Map<String, String>> handleReturnQuantityExceeded(ReturnQuantityExceededException ex) {
+    public ResponseEntity<Map<String, Object>> handleReturnQuantityExceeded(ReturnQuantityExceededException ex) {
         return build(HttpStatus.valueOf(422), "RETURN_QUANTITY_EXCEEDED", ex.getMessage());
     }
 
@@ -172,41 +203,45 @@ public class InventoryGlobalExceptionHandler {
             SourceDocumentNotFoundException.class,
             ReceivingSessionNotFoundException.class
     })
-    public ResponseEntity<Map<String, String>> handleReceivingNotFound(RuntimeException ex) {
+    public ResponseEntity<Map<String, Object>> handleReceivingNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
     @ExceptionHandler(SourceDocumentAlreadyReceivedException.class)
-    public ResponseEntity<Map<String, String>> handleSourceDocumentAlreadyReceived(
+    public ResponseEntity<Map<String, Object>> handleSourceDocumentAlreadyReceived(
             SourceDocumentAlreadyReceivedException ex) {
         return build(HttpStatus.BAD_REQUEST, "SOURCE_DOCUMENT_ALREADY_RECEIVED", ex.getMessage());
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException ex) {
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
     }
 
     @ExceptionHandler(WorkorderClosedException.class)
-    public ResponseEntity<Map<String, String>> handleWorkorderClosed(WorkorderClosedException ex) {
+    public ResponseEntity<Map<String, Object>> handleWorkorderClosed(WorkorderClosedException ex) {
         return build(HttpStatus.BAD_REQUEST, "WORKORDER_CLOSED", ex.getMessage());
     }
 
     @ExceptionHandler(PartMatchPermissionException.class)
-    public ResponseEntity<Map<String, String>> handlePartMatchPermission(PartMatchPermissionException ex) {
+    public ResponseEntity<Map<String, Object>> handlePartMatchPermission(PartMatchPermissionException ex) {
         return build(HttpStatus.FORBIDDEN, "PART_MATCH_PERMISSION_REQUIRED", ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, String>> handleUnexpected(Exception ex) {
+    public ResponseEntity<Map<String, Object>> handleUnexpected(Exception ex) {
         log.error("Unhandled inventory exception", ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error occurred");
     }
 
-    private ResponseEntity<Map<String, String>> build(HttpStatus status, String code, String message) {
+    private ResponseEntity<Map<String, Object>> build(HttpStatus status, String code, String message) {
+        String correlationId = resolveCorrelationId(null);
         return ResponseEntity.status(status)
+                .header(X_CORRELATION_ID, correlationId)
                 .body(Map.of(
                         TIMESTAMP, Instant.now(clock).toString(),
+                        STATUS, status.value(),
+                        CORRELATION_ID, correlationId,
                         CODE, code,
                         MESSAGE, message != null ? message : ""));
     }
@@ -216,12 +251,34 @@ public class InventoryGlobalExceptionHandler {
             String code,
             String message,
             Map<String, Object> extra) {
+        String correlationId = resolveCorrelationId(null);
+        Map<String, Object> body = new HashMap<>();
+        body.put(TIMESTAMP, Instant.now(clock).toString());
+        body.put(STATUS, status.value());
+        body.put(CORRELATION_ID, correlationId);
+        body.put(CODE, code);
+        body.put(MESSAGE, message != null ? message : "");
+        body.put("context", extra);
         return ResponseEntity.status(status)
-                .body(Map.of(
-                        TIMESTAMP, Instant.now(clock).toString(),
-                        CODE, code,
-                        MESSAGE, message != null ? message : "",
-                        "context", extra));
+                .header(X_CORRELATION_ID, correlationId)
+                .body(body);
+    }
+
+    private String resolveCorrelationId(HttpServletRequest request) {
+        if (request != null) {
+            String fromRequest = request.getHeader(X_CORRELATION_ID);
+            if (fromRequest != null && !fromRequest.isBlank()) {
+                return fromRequest;
+            }
+        }
+        var attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes instanceof ServletRequestAttributes servletRequestAttributes) {
+            String fromContext = servletRequestAttributes.getRequest().getHeader(X_CORRELATION_ID);
+            if (fromContext != null && !fromContext.isBlank()) {
+                return fromContext;
+            }
+        }
+        return UUID.randomUUID().toString();
     }
 
     private Map<String, Object> putawayContext(PutawayValidationException ex) {

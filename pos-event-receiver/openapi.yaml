@@ -31,13 +31,13 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
         "200":
           description: Event type found and returned
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
     put:
       tags:
       - Event Types
@@ -66,18 +66,18 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
         "200":
           description: Event type updated successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
     delete:
       tags:
       - Event Types
       summary: Delete event type
-      description: Delete an event type by its ID
+      description: Delete an event type by ID
       operationId: deleteEventType
       parameters:
       - name: id
@@ -114,19 +114,18 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
         "200":
           description: Event type found and returned
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
     put:
       tags:
       - Event Types
       summary: Upsert event type
-      description: "Create or update an event type by its type code. Creates if not\
-        \ exists, updates if exists."
+      description: Create or update an event type by type code
       operationId: upsertEventType
       parameters:
       - name: typeCode
@@ -144,18 +143,18 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "200":
-          description: Event type created or updated successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EventType"
         "400":
           description: Invalid request parameters
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
+        "200":
+          description: Event type created or updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventTypeResponse"
   /v1/events:
     post:
       tags:
@@ -187,12 +186,12 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
     post:
       tags:
       - Event Types
       summary: Create event type
-      description: Create a new event type for PreregisteredEvents
+      description: Create a new event type for preregistered events
       operationId: createEventType
       requestBody:
         description: Event type details
@@ -202,18 +201,18 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "201":
-          description: Event type created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/EventType"
         "400":
           description: Invalid request parameters
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
+        "201":
+          description: Event type created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventTypeResponse"
   /v1/eventTypes/active:
     get:
       tags:
@@ -227,7 +226,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/EventType"
+                $ref: "#/components/schemas/EventTypeResponse"
 components:
   schemas:
     EventTypeRequest:
@@ -268,7 +267,7 @@ components:
           description: "99th percentile latency threshold in microseconds (default:\
             \ 10,000,000 = 10s)"
           example: 2000000
-    EventType:
+    EventTypeResponse:
       type: object
       properties:
         id:

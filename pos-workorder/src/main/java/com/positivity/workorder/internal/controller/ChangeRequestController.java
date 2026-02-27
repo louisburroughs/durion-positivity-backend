@@ -6,7 +6,6 @@ import com.positivity.workorder.internal.dto.ChangeRequestResponse;
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.dto.DeclineChangeRequestDTO;
 import com.positivity.workorder.internal.dto.EmergencyOverrideDTO;
-import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.service.ChangeRequestService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,7 +48,7 @@ public class ChangeRequestController {
             @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)", example = "change-request-create-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         try {
             dto.setWorkorderId(workorderId);
-            ChangeRequest created = changeRequestService.createChangeRequestWithIdempotency(dto, idempotencyKey);
+            var created = changeRequestService.createChangeRequestWithIdempotency(dto, idempotencyKey);
             return ResponseEntity.ok(ChangeRequestResponse.fromEntity(created));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().build();
@@ -70,7 +69,7 @@ public class ChangeRequestController {
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Approval details including user ID and note") @RequestBody ApproveChangeRequestDTO dto) {
         try {
-            ChangeRequest approved = changeRequestService.approveChangeRequest(
+            var approved = changeRequestService.approveChangeRequest(
                     changeId, dto.getApprovedBy(), dto.getApprovalNote());
             return ResponseEntity.ok(ChangeRequestResponse.fromEntity(approved));
         } catch (IllegalArgumentException | IllegalStateException e) {
@@ -92,7 +91,7 @@ public class ChangeRequestController {
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Decline details including note") @RequestBody DeclineChangeRequestDTO dto) {
         try {
-            ChangeRequest declined = changeRequestService.declineChangeRequest(changeId, dto.getApprovalNote());
+            var declined = changeRequestService.declineChangeRequest(changeId, dto.getApprovalNote());
             return ResponseEntity.ok(ChangeRequestResponse.fromEntity(declined));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().build();
@@ -134,7 +133,7 @@ public class ChangeRequestController {
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Emergency override details including manager ID and reason") @RequestBody EmergencyOverrideDTO dto) {
         try {
-            ChangeRequest overridden = changeRequestService.applyEmergencyOverride(
+            var overridden = changeRequestService.applyEmergencyOverride(
                     changeId, dto.getManagerId(), dto.getExceptionReason());
             return ResponseEntity.ok(ChangeRequestResponse.fromEntity(overridden));
         } catch (IllegalArgumentException | IllegalStateException e) {
@@ -150,7 +149,7 @@ public class ChangeRequestController {
     public ResponseEntity<ChangeRequestResponse> getChangeRequestById(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId) {
         try {
-            ChangeRequest changeRequest = changeRequestService.getChangeRequestById(changeId);
+            var changeRequest = changeRequestService.getChangeRequestById(changeId);
             return ResponseEntity.ok(ChangeRequestResponse.fromEntity(changeRequest));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
@@ -164,7 +163,7 @@ public class ChangeRequestController {
     @PreAuthorize("hasAuthority('workorder:change_request:view')")
     public ResponseEntity<List<ChangeRequestResponse>> getChangeRequestsByWorkorder(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
-        List<ChangeRequest> changeRequests = changeRequestService.getChangeRequestsByWorkorder(workorderId);
+        var changeRequests = changeRequestService.getChangeRequestsByWorkorder(workorderId);
         return ResponseEntity.ok(changeRequests.stream().map(ChangeRequestResponse::fromEntity).toList());
     }
 

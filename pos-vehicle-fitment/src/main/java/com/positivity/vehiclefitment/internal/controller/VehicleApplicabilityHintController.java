@@ -20,7 +20,7 @@ import com.positivity.vehiclefitment.internal.dto.CreateHintRequest;
 import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
 import com.positivity.vehiclefitment.internal.dto.HintResponse;
 import com.positivity.vehiclefitment.internal.dto.UpdateHintRequest;
-import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
+import com.positivity.vehiclefitment.internal.service.VehicleApplicabilityHintService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -1,7 +1,7 @@
 package com.positivity.vehicle.internal.config;
 
 import com.positivity.vehicle.internal.dto.VehicleUpdatedEvent;
-import com.positivity.vehicle.service.VehicleEventIngestionService;
+import com.positivity.vehicle.internal.service.VehicleEventIngestionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;

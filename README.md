@@ -2,7 +2,7 @@
 
 The **Durion Positivity Backend** is the server-side microservice suite for the Durion platform. Built on **Java 21** and **Spring Boot 4.0.x**, it provides the core business logic, data persistence, and API gateway capabilities for the Point of Sale (POS) system.
 
-This repository works in tandem with the [Moqui Frontend](../durion-moqui-frontend/README.md) and is governed by the workspace-level policies in the [Durion](../durion/README.md) root repository.
+This repository works in tandem with Durion frontend applications and is governed by the workspace-level policies in the [Durion](../durion/README.md) root repository.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ The backend follows a domain-driven microservices architecture. Each bounded con
 +-------------------+      +-------------------+      +-------------------+
 |                   |      |                   |      |                   |
 |   Subscriber A    |      |   Subscriber B    |      |    Durion UI      |
-| (Experience Layer)|      | (Experience Layer)|      | (Moqui/Vue App)   |
+| (Experience Layer)|      | (Experience Layer)|      |  (Frontend Apps)  |
 |                   |      |                   |      |                   |
 +-------------------+      +-------------------+      +-------------------+
         |                           |                           |
@@ -22,7 +22,7 @@ The backend follows a domain-driven microservices architecture. Each bounded con
         v                           v                           v
 +-----------------------------------------------------------------------+
 |                       API Gateway (Spring Cloud Gateway)              |
-|             - Routing, Load Balancing, AuthN Passthrough              |
+|          - Routing, Load Balancing, JWT Validation, Route Control     |
 +-----------------------------------------------------------------------+
         |                                       |
         |                                       |
@@ -54,7 +54,7 @@ The backend follows a domain-driven microservices architecture. Each bounded con
 ### Key Components
 
 - **API Gateway (`pos-api-gateway`)**: The single entry point for all client requests. Handles routing, cross-cutting concerns (CORS, headers), and initial request validation.
-- **Security Service (`pos-security-service`)**: Manages identity and access. Issues and validates JWTs, enforcing Role-Based Access Control (RBAC).
+- **Security Service (`pos-security-service`)**: System of record for identities, roles, permissions, and assignments. Issues JWTs and owns role/permission lifecycle.
 - **Domain Services**: Independent `pos-*` modules packaging business logic (e.g., `pos-order` for checkout flows, `pos-inventory` for stock management).
 - **Core Services**: Foundational modules like `pos-service-discovery` (if applicable) and shared libraries.
 
@@ -156,13 +156,10 @@ Refer to the root [Durion](../durion/README.md) repository for governance, ADRs,
 
 ## Gateway Authentication & Headers
 
-See pos-api-gateway security blurb for how the gateway validates tokens and enriches requests with authorities and subject headers.
+See [pos-api-gateway/README.md](pos-api-gateway/README.md) for gateway authentication boundary behavior.
 
-- Gateway doc: [pos-api-gateway/README.md](pos-api-gateway/README.md)
 - Injected headers:
-  - X-Authorities: comma-separated `crm:*:*` authorities
-  - X-User: token subject
-- Security service endpoints leveraged:
-  - GET /v1/auth/validate?token=...
-  - GET /v1/auth/authorities?token=...
-  - GET /v1/auth/subject?token=...
+  - X-Authorities: canonical authority list for service-level `@PreAuthorize` checks
+  - X-User: authenticated subject
+  - X-User-Id: stable user/person identifier when available
+- JWT issuer and role/permission authority: `pos-security-service` (see [ADR-0011](../durion/docs/adr/0011-api-gateway-security-architecture.adr.md))

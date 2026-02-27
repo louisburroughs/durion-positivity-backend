@@ -34,7 +34,6 @@ import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
 import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
-import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.service.EstimateService;
 import com.positivity.workorder.service.IdempotencyService;
@@ -232,7 +231,7 @@ public class EstimateController {
             +
             "Returns 409 ALREADY_PROMOTED with existingWorkorderId if estimate was previously promoted (idempotency). "
             +
-            "CAP:004 Story #26 - Create Workorder from Approved Estimate.")
+            "CAP:004 Story #26 - Create a workorder from approved estimate.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Workorder created successfully from estimate"),
             @ApiResponse(responseCode = "400", description = "Validation error - estimate not in correct state"),
@@ -253,7 +252,7 @@ public class EstimateController {
                 return idempotentResponse;
             }
 
-            Workorder workorder = workorderService.createWorkorder(estimateId, null);
+            var workorder = workorderService.createWorkorder(estimateId, null);
             WorkorderResponse response = WorkorderResponse.fromEntity(workorder);
 
             ResponseEntity<WorkorderResponse> raceConditionResponse = registerIdempotencyKeyAndHandleRaceCondition(

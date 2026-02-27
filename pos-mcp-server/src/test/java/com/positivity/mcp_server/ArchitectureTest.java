@@ -1,4 +1,4 @@
-package com.positivity.mcp_server;
+package com.positivity.mcp;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -22,7 +22,7 @@ import java.util.UUID;
  * - Controller -> Service -> Repository layering
  * - No circular dependencies
  */
-@AnalyzeClasses(packages = "com.positivity.mcp_server", importOptions = ImportOption.DoNotIncludeTests.class)
+@AnalyzeClasses(packages = "com.positivity.mcp", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
@@ -72,14 +72,14 @@ public class ArchitectureTest {
     @ArchTest
     static final ArchRule spring_boot_application_should_be_in_root_package = classes()
             .that().areAnnotatedWith("org.springframework.boot.autoconfigure.SpringBootApplication")
-            .should().resideInAPackage("com.positivity.mcp_server")
+            .should().resideInAPackage("com.positivity.mcp")
             .andShould().resideOutsideOfPackages("..internal..", "..service..")
             .allowEmptyShould(true)
             .because("@SpringBootApplication must be at root for component scanning");
 
     @ArchTest
     static final ArchRule only_service_layer_should_be_public_api = classes()
-            .that().resideInAPackage("com.positivity.mcp_server.service..")
+            .that().resideInAPackage("com.positivity.mcp.service..")
             .should().bePublic()
             .allowEmptyShould(true)
             .because("service layer is the public API of this module");
@@ -100,7 +100,7 @@ public class ArchitectureTest {
 
     @ArchTest
     static final ArchRule packages_should_be_free_of_cycles = slices()
-            .matching("com.positivity.mcp_server.internal.(*)..")
+            .matching("com.positivity.mcp.internal.(*)..")
             .should().beFreeOfCycles()
             .because("cyclic dependencies make modules harder to maintain and evolve");
     @ArchTest
