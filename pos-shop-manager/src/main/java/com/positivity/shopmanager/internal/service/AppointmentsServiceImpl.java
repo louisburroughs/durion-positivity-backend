@@ -77,6 +77,7 @@ import org.springframework.web.client.RestClientException;
 @Service
 @RequiredArgsConstructor
 public class AppointmentsServiceImpl implements AppointmentsService {
+    private static final String SYSTEM = "system";
     private final AppointmentRepository appointmentRepository;
     private final AppointmentAuditRepository appointmentAuditRepository;
     private final AppointmentServiceRequestRepository appointmentServiceRequestRepository;
@@ -97,7 +98,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             throw new AppointmentValidationException("serviceRequestIds must contain at least one entry");
         }
         validateCrmIdentifiers(request.getCrmCustomerId(), request.getCrmVehicleId());
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         Map<String, Object> customerSnapshot;
         Map<String, Object> vehicleSnapshot;
         try {
@@ -128,7 +129,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
 
         Appointment appointment = Appointment.builder()
-                .appointmentId(UUIDv7Generator.generate())
                 .status(AppointmentStatus.SCHEDULED)
                 .locationId(request.getLocationId())
                 .resourceId(request.getResourceId())
@@ -208,7 +208,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         appointment.setEndAt(request.getNewEndAt());
         Appointment saved = appointmentRepository.save(appointment);
 
-        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         AppointmentAudit audit = AppointmentAudit.builder()
                 .appointmentId(appointmentId)
                 .action(AppointmentAction.RESCHEDULED)
@@ -248,7 +248,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         appointment.setCancellationNotes(request.getNotes());
         Appointment saved = appointmentRepository.save(appointment);
 
-        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         AppointmentAudit audit = AppointmentAudit.builder()
                 .appointmentId(appointmentId)
                 .action(AppointmentAction.CANCELLED)
@@ -466,32 +466,68 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private void detectConflicts(List<ScheduleViewResponse.ScheduleEventView> events) {
+        Map<String, Set<String>> conflictsByEvent = collectConflictsByEvent(events);
+        applyConflictMetadata(events, conflictsByEvent);
+    }
+
+    private Map<String, Set<String>> collectConflictsByEvent(List<ScheduleViewResponse.ScheduleEventView> events) {
         Map<String, Set<String>> conflictsByEvent = new HashMap<>();
         for (int i = 0; i < events.size(); i++) {
             ScheduleViewResponse.ScheduleEventView current = events.get(i);
             if (isConflictExempt(current)) {
                 continue;
             }
+            collectConflictsForCurrentEvent(events, i, current, conflictsByEvent);
+        }
+        return conflictsByEvent;
+    }
 
-            for (int j = i + 1; j < events.size(); j++) {
-                ScheduleViewResponse.ScheduleEventView candidate = events.get(j);
-                if (!candidate.getStartTime().isBefore(current.getEndTime())) {
-                    break;
-                }
-                if (isConflictExempt(candidate)) {
-                    continue;
-                }
-                if (!hasBlockingOverlap(current, candidate)) {
-                    continue;
-                }
-
-                conflictsByEvent.computeIfAbsent(current.getEventId(), ignored -> new HashSet<>())
-                        .add(candidate.getEventId());
-                conflictsByEvent.computeIfAbsent(candidate.getEventId(), ignored -> new HashSet<>())
-                        .add(current.getEventId());
+    private void collectConflictsForCurrentEvent(
+            List<ScheduleViewResponse.ScheduleEventView> events,
+            int currentIndex,
+            ScheduleViewResponse.ScheduleEventView current,
+            Map<String, Set<String>> conflictsByEvent) {
+        for (ScheduleViewResponse.ScheduleEventView candidate : events.subList(currentIndex + 1, events.size())) {
+            if (shouldStopConflictScan(current, candidate)) {
+                return;
+            }
+            if (isBlockingConflictCandidate(current, candidate)) {
+                registerConflict(conflictsByEvent, current, candidate);
             }
         }
+    }
 
+    private boolean shouldStopConflictScan(
+            ScheduleViewResponse.ScheduleEventView current,
+            ScheduleViewResponse.ScheduleEventView candidate) {
+        return !candidateStartsBeforeCurrentEnds(current, candidate);
+    }
+
+    private boolean isBlockingConflictCandidate(
+            ScheduleViewResponse.ScheduleEventView current,
+            ScheduleViewResponse.ScheduleEventView candidate) {
+        return !isConflictExempt(candidate) && hasBlockingOverlap(current, candidate);
+    }
+
+    private boolean candidateStartsBeforeCurrentEnds(
+            ScheduleViewResponse.ScheduleEventView current,
+            ScheduleViewResponse.ScheduleEventView candidate) {
+        return candidate.getStartTime().isBefore(current.getEndTime());
+    }
+
+    private void registerConflict(
+            Map<String, Set<String>> conflictsByEvent,
+            ScheduleViewResponse.ScheduleEventView left,
+            ScheduleViewResponse.ScheduleEventView right) {
+        conflictsByEvent.computeIfAbsent(left.getEventId(), ignored -> new HashSet<>())
+                .add(right.getEventId());
+        conflictsByEvent.computeIfAbsent(right.getEventId(), ignored -> new HashSet<>())
+                .add(left.getEventId());
+    }
+
+    private void applyConflictMetadata(
+            List<ScheduleViewResponse.ScheduleEventView> events,
+            Map<String, Set<String>> conflictsByEvent) {
         for (ScheduleViewResponse.ScheduleEventView event : events) {
             Set<String> conflictIds = conflictsByEvent.getOrDefault(event.getEventId(), Set.of());
             if (conflictIds.isEmpty()) {

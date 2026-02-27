@@ -37,12 +37,6 @@ public class Certification {
         if (id == null) {
             id = UUIDv7Generator.generate();
         }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
     }
 
     private String aseCode; // ASE certification code

@@ -1,8 +1,11 @@
 package com.positivity.shopmanager.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.CancellationReasonCode;
+
+import jakarta.annotation.Generated;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -31,6 +34,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class Appointment {
 
     @Id
+    @UUIDv7Id
+    @Generated(value = "com.positivity.shared.id.UUIDv7Generator")
     @Column(name = "appointment_id", columnDefinition = "UUID")
     private UUID appointmentId;
 
