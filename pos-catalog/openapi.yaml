@@ -83,12 +83,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
-        "200":
-          description: Product updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "409":
           description: Business conflict
           content:
@@ -99,6 +93,12 @@ paths:
           description: Product not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+        "200":
+          description: Product updated
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
   /v1/products/{productId}/msrp/{msrpId}:
@@ -146,16 +146,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
-        "200":
-          description: MSRP updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "409":
           description: Temporal overlap or optimistic locking conflict
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "200":
+          description: MSRP updated
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/{productId}/lifecycle:
@@ -174,16 +174,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Successfully retrieved lifecycle state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
         "404":
           description: Product not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+        "200":
+          description: Successfully retrieved lifecycle state
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
     put:
@@ -386,16 +386,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Price book returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PriceBookDto"
         "404":
           description: Price book not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceBookDto"
+        "200":
+          description: Price book returned
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
     put:
@@ -417,16 +417,16 @@ paths:
               $ref: "#/components/schemas/PriceBookCreateRequestDto"
         required: true
       responses:
-        "200":
-          description: Price book updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PriceBookDto"
         "404":
           description: Price book not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceBookDto"
+        "200":
+          description: Price book updated
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
   /v1/products/price-books/{priceBookId}/rules/{ruleId}:
@@ -508,16 +508,16 @@ paths:
               $ref: "#/components/schemas/UpdateStandardCostRequestDto"
         required: true
       responses:
-        "400":
-          description: Invalid payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ItemCostsDto"
         "200":
           description: Updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/ItemCostsDto"
+        "400":
+          description: Invalid payload
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/ItemCostsDto"
   /v1/catalogs/{catalogId}:
@@ -570,16 +570,16 @@ paths:
               $ref: "#/components/schemas/CatalogDto"
         required: true
       responses:
-        "400":
-          description: Invalid request body
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogDto"
         "200":
           description: Catalog updated successfully
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogDto"
+        "400":
+          description: Invalid request body
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/CatalogDto"
         "404":
@@ -636,6 +636,12 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
+        "200":
+          description: Catalog item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
         "400":
           description: Invalid item type or request body
           content:
@@ -646,12 +652,6 @@ paths:
           description: Catalog item not found
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
-        "200":
-          description: Catalog item updated successfully
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
     delete:
@@ -825,12 +825,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
-        "201":
-          description: MSRP created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "400":
           description: Invalid payload
           content:
@@ -841,6 +835,12 @@ paths:
           description: Forbidden
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "201":
+          description: MSRP created
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/uom-conversions:
@@ -889,12 +889,6 @@ paths:
               $ref: "#/components/schemas/SupplierItemCostCreateRequestDto"
         required: true
       responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
         "400":
           description: Invalid payload
           content:
@@ -905,6 +899,12 @@ paths:
           description: Duplicate supplier and item combination
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
+        "201":
+          description: Created
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
   /v1/products/pricing/location-overrides:
@@ -963,16 +963,16 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "404":
-          description: Override or approval request not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "200":
           description: Override rejected
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "404":
+          description: Override or approval request not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "400":
@@ -1010,16 +1010,16 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "200":
-          description: Override approved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "404":
           description: Override or approval request not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "200":
+          description: Override approved
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "409":
@@ -1204,16 +1204,16 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        "400":
-          description: Invalid item type or request body
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
         "201":
           description: Catalog item created successfully
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+        "400":
+          description: Invalid item type or request body
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
   /v1/products/{productId}/substitutes:
@@ -1420,16 +1420,16 @@ paths:
           format: int32
           default: 20
       responses:
-        "200":
-          description: Search results
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogSearchResultDto"
         "400":
           description: "Invalid request parameter (e.g., non-numeric limit)"
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogSearchResultDto"
+        "200":
+          description: Search results
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogSearchResultDto"
   /v1/products/pricing/effective-price/{locationId}/{productId}:
@@ -1456,16 +1456,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Effective price returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
         "404":
           description: No pricing context found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
+        "200":
+          description: Effective price returned
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
   /v1/products/noninventory/{productId}:

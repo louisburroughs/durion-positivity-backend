@@ -1,5 +1,10 @@
 package com.positivity.shopmanager.internal.dto;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import lombok.Data;
 
 /**
@@ -12,15 +17,18 @@ import lombok.Data;
  */
 @Data
 public class AppointmentResponse {
-    private String appointmentId; // appointment identifier (opaque string)
-    private String appointmentStatus; // SCHEDULED, CANCELLED, etc. (opaque; no client-side validation)
-    private String scheduledStartDateTime; // ISO-8601 with offset (facility timezone per DECISION-SHOPMGMT-015)
-    private String scheduledEndDateTime; // ISO-8601 with offset (facility timezone per DECISION-SHOPMGMT-015)
-    private String facilityId; // facility identifier
-    private String facilityTimeZoneId; // IANA timezone ID (e.g., America/New_York)
-    private String sourceType; // ESTIMATE or WORKORDER
-    private String sourceId; // estimateId or workOrderId
-    private String notificationOutcomeSummary; // optional, per DECISION-SHOPMGMT-016 (e.g., "Email sent to customer")
-    private String createdAt; // ISO-8601 Z (UTC timestamp)
-    private String lastUpdatedAt; // ISO-8601 Z (UTC timestamp)
+    private UUID appointmentId;
+    private String status;
+    private UUID locationId;
+    private String resourceId;
+    private UUID crmCustomerId;
+    private UUID crmVehicleId;
+    private Instant startAt;
+    private Instant endAt;
+    private Instant createdAt;
+    private String cancellationReason;
+    private String cancellationNotes;
+    private List<UUID> serviceRequestIds;
+    private Map<String, Object> customerSnapshot;
+    private Map<String, Object> vehicleSnapshot;
 }

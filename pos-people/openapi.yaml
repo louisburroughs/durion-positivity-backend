@@ -369,6 +369,12 @@ paths:
               $ref: "#/components/schemas/PersonRoleAssignmentRequest"
         required: true
       responses:
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "404":
           description: Person or role not found
           content:
@@ -381,12 +387,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserRoleDto"
-        "400":
-          description: Invalid request
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -1399,12 +1399,6 @@ paths:
           type: string
           format: date-time
       responses:
-        "400":
-          description: Invalid request for revoking role assignment
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
           description: Person or role assignment not found
           content:
@@ -1413,6 +1407,12 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
         "204":
           description: Role assignment revoked successfully
+        "400":
+          description: Invalid request for revoking role assignment
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
   /v1/people/users/{userId}/link:
     delete:
       tags:

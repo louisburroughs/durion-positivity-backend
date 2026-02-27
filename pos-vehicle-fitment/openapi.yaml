@@ -186,7 +186,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/VehicleType"
+                  $ref: "#/components/schemas/VehicleTypeResponse"
   /v1/vehicle-fitment/models/{makeId}:
     get:
       tags:
@@ -211,7 +211,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Model"
+                  $ref: "#/components/schemas/ModelResponse"
   /v1/vehicle-fitment/manufacturers:
     get:
       tags:
@@ -227,7 +227,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Manufacturer"
+                  $ref: "#/components/schemas/ManufacturerResponse"
   /v1/vehicle-fitment/makes/{manufacturerId}:
     get:
       tags:
@@ -252,7 +252,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Make"
+                  $ref: "#/components/schemas/MakeResponse"
   /v1/vehicle-fitment/hints/product/{productId}:
     get:
       tags:
@@ -351,64 +351,20 @@ components:
         count:
           type: integer
           format: int32
-    Make:
+    VehicleTypeResponse:
       type: object
       properties:
         id:
           type: string
           format: uuid
-        name:
-          type: string
-        manufacturer:
-          $ref: "#/components/schemas/Manufacturer"
-        cacheTimestamp:
-          type: string
-          format: date-time
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-    Manufacturer:
-      type: object
-      properties:
-        id:
+        makeId:
           type: string
           format: uuid
-        name:
-          type: string
-        cacheTimestamp:
-          type: string
-          format: date-time
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-    VehicleType:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        make:
-          $ref: "#/components/schemas/Make"
-        vehicleTypeName:
-          type: string
         vehicleTypeId:
           type: string
-        cacheTimestamp:
+        vehicleTypeName:
           type: string
-          format: date-time
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-    Model:
+    ModelResponse:
       type: object
       properties:
         id:
@@ -416,14 +372,25 @@ components:
           format: uuid
         name:
           type: string
-        make:
-          $ref: "#/components/schemas/Make"
-        cacheTimestamp:
+        makeId:
           type: string
-          format: date-time
-        createdAt:
+          format: uuid
+    ManufacturerResponse:
+      type: object
+      properties:
+        id:
           type: string
-          format: date-time
-        updatedAt:
+          format: uuid
+        name:
           type: string
-          format: date-time
+    MakeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        manufacturerId:
+          type: string
+          format: uuid

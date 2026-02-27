@@ -8,7 +8,7 @@
         <version>0.1.0-SNAPSHOT</version>
     </parent>
     <artifactId>pos-vehicle-inventory</artifactId>
-    <name>pos-vehicle</name>
+    <name>pos-vehicle-inventory</name>
     <description>POS Vehicle module</description>
     <packaging>jar</packaging>
     <dependencies>
