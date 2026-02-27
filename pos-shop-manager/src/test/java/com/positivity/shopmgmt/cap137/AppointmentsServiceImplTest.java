@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,7 +55,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
-public class AppointmentsServiceImplTest {
+class AppointmentsServiceImplTest {
 
     @Mock
     private AppointmentRepository appointmentRepository;
@@ -365,7 +366,7 @@ public class AppointmentsServiceImplTest {
         assertEquals(AppointmentStatus.SCHEDULED.name(), response.getStatus());
         assertEquals(List.of(serviceRequestId), response.getServiceRequestIds());
         verify(appointmentRepository).save(any(Appointment.class));
-        verify(appointmentServiceRequestRepository).saveAll(any(List.class));
+                verify(appointmentServiceRequestRepository).saveAll(anyIterable());
     }
 
     @Test
