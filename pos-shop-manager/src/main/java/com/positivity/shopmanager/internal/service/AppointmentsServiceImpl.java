@@ -466,32 +466,68 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private void detectConflicts(List<ScheduleViewResponse.ScheduleEventView> events) {
+        Map<String, Set<String>> conflictsByEvent = collectConflictsByEvent(events);
+        applyConflictMetadata(events, conflictsByEvent);
+    }
+
+    private Map<String, Set<String>> collectConflictsByEvent(List<ScheduleViewResponse.ScheduleEventView> events) {
         Map<String, Set<String>> conflictsByEvent = new HashMap<>();
         for (int i = 0; i < events.size(); i++) {
             ScheduleViewResponse.ScheduleEventView current = events.get(i);
             if (isConflictExempt(current)) {
                 continue;
             }
+            collectConflictsForCurrentEvent(events, i, current, conflictsByEvent);
+        }
+        return conflictsByEvent;
+    }
 
-            for (int j = i + 1; j < events.size(); j++) {
-                ScheduleViewResponse.ScheduleEventView candidate = events.get(j);
-                if (!candidate.getStartTime().isBefore(current.getEndTime())) {
-                    break;
-                }
-                if (isConflictExempt(candidate)) {
-                    continue;
-                }
-                if (!hasBlockingOverlap(current, candidate)) {
-                    continue;
-                }
-
-                conflictsByEvent.computeIfAbsent(current.getEventId(), ignored -> new HashSet<>())
-                        .add(candidate.getEventId());
-                conflictsByEvent.computeIfAbsent(candidate.getEventId(), ignored -> new HashSet<>())
-                        .add(current.getEventId());
+    private void collectConflictsForCurrentEvent(
+            List<ScheduleViewResponse.ScheduleEventView> events,
+            int currentIndex,
+            ScheduleViewResponse.ScheduleEventView current,
+            Map<String, Set<String>> conflictsByEvent) {
+        for (ScheduleViewResponse.ScheduleEventView candidate : events.subList(currentIndex + 1, events.size())) {
+            if (shouldStopConflictScan(current, candidate)) {
+                return;
+            }
+            if (isBlockingConflictCandidate(current, candidate)) {
+                registerConflict(conflictsByEvent, current, candidate);
             }
         }
+    }
 
+    private boolean shouldStopConflictScan(
+            ScheduleViewResponse.ScheduleEventView current,
+            ScheduleViewResponse.ScheduleEventView candidate) {
+        return !candidateStartsBeforeCurrentEnds(current, candidate);
+    }
+
+    private boolean isBlockingConflictCandidate(
+            ScheduleViewResponse.ScheduleEventView current,
+            ScheduleViewResponse.ScheduleEventView candidate) {
+        return !isConflictExempt(candidate) && hasBlockingOverlap(current, candidate);
+    }
+
+    private boolean candidateStartsBeforeCurrentEnds(
+            ScheduleViewResponse.ScheduleEventView current,
+            ScheduleViewResponse.ScheduleEventView candidate) {
+        return candidate.getStartTime().isBefore(current.getEndTime());
+    }
+
+    private void registerConflict(
+            Map<String, Set<String>> conflictsByEvent,
+            ScheduleViewResponse.ScheduleEventView left,
+            ScheduleViewResponse.ScheduleEventView right) {
+        conflictsByEvent.computeIfAbsent(left.getEventId(), ignored -> new HashSet<>())
+                .add(right.getEventId());
+        conflictsByEvent.computeIfAbsent(right.getEventId(), ignored -> new HashSet<>())
+                .add(left.getEventId());
+    }
+
+    private void applyConflictMetadata(
+            List<ScheduleViewResponse.ScheduleEventView> events,
+            Map<String, Set<String>> conflictsByEvent) {
         for (ScheduleViewResponse.ScheduleEventView event : events) {
             Set<String> conflictIds = conflictsByEvent.getOrDefault(event.getEventId(), Set.of());
             if (conflictIds.isEmpty()) {
