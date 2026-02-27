@@ -188,7 +188,7 @@ class ConsumptionContractBehaviorIT extends BaseContractIntegrationTest {
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/consumption"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(requestBody)))
-                                .andExpect(status().isUnprocessableEntity());
+                                .andExpect(status().is(422));
         }
 
         // ─── CC4: POST /v1/inventory/consumption — 400 for null workorderId ──────────

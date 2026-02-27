@@ -12,7 +12,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.shared.id.UUIDv7Id;
 
-import jakarta.annotation.Generated;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,9 +31,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Location aggregate representing physical sites, warehouses, or other operational locations.
+ * Location aggregate representing physical sites, warehouses, or other
+ * operational locations.
  *
- * Issue: CAP-214 #38   
+ * Issue: CAP-214 #38
  */
 @Entity
 @Data

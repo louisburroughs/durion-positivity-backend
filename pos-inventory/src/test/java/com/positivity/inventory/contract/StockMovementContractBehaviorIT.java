@@ -169,7 +169,7 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"productSku\":\"SKU-PICK-1\",\"fromLocationId\":\"" + LOC_PICK + "\","
                                                 + "\"movementType\":\"PICK\",\"quantity\":500,\"unitOfMeasure\":\"EACH\"}")))
-                                .andExpect(status().isUnprocessableEntity())
+                                .andExpect(status().is(422))
                                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                                 .andExpect(jsonPath("$.code").value("INSUFFICIENT_STOCK"));
         }
