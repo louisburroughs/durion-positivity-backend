@@ -17,7 +17,7 @@ public final class InventoryEventTypes {
 
         /**
          * All event type registrations for the inventory module.
-         * Total: 20 event types.
+         * Total: 34 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -80,6 +80,39 @@ public final class InventoryEventTypes {
                                 EventTypeRegistration.write("INVENTORY_RECEIVING_SESSION_COMPLETE",
                                                 "Complete receive items into staging").build(),
                                 EventTypeRegistration.write("INVENTORY_RECEIVING_CROSSDOCK",
-                                                "Cross-dock receiving line directly to workorder").build());
+                                                "Cross-dock receiving line directly to workorder").build(),
+
+                                // PurchaseOrderController - 9 events
+                                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_CREATE",
+                                                "Create a purchase order").build(),
+                                EventTypeRegistration.fastRead("INVENTORY_PURCHASE_ORDER_GET",
+                                                "Get purchase order").build(),
+                                EventTypeRegistration.fastRead("INVENTORY_PURCHASE_ORDER_LIST",
+                                                "List purchase orders").build(),
+                                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_APPROVE",
+                                                "Approve a purchase order").build(),
+                                EventTypeRegistration.approval("INVENTORY_PURCHASE_ORDER_ENCUMBRANCE",
+                                                "Emit encumbrance posting contract on PO approval").build(),
+                                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_ACCOUNTING_ERROR",
+                                                "Record accounting error on PO GL posting failure").build(),
+                                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_RECEIVE",
+                                                "Record a receipt against a purchase order").build(),
+                                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_REVISE",
+                                                "Revise a purchase order").build(),
+                                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_CANCEL",
+                                                "Cancel a purchase order").build(),
+
+                                // AsnController - 5 events
+                                EventTypeRegistration.write("INVENTORY_ASN_CREATE",
+                                                "Create an Advance Shipping Notice").build(),
+                                EventTypeRegistration.fastRead("INVENTORY_ASN_GET",
+                                                "Get ASN by ID").build(),
+                                EventTypeRegistration.write("INVENTORY_ASN_GOODS_RECEIPT_CREATED",
+                                                "Publish goods receipt intent event before receipt line processing")
+                                                .build(),
+                                EventTypeRegistration.write("INVENTORY_GOODS_RECEIPT_CREATE",
+                                                "Create a goods receipt").build(),
+                                EventTypeRegistration.fastRead("INVENTORY_GOODS_RECEIPT_GET",
+                                                "Get goods receipt by ID").build());
         }
 }

@@ -16,14 +16,13 @@ A lightweight authentication/authorization filter enriches requests with user id
   - Service receives the request after gateway strips `/{domain}` prefix
 
 ### Authentication & Authorization
-- Validates JWT via Security Service: `GET /v1/auth/validate?token=...`
-- Expands roles → authorities: `GET /v1/auth/authorities?token=...`
-- Fetches subject: `GET /v1/auth/subject?token=...`
-- Fetches stable person ID: `GET /v1/auth/person-id?token=...`
+- Validates JWTs issued by `pos-security-service`
+- Enforces required claims (issuer, audience, expiration, subject, token id) per ADR-0011
+- Uses canonical authorities for downstream authorization decisions
 - Injects headers to downstream services:
   - `X-Authorities`: comma-separated authorities (e.g., `crm:party:view,crm:vehicle:edit,...`)
   - `X-User`: token subject (username)
-  - `X-User-Id`: stable person ID from token
+  - `X-User-Id`: stable user/person ID from token when available
   - `X-API-Version`: forwarded from client request (enables per-endpoint versioning)
 - Public paths bypass authentication: `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/swagger-resources/**`, `/eureka/**`
 
@@ -34,13 +33,14 @@ Source:
 ## Configuration
 - Security service lookup is via Eureka service discovery (`lb://security-service`) in `SecurityGatewayConfig`.
 - Ensure `pos-security-service` is registered in Eureka as `security-service`.
+- Configure JWT validation to trust tokens from `pos-security-service` and audience `api-gateway`.
 
 ## Notes
 - **API Versioning is mandatory**: All client requests must include `X-API-Version` with a simple integer (e.g., `1`, `2`). This enables independent versioning of endpoints across the platform.
 - **Gateway is thin & stateless**: Validates versions, injects auth headers, rewrites paths. No policy logic here; services enforce authorization via `@PreAuthorize("hasAuthority('crm:...')")`.
 - **Version header forwarding**: The gateway forwards `X-API-Version` to downstream services, enabling per-endpoint version tracking and observability.
-- Tokens issued by Security Service already carry `authorities` claim; the gateway can still call `/authorities` for consistency or fallback.
-- Downstream services may read `authorities` directly from JWT or use `X-Authorities` header if desired.
+- **Role and permission management ownership**: `pos-security-service` is the source of truth for roles, permissions, and assignments.
+- Downstream services authorize on canonical authorities from gateway-established security context.
 
 ## Quick Test
 
