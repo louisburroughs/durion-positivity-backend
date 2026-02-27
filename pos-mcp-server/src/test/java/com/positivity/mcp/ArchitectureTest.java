@@ -27,7 +27,7 @@ public class ArchitectureTest {
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
             "call UUID.randomUUID()") {
-        
+
         public boolean test(JavaCall<?> input) {
             return input.getTargetOwner().isEquivalentTo(UUID.class)
                     && "randomUUID".equals(input.getName());

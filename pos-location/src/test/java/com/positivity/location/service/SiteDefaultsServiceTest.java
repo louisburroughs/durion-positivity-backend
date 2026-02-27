@@ -137,7 +137,6 @@ class SiteDefaultsServiceTest {
     @DisplayName("#38 - staging location not belonging to site throws 422")
     void configureDefaults_stagingLocationNotBelongsToSite_throwsValidationError() {
         UUID siteId = UUID.randomUUID();
-        UUID otherSiteId = UUID.randomUUID();
         UUID stagingId = UUID.randomUUID();
         UUID quarantineId = UUID.randomUUID();
 
@@ -165,7 +164,6 @@ class SiteDefaultsServiceTest {
     @DisplayName("#38 - quarantine location not belonging to site throws 422")
     void configureDefaults_quarantineLocationNotBelongsToSite_throwsValidationError() {
         UUID siteId = UUID.randomUUID();
-        UUID otherSiteId = UUID.randomUUID();
         UUID stagingId = UUID.randomUUID();
         UUID quarantineId = UUID.randomUUID();
 

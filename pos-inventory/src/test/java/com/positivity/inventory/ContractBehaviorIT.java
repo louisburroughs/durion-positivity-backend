@@ -18,8 +18,6 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.positivity.inventory.contract.BaseContractIntegrationTest;
 
-import tools.jackson.databind.ObjectMapper;
-
 /**
  * Contract Behavioral Integration Tests for Inventory Service
  *
@@ -44,8 +42,6 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         private MockMvc mockMvc;
 
         @Autowired
-        private ObjectMapper objectMapper;
-
         private String inventoryPayload;
 
         @BeforeEach

@@ -142,7 +142,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
-                                .andExpect(status().isUnprocessableEntity())
+                                .andExpect(status().is(422))
                                 .andExpect(jsonPath("$.code").value("LOCATION_NOT_VALID_FOR_SKU"));
         }
 
@@ -176,7 +176,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
-                                .andExpect(status().isUnprocessableEntity())
+                                .andExpect(status().is(422))
                                 .andExpect(jsonPath("$.code").value("LOCATION_AT_CAPACITY"));
         }
 
@@ -217,7 +217,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
-                                .andExpect(status().isUnprocessableEntity())
+                                .andExpect(status().is(422))
                                 .andExpect(jsonPath("$.code").value("NO_ON_HAND_AT_SOURCE_LOCATION"));
         }
 

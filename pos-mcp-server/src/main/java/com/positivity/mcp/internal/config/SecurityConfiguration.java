@@ -1,29 +1,11 @@
 package com.positivity.mcp.internal.config;
 
-import org.jspecify.annotations.NonNull;
-import org.springframework.context.annotation.Bean;
+import com.positivity.security.common.GatewaySecurityConfig;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.context.annotation.Import;
 
 @Configuration
-@EnableWebSecurity
-@EnableMethodSecurity
+@Import(GatewaySecurityConfig.class)
 public class SecurityConfiguration {
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(@NonNull HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/v1/llm-apis/**", "/v1/prompts/**", "/v1/mcp/**").authenticated()
-                        .anyRequest().authenticated()
-                )
-                .httpBasic(Customizer.withDefaults());
-        return http.build();
-    }
+    // Use shared gateway security (GatewayAuthoritiesFilter + stateless rules).
 }

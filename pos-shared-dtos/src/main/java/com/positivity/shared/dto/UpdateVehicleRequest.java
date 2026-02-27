@@ -1,6 +1,10 @@
 package com.positivity.shared.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,27 +20,58 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request payload for partially updating mutable vehicle fields.")
 public class UpdateVehicleRequest {
 
+    @Size(max = 255)
     @Schema(description = "Fleet/unit number.", example = "UNIT-2048")
     private String unitNumber;
 
+    @Size(max = 4000)
     @Schema(description = "Human-readable vehicle description.", example = "2023 Chevrolet Silverado 1500")
     private String description;
 
+    @Size(max = 50)
     @Schema(description = "License plate value.", example = "XYZ7890")
     private String licensePlate;
 
+    @Size(max = 50)
     @Schema(description = "License plate jurisdiction/state or province.", example = "TX")
     private String licensePlateJurisdiction;
 
+    @Min(1886)
+    @Max(2100)
     @Schema(description = "Model year.", example = "2023")
     private Integer year;
 
+    @Size(max = 255)
     @Schema(description = "Vehicle make.", example = "Chevrolet")
     private String make;
 
+    @Size(max = 255)
     @Schema(description = "Vehicle model.", example = "Silverado 1500")
     private String model;
 
+    @Size(max = 255)
     @Schema(description = "Vehicle trim.", example = "LT")
     private String trim;
+
+    @AssertTrue(message = "At least one field must be provided for update")
+    private boolean isAtLeastOneFieldProvided() {
+        return unitNumber != null
+                || description != null
+                || licensePlate != null
+                || licensePlateJurisdiction != null
+                || year != null
+                || make != null
+                || model != null
+                || trim != null;
+    }
+
+    @AssertTrue(message = "unitNumber must not be blank when provided")
+    private boolean isUnitNumberNotBlankWhenProvided() {
+        return unitNumber == null || !unitNumber.isBlank();
+    }
+
+    @AssertTrue(message = "description must not be blank when provided")
+    private boolean isDescriptionNotBlankWhenProvided() {
+        return description == null || !description.isBlank();
+    }
 }
