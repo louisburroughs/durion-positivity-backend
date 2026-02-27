@@ -1,4 +1,4 @@
-package com.positivity.inventory.service.contract;
+package com.positivity.inventory.contract;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;

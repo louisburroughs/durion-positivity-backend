@@ -16,7 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-import com.positivity.inventory.service.contract.BaseContractIntegrationTest;
+import com.positivity.inventory.contract.BaseContractIntegrationTest;
 
 import tools.jackson.databind.ObjectMapper;
 

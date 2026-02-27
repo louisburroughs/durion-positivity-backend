@@ -10,7 +10,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
@@ -22,8 +21,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "timekeeping_policy", indexes = {
         @Index(name = "idx_timekeeping_policy_scope", columnList = "scope_type, scope_id"),
-        @Index(name = "idx_timekeeping_policy_scope_effective_updated",
-                columnList = "scope_type, scope_id, effective_start_at, effective_end_at, updated_at")
+        @Index(name = "idx_timekeeping_policy_scope_effective_updated", columnList = "scope_type, scope_id, effective_start_at, effective_end_at, updated_at")
 })
 public class TimekeepingPolicy {
 

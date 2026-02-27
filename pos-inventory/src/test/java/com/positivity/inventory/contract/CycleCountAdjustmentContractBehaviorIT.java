@@ -22,7 +22,6 @@ import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
-import com.positivity.inventory.service.contract.BaseContractIntegrationTest;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
