@@ -2,12 +2,14 @@ package com.positivity.vehicle.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.dto.CreateVehicleRequest;
+import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.service.VehicleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -82,13 +84,16 @@ public class VehicleRegistryController {
     @PutMapping("/{vehicleId}")
     public ResponseEntity<VehicleResponse> updateVehicle(
             @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId,
-            @Parameter(description = "Vehicle update request", required = true) @RequestBody CreateVehicleRequest request) {
+            @Parameter(description = "Vehicle update request", required = true) @RequestBody UpdateVehicleRequest request) {
         try {
             VehicleResponse response = vehicleService.updateVehicle(vehicleId, request);
             return ResponseEntity.ok(response);
+        } catch (EntityNotFoundException e) {
+            log.warn("Vehicle not found for update {}: {}", vehicleId, e.getMessage());
+            return ResponseEntity.notFound().build();
         } catch (IllegalArgumentException e) {
             log.warn("Failed to update vehicle {}: {}", vehicleId, e.getMessage());
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.badRequest().build();
         }
     }
 
@@ -102,9 +107,12 @@ public class VehicleRegistryController {
         try {
             vehicleService.deleteVehicle(vehicleId);
             return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to delete vehicle {}: {}", vehicleId, e.getMessage());
+        } catch (EntityNotFoundException e) {
+            log.warn("Vehicle not found for delete {}: {}", vehicleId, e.getMessage());
             return ResponseEntity.notFound().build();
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid delete request for vehicle {}: {}", vehicleId, e.getMessage());
+            return ResponseEntity.badRequest().build();
         }
     }
 }

@@ -23,7 +23,6 @@ import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.event.InventoryAuditEvent;
 import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
-import com.positivity.inventory.service.contract.BaseContractIntegrationTest;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;

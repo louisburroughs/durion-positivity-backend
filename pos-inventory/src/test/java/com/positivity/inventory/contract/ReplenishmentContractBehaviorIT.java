@@ -23,7 +23,6 @@ import com.positivity.inventory.internal.dto.replenishment.CreateReplenishmentPo
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
 import com.positivity.inventory.service.ReplenishmentService;
-import com.positivity.inventory.service.contract.BaseContractIntegrationTest;
 
 import tools.jackson.databind.ObjectMapper;
 
