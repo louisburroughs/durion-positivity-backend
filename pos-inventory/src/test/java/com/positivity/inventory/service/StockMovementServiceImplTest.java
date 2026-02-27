@@ -48,14 +48,10 @@ class StockMovementServiceImplTest {
     @Mock
     private InventoryAdjustmentRequestRepository adjustmentRepository;
 
-    @Mock
-    private Clock clock;
-
     @InjectMocks
     private StockMovementServiceImpl service;
 
     private void setupClock() {
-        when(clock.instant()).thenReturn(Instant.parse("2023-01-01T12:00:00Z"));
     }
 
     @Test
