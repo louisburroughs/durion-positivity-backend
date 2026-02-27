@@ -40,6 +40,8 @@ public final class ShopEventTypes {
                                 // AppointmentsController - 1 event
                                 EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATE",
                                                 "Create an appointment").build(),
+                                EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATED",
+                                                "Appointment created domain event").build(),
                                 EventTypeRegistration.write("SHOPMGR_APPOINTMENT_RESCHEDULE",
                                                 "Reschedule an appointment").build(),
                                 EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CANCEL",

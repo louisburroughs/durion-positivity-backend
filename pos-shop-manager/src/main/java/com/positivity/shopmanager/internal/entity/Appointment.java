@@ -80,7 +80,7 @@ public class Appointment {
     private String workorderLinkRef;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "cancellation_reason_code", length = 128)
+    @Column(name = "cancellation_reason", length = 128)
     private CancellationReasonCode cancellationReasonCode;
 
     @Column(name = "cancellation_notes", length = 1000)

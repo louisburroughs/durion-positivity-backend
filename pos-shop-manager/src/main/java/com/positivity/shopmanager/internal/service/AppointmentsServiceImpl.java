@@ -24,12 +24,14 @@ import com.positivity.shopmanager.internal.entity.AppointmentAudit;
 import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
 import com.positivity.shopmanager.internal.entity.Shop;
 import com.positivity.shopmanager.internal.event.AppointmentCancelledEvent;
+import com.positivity.shopmanager.internal.event.AppointmentCreatedEvent;
 import com.positivity.shopmanager.internal.event.AppointmentRescheduledEvent;
 import com.positivity.shopmanager.internal.enums.AppointmentAction;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
+import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
@@ -61,6 +63,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Orchestration service for appointment operations.
@@ -95,9 +98,34 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
         validateCrmIdentifiers(request.getCrmCustomerId(), request.getCrmVehicleId());
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
-        Map<String, Object> customerSnapshot = crmCustomerClient.getCustomerById(request.getCrmCustomerId());
-        Map<String, Object> vehicleSnapshot = crmVehicleClient.getVehicleById(request.getCrmVehicleId());
+        Map<String, Object> customerSnapshot;
+        Map<String, Object> vehicleSnapshot;
+        try {
+            customerSnapshot = crmCustomerClient.getCustomerById(request.getCrmCustomerId());
+            vehicleSnapshot = crmVehicleClient.getVehicleById(request.getCrmVehicleId());
+        } catch (RestClientException exception) {
+            throw new CrmUnavailableException("CRM service is unavailable", exception);
+        }
         validateCrmRelationship(request.getCrmCustomerId(), request.getCrmVehicleId(), vehicleSnapshot);
+
+        List<Appointment> conflicts = appointmentRepository
+                .findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
+                        request.getLocationId(),
+                        request.getEndAt(),
+                        request.getStartAt())
+                .stream()
+                .filter(existing -> Objects.equals(existing.getResourceId(), request.getResourceId()))
+                .filter(existing -> existing.getStatus() == AppointmentStatus.SCHEDULED)
+                .filter(existing -> !Objects.equals(existing.getCrmCustomerId(), request.getCrmCustomerId())
+                        || !Objects.equals(existing.getCrmVehicleId(), request.getCrmVehicleId())
+                        || !Objects.equals(existing.getStartAt(), request.getStartAt())
+                        || !Objects.equals(existing.getEndAt(), request.getEndAt()))
+                .toList();
+
+        if (!conflicts.isEmpty()) {
+            throw new AppointmentValidationException("Requested slot is already booked. "
+                    + conflicts.size() + " conflicting appointment(s) found.");
+        }
 
         Appointment appointment = Appointment.builder()
                 .appointmentId(UUIDv7Generator.generate())
@@ -111,10 +139,19 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .startAt(request.getStartAt())
                 .endAt(request.getEndAt())
                 .createdBy(actor)
+                .workorderLinkRef(request.getWorkorderLinkRef())
                 .build();
 
         Appointment saved = appointmentRepository.save(appointment);
         saveServiceRequests(saved.getAppointmentId(), request.getServiceRequestIds());
+        eventPublisher.publishEvent(new AppointmentCreatedEvent(
+                saved.getAppointmentId(),
+                saved.getCrmCustomerId().toString(),
+                saved.getCrmVehicleId().toString(),
+                saved.getStartAt(),
+                saved.getEndAt(),
+                saved.getCreatedBy(),
+                saved.getWorkorderLinkRef()));
         return toResponse(saved);
     }
 
@@ -349,8 +386,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .filter(timezone -> timezone != null && !timezone.isBlank())
                 .orElse(null);
         if (configuredTimezone == null) {
-            // Fallback: location has no configured timezone; using UTC. TODO: ensure all
-            // locations have timezone set.
+            log.warn("Location {} has no configured timezone; defaulting to UTC. "
+                    + "Schedule windows may be incorrect for non-UTC locations.", locationId);
             return ZoneOffset.UTC;
         }
         return ZoneId.of(configuredTimezone);
