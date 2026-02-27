@@ -32,39 +32,39 @@ public class GlobalExceptionHandler {
     private final Clock clock;
 
     @ExceptionHandler(CrmCustomerNotFoundException.class)
-        public ResponseEntity<ErrorResponse> handleCustomerNotFound(
+    public ResponseEntity<ErrorResponse> handleCustomerNotFound(
             CrmCustomerNotFoundException exception,
             HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(error("CUSTOMER_NOT_FOUND", exception.getMessage(), correlationId));
+                .body(error("CUSTOMER_NOT_FOUND", exception.getMessage(), correlationId));
     }
 
     @ExceptionHandler(CrmVehicleNotFoundException.class)
-        public ResponseEntity<ErrorResponse> handleVehicleNotFound(
+    public ResponseEntity<ErrorResponse> handleVehicleNotFound(
             CrmVehicleNotFoundException exception,
             HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(error("VEHICLE_NOT_FOUND", exception.getMessage(), correlationId));
+                .body(error("VEHICLE_NOT_FOUND", exception.getMessage(), correlationId));
     }
 
     @ExceptionHandler(VehicleCustomerMismatchException.class)
-        public ResponseEntity<ErrorResponse> handleVehicleCustomerMismatch(
+    public ResponseEntity<ErrorResponse> handleVehicleCustomerMismatch(
             VehicleCustomerMismatchException exception,
             HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         return ResponseEntity.status(HttpStatus.CONFLICT)
-            .body(error("VEHICLE_CUSTOMER_MISMATCH", exception.getMessage(), correlationId));
+                .body(error("VEHICLE_CUSTOMER_MISMATCH", exception.getMessage(), correlationId));
     }
 
     @ExceptionHandler(AppointmentValidationException.class)
-        public ResponseEntity<ErrorResponse> handleAppointmentValidation(
+    public ResponseEntity<ErrorResponse> handleAppointmentValidation(
             AppointmentValidationException exception,
             HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .body(error("VALIDATION_ERROR", exception.getMessage(), correlationId));
+                .body(error("VALIDATION_ERROR", exception.getMessage(), correlationId));
     }
 
     @ExceptionHandler(AppointmentStateException.class)
@@ -76,14 +76,14 @@ public class GlobalExceptionHandler {
                 .body(error("INVALID_APPOINTMENT_STATE", exception.getMessage(), correlationId));
     }
 
-        @ExceptionHandler(AppointmentNotFoundException.class)
-        public ResponseEntity<ErrorResponse> handleAppointmentNotFound(
+    @ExceptionHandler(AppointmentNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAppointmentNotFound(
             AppointmentNotFoundException exception,
             HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(error("APPOINTMENT_NOT_FOUND", exception.getMessage(), correlationId));
-        }
+                .body(error("APPOINTMENT_NOT_FOUND", exception.getMessage(), correlationId));
+    }
 
     @ExceptionHandler(LocationNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleLocationNotFound(
@@ -104,7 +104,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-        public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
+    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
             MethodArgumentNotValidException exception,
             HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
@@ -146,7 +146,8 @@ public class GlobalExceptionHandler {
     private int resolveStatus(String code) {
         return switch (code) {
             case "CUSTOMER_NOT_FOUND", "VEHICLE_NOT_FOUND", "APPOINTMENT_NOT_FOUND", "LOCATION_NOT_FOUND",
-                    "RESOURCE_NOT_FOUND" -> HttpStatus.NOT_FOUND.value();
+                    "RESOURCE_NOT_FOUND" ->
+                HttpStatus.NOT_FOUND.value();
             case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE" -> HttpStatus.CONFLICT.value();
             case "CRM_UNAVAILABLE" -> HttpStatus.SERVICE_UNAVAILABLE.value();
             default -> HttpStatus.BAD_REQUEST.value();

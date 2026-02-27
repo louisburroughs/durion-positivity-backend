@@ -14,7 +14,8 @@ public interface AppointmentsService {
 
     AppointmentResponse createAppointment(@NonNull AppointmentCreateRequest request);
 
-    AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId, @NonNull RescheduleAppointmentRequest request);
+    AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId,
+            @NonNull RescheduleAppointmentRequest request);
 
     AppointmentResponse cancelAppointment(@NonNull UUID appointmentId, @NonNull CancelAppointmentRequest request);
 

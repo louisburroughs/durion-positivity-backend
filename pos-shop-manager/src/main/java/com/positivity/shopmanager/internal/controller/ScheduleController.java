@@ -52,7 +52,8 @@ public class ScheduleController {
         request.setResourceId(resourceId);
         request.setIncludeAvailabilityOverlay(includeAvailabilityOverlay);
         request.setRange(range);
-        log.info("Schedule view requested. locationId={}, date={}, resourceType={}, resourceId={}, includeAvailabilityOverlay={}, range={}, X-Correlation-Id={}",
+        log.info(
+                "Schedule view requested. locationId={}, date={}, resourceType={}, resourceId={}, includeAvailabilityOverlay={}, range={}, X-Correlation-Id={}",
                 locationId, date, resourceType, resourceId, includeAvailabilityOverlay, range, correlationId);
         ScheduleViewResponse response = appointmentsService.getScheduleView(request, correlationId);
         return ResponseEntity.ok(response);
