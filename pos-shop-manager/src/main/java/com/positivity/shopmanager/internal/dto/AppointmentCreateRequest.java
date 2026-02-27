@@ -34,4 +34,6 @@ public class AppointmentCreateRequest {
 
     @NotNull
     private List<UUID> serviceRequestIds;
+
+    private String workorderLinkRef;
 }

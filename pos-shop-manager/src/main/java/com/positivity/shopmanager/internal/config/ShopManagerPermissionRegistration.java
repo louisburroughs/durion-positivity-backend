@@ -2,7 +2,6 @@ package com.positivity.shopmanager.internal.config;
 
 import com.positivity.security.common.PermissionDefinition;
 import com.positivity.security.common.PermissionRegistrationSupport;
-import java.util.Collections;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -23,7 +22,6 @@ public class ShopManagerPermissionRegistration extends PermissionRegistrationSup
 
     @Override
     protected List<PermissionDefinition> getPermissions() {
-        // TODO: Load permissions from permissions.yaml
-        return Collections.emptyList();
+        return super.getPermissions();
     }
 }
