@@ -1,5 +1,10 @@
 package com.positivity.shopmanager.internal.dto;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
@@ -10,14 +15,25 @@ import lombok.Data;
  */
 @Data
 public class AppointmentCreateRequest {
-    private String sourceType; // ESTIMATE or WORKORDER (required)
-    private String sourceId; // estimateId or workOrderId (required, opaque string)
-    private String facilityId; // facility identifier (required, opaque string per DECISION-SHOPMGMT-012)
-    private String scheduledStartDateTime; // ISO-8601 with offset (required, per DECISION-SHOPMGMT-015)
-    private String scheduledEndDateTime; // ISO-8601 with offset (required, per DECISION-SHOPMGMT-015)
-    private String clientRequestId; // UUID (optional but recommended for idempotency per DECISION-SHOPMGMT-014)
-    private Boolean overrideSoftConflicts; // boolean, default false (controls conflict override per
-                                           // DECISION-SHOPMGMT-002)
-    private String overrideReason; // string, required when overrideSoftConflicts=true (audit trail per
-                                   // DECISION-SHOPMGMT-007)
+    @NotNull
+    private UUID crmCustomerId;
+
+    @NotNull
+    private UUID crmVehicleId;
+
+    @NotNull
+    private UUID locationId;
+
+    private String resourceId;
+
+    @NotNull
+    private Instant startAt;
+
+    @NotNull
+    private Instant endAt;
+
+    @NotNull
+    private List<UUID> serviceRequestIds;
+
+    private String workorderLinkRef;
 }

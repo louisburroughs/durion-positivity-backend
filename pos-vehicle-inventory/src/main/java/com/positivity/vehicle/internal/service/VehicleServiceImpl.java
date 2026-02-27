@@ -5,6 +5,8 @@ import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.internal.util.VinUtils;
+import com.positivity.vehicle.service.VehicleService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -21,13 +23,14 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class VehicleService {
+public class VehicleServiceImpl implements VehicleService {
 
     private final VehicleRecordRepository vehicleRepository;
 
     /**
      * Creates a new vehicle with VIN validation and normalization.
      */
+    @Override
     @Transactional
     public VehicleResponse createVehicle(@NonNull CreateVehicleRequest request) {
         log.info("Creating vehicle for account {} with VIN {}", request.getAccountId(), request.getVin());
@@ -67,6 +70,7 @@ public class VehicleService {
     /**
      * Gets a vehicle by ID.
      */
+    @Override
     @Transactional(readOnly = true)
     public Optional<VehicleResponse> getVehicle(@NonNull UUID vehicleId) {
         return vehicleRepository.findByVehicleId(vehicleId)
@@ -76,6 +80,7 @@ public class VehicleService {
     /**
      * Gets a vehicle by VIN (normalized lookup).
      */
+    @Override
     @Transactional(readOnly = true)
     public Optional<VehicleResponse> getVehicleByVin(@NonNull String vin) {
         String vinNormalized = VinUtils.normalize(vin);
@@ -86,6 +91,7 @@ public class VehicleService {
     /**
      * Updates a vehicle.
      */
+    @Override
     @Transactional
     public VehicleResponse updateVehicle(@NonNull UUID vehicleId, @NonNull CreateVehicleRequest request) {
         log.info("Updating vehicle {}", vehicleId);
@@ -112,6 +118,7 @@ public class VehicleService {
     /**
      * Deletes (deactivates) a vehicle.
      */
+    @Override
     @Transactional
     public void deleteVehicle(@NonNull UUID vehicleId) {
         log.info("Deactivating vehicle {}", vehicleId);

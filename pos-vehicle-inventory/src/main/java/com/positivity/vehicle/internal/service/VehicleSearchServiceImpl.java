@@ -11,6 +11,7 @@ import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
 import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
 import com.positivity.vehicle.internal.dto.VehicleSummary;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
+import com.positivity.vehicle.service.VehicleSearchService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,9 +24,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class VehicleSearchService {
+public class VehicleSearchServiceImpl implements VehicleSearchService {
 
-    private static final int DEFAULT_LIMIT = 25;
     private static final int MAX_LIMIT = 50;
     private static final int MIN_VIN_QUERY_LENGTH = 6;
     private static final int MIN_PLATE_QUERY_LENGTH = 3;
@@ -37,6 +37,7 @@ public class VehicleSearchService {
      * Searches vehicles by query with ranking-based results.
      * Ranking tiers: exact match → prefix match → contains match (if enabled)
      */
+    @Override
     @Transactional(readOnly = true)
     public SearchVehiclesResponse search(@NonNull SearchVehiclesRequest request) {
         log.info("Searching vehicles: query='{}', limit={}, enableContains={}",

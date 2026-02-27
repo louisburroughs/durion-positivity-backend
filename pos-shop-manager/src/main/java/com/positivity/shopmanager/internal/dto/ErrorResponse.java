@@ -8,8 +8,9 @@ import java.util.Map;
  * Includes correlationId for distributed tracing and debugging.
  */
 public class ErrorResponse {
-    private String errorCode;
+    private String code;
     private String message;
+    private Integer status;
     private String correlationId;
     private Instant timestamp;
     private Map<String, String> fieldErrors;
@@ -17,19 +18,12 @@ public class ErrorResponse {
     public ErrorResponse() {
     }
 
-    public ErrorResponse(String errorCode, String message, String correlationId) {
-        this.errorCode = errorCode;
-        this.message = message;
-        this.correlationId = correlationId;
-        this.timestamp = Instant.now();
+    public String getCode() {
+        return code;
     }
 
-    public String getErrorCode() {
-        return errorCode;
-    }
-
-    public void setErrorCode(String errorCode) {
-        this.errorCode = errorCode;
+    public void setCode(String code) {
+        this.code = code;
     }
 
     public String getMessage() {
@@ -38,6 +32,14 @@ public class ErrorResponse {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public Integer getStatus() {
+        return status;
+    }
+
+    public void setStatus(Integer status) {
+        this.status = status;
     }
 
     public String getCorrelationId() {

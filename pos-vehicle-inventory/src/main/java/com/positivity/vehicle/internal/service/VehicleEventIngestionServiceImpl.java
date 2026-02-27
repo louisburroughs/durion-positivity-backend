@@ -1,5 +1,17 @@
 package com.positivity.vehicle.internal.service;
 
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.positivity.vehicle.internal.dto.VehicleUpdatedEvent;
 import com.positivity.vehicle.internal.entity.EventProcessingLog;
 import com.positivity.vehicle.internal.entity.EventProcessingLog.ConflictPolicy;
@@ -9,15 +21,10 @@ import com.positivity.vehicle.internal.entity.VehicleRecord.OdometerReading;
 import com.positivity.vehicle.internal.enums.OdometerUnit;
 import com.positivity.vehicle.internal.repository.EventProcessingLogRepository;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
+import com.positivity.vehicle.service.VehicleEventIngestionService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
-import java.time.Instant;
-import java.util.*;
 
 /**
  * Event ingestion service for vehicle updates (CAP:091 Story #101).
@@ -33,17 +40,17 @@ import java.util.*;
 @Slf4j
 @RequiredArgsConstructor
 @Service
-public class VehicleEventIngestionService {
+public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionService {
 
     private final VehicleRecordRepository vehicleRepository;
     private final EventProcessingLogRepository eventProcessingLogRepository;
-    private final VehicleService vehicleService;
 
     /**
      * Process a VehicleUpdated event with conflict resolution and idempotency.
      *
      * @param event VehicleUpdated event from message broker
      */
+    @Override
     @Transactional
     public void processVehicleUpdateEvent(@NonNull VehicleUpdatedEvent event) {
         String eventId = event.getEventId();
@@ -203,6 +210,7 @@ public class VehicleEventIngestionService {
     /**
      * Get processing history for a vehicle.
      */
+    @Override
     @Transactional(readOnly = true)
     public List<EventProcessingLog> getProcessingHistory(@NonNull String vehicleId) {
         return eventProcessingLogRepository.findByVehicleId(vehicleId);
@@ -211,6 +219,7 @@ public class VehicleEventIngestionService {
     /**
      * Get processing log by event ID.
      */
+    @Override
     @Transactional(readOnly = true)
     public Optional<EventProcessingLog> getProcessingLog(@NonNull String eventId) {
         return eventProcessingLogRepository.findByEventId(eventId);

@@ -58,7 +58,7 @@ import jakarta.servlet.http.HttpServletResponse;
  */
 @Order(1)
 public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
-    private static final Logger logger = LoggerFactory.getLogger(GatewayAuthoritiesFilter.class);
+    private static final Logger loggr = LoggerFactory.getLogger(GatewayAuthoritiesFilter.class);
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -89,16 +89,16 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            if (logger.isDebugEnabled()) {
-                logger.debug("Authenticated user '{}' (userId='{}') with {} authorities from gateway headers",
+            if (loggr.isDebugEnabled()) {
+                loggr.debug("Authenticated user '{}' (userId='{}') with {} authorities from gateway headers",
                         username, userId, authorities.size());
             }
         } else {
             // No authentication headers - clear any existing context
             SecurityContextHolder.clearContext();
 
-            if (logger.isTraceEnabled()) {
-                logger.trace("No gateway authentication headers for request: {} {}",
+            if (loggr.isTraceEnabled()) {
+                loggr.trace("No gateway authentication headers for request: {} {}",
                         request.getMethod(), path);
             }
         }

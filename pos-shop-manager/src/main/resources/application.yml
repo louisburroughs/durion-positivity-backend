@@ -57,3 +57,10 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+
+pos:
+  crm:
+    customer-base-url: ${POS_CRM_CUSTOMER_BASE_URL:http://localhost:8080/v1/customers}
+    vehicle-base-url: ${POS_CRM_VEHICLE_BASE_URL:http://localhost:8080/v1/vehicles}
+    connect-timeout-ms: ${POS_CRM_CONNECT_TIMEOUT_MS:200}
+    read-timeout-ms: ${POS_CRM_READ_TIMEOUT_MS:2000}

@@ -1,0 +1,2 @@
+ALTER TABLE shop
+    ADD COLUMN timezone VARCHAR(64);
