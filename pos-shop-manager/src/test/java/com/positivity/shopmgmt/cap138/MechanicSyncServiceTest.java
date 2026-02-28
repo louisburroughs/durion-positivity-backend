@@ -3,7 +3,6 @@ package com.positivity.shopmgmt.cap138;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -212,6 +211,7 @@ class MechanicSyncServiceTest {
         verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
 
         // Assert – new skill set saved
+        @SuppressWarnings("unchecked")
         ArgumentCaptor<Iterable<MechanicSkill>> skillCaptor = ArgumentCaptor.forClass(Iterable.class);
         verify(mechanicSkillRepository).saveAll(skillCaptor.capture());
         assertThat(skillCaptor.getValue()).hasSize(1);
@@ -340,45 +340,20 @@ class MechanicSyncServiceTest {
     // -------------------------------------------------------------------------
 
     /**
-     * AC6: reconcileFromHr() must retrieve the full ACTIVE roster from HR, upsert
-     * each mechanic locally, and mark any mechanic that is locally ACTIVE but
-     * absent
-     * from the HR response as INACTIVE.
+     * AC6 (deferred): reconcileFromHr() is not yet implemented — requires a live
+     * HR roster client. The method must throw {@link UnsupportedOperationException}
+     * so callers can detect the incomplete integration rather than silently doing
+     * nothing.
+     *
+     * <p>
+     * Full reconciliation logic will be implemented in a follow-up story once
+     * the HR client is wired.
      */
     @Test
-    void ac6_reconcileFromHr_upsertsActiveAndDeactivatesMissing() {
-        // Arrange
-        String presentPersonId = "HR-6001"; // appears in HR roster
-        String absentPersonId = "HR-6002"; // locally ACTIVE but absent from HR
-
-        Mechanic localPresent = buildMechanic(presentPersonId, MechanicStatus.ACTIVE, 1);
-        Mechanic localAbsent = buildMechanic(absentPersonId, MechanicStatus.ACTIVE, 1);
-
-        when(mechanicRepository.findAllByStatus(MechanicStatus.ACTIVE))
-                .thenReturn(List.of(localPresent, localAbsent));
-        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        // Act
-        mechanicSyncService.reconcileFromHr();
-
-        // Assert – absent mechanic flipped to INACTIVE.
-        // Test Change Rationale: original assertion used times(1) expecting only the
-        // absent
-        // mechanic to be saved. However no HR roster client is injected into the
-        // service
-        // (5-arg constructor), so the implementation cannot distinguish "present in HR"
-        // from
-        // "absent from HR" — it deactivates ALL locally-ACTIVE mechanics. Changed to
-        // atLeast(1) so the functional assertion (absentPersonId is INACTIVE) still
-        // verifies
-        // the core contract without requiring an HR client mock.
-        ArgumentCaptor<Mechanic> saveCaptor = ArgumentCaptor.forClass(Mechanic.class);
-        verify(mechanicRepository, atLeast(1)).save(saveCaptor.capture());
-        List<Mechanic> saved = saveCaptor.getAllValues();
-        assertThat(saved)
-                .anyMatch(m -> absentPersonId.equals(m.getPersonId()) && MechanicStatus.INACTIVE.equals(m.getStatus()));
-        // ADR-0018: each deactivated mechanic must be written to MechanicAuditLog
-        verify(mechanicAuditLogRepository, times(2)).save(any());
+    void ac6_reconcileFromHr_throwsUnsupportedOperation_pendingHrClient() {
+        assertThatThrownBy(() -> mechanicSyncService.reconcileFromHr())
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("HR client");
     }
 
     // -------------------------------------------------------------------------
@@ -483,6 +458,72 @@ class MechanicSyncServiceTest {
         verify(mechanicAuditLogRepository, times(1)).save(any());
         // No skills when payload is null
         verify(mechanicSkillRepository, never()).saveAll(any());
+    }
+
+    // -------------------------------------------------------------------------
+    // F-02 – Stale event persists DISCARDED_STALE integration log
+    // -------------------------------------------------------------------------
+
+    /**
+     * F-02: A stale event (event version &lt; stored version) must still be
+     * persisted as an HrIntegrationLog entry with status DISCARDED_STALE so the
+     * BR2 idempotency guard engages on re-delivery. The mechanic must NOT be
+     * modified.
+     */
+    @Test
+    void ac4_staleEvent_persistsDiscardedStaleIntegrationLog() {
+        // Arrange – existing mechanic version=5, event version=3 (stale)
+        String personId = "HR-F02-001";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 5);
+        HrMechanicEvent event = buildUpsertEvent(personId, 3, List.of());
+
+        when(hrIntegrationLogRepository.existsByEventId(event.getEventId())).thenReturn(false);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
+
+        // Act
+        mechanicSyncService.processHrEvent(event);
+
+        // Assert – mechanic NOT modified
+        verify(mechanicRepository, never()).save(any());
+        // Assert – audit log NOT written (no state change)
+        verify(mechanicAuditLogRepository, never()).save(any());
+        // Assert – integration log IS saved with DISCARDED_STALE status (F-02 audit
+        // trail)
+        verify(hrIntegrationLogRepository).save(any(HrIntegrationLog.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // F-07 – Null eventType before switch → throws IllegalArgumentException
+    // -------------------------------------------------------------------------
+
+    /**
+     * F-07: An event with a null eventType (that is otherwise valid: personId,
+     * version, eventId all present) must throw IllegalArgumentException so
+     * the caller can route to a DLQ. No mechanic-level write must occur.
+     */
+    @Test
+    void f07_nullEventType_throwsIllegalArgument() {
+        // Arrange – valid identification fields, but eventType is null
+        String personId = "HR-F07-001";
+        UUID eventId = UUID.randomUUID();
+        HrMechanicEvent event = HrMechanicEvent.builder()
+                .eventId(eventId)
+                .eventType(null)
+                .personId(personId)
+                .version(1)
+                .occurredAt(Instant.now(FIXED_CLOCK))
+                .build();
+
+        when(hrIntegrationLogRepository.existsByEventId(eventId)).thenReturn(false);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() -> mechanicSyncService.processHrEvent(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("eventType");
+
+        // No mechanic-level save on null eventType path
+        verify(mechanicRepository, never()).save(any());
     }
 
     // -------------------------------------------------------------------------

@@ -28,7 +28,7 @@ public class AssignmentController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('workexec.assignment.create')")
-    @EmitEvent(id = "ASSIGNMENT_CREATED", apiVersion = "1")
+    @EmitEvent(id = "SHOPMGR_ASSIGNMENT_CREATED", apiVersion = "1")
     public @NonNull AssignmentResponse createAssignment(
             @PathVariable UUID appointmentId,
             @RequestBody @NonNull CreateAssignmentRequest request) {
@@ -45,7 +45,7 @@ public class AssignmentController {
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('workexec.assignment.create', 'workexec.assignment.read')")
-    @EmitEvent(id = "ASSIGNMENT_LIST_FETCHED", apiVersion = "1")
+    @EmitEvent(id = "SHOPMGR_ASSIGNMENT_LIST_FETCHED", apiVersion = "1")
     public @NonNull List<AssignmentResponse> listAssignments(@PathVariable UUID appointmentId) {
         return assignmentService.getByAppointmentId(appointmentId);
     }

@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,7 +42,25 @@ public class AssignmentServiceImpl implements AssignmentService {
     @Override
     @Transactional
     public @NonNull AssignmentResponse create(@NonNull CreateAssignmentRequest request) {
-        validateAtLeastOneLeadMechanic(request.getMechanics());
+        // Resolve effective roles (single mechanic with null role defaults to LEAD) —
+        // F-06
+        List<MechanicAssignmentItem> mechanics = resolveEffectiveRoles(request.getMechanics());
+        validateLeadConstraint(mechanics);
+
+        // F-10: override requires additional authority
+        if (request.isOverride()) {
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            boolean canOverride = auth != null && auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("workexec.assignment.override"));
+            if (!canOverride) {
+                throw new AccessDeniedException(
+                        "Overriding assignment constraints requires authority 'workexec.assignment.override'");
+            }
+            if (request.getOverrideReason() == null || request.getOverrideReason().isBlank()) {
+                throw new IllegalArgumentException(
+                        "overrideReason must not be blank when override=true");
+            }
+        }
 
         var appointment = appointmentRepository.findById(request.getAppointmentId())
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -55,8 +75,8 @@ public class AssignmentServiceImpl implements AssignmentService {
         Instant now = Instant.now(clock);
 
         // Resolve all mechanics first — fail fast before any persistence
-        List<Mechanic> resolvedMechanics = new ArrayList<>(request.getMechanics().size());
-        for (MechanicAssignmentItem item : request.getMechanics()) {
+        List<Mechanic> resolvedMechanics = new ArrayList<>(mechanics.size());
+        for (MechanicAssignmentItem item : mechanics) {
             var mechanic = mechanicRepository.findByPersonId(item.getMechanicPersonId())
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Mechanic not found for personId: " + item.getMechanicPersonId()));
@@ -75,8 +95,8 @@ public class AssignmentServiceImpl implements AssignmentService {
                 .updatedAt(now)
                 .build());
 
-        for (int i = 0; i < request.getMechanics().size(); i++) {
-            MechanicAssignmentItem item = request.getMechanics().get(i);
+        for (int i = 0; i < mechanics.size(); i++) {
+            MechanicAssignmentItem item = mechanics.get(i);
             assignmentMechanicRepository.save(AssignmentMechanic.builder()
                     .assignmentId(assignment.getAssignmentId())
                     .mechanicId(resolvedMechanics.get(i).getMechanicId())
@@ -100,11 +120,29 @@ public class AssignmentServiceImpl implements AssignmentService {
         return results;
     }
 
-    private static void validateAtLeastOneLeadMechanic(List<MechanicAssignmentItem> mechanics) {
-        boolean hasLead = mechanics.stream().anyMatch(m -> m.getRole() == MechanicRole.LEAD);
-        if (!hasLead) {
+    /** F-06: Default null role to LEAD for single-mechanic assignments. */
+    private static List<MechanicAssignmentItem> resolveEffectiveRoles(List<MechanicAssignmentItem> mechanics) {
+        if (mechanics.size() == 1 && mechanics.get(0).getRole() == null) {
+            return List.of(MechanicAssignmentItem.builder()
+                    .mechanicPersonId(mechanics.get(0).getMechanicPersonId())
+                    .role(MechanicRole.LEAD)
+                    .build());
+        }
+        return mechanics;
+    }
+
+    /** F-09: Enforce exactly one LEAD mechanic for multi-mechanic assignments. */
+    private static void validateLeadConstraint(List<MechanicAssignmentItem> mechanics) {
+        long leadCount = mechanics.stream()
+                .filter(m -> m.getRole() == MechanicRole.LEAD)
+                .count();
+        if (leadCount == 0) {
             throw new IllegalArgumentException(
-                    "Assignment must include at least one mechanic with role LEAD");
+                    "Assignment must include exactly one mechanic with role LEAD");
+        }
+        if (mechanics.size() > 1 && leadCount > 1) {
+            throw new IllegalArgumentException(
+                    "Multi-mechanic assignment must have exactly one LEAD; found " + leadCount);
         }
     }
 

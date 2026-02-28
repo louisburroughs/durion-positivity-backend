@@ -1,6 +1,5 @@
 package com.positivity.shopmanager.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -60,9 +59,10 @@ public class HrIntegrationLog {
     private Instant updatedAt;
 
     @PrePersist
-    public void generateEventIdIfAbsent() {
+    public void requireEventId() {
         if (eventId == null) {
-            eventId = UUIDv7Generator.generate();
+            throw new IllegalStateException(
+                    "HrIntegrationLog.eventId must be set before persisting — eventId is the dedupe key");
         }
     }
 }
