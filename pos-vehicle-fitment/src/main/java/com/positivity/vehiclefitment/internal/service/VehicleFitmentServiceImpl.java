@@ -21,6 +21,7 @@ import com.positivity.vehiclefitment.internal.repository.ModelRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleTypeRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableRepository;
 import com.positivity.vehiclefitment.internal.repository.VehicleVariableValueRepository;
+import com.positivity.vehiclefitment.service.VehicleFitmentService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,12 +31,9 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @RequiredArgsConstructor
 @Service
-public class VehicleFitmentService {
+public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
     private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
-    public static final String RESULTS = "Results";
-    public static final String FORMAT_JSON = "?format=json";
-
     private final ManufacturerRepository manufacturerRepository;
     private final MakeRepository makeRepository;
     private final ModelRepository modelRepository;
@@ -45,6 +43,7 @@ public class VehicleFitmentService {
     private final VehicleVariableValueRepository vehicleVariableValueRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    @Override
     public List<VehicleVariable> getVehicleVariables() {
         List<VehicleVariable> cached = vehicleVariableRepository.findAll();
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
@@ -72,6 +71,7 @@ public class VehicleFitmentService {
         return vehicleVariableRepository.findAll();
     }
 
+    @Override
     public List<VehicleVariableValue> getVehicleVariableValues(UUID variableId) {
         List<VehicleVariableValue> cached = vehicleVariableValueRepository.findByVariableId(variableId);
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
@@ -100,6 +100,7 @@ public class VehicleFitmentService {
         return vehicleVariableValueRepository.findByVariableId(variableId);
     }
 
+    @Override
     public List<Manufacturer> getManufacturers() {
         List<Manufacturer> cached = manufacturerRepository.findAll();
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
@@ -129,6 +130,7 @@ public class VehicleFitmentService {
         return manufacturerRepository.findAll();
     }
 
+    @Override
     public List<Make> getMakesByManufacturer(UUID manufacturerId) {
         Manufacturer manufacturer = manufacturerRepository.findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
@@ -161,6 +163,7 @@ public class VehicleFitmentService {
         return makeRepository.findByManufacturerId(manufacturerId);
     }
 
+    @Override
     public List<Model> getModelsByMake(UUID makeId) {
         Make make = makeRepository.findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
@@ -193,6 +196,7 @@ public class VehicleFitmentService {
         return modelRepository.findByMakeId(makeId);
     }
 
+    @Override
     public List<VehicleType> getVehicleTypesForMake(UUID makeId) {
         Make make = makeRepository.findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));

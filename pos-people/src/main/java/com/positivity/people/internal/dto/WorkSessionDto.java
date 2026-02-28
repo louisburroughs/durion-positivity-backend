@@ -6,7 +6,7 @@ import java.util.UUID;
 public class WorkSessionDto {
 
     private UUID sessionId;
-    private String personId;
+    private UUID personId;
     private String status;
     private Instant startedAt;
     private Instant endedAt;
@@ -14,7 +14,7 @@ public class WorkSessionDto {
     public WorkSessionDto() {
     }
 
-    public WorkSessionDto(UUID sessionId, String personId, String status, Instant startedAt, Instant endedAt) {
+    public WorkSessionDto(UUID sessionId, UUID personId, String status, Instant startedAt, Instant endedAt) {
         this.sessionId = sessionId;
         this.personId = personId;
         this.status = status;
@@ -30,11 +30,11 @@ public class WorkSessionDto {
         this.sessionId = sessionId;
     }
 
-    public String getPersonId() {
+    public UUID getPersonId() {
         return personId;
     }
 
-    public void setPersonId(String personId) {
+    public void setPersonId(UUID personId) {
         this.personId = personId;
     }
 

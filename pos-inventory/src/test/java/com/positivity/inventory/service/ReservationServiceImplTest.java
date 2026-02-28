@@ -85,14 +85,14 @@ class ReservationServiceImplTest {
                         UUID id = inv.getArgument(0);
                         ReservationEntity res = ReservationEntity.builder()
                                         .reservationId(UUID.randomUUID()).workorderLineId(UUID.randomUUID())
-                                        .sku("SKU-DEFAULT").requiredQuantity(5).allocatedQuantity(5)
+                                        .stockItemId(UUID.randomUUID()).requiredQuantity(5).allocatedQuantity(5)
                                         .status(ReservationStatus.PENDING).build();
                         return Optional.of(AllocationEntity.builder()
                                         .allocationId(id).reservation(res).allocatedQuantity(5)
                                         .allocationState(AllocationState.SOFT).status(AllocationStatus.ALLOCATED)
                                         .build());
                 });
-                lenient().when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any())).thenReturn(100);
+                lenient().when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class))).thenReturn(100);
         }
 
         // ─── SC1: Create SOFT reservation ──────────────────────────────────────────
@@ -112,7 +112,8 @@ class ReservationServiceImplTest {
                 // allocatedQuantity=requiredQuantity
                 // Arrange
                 UUID workorderLineId = UUID.randomUUID();
-                CreateReservationRequest request = new CreateReservationRequest(workorderLineId, "SKU-001", 5);
+                UUID stockItemId = UUID.randomUUID();
+                CreateReservationRequest request = new CreateReservationRequest(workorderLineId, stockItemId, 5);
 
                 // Act — RED: impl throws UnsupportedOperationException; assertions are never
                 // reached
@@ -122,7 +123,7 @@ class ReservationServiceImplTest {
                 assertThat(result.getStatus()).isEqualTo(ReservationStatus.PENDING.name());
                 assertThat(result.getAllocatedQuantity()).isEqualTo(5);
                 assertThat(result.getWorkorderLineId()).isEqualTo(workorderLineId);
-                assertThat(result.getSku()).isEqualTo("SKU-001");
+                assertThat(result.getStockItemId()).isEqualTo(stockItemId);
         }
 
         // ─── SC2: Idempotency by workorderLineId ────────────────────────────────────
@@ -141,8 +142,8 @@ class ReservationServiceImplTest {
                 // Issue #29: SC2 — idempotent upsert semantics by workorderLineId
                 // Arrange
                 UUID workorderLineId = UUID.randomUUID();
-                CreateReservationRequest first = new CreateReservationRequest(workorderLineId, "SKU-001", 5);
-                CreateReservationRequest second = new CreateReservationRequest(workorderLineId, "SKU-001", 10);
+                CreateReservationRequest first = new CreateReservationRequest(workorderLineId, UUID.randomUUID(), 5);
+                CreateReservationRequest second = new CreateReservationRequest(workorderLineId, UUID.randomUUID(), 10);
 
                 // Act — RED: first call already throws UnsupportedOperationException
                 service.createOrUpdateReservation(first);
@@ -202,7 +203,7 @@ class ReservationServiceImplTest {
                 UUID allocationId = UUID.randomUUID();
                 PromoteAllocationRequest request = new PromoteAllocationRequest("urgent");
                 // Force insufficient ATP so the exception is thrown
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any())).thenReturn(1);
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class))).thenReturn(1);
 
                 // Act + Assert
                 assertThatThrownBy(() -> service.promoteToHard(allocationId, request))
@@ -227,7 +228,7 @@ class ReservationServiceImplTest {
                 UUID workorderLineId = UUID.randomUUID();
                 ReservationEntity reservation = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID()).workorderLineId(workorderLineId)
-                                .sku("SKU-SOFT").requiredQuantity(3).allocatedQuantity(3)
+                                .stockItemId(UUID.randomUUID()).requiredQuantity(3).allocatedQuantity(3)
                                 .status(ReservationStatus.PENDING).build();
                 when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.of(reservation));
                 when(allocationRepository.findByReservation(reservation)).thenReturn(List.of());
@@ -256,7 +257,7 @@ class ReservationServiceImplTest {
                 UUID workorderLineId = UUID.randomUUID();
                 ReservationEntity reservation = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID()).workorderLineId(workorderLineId)
-                                .sku("SKU-HARD").requiredQuantity(5).allocatedQuantity(5)
+                                .stockItemId(UUID.randomUUID()).requiredQuantity(5).allocatedQuantity(5)
                                 .status(ReservationStatus.PENDING).build();
                 AllocationEntity hardAlloc = AllocationEntity.builder()
                                 .allocationId(UUID.randomUUID()).reservation(reservation)
@@ -290,8 +291,8 @@ class ReservationServiceImplTest {
                 // Issue #29: SC7 — upsert updates requiredQuantity and adjusts allocations
                 // Arrange
                 UUID workorderLineId = UUID.randomUUID();
-                CreateReservationRequest original = new CreateReservationRequest(workorderLineId, "SKU-001", 3);
-                CreateReservationRequest update = new CreateReservationRequest(workorderLineId, "SKU-001", 7);
+                CreateReservationRequest original = new CreateReservationRequest(workorderLineId, UUID.randomUUID(), 3);
+                CreateReservationRequest update = new CreateReservationRequest(workorderLineId, UUID.randomUUID(), 7);
 
                 // Act — RED: first call throws UnsupportedOperationException
                 service.createOrUpdateReservation(original);
@@ -314,7 +315,7 @@ class ReservationServiceImplTest {
                 ReservationEntity existing = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID())
                                 .workorderLineId(workorderLineId)
-                                .sku("SKU-101")
+                                .stockItemId(UUID.randomUUID())
                                 .requiredQuantity(2)
                                 .allocatedQuantity(2)
                                 .status(ReservationStatus.PENDING)
@@ -324,7 +325,7 @@ class ReservationServiceImplTest {
                 when(reservationRepository.save(existing)).thenReturn(existing);
 
                 ReservationResponse response = repositoryService.createOrUpdateReservation(
-                                new CreateReservationRequest(workorderLineId, "SKU-101", 9));
+                                new CreateReservationRequest(workorderLineId, UUID.randomUUID(), 9));
 
                 assertThat(existing.getRequiredQuantity()).isEqualTo(9);
                 assertThat(response.getRequiredQuantity()).isEqualTo(9);
@@ -357,7 +358,7 @@ class ReservationServiceImplTest {
                 });
 
                 ReservationResponse response = repositoryService.createOrUpdateReservation(
-                                new CreateReservationRequest(workorderLineId, "SKU-NEW", 4));
+                                new CreateReservationRequest(workorderLineId, UUID.randomUUID(), 4));
 
                 assertThat(response.getWorkorderLineId()).isEqualTo(workorderLineId);
                 assertThat(response.getStatus()).isEqualTo(ReservationStatus.PENDING.name());
@@ -395,7 +396,7 @@ class ReservationServiceImplTest {
                 ReservationEntity reservation = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID())
                                 .workorderLineId(UUID.randomUUID())
-                                .sku("SKU-ATP")
+                                .stockItemId(UUID.randomUUID())
                                 .requiredQuantity(5)
                                 .allocatedQuantity(5)
                                 .status(ReservationStatus.PENDING)
@@ -410,7 +411,7 @@ class ReservationServiceImplTest {
                                 .build();
 
                 when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity("SKU-ATP")).thenReturn(2);
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class))).thenReturn(2);
                 when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                                 .thenReturn(List.of());
                 when(reservationRepository.save(any(ReservationEntity.class)))
@@ -437,7 +438,7 @@ class ReservationServiceImplTest {
                 ReservationEntity reservation = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID())
                                 .workorderLineId(UUID.randomUUID())
-                                .sku("SKU-HARD")
+                                .stockItemId(UUID.randomUUID())
                                 .requiredQuantity(5)
                                 .allocatedQuantity(0)
                                 .status(ReservationStatus.PENDING)
@@ -452,7 +453,7 @@ class ReservationServiceImplTest {
                                 .build();
 
                 when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity("SKU-HARD")).thenReturn(10);
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class))).thenReturn(10);
                 when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                                 .thenReturn(List.of());
                 when(allocationRepository.save(any(AllocationEntity.class)))
@@ -484,7 +485,7 @@ class ReservationServiceImplTest {
                 ReservationEntity reservation = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID())
                                 .workorderLineId(UUID.randomUUID())
-                                .sku("SKU-BRANCH")
+                                .stockItemId(UUID.randomUUID())
                                 .requiredQuantity(5)
                                 .allocatedQuantity(5)
                                 .status(ReservationStatus.PENDING)
@@ -507,7 +508,7 @@ class ReservationServiceImplTest {
                                 .build();
 
                 when(allocationRepository.findById(current.getAllocationId())).thenReturn(Optional.of(current));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity("SKU-BRANCH")).thenReturn(6);
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class))).thenReturn(6);
                 when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                                 .thenReturn(List.of(current, otherHard));
                 when(reservationRepository.save(any(ReservationEntity.class)))
@@ -549,7 +550,7 @@ class ReservationServiceImplTest {
                 ReservationEntity reservation = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID())
                                 .workorderLineId(workorderLineId)
-                                .sku("SKU-CANCEL")
+                                .stockItemId(UUID.randomUUID())
                                 .requiredQuantity(5)
                                 .allocatedQuantity(5)
                                 .status(ReservationStatus.PENDING)
@@ -580,7 +581,7 @@ class ReservationServiceImplTest {
                 ReservationEntity reservation = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID())
                                 .workorderLineId(workorderLineId)
-                                .sku("SKU-CANCEL-2")
+                                .stockItemId(UUID.randomUUID())
                                 .requiredQuantity(9)
                                 .allocatedQuantity(9)
                                 .status(ReservationStatus.PARTIALLY_FULFILLED)

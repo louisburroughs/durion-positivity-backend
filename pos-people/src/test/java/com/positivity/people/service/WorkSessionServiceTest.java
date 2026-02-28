@@ -36,12 +36,12 @@ class WorkSessionServiceTest {
     private WorkSessionBreakRepository workSessionBreakRepository;
 
     private WorkSessionService service;
-    private String personId;
+    private UUID personId;
 
     @BeforeEach
     void setUp() {
         service = new WorkSessionServiceImpl(workSessionRepository, workSessionBreakRepository);
-        personId = "person-1001";
+        personId = UUID.fromString("10000000-0000-0000-0000-000000000001");
     }
 
     @Test

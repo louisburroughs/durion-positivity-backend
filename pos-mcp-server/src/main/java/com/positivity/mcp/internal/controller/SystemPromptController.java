@@ -4,7 +4,8 @@ import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
-import com.positivity.mcp.internal.service.SystemPromptService;
+import com.positivity.mcp.service.SystemPromptService;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -55,7 +56,7 @@ class SystemPromptController {
     @PreAuthorize("hasAuthority('" + McpPermissions.SYSTEM_PROMPT_UPDATE + "')")
     @EmitEvent(id = "MCP_SYSTEM_PROMPT_UPDATE", apiVersion = "1")
     ResponseEntity<SystemPromptResponse> update(@PathVariable @NonNull UUID id,
-                                                @Validated @RequestBody @NonNull SystemPromptRequest request) {
+            @Validated @RequestBody @NonNull SystemPromptRequest request) {
         return ResponseEntity.ok(systemPromptService.update(id, request));
     }
 

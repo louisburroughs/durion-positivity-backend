@@ -1,10 +1,12 @@
 package com.positivity.vehiclefitment.internal.model;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.vehiclefitment.internal.entity.*;
 import jakarta.persistence.*;
 import lombok.Data;
 
 import java.util.List;
+import java.util.UUID;
 
 
 @Entity
@@ -12,8 +14,8 @@ import java.util.List;
 public class PartFitmentEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    private UUID id;
     private Long partNumberId; // Reference to the product this fitment applies to
     @ManyToOne
     @JoinColumn(name = "vehicle_manufacturer_id")
@@ -33,4 +35,11 @@ public class PartFitmentEntity {
     @ManyToMany
     private List<VehicleVariableValue> vehicleVariableValues;
     private String notes;// (Specific fitment notes, e.g., "Except with Off-Road Package," "Requires Modification")
+
+    @PrePersist
+    protected void onCreate() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 }

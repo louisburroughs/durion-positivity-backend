@@ -70,17 +70,18 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
          * Issue: #29
          */
         @Test
-        @DisplayName("POST /v1/inventory/reservations/ with valid request → 201 Created with reservationId")
+        @DisplayName("POST /v1/inventory/reservations with valid request → 201 Created with reservationId")
         void contract_createReservation_returns201() throws Exception {
                 // Issue #29: create reservation endpoint must return 201 with reservationId,
                 // workorderLineId, status
                 UUID workorderLineId = UUID.randomUUID();
                 UUID reservationId = UUID.randomUUID();
+                UUID stockItemId = UUID.randomUUID();
 
                 ReservationResponse mockResponse = ReservationResponse.builder()
                                 .reservationId(reservationId)
                                 .workorderLineId(workorderLineId)
-                                .sku("SKU-001")
+                                .stockItemId(stockItemId)
                                 .requiredQuantity(5)
                                 .allocatedQuantity(5)
                                 .status(ReservationStatus.PENDING.name())
@@ -90,9 +91,9 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .thenReturn(mockResponse);
 
                 String requestBody = objectMapper.writeValueAsString(
-                                new CreateReservationRequest(workorderLineId, "SKU-001", 5));
+                                new CreateReservationRequest(workorderLineId, stockItemId, 5));
 
-                mockMvc.perform(withGatewayAuth(post("/v1/inventory/reservations/"))
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/reservations"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                                 .andExpect(status().isCreated())
@@ -119,11 +120,12 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
                 UUID allocationId = UUID.randomUUID();
                 UUID workorderLineId = UUID.randomUUID();
                 UUID reservationId = UUID.randomUUID();
+                UUID stockItemId = UUID.randomUUID();
 
                 ReservationResponse mockResponse = ReservationResponse.builder()
                                 .reservationId(reservationId)
                                 .workorderLineId(workorderLineId)
-                                .sku("SKU-001")
+                                .stockItemId(stockItemId)
                                 .requiredQuantity(5)
                                 .allocatedQuantity(5)
                                 .status(ReservationStatus.FULFILLED.name())
@@ -217,10 +219,11 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #29: ADR-0011/ADR-0014 — missing X-Authorities header must yield 403
                 // Forbidden
                 UUID workorderLineId = UUID.randomUUID();
+                UUID stockItemId = UUID.randomUUID();
                 String requestBody = objectMapper.writeValueAsString(
-                                new CreateReservationRequest(workorderLineId, "SKU-001", 5));
+                                new CreateReservationRequest(workorderLineId, stockItemId, 5));
 
-                mockMvc.perform(post("/v1/inventory/reservations/")
+                mockMvc.perform(post("/v1/inventory/reservations")
                                 .header("X-User", "test-user")
                                 // Deliberately omit X-Authorities to trigger 403
                                 .contentType(MediaType.APPLICATION_JSON)

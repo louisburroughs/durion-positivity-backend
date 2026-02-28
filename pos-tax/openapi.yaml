@@ -184,9 +184,9 @@ components:
           type: string
         postalCode:
           type: string
-        city:
-          type: string
         stateCode:
+          type: string
+        city:
           type: string
       required:
       - destinationAddress

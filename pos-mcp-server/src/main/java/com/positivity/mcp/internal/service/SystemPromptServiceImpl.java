@@ -4,6 +4,8 @@ import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
+import com.positivity.mcp.service.SystemPromptService;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,14 +15,15 @@ import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @Service
-public class SystemPromptService {
+public class SystemPromptServiceImpl implements SystemPromptService {
 
     private final SystemPromptRepository repository;
 
-    public SystemPromptService(@NonNull SystemPromptRepository repository) {
+    public SystemPromptServiceImpl(@NonNull SystemPromptRepository repository) {
         this.repository = repository;
     }
 
+    @Override
     @Transactional
     public @NonNull SystemPromptResponse create(@NonNull SystemPromptRequest request) {
         if (repository.existsByName(request.name())) {
@@ -32,11 +35,13 @@ public class SystemPromptService {
         return SystemPromptResponse.from(repository.save(prompt));
     }
 
+    @Override
     @Transactional(readOnly = true)
     public @NonNull List<SystemPromptResponse> findAll() {
         return repository.findAll().stream().map(SystemPromptResponse::from).toList();
     }
 
+    @Override
     @Transactional(readOnly = true)
     public @NonNull SystemPromptResponse get(@NonNull UUID id) {
         return repository.findById(id)
@@ -44,6 +49,7 @@ public class SystemPromptService {
                 .orElseThrow(() -> new NoSuchElementException("Prompt not found: " + id));
     }
 
+    @Override
     @Transactional
     public @NonNull SystemPromptResponse update(@NonNull UUID id, @NonNull SystemPromptRequest request) {
         var prompt = repository.findById(id)
@@ -56,6 +62,7 @@ public class SystemPromptService {
         return SystemPromptResponse.from(repository.save(prompt));
     }
 
+    @Override
     @Transactional
     public void delete(@NonNull UUID id) {
         repository.deleteById(id);

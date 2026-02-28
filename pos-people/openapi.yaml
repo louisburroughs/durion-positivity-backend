@@ -375,18 +375,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Person or role not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "201":
           description: Role assignment created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserRoleDto"
+        "404":
+          description: Person or role not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -499,12 +499,6 @@ paths:
               $ref: "#/components/schemas/LinkUserToPersonRequest"
         required: true
       responses:
-        "200":
-          description: Link already exists and is returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
         "201":
           description: Link created successfully
           content:
@@ -519,6 +513,12 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -543,12 +543,6 @@ paths:
               $ref: "#/components/schemas/CreateUserLinkRequest"
         required: true
       responses:
-        "200":
-          description: Link already exists and is returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
         "201":
           description: Link created successfully
           content:
@@ -563,6 +557,12 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -1189,6 +1189,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         "200":
           description: List returned
@@ -1405,14 +1406,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "204":
-          description: Role assignment revoked successfully
         "400":
           description: Invalid request for revoking role assignment
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
+        "204":
+          description: Role assignment revoked successfully
   /v1/people/users/{userId}/link:
     delete:
       tags:
@@ -1743,6 +1744,7 @@ components:
       properties:
         personId:
           type: string
+          format: uuid
         actor:
           type: string
     WorkSessionDto:
@@ -1753,6 +1755,7 @@ components:
           format: uuid
         personId:
           type: string
+          format: uuid
         status:
           type: string
         startedAt:
@@ -1830,8 +1833,9 @@ components:
       properties:
         timeEntryId:
           type: string
+          format: uuid
           description: Time entry identifier to adjust
-          example: te-12345
+          example: 123e4567-e89b-12d3-a456-426614174000
         reasonCode:
           type: string
           description: Reason code for the adjustment
@@ -2138,8 +2142,9 @@ components:
           readOnly: true
         timeEntryId:
           type: string
+          format: uuid
           description: Time entry identifier being adjusted
-          example: te-12345
+          example: 123e4567-e89b-12d3-a456-426614174000
         reasonCode:
           type: string
           description: Reason code for the adjustment
