@@ -369,18 +369,18 @@ paths:
               $ref: "#/components/schemas/PersonRoleAssignmentRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "201":
           description: Role assignment created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserRoleDto"
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "404":
           description: Person or role not found
           content:
@@ -499,8 +499,8 @@ paths:
               $ref: "#/components/schemas/LinkUserToPersonRequest"
         required: true
       responses:
-        "201":
-          description: Link created successfully
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -517,8 +517,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "200":
-          description: Link already exists and is returned
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -543,8 +543,8 @@ paths:
               $ref: "#/components/schemas/CreateUserLinkRequest"
         required: true
       responses:
-        "201":
-          description: Link created successfully
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -561,8 +561,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "200":
-          description: Link already exists and is returned
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -1406,14 +1406,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
+        "204":
+          description: Role assignment revoked successfully
         "400":
           description: Invalid request for revoking role assignment
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "204":
-          description: Role assignment revoked successfully
   /v1/people/users/{userId}/link:
     delete:
       tags:
@@ -1689,6 +1689,24 @@ components:
           format: date-time
       required:
       - roleCode
+    UserRoleDto:
+      type: object
+      properties:
+        userId:
+          type: string
+        roleCode:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        active:
+          type: boolean
     ProblemDetail:
       type: object
       properties:
@@ -1708,24 +1726,6 @@ components:
         properties:
           type: object
           additionalProperties: {}
-    UserRoleDto:
-      type: object
-      properties:
-        userId:
-          type: string
-        roleCode:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
-        active:
-          type: boolean
     BreakDto:
       type: object
       properties:

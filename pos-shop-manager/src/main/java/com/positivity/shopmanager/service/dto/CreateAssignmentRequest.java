@@ -6,13 +6,18 @@ import lombok.Builder;
 import lombok.Value;
 import org.jspecify.annotations.NonNull;
 
-/** Request payload for assigning mechanics and an optional resource to an appointment. */
+/**
+ * Request payload for assigning mechanics and an optional resource to an
+ * appointment.
+ */
 @Value
 @Builder
 public class CreateAssignmentRequest {
-    @NonNull UUID appointmentId;
+    @NonNull
+    UUID appointmentId;
     /** At least one entry with role LEAD is required (AC-4). */
-    @NonNull List<MechanicAssignmentItem> mechanics;
+    @NonNull
+    List<MechanicAssignmentItem> mechanics;
     /** Optional — bay or mobile unit to associate with this assignment. */
     UUID resourceId;
     String resourceType;

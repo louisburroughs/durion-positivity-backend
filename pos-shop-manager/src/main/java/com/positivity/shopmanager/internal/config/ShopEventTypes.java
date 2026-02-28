@@ -50,7 +50,8 @@ public final class ShopEventTypes {
                                                 "View schedule by location and resource filters").build(),
                                 // ConflictOverrideController - 1 event
                                 EventTypeRegistration.write("APPOINTMENT_CONFLICT_OVERRIDE_CREATE",
-                                                "Override appointment scheduling conflict with manager permission").build(),
+                                                "Override appointment scheduling conflict with manager permission")
+                                                .build(),
                                 // AssignmentController - 2 events
                                 EventTypeRegistration.write("ASSIGNMENT_CREATED",
                                                 "Mechanic and resource assignment created for an appointment").build(),

@@ -207,6 +207,76 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AppointmentResponse"
+  /v1/appointments/{appointmentId}/conflict-override:
+    post:
+      tags:
+      - conflict-override-controller
+      operationId: executeOverride
+      parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConflictOverrideRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ConflictOverrideResponse"
+  /v1/appointments/{appointmentId}/assignments:
+    get:
+      tags:
+      - assignment-controller
+      operationId: listAssignments
+      parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AssignmentResponse"
+    post:
+      tags:
+      - assignment-controller
+      operationId: createAssignment
+      parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssignmentRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AssignmentResponse"
   /v1/shop-manager/{locationId}/workorders/{workorderId}/operationalContext:
     get:
       tags:
@@ -677,6 +747,102 @@ components:
       - locationId
       - serviceRequestIds
       - startAt
+    ConflictOverrideRequest:
+      type: object
+      properties:
+        appointmentId:
+          type: string
+          format: uuid
+        overrideReason:
+          type: string
+        conflictDetails:
+          type: string
+    ConflictOverrideResponse:
+      type: object
+      properties:
+        overrideId:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+        overriddenByUserId:
+          type: string
+        overrideTimestamp:
+          type: string
+          format: date-time
+        overrideReason:
+          type: string
+    CreateAssignmentRequest:
+      type: object
+      properties:
+        appointmentId:
+          type: string
+          format: uuid
+        mechanics:
+          type: array
+          items:
+            $ref: "#/components/schemas/MechanicAssignmentItem"
+        resourceId:
+          type: string
+          format: uuid
+        resourceType:
+          type: string
+        override:
+          type: boolean
+        overrideReason:
+          type: string
+    MechanicAssignmentItem:
+      type: object
+      properties:
+        mechanicPersonId:
+          type: string
+        role:
+          type: string
+          enum:
+          - LEAD
+          - ASSIST
+    AssignedMechanicInfo:
+      type: object
+      properties:
+        mechanicId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum:
+          - LEAD
+          - ASSIST
+    AssignmentResponse:
+      type: object
+      properties:
+        assignmentId:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+        mechanics:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssignedMechanicInfo"
+        resourceId:
+          type: string
+          format: uuid
+        resourceType:
+          type: string
+        status:
+          type: string
+          enum:
+          - CONFIRMED
+          - IN_PROGRESS
+          - COMPLETED
+          - CANCELLED
+        override:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
     PersonDTO:
       type: object
       properties:

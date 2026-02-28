@@ -49,7 +49,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         if (appointment.getStatus() != AppointmentStatus.SCHEDULED) {
             throw new IllegalStateException(
                     "Appointment must be SCHEDULED to create an assignment, current status: "
-                    + appointment.getStatus());
+                            + appointment.getStatus());
         }
 
         Instant now = Instant.now(clock);
