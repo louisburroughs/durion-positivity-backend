@@ -78,6 +78,23 @@ public class InvoicePaymentController {
         }
     }
 
+    /**
+     * Legacy endpoint kept for backward compatibility with older clients.
+     *
+     * New implementations should use /v1/accounting/payments/{paymentId}/applications.
+     */
+    @PostMapping("/v1/accounting/invoices/{invoiceId}/pay")
+    @PreAuthorize("hasAuthority('accounting:ap:pay')")
+    @Operation(summary = "Apply payment to invoice (legacy)", description = "Legacy compatibility endpoint. Use payment applications API instead.")
+    @ApiResponse(responseCode = "501", description = "Legacy endpoint is not implemented")
+    @EmitEvent(id = "ACCOUNTING_INVOICE_PAY_LEGACY", apiVersion = "1")
+    public ResponseEntity<Void> applyPaymentLegacy(
+            @Parameter(description = "Invoice identifier") @PathVariable UUID invoiceId,
+            @RequestBody(required = false) Object body) {
+        log.info("Legacy invoice pay endpoint called for invoice {}", invoiceId);
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    }
+
     @PostMapping("/v1/accounting/invoice/invoices")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Regenerate invoice from workorder", description = "Regenerate an invoice from a workorder.")

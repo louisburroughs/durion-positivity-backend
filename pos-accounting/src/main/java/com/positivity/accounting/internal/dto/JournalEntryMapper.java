@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.dto;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 
 import org.jspecify.annotations.NonNull;
 
@@ -75,9 +76,9 @@ public final class JournalEntryMapper {
         entity.setPostingRuleVersionId(request.getPostingRuleVersionId());
 
         if (request.getLines() != null) {
-            entity.setLines(request.getLines().stream()
+            entity.setLines(new ArrayList<>(request.getLines().stream()
                     .map(JournalEntryMapper::toLineEntity)
-                    .toList());
+                    .toList()));
         }
 
         return entity;

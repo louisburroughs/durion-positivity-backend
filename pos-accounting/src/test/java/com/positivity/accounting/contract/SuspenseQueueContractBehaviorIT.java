@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -99,7 +100,8 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Manually mark event as SUSPENDED for this test
                 // In production, this would happen through the posting rule engine
-                markEventAsSuspended(UUID.fromString(eventId), "Test setup: simulating rule engine suspension");
+                markEventAsSuspendedForSuccessPath(UUID.fromString(eventId),
+                                "Test setup: simulating rule engine suspension");
 
                 // Act: Reprocess the suspended event
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -202,7 +204,8 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
                 String eventId = extractEventIdFromResponse(submitResult);
 
-                markEventAsSuspended(UUID.fromString(eventId), "Test setup: simulating suspended event for success history");
+                markEventAsSuspendedForSuccessPath(UUID.fromString(eventId),
+                                "Test setup: simulating suspended event for success history");
 
                 // Act: Reprocess the event
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -348,6 +351,24 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                                 .orElseThrow(() -> new IllegalStateException("Event not found: " + eventId));
                 event.setStatus(AccountingEventStatus.SUSPENDED);
                 event.setErrorMessage(errorMessage);
+                accountingEventRepository.save(event);
+        }
+
+        private void markEventAsSuspendedForSuccessPath(UUID eventId, String errorMessage) {
+                AccountingEvent event = accountingEventRepository.findById(eventId)
+                                .orElseThrow(() -> new IllegalStateException("Event not found: " + eventId));
+                event.setStatus(AccountingEventStatus.SUSPENDED);
+                event.setErrorMessage(errorMessage);
+
+                if (event.getPayload() != null) {
+                        Object nestedPayload = event.getPayload().get("payload");
+                        if (nestedPayload instanceof Map<?, ?> payloadMap && payloadMap.get("amount") != null) {
+                                Map<String, Object> normalizedPayload = new HashMap<>(event.getPayload());
+                                normalizedPayload.put("amount", payloadMap.get("amount"));
+                                event.setPayload(normalizedPayload);
+                        }
+                }
+
                 accountingEventRepository.save(event);
         }
 
