@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -147,7 +148,7 @@ class CycleCountAdjustmentServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(AdjustmentStatus.PENDING_APPROVAL);
         assertThat(response.getRequiredApprovalTier()).isEqualTo(ApprovalTier.TIER_1_MANAGER);
         verify(ledgerRepository, never()).save(any());
-        verify(ledgerRepository, never()).calculateOnHandQuantity(any());
+        verify(ledgerRepository, never()).calculateOnHandQuantity(anyString());
     }
 
     // -------------------------------------------------------------------------

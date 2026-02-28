@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -38,16 +39,16 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
 
     @Override
     public @NonNull ReallocateResponse reallocate(@NonNull ReallocateRequest request) {
-        String sku = request.getSku();
-        if (sku == null || sku.isBlank()) {
-            throw new IllegalArgumentException("sku is required");
+        UUID stockItemId = request.getStockItemId();
+        if (stockItemId == null) {
+            throw new IllegalArgumentException("stockItemId is required");
         }
         Instant now = Instant.now(clock);
 
-        int onHand = Optional.ofNullable(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku))
+        int onHand = Optional.ofNullable(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId))
                 .orElse(0);
 
-        List<ReservationEntity> reservations = reservationRepository.findBySku(sku);
+        List<ReservationEntity> reservations = reservationRepository.findByStockItemId(stockItemId);
 
         // Sort by effective priority ASC (1=CRITICAL on a 1–10 scale, so ASC integer
         // order
@@ -100,7 +101,7 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
         int atpAfterReallocation = onHand - totalAllocated;
 
         return ReallocateResponse.builder()
-                .sku(request.getSku())
+                .stockItemId(request.getStockItemId())
                 .totalReallocated(totalReallocated)
                 .auditRecordsCreated(audits.size())
                 .atpAfterReallocation(atpAfterReallocation)
@@ -124,7 +125,7 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
             AllocationAuditReasonCode reasonCode, Instant now,
             int previousAllocatedQty, int newAllocatedQty) {
         return AllocationAuditEntity.builder()
-                .stockItemId(request.getSku())
+                .stockItemId(request.getStockItemId())
                 .reasonCode(reasonCode)
                 .triggeredBy(resolveTriggeredBy())
                 .triggerReferenceId(request.getTriggerReferenceId())

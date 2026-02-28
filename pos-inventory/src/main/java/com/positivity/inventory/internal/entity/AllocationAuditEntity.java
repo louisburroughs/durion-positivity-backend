@@ -35,7 +35,7 @@ public class AllocationAuditEntity {
     private UUID allocationAuditId;
 
     @Column(name = "stock_item_id", nullable = false)
-    private String stockItemId;
+    private UUID stockItemId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "reason_code", nullable = false)

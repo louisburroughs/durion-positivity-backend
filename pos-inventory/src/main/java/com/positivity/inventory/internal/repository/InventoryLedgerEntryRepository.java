@@ -31,6 +31,10 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
 
     Optional<InventoryLedgerEntry> findByAdjustmentId(UUID adjustmentId);
 
+    default Integer calculateOnHandQuantity(UUID stockItemId) {
+        return calculateOnHandQuantity(stockItemId.toString());
+    }
+
     default Integer calculateOnHandQuantity(String stockItemId) {
         return calculateOnHandQuantityForEventTypes(stockItemId,
                 InventoryLedgerEventType.onHandAffectingTypes());

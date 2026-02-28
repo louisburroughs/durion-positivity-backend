@@ -42,8 +42,8 @@ public class ReservationEntity {
     @Column(nullable = false, unique = true)
     private UUID workorderLineId;
 
-    @Column(nullable = false)
-    private String sku;
+    @Column(name = "stock_item_id", nullable = false)
+    private UUID stockItemId;
 
     @Column(nullable = false)
     private int requiredQuantity;
