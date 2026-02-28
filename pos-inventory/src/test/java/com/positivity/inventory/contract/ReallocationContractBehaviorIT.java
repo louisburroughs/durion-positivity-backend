@@ -6,8 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.inventory.dto.reallocation.ReallocateRequest;
-import com.positivity.inventory.dto.reallocation.ReallocateResponse;
+import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
+import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
 import com.positivity.inventory.service.AllocationReallocationService;
 
 import java.util.UUID;
@@ -220,7 +220,8 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("POST /v1/inventory/allocations/reallocate with missing stockItemId → 400 Bad Request")
         void contract_reallocate_missingSku_returns400() throws Exception {
-                // Issue #24: AC4 — missing stockItemId must produce 400 (bean validation via @NotNull)
+                // Issue #24: AC4 — missing stockItemId must produce 400 (bean validation via
+                // @NotNull)
                 String requestBody = "{\"triggerType\":\"PRIORITY_CHANGE\",\"triggerReferenceId\":\"ref-007\"}";
 
                 mockMvc.perform(withReallocateAuth(post("/v1/inventory/allocations/reallocate"))

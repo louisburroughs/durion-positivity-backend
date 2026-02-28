@@ -9,10 +9,10 @@ import static org.mockito.Mockito.verify;
 
 import com.positivity.inventory.internal.client.ExternalAvailabilityClient;
 import com.positivity.inventory.internal.client.ProductSubstituteClient;
-import com.positivity.inventory.dto.shortage.ShortageResolutionRequest;
-import com.positivity.inventory.dto.shortage.ShortageResolutionResponse;
-import com.positivity.inventory.dto.shortage.ResolutionOption;
-import com.positivity.inventory.dto.shortage.ResolutionOptionType;
+import com.positivity.inventory.internal.dto.shortage.ResolutionOption;
+import com.positivity.inventory.internal.dto.shortage.ResolutionOptionType;
+import com.positivity.inventory.internal.dto.shortage.ShortageResolutionRequest;
+import com.positivity.inventory.internal.dto.shortage.ShortageResolutionResponse;
 import com.positivity.inventory.internal.service.ShortageResolutionServiceImpl;
 
 import java.math.BigDecimal;

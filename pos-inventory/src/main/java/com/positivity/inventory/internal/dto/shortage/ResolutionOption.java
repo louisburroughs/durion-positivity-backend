@@ -1,4 +1,4 @@
-package com.positivity.inventory.dto.shortage;
+package com.positivity.inventory.internal.dto.shortage;
 
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;

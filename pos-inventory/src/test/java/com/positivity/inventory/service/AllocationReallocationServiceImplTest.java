@@ -6,8 +6,8 @@ import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.inventory.dto.reallocation.ReallocateRequest;
-import com.positivity.inventory.dto.reallocation.ReallocateResponse;
+import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
+import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
 import com.positivity.inventory.internal.entity.AllocationAuditEntity;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationAuditReasonCode;
@@ -151,7 +151,8 @@ class AllocationReallocationServiceImplTest {
                 // exists
                 highPrio.setAllocatedQuantity(5);
                 lowPrio.setAllocatedQuantity(5);
-                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(highPrio, lowPrio));
+                when(reservationRepository.findByStockItemId(stockItemId))
+                                .thenReturn(java.util.List.of(highPrio, lowPrio));
                 when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
@@ -197,7 +198,8 @@ class AllocationReallocationServiceImplTest {
                 // exists
                 highPrio.setAllocatedQuantity(5);
                 lowPrio.setAllocatedQuantity(5);
-                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(highPrio, lowPrio));
+                when(reservationRepository.findByStockItemId(stockItemId))
+                                .thenReturn(java.util.List.of(highPrio, lowPrio));
                 when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
@@ -321,7 +323,8 @@ class AllocationReallocationServiceImplTest {
                                 .isEqualTo(expectedAtp);
         }
 
-        // ─── AC4: Null stockItemId → exception (service-layer guard) ────────────────────────
+        // ─── AC4: Null stockItemId → exception (service-layer guard)
+        // ────────────────────────
 
         /**
          * AC4: A {@code ReallocateRequest} with a null {@code stockItemId} must cause
@@ -375,7 +378,8 @@ class AllocationReallocationServiceImplTest {
                 agedWaiter.setAllocatedQuantity(4);
                 freshHigher.setAllocatedQuantity(4);
 
-                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(freshHigher, agedWaiter));
+                when(reservationRepository.findByStockItemId(stockItemId))
+                                .thenReturn(java.util.List.of(freshHigher, agedWaiter));
                 when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(5);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
@@ -443,7 +447,8 @@ class AllocationReallocationServiceImplTest {
                 // earlyDueDate wins the tie-break by dueDateTime.
                 lateDueDate.setAllocatedQuantity(5);
 
-                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(lateDueDate, earlyDueDate));
+                when(reservationRepository.findByStockItemId(stockItemId))
+                                .thenReturn(java.util.List.of(lateDueDate, earlyDueDate));
                 when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(5);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
@@ -582,9 +587,11 @@ class AllocationReallocationServiceImplTest {
                 UUID stockItemId = STOCK_ITEM_ID;
                 // Waiting for 12 hours, which is less than the 24-hour grace period
                 Instant waitingSince = FIXED_NOW.minus(Duration.ofHours(12));
-                ReservationEntity noAgingReservation = buildReservation(WORKORDER_LOW_PRIO, stockItemId, 8, 5, waitingSince);
+                ReservationEntity noAgingReservation = buildReservation(WORKORDER_LOW_PRIO, stockItemId, 8, 5,
+                                waitingSince);
 
-                ReservationEntity higherPrioReservation = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 7, 5, null);
+                ReservationEntity higherPrioReservation = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 7, 5,
+                                null);
                 // AC5: seed prior allocation on the lower-priority reservation so that
                 // previousTotalAllocated = 5 and the pool is available for redistribution.
                 noAgingReservation.setAllocatedQuantity(5);

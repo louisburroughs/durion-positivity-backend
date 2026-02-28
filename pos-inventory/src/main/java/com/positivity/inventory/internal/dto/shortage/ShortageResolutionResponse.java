@@ -1,4 +1,4 @@
-package com.positivity.inventory.dto.shortage;
+package com.positivity.inventory.internal.dto.shortage;
 
 import java.util.List;
 import java.util.UUID;
