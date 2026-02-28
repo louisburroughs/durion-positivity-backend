@@ -10,8 +10,8 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
-- name: Vehicle Registry
-  description: Vehicle CRUD and management operations for CAP:091
+- name: Vehicle Registry API
+  description: Operations for creating and maintaining vehicle registry records
 - name: Vehicle API
   description: Endpoints for vehicle CRUD and VIN-based operations
 - name: Vehicle Preferences
@@ -19,81 +19,6 @@ tags:
 - name: Vehicle Search
   description: Search and discover vehicles with ranking-based results
 paths:
-  /v1/vehicles/{vehicleId}:
-    get:
-      tags:
-      - Vehicle Registry
-      summary: Get vehicle by ID
-      description: "Retrieves a vehicle by its unique ID. Story #105."
-      operationId: getVehicle
-      parameters:
-      - name: vehicleId
-        in: path
-        description: Vehicle UUID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "404":
-          description: Vehicle not found
-        "200":
-          description: Vehicle found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleResponse"
-    put:
-      tags:
-      - Vehicle Registry
-      summary: Update vehicle
-      description: "Updates an existing vehicle's details. VIN cannot be changed.\
-        \ Story #105."
-      operationId: updateVehicle
-      parameters:
-      - name: vehicleId
-        in: path
-        description: Vehicle UUID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateVehicleRequest"
-        required: true
-      responses:
-        "400":
-          description: Invalid request
-        "404":
-          description: Vehicle not found
-        "200":
-          description: Vehicle updated successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleResponse"
-    delete:
-      tags:
-      - Vehicle Registry
-      summary: Delete vehicle
-      description: "Soft-deletes (deactivates) a vehicle. Story #105."
-      operationId: deleteVehicle
-      parameters:
-      - name: vehicleId
-        in: path
-        description: Vehicle UUID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "204":
-          description: Vehicle deleted successfully
-        "404":
-          description: Vehicle not found
   /v1/vehicles/{vehicleId}/preferences:
     get:
       tags:
@@ -111,14 +36,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: No preferences found for this vehicle
+        "200":
+          description: Preferences found and returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "200":
-          description: Preferences found and returned
+        "404":
+          description: No preferences found for this vehicle
           content:
             '*/*':
               schema:
@@ -151,14 +76,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "200":
-          description: Preferences updated successfully
+        "400":
+          description: Invalid preference data
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "400":
-          description: Invalid preference data
+        "200":
+          description: Preferences updated successfully
           content:
             '*/*':
               schema:
@@ -210,14 +135,14 @@ paths:
               $ref: "#/components/schemas/PreferencesMergeDto"
         required: true
       responses:
-        "404":
-          description: No existing preferences to merge into
+        "200":
+          description: Preferences merged successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "200":
-          description: Preferences merged successfully
+        "404":
+          description: No existing preferences to merge into
           content:
             '*/*':
               schema:
@@ -228,7 +153,7 @@ paths:
       - Vehicle API
       summary: Get vehicle by ID
       description: Retrieve a vehicle by its unique ID.
-      operationId: getVehicle_1
+      operationId: getVehicle
       parameters:
       - name: id
         in: path
@@ -256,7 +181,7 @@ paths:
       - Vehicle API
       summary: Update vehicle by ID
       description: Update an existing vehicle's details by its ID.
-      operationId: updateVehicle_1
+      operationId: updateVehicle
       parameters:
       - name: id
         in: path
@@ -290,7 +215,7 @@ paths:
       - Vehicle API
       summary: Delete vehicle by ID
       description: Delete a vehicle from the inventory by its ID.
-      operationId: deleteVehicle_1
+      operationId: deleteVehicle
       parameters:
       - name: id
         in: path
@@ -385,33 +310,92 @@ paths:
           description: Vehicle deleted successfully.
         "404":
           description: Vehicle not found.
-  /v1/vehicles:
-    post:
+  /v1/vehicle-registry/{vehicleId}:
+    get:
       tags:
-      - Vehicle Registry
-      summary: Create a new vehicle
-      description: "Creates a new vehicle record with VIN validation and normalization.\
-        \ VIN must be globally unique across all active vehicles. Story #105 / Issue\
-        \ #105."
-      operationId: createVehicle
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateVehicleRequest"
+      - Vehicle Registry API
+      summary: Get vehicle by ID
+      description: Retrieve a vehicle by its unique ID
+      operationId: getVehicle_1
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle UUID
         required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "400":
-          description: "Invalid request - VIN format invalid, missing required fields,\
-            \ or duplicate VIN"
-        "409":
-          description: Conflict - VIN already exists for another active vehicle
-        "201":
-          description: Vehicle created successfully
+        "200":
+          description: Vehicle retrieved successfully.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
+        "404":
+          description: Vehicle not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+    put:
+      tags:
+      - Vehicle Registry API
+      summary: Update vehicle
+      description: Update an existing vehicle by ID
+      operationId: updateVehicle_1
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVehicleRequest"
+        required: true
+      responses:
+        "200":
+          description: Vehicle updated successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+        "400":
+          description: Invalid vehicle request.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+        "404":
+          description: Vehicle not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+    delete:
+      tags:
+      - Vehicle Registry API
+      summary: Delete vehicle
+      description: Deactivate a vehicle by ID
+      operationId: deleteVehicle_1
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Vehicle deleted successfully.
+        "404":
+          description: Vehicle not found.
   /v1/vehicles/search:
     get:
       tags:
@@ -502,7 +486,7 @@ paths:
       - Vehicle API
       summary: Create a new vehicle
       description: Add a new vehicle to the inventory.
-      operationId: createVehicle_1
+      operationId: createVehicle
       requestBody:
         content:
           application/json:
@@ -536,99 +520,63 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleLegacyResponse"
-  /v1/vehicles/vin/{vin}:
+  /v1/vehicle-registry:
+    post:
+      tags:
+      - Vehicle Registry API
+      summary: Create vehicle
+      description: Create a new vehicle registry record
+      operationId: createVehicle_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleRequest"
+        required: true
+      responses:
+        "400":
+          description: Invalid vehicle request.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+        "201":
+          description: Vehicle created successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+  /v1/vehicle-registry/vin/{vin}:
     get:
       tags:
-      - Vehicle Registry
+      - Vehicle Registry API
       summary: Get vehicle by VIN
-      description: "Retrieves a vehicle by its VIN (normalized lookup). Story #105."
+      description: Retrieve a vehicle by VIN
       operationId: getVehicleByVin
       parameters:
       - name: vin
         in: path
-        description: Vehicle VIN (17 characters)
+        description: Vehicle VIN
         required: true
         schema:
           type: string
-        example: 1HGCM82633A004352
+          maxLength: 17
+          minLength: 17
       responses:
-        "404":
-          description: Vehicle not found
         "200":
-          description: Vehicle found
+          description: Vehicle retrieved successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+        "404":
+          description: Vehicle not found.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
 components:
   schemas:
-    CreateVehicleRequest:
-      type: object
-      description: "Vehicle creation request with VIN, unit number, and description"
-      properties:
-        accountId:
-          type: string
-          format: uuid
-        vin:
-          type: string
-        unitNumber:
-          type: string
-        description:
-          type: string
-        licensePlate:
-          type: string
-        licensePlateJurisdiction:
-          type: string
-        year:
-          type: integer
-          format: int32
-        make:
-          type: string
-        model:
-          type: string
-        trim:
-          type: string
-    VehicleResponse:
-      type: object
-      properties:
-        vehicleId:
-          type: string
-          format: uuid
-        accountId:
-          type: string
-          format: uuid
-        vin:
-          type: string
-        vinNormalized:
-          type: string
-        unitNumber:
-          type: string
-        description:
-          type: string
-        licensePlate:
-          type: string
-        licensePlateJurisdiction:
-          type: string
-        year:
-          type: integer
-          format: int32
-        make:
-          type: string
-        model:
-          type: string
-        trim:
-          type: string
-        isActive:
-          type: boolean
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-        version:
-          type: integer
-          format: int64
     PreferencesUpsertDto:
       type: object
       properties:
@@ -713,6 +661,133 @@ components:
         updatedAt:
           type: string
           format: date-time
+    UpdateVehicleRequest:
+      type: object
+      description: Vehicle update request
+      properties:
+        unitNumber:
+          type: string
+          description: Fleet/unit number.
+          example: UNIT-2048
+          maxLength: 255
+          minLength: 0
+        description:
+          type: string
+          description: Human-readable vehicle description.
+          example: 2023
+          maxLength: 4000
+          minLength: 0
+        licensePlate:
+          type: string
+          description: License plate value.
+          example: XYZ7890
+          maxLength: 50
+          minLength: 0
+        licensePlateJurisdiction:
+          type: string
+          description: License plate jurisdiction/state or province.
+          example: TX
+          maxLength: 50
+          minLength: 0
+        year:
+          type: integer
+          format: int32
+          description: Model year.
+          example: 2023
+          maximum: 2100
+          minimum: 1886
+        make:
+          type: string
+          description: Vehicle make.
+          example: Chevrolet
+          maxLength: 255
+          minLength: 0
+        model:
+          type: string
+          description: Vehicle model.
+          example: Silverado 1500
+          maxLength: 255
+          minLength: 0
+        trim:
+          type: string
+          description: Vehicle trim.
+          example: LT
+          maxLength: 255
+          minLength: 0
+    VehicleResponse:
+      type: object
+      description: Vehicle response payload.
+      properties:
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle identifier.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        accountId:
+          type: string
+          format: uuid
+          description: Owning account identifier.
+          example: 550e8400-e29b-41d4-a716-446655440001
+        vin:
+          type: string
+          description: Vehicle VIN.
+          example: 1HGCM82633A004352
+        vinNormalized:
+          type: string
+          description: Normalized VIN used for lookup and uniqueness.
+          example: 1HGCM82633A004352
+        unitNumber:
+          type: string
+          description: Fleet/unit number.
+          example: UNIT-1024
+        description:
+          type: string
+          description: Human-readable vehicle description.
+          example: 2024
+        licensePlate:
+          type: string
+          description: License plate value.
+          example: ABC1234
+        licensePlateJurisdiction:
+          type: string
+          description: License plate jurisdiction/state or province.
+          example: CA
+        year:
+          type: integer
+          format: int32
+          description: Model year.
+          example: 2024
+        make:
+          type: string
+          description: Vehicle make.
+          example: Ford
+        model:
+          type: string
+          description: Vehicle model.
+          example: F-150
+        trim:
+          type: string
+          description: Vehicle trim.
+          example: XL
+        isActive:
+          type: boolean
+          description: Whether vehicle is active.
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Record creation timestamp (UTC).
+          example: 2026-02-27T12:00:00Z
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp (UTC).
+          example: 2026-02-27T13:00:00Z
+        version:
+          type: integer
+          format: int64
+          description: Optimistic lock version.
+          example: 1
     SearchVehiclesRequest:
       type: object
       properties:
@@ -760,6 +835,57 @@ components:
           type: string
         model:
           type: string
+    CreateVehicleRequest:
+      type: object
+      description: Vehicle creation request
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Owning account identifier.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        vin:
+          type: string
+          description: Vehicle VIN.
+          example: 1HGCM82633A004352
+        unitNumber:
+          type: string
+          description: Fleet/unit number.
+          example: UNIT-1024
+        description:
+          type: string
+          description: Human-readable vehicle description.
+          example: 2024
+        licensePlate:
+          type: string
+          description: License plate value.
+          example: ABC1234
+        licensePlateJurisdiction:
+          type: string
+          description: License plate jurisdiction/state or province.
+          example: CA
+        year:
+          type: integer
+          format: int32
+          description: Model year.
+          example: 2024
+        make:
+          type: string
+          description: Vehicle make.
+          example: Ford
+        model:
+          type: string
+          description: Vehicle model.
+          example: F-150
+        trim:
+          type: string
+          description: Vehicle trim.
+          example: XL
+      required:
+      - accountId
+      - description
+      - unitNumber
+      - vin
     PreferencesMergeDto:
       type: object
       properties:
