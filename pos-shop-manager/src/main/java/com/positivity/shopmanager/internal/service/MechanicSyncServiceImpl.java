@@ -114,7 +114,8 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
 
     private void processDeactivation(HrMechanicEvent event, Mechanic existing) {
         if (existing == null) {
-            // Mechanic not found; record the integration log so idempotency guard engages on re-delivery
+            // Mechanic not found; record the integration log so idempotency guard engages
+            // on re-delivery
             persistIntegrationLog(event);
             return;
         }
@@ -129,7 +130,8 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
 
     private void processSkillsUpdate(HrMechanicEvent event, Mechanic existing) {
         if (existing == null) {
-            // Mechanic not found; record the integration log so idempotency guard engages on re-delivery
+            // Mechanic not found; record the integration log so idempotency guard engages
+            // on re-delivery
             persistIntegrationLog(event);
             return;
         }
@@ -157,8 +159,10 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
     @Override
     @Transactional
     public void reconcileFromHr() {
-        // No HR roster client is available; all locally-ACTIVE mechanics are unconditionally
-        // deactivated. This is intentional for the current scope — an HR client integration
+        // No HR roster client is available; all locally-ACTIVE mechanics are
+        // unconditionally
+        // deactivated. This is intentional for the current scope — an HR client
+        // integration
         // is a follow-up story.
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         Instant now = Instant.now(clock);
