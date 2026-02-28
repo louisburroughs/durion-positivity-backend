@@ -38,11 +38,10 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
 
     @Override
     public @NonNull ReallocateResponse reallocate(@NonNull ReallocateRequest request) {
-        if (request.getStockItemId() == null) {
-            throw new IllegalArgumentException("stockItemId is required");
+        String sku = request.getSku();
+        if (sku == null || sku.isBlank()) {
+            throw new IllegalArgumentException("sku is required");
         }
-
-        String sku = request.getStockItemId().toString();
         Instant now = Instant.now(clock);
 
         int onHand = Optional.ofNullable(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku))
