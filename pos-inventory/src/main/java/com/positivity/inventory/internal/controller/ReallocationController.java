@@ -1,8 +1,8 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
-import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
+import com.positivity.inventory.dto.reallocation.ReallocateRequest;
+import com.positivity.inventory.dto.reallocation.ReallocateResponse;
 import com.positivity.inventory.service.AllocationReallocationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

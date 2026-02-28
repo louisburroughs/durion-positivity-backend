@@ -1,7 +1,6 @@
-package com.positivity.inventory.internal.dto.reallocation;
+package com.positivity.inventory.dto.reallocation;
 
-import jakarta.validation.constraints.NotNull;
-import java.util.UUID;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,8 +12,8 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ReallocateRequest {
 
-    @NotNull
-    private UUID stockItemId;
+    @NotBlank
+    private String sku;
 
     private String triggerType;
 

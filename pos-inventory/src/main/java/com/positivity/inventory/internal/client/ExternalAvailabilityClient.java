@@ -1,6 +1,6 @@
 package com.positivity.inventory.internal.client;
 
-import com.positivity.inventory.internal.dto.shortage.ResolutionOption;
+import com.positivity.inventory.dto.shortage.ResolutionOption;
 import org.jspecify.annotations.NonNull;
 
 import java.util.List;
