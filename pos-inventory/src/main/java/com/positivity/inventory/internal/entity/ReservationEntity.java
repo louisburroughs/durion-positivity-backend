@@ -42,8 +42,8 @@ public class ReservationEntity {
     @Column(nullable = false, unique = true)
     private UUID workorderLineId;
 
-    @Column(nullable = false)
-    private String sku;
+    @Column(name = "stock_item_id", nullable = false)
+    private UUID stockItemId;
 
     @Column(nullable = false)
     private int requiredQuantity;
@@ -51,6 +51,19 @@ public class ReservationEntity {
     @Column(nullable = false)
     @Builder.Default
     private int allocatedQuantity = 0;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private int priority = 5;
+
+    @Column(nullable = true)
+    private Instant waitingSince;
+
+    @Column(nullable = true)
+    private Instant dueDateTime;
+
+    @Column(nullable = true)
+    private Instant scheduleStartTime;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

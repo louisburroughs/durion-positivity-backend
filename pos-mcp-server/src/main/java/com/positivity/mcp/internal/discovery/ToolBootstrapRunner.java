@@ -1,12 +1,13 @@
 package com.positivity.mcp.internal.discovery;
 
-import com.positivity.mcp.internal.service.ToolRegistrationService;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
+
+import com.positivity.mcp.service.ToolRegistrationService;
 
 @Component
 public class ToolBootstrapRunner implements ApplicationRunner {

@@ -1,15 +1,17 @@
 package com.positivity.people.internal.dto;
 
+import java.util.UUID;
+
 public class WorkSessionRequest {
 
-    private String personId;
+    private UUID personId;
     private String actor;
 
-    public String getPersonId() {
+    public UUID getPersonId() {
         return personId;
     }
 
-    public void setPersonId(String personId) {
+    public void setPersonId(UUID personId) {
         this.personId = personId;
     }
 

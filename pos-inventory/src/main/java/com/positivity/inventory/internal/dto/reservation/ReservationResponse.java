@@ -10,7 +10,7 @@ public class ReservationResponse {
 
     private UUID reservationId;
     private UUID workorderLineId;
-    private String sku;
+    private UUID stockItemId;
     private int requiredQuantity;
     private int allocatedQuantity;
     private String status;

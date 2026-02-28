@@ -1,0 +1,16 @@
+domain: vehicle-inventory
+serviceName: pos-vehicle-inventory
+version: "1.0"
+permissions:
+  - name: "vehicle-inventory:registry:view"
+    description: "View vehicle registry records"
+  - name: "vehicle-inventory:registry:create"
+    description: "Create vehicle registry records"
+  - name: "vehicle-inventory:registry:update"
+    description: "Update vehicle registry records"
+  - name: "vehicle-inventory:registry:delete"
+    description: "Delete vehicle registry records"
+  - name: "vehicle-inventory:preferences:manage"
+    description: "Manage vehicle care preferences"
+  - name: "vehicle-inventory:search:view"
+    description: "Search vehicle inventory records"

@@ -56,8 +56,8 @@ public class ReservationServiceImpl implements ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Allocation", allocationId.toString()));
 
         ReservationEntity reservation = allocation.getReservation();
-        String sku = reservation.getSku();
-        int netOnHand = calculateNetOnHand(sku);
+        UUID stockItemId = reservation.getStockItemId();
+        int netOnHand = calculateNetOnHand(stockItemId);
 
         int existingHard = allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD)
                 .stream()
@@ -107,6 +107,7 @@ public class ReservationServiceImpl implements ReservationService {
     }
 
     private ReservationEntity updateExistingReservation(ReservationEntity existing, CreateReservationRequest request) {
+        existing.setStockItemId(request.getStockItemId());
         existing.setRequiredQuantity(request.getRequiredQuantity());
         return reservationRepository.save(existing);
     }
@@ -114,7 +115,7 @@ public class ReservationServiceImpl implements ReservationService {
     private ReservationEntity createReservationWithSoftAllocation(CreateReservationRequest request) {
         ReservationEntity reservation = ReservationEntity.builder()
                 .workorderLineId(request.getWorkorderLineId())
-                .sku(request.getSku())
+                .stockItemId(request.getStockItemId())
                 .requiredQuantity(request.getRequiredQuantity())
                 .allocatedQuantity(request.getRequiredQuantity())
                 .status(ReservationStatus.PENDING)
@@ -134,8 +135,8 @@ public class ReservationServiceImpl implements ReservationService {
         return reservationRepository.save(reservation);
     }
 
-    private int calculateNetOnHand(String sku) {
-        Integer onHand = inventoryLedgerEntryRepository.calculateOnHandQuantity(sku);
+    private int calculateNetOnHand(UUID stockItemId) {
+        Integer onHand = inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId);
         return onHand == null ? 0 : onHand;
     }
 
@@ -143,7 +144,7 @@ public class ReservationServiceImpl implements ReservationService {
         return ReservationResponse.builder()
                 .reservationId(reservation.getReservationId())
                 .workorderLineId(reservation.getWorkorderLineId())
-                .sku(reservation.getSku())
+                .stockItemId(reservation.getStockItemId())
                 .requiredQuantity(reservation.getRequiredQuantity())
                 .allocatedQuantity(reservation.getAllocatedQuantity())
                 .status(reservation.getStatus().name())

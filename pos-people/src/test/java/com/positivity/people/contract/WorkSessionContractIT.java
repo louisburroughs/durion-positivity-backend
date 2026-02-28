@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import java.util.UUID;
 
 @DisplayName("Work Session ContractIT")
 class WorkSessionContractIT extends BaseContractIntegrationTest {
@@ -21,12 +22,14 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
     @Autowired
     private WorkSessionBreakRepository workSessionBreakRepository;
 
+    private static final UUID PERSON_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
     private static final String START_PAYLOAD = """
             {
-              "personId": "person-1",
+              "personId": "%s",
               "actor": "test-user"
             }
-            """;
+            """.formatted(PERSON_ID);
 
     @BeforeEach
     void cleanData() {
@@ -69,7 +72,7 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
                 .getResponse()
                 .getContentAsString();
 
-        long sessionId = objectMapper.readTree(response).get("sessionId").asLong();
+        String sessionId = objectMapper.readTree(response).get("sessionId").asText();
 
         mockMvc.perform(withAuth(post("/v1/people/workSessions/" + sessionId + "/breaks/start")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -88,7 +91,7 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
                 .getResponse()
                 .getContentAsString();
 
-        long sessionId = objectMapper.readTree(response).get("sessionId").asLong();
+        String sessionId = objectMapper.readTree(response).get("sessionId").asText();
 
         mockMvc.perform(withAuth(post("/v1/people/workSessions/" + sessionId + "/breaks/start")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -104,12 +107,13 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("VE-120-001: starting a second active session returns 4xx")
     void VE_120_001_startWorkSession_whenAlreadyActive_returns4xx() throws Exception {
+        UUID isolatedPersonId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
         String isolatedPayload = """
                 {
-                  "personId": "person-2",
+                  "personId": "%s",
                   "actor": "test-user"
                 }
-                """;
+                """.formatted(isolatedPersonId);
 
         mockMvc.perform(withAuth(post("/v1/people/workSessions/start")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -125,7 +129,8 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("VE-120-002: starting break for non-existent session returns 404")
     void VE_120_002_startBreak_nonExistentSession_returns404() throws Exception {
-        mockMvc.perform(withAuth(post("/v1/people/workSessions/99999/breaks/start")
+        mockMvc.perform(withAuth(post("/v1/people/workSessions/{id}/breaks/start",
+                UUID.fromString("99999999-9999-9999-9999-999999999999"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}")))
                 .andExpect(status().isNotFound());

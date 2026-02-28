@@ -4,6 +4,8 @@ import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.entity.LlmApiConfig;
 import com.positivity.mcp.internal.repository.LlmApiConfigRepository;
+import com.positivity.mcp.service.LlmApiConfigService;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,14 +15,15 @@ import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @Service
-public class LlmApiConfigService {
+public class LlmApiConfigServiceImpl implements LlmApiConfigService {
 
     private final LlmApiConfigRepository repository;
 
-    public LlmApiConfigService(@NonNull LlmApiConfigRepository repository) {
+    public LlmApiConfigServiceImpl(@NonNull LlmApiConfigRepository repository) {
         this.repository = repository;
     }
 
+    @Override
     @Transactional(readOnly = true)
     public @NonNull List<LlmApiConfigResponse> list() {
         return repository.findAll().stream()
@@ -28,6 +31,7 @@ public class LlmApiConfigService {
                 .toList();
     }
 
+    @Override
     @Transactional(readOnly = true)
     public @NonNull LlmApiConfigResponse get(@NonNull UUID id) {
         return repository.findById(id)
@@ -35,6 +39,7 @@ public class LlmApiConfigService {
                 .orElseThrow(() -> new NoSuchElementException("LLM API config not found: " + id));
     }
 
+    @Override
     @Transactional
     public @NonNull LlmApiConfigResponse create(@NonNull LlmApiConfigRequest request) {
         if (repository.existsByApiId(request.apiId())) {
@@ -45,6 +50,7 @@ public class LlmApiConfigService {
         return LlmApiConfigResponse.from(repository.save(entity));
     }
 
+    @Override
     @Transactional
     public @NonNull LlmApiConfigResponse update(@NonNull UUID id, @NonNull LlmApiConfigRequest request) {
         var entity = repository.findById(id)
@@ -56,6 +62,7 @@ public class LlmApiConfigService {
         return LlmApiConfigResponse.from(repository.save(entity));
     }
 
+    @Override
     @Transactional
     public void delete(@NonNull UUID id) {
         repository.deleteById(id);
@@ -69,4 +76,3 @@ public class LlmApiConfigService {
         entity.setHeaders(request.headers() == null ? java.util.Map.of() : request.headers());
     }
 }
-

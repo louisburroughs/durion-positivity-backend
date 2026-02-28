@@ -4,7 +4,8 @@ import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
-import com.positivity.mcp.internal.service.LlmApiConfigService;
+import com.positivity.mcp.service.LlmApiConfigService;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -55,7 +56,7 @@ class LlmApiConfigController {
     @PreAuthorize("hasAuthority('" + McpPermissions.LLM_API_UPDATE + "')")
     @EmitEvent(id = "MCP_LLM_API_UPDATE", apiVersion = "1")
     ResponseEntity<LlmApiConfigResponse> update(@PathVariable @NonNull UUID id,
-                                                @RequestBody @Validated @NonNull LlmApiConfigRequest request) {
+            @RequestBody @Validated @NonNull LlmApiConfigRequest request) {
         return ResponseEntity.ok(service.update(id, request));
     }
 

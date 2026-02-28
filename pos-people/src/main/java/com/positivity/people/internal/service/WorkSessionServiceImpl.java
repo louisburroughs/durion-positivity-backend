@@ -38,7 +38,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     }
 
     @Override
-    public WorkSessionDto startSession(@NonNull String personId) {
+    public WorkSessionDto startSession(@NonNull UUID personId) {
         Objects.requireNonNull(personId, "personId must not be null");
         String resolvedActor = resolveActorFromSecurityContext();
 
@@ -63,7 +63,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     }
 
     @Override
-    public WorkSessionDto stopSession(@NonNull String personId) {
+    public WorkSessionDto stopSession(@NonNull UUID personId) {
         Objects.requireNonNull(personId, "personId must not be null");
         String resolvedActor = resolveActorFromSecurityContext();
 
