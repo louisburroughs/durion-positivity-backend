@@ -1,8 +1,10 @@
 package com.positivity.shopmanager.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
@@ -43,4 +45,11 @@ public class HrIntegrationLog {
 
     @Column(name = "payload_hash")
     private String payloadHash;
+
+    @PrePersist
+    public void generateEventIdIfAbsent() {
+        if (eventId == null) {
+            eventId = UUIDv7Generator.generate();
+        }
+    }
 }
