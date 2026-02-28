@@ -6,6 +6,7 @@ import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
+import com.positivity.shopmanager.internal.exception.HrUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 public class GlobalExceptionHandler {
 
         private static final String CODE_CRM_UNAVAILABLE = "CRM_UNAVAILABLE";
+        private static final String CODE_HR_UNAVAILABLE = "HR_UNAVAILABLE";
         private final Clock clock;
 
         @ExceptionHandler(CrmCustomerNotFoundException.class)
@@ -137,6 +139,15 @@ public class GlobalExceptionHandler {
                                 .body(error(CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId));
         }
 
+        @ExceptionHandler(HrUnavailableException.class)
+        public ResponseEntity<ErrorResponse> handleHrUnavailable(
+                        HrUnavailableException exception,
+                        HttpServletRequest request) {
+                String correlationId = resolveCorrelationId(request);
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                .body(error(CODE_HR_UNAVAILABLE, "HR service is unavailable", correlationId));
+        }
+
         @ExceptionHandler(UnsupportedOperationException.class)
         public ResponseEntity<ErrorResponse> handleNotImplemented(
                         UnsupportedOperationException exception,
@@ -169,7 +180,7 @@ public class GlobalExceptionHandler {
                                         "RESOURCE_NOT_FOUND" ->
                                 HttpStatus.NOT_FOUND.value();
                         case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE" -> HttpStatus.CONFLICT.value();
-                        case CODE_CRM_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE.value();
+                        case CODE_CRM_UNAVAILABLE, CODE_HR_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE.value();
                         case "NOT_IMPLEMENTED" -> HttpStatus.NOT_IMPLEMENTED.value();
                         default -> HttpStatus.BAD_REQUEST.value();
                 };

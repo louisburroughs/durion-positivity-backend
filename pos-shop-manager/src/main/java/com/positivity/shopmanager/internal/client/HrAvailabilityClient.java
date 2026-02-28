@@ -1,11 +1,17 @@
 package com.positivity.shopmanager.internal.client;
 
+import com.positivity.shopmanager.internal.dto.HrScheduleBlock;
+import com.positivity.shopmanager.internal.exception.HrUnavailableException;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 @Component
 public class HrAvailabilityClient {
@@ -33,5 +39,28 @@ public class HrAvailabilityClient {
                         .build())
                 .retrieve()
                 .body(Object.class);
+    }
+
+    /**
+     * Retrieve shift and PTO blocks for a mechanic from the HR system for the
+     * given time window. Returns an empty list when the person has no entries.
+     *
+     * @throws HrUnavailableException when the HR system cannot be reached or returns an error
+     */
+    public List<HrScheduleBlock> getScheduleBlocks(String personId, Instant windowStart, Instant windowEnd) {
+        try {
+            List<HrScheduleBlock> result = hrRestClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/hr/v1/schedules")
+                            .queryParam("personId", personId)
+                            .queryParam("startTime", windowStart.toString())
+                            .queryParam("endTime", windowEnd.toString())
+                            .build())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<HrScheduleBlock>>() {});
+            return result != null ? result : List.of();
+        } catch (RestClientException e) {
+            throw new HrUnavailableException("HR system is unavailable: " + e.getMessage(), e);
+        }
     }
 }

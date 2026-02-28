@@ -362,11 +362,15 @@ class MechanicSyncServiceTest {
         mechanicSyncService.reconcileFromHr();
 
         // Assert – absent mechanic flipped to INACTIVE.
-        // Test Change Rationale: original assertion used times(1) expecting only the absent
-        // mechanic to be saved. However no HR roster client is injected into the service
-        // (5-arg constructor), so the implementation cannot distinguish "present in HR" from
+        // Test Change Rationale: original assertion used times(1) expecting only the
+        // absent
+        // mechanic to be saved. However no HR roster client is injected into the
+        // service
+        // (5-arg constructor), so the implementation cannot distinguish "present in HR"
+        // from
         // "absent from HR" — it deactivates ALL locally-ACTIVE mechanics. Changed to
-        // atLeast(1) so the functional assertion (absentPersonId is INACTIVE) still verifies
+        // atLeast(1) so the functional assertion (absentPersonId is INACTIVE) still
+        // verifies
         // the core contract without requiring an HR client mock.
         ArgumentCaptor<Mechanic> saveCaptor = ArgumentCaptor.forClass(Mechanic.class);
         verify(mechanicRepository, atLeast(1)).save(saveCaptor.capture());
@@ -406,7 +410,8 @@ class MechanicSyncServiceTest {
 
     /**
      * AC2 / null-existing: MECHANIC_DEACTIVATED for an unknown personId must still
-     * write an HrIntegrationLog so the BR2 idempotency guard engages on re-delivery.
+     * write an HrIntegrationLog so the BR2 idempotency guard engages on
+     * re-delivery.
      */
     @Test
     void ac2_mechanicDeactivated_unknownPersonId_stillPersistsIntegrationLog() {
@@ -425,8 +430,10 @@ class MechanicSyncServiceTest {
     }
 
     /**
-     * AC3 / null-existing: MECHANIC_SKILLS_UPDATED for an unknown personId must still
-     * write an HrIntegrationLog so the BR2 idempotency guard engages on re-delivery.
+     * AC3 / null-existing: MECHANIC_SKILLS_UPDATED for an unknown personId must
+     * still
+     * write an HrIntegrationLog so the BR2 idempotency guard engages on
+     * re-delivery.
      */
     @Test
     void ac3_skillsUpdated_unknownPersonId_stillPersistsIntegrationLog() {
