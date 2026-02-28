@@ -8,6 +8,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -62,7 +63,9 @@ public class HrIntegrationLog {
     public void requireEventId() {
         if (eventId == null) {
             throw new IllegalStateException(
-                    "HrIntegrationLog.eventId must be set before persisting — eventId is the dedupe key");
+                    "HrIntegrationLog.eventId must be set before persisting - eventId is the dedupe key. "
+                            + "For internally generated IDs use "
+                            + UUIDv7Generator.class.getSimpleName() + ".generate().");
         }
     }
 }
