@@ -1,13 +1,12 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.dto.shortage.ShortageResolutionRequest;
+import com.positivity.inventory.dto.shortage.ResolutionOption;
+import com.positivity.inventory.dto.shortage.ResolutionOptionType;
+import com.positivity.inventory.dto.shortage.ShortageResolutionResponse;
 import com.positivity.inventory.internal.client.ExternalAvailabilityClient;
 import com.positivity.inventory.internal.client.ProductSubstituteClient;
-import com.positivity.inventory.internal.dto.shortage.ResolutionOption;
-import com.positivity.inventory.internal.dto.shortage.ShortageResolutionRequest;
-import com.positivity.inventory.internal.dto.shortage.ShortageResolutionResponse;
-import com.positivity.inventory.internal.enums.ResolutionOptionType;
 import com.positivity.inventory.service.ShortageResolutionService;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -59,9 +58,15 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
             substituteOptions = substituteFuture.get(PRODUCT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            substituteFuture.cancel(true);
             log.warn("Product substitute client interrupted for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
-        } catch (ExecutionException | TimeoutException e) {
+        } catch (TimeoutException e) {
+            substituteFuture.cancel(true);
+            externalFuture.cancel(true);
+            log.warn("Product substitute client timed out for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
+            partialResultsBanner = true;
+        } catch (ExecutionException e) {
             log.warn("Product substitute client failed for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
         }
@@ -71,9 +76,15 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
             externalOptions = externalFuture.get(EXTERNAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            externalFuture.cancel(true);
             log.warn("External availability client interrupted for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
-        } catch (ExecutionException | TimeoutException e) {
+        } catch (TimeoutException e) {
+            substituteFuture.cancel(true);
+            externalFuture.cancel(true);
+            log.warn("External availability client timed out for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
+            partialResultsBanner = true;
+        } catch (ExecutionException e) {
             log.warn("External availability client failed for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
         }
@@ -82,10 +93,10 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
                 .comparingInt((ResolutionOption option) -> option.getEstimatedLeadTimeDays() != null
                         ? option.getEstimatedLeadTimeDays()
                         : Integer.MAX_VALUE)
-                .thenComparing(option -> option.getUnitCost() != null ? option.getUnitCost() : BigDecimal.ZERO)
-                .thenComparing(Comparator.comparing(
-                        (ResolutionOption option) -> option.getQualityTier() != null ? option.getQualityTier() : "Z",
-                        Comparator.reverseOrder()));
+                .thenComparing(Comparator.comparing(ResolutionOption::getUnitCost,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .thenComparing(Comparator.comparing(ResolutionOption::getQualityTier,
+                        Comparator.nullsLast(Comparator.reverseOrder())));
 
         substituteOptions = new ArrayList<>(substituteOptions.stream().sorted(ranker).toList());
         externalOptions = new ArrayList<>(externalOptions.stream().sorted(ranker).toList());
@@ -93,7 +104,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
         List<ResolutionOption> orderedOptions = new ArrayList<>();
         orderedOptions.addAll(substituteOptions);
         orderedOptions.addAll(externalOptions);
-        orderedOptions.add(buildBackorderOption());
+        orderedOptions.add(buildBackorderOption(null));
 
         return ShortageResolutionResponse.builder()
                 .allocationId(request.getAllocationId())
@@ -103,10 +114,10 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
                 .build();
     }
 
-    private ResolutionOption buildBackorderOption() {
+    private ResolutionOption buildBackorderOption(Integer leadTimeDays) {
         return ResolutionOption.builder()
                 .type(ResolutionOptionType.BACKORDER)
-                .estimatedLeadTimeDays(null)
+                .estimatedLeadTimeDays(leadTimeDays)
                 .source(null)
                 .confidence(null)
                 .build();

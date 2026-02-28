@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
-import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
+import com.positivity.inventory.dto.reallocation.ReallocateRequest;
+import com.positivity.inventory.dto.reallocation.ReallocateResponse;
 import com.positivity.inventory.internal.entity.AllocationAuditEntity;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationAuditReasonCode;
@@ -64,7 +64,10 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
                         .thenComparing(ReservationEntity::getCreatedAt))
                 .toList();
 
-        int remainingStock = onHand;
+        int previousTotalAllocated = reservations.stream()
+                .mapToInt(ReservationEntity::getAllocatedQuantity)
+                .sum();
+        int remainingStock = previousTotalAllocated;
         int totalReallocated = 0;
         List<AllocationAuditEntity> audits = new ArrayList<>();
 
@@ -97,7 +100,7 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
         int atpAfterReallocation = onHand - totalAllocated;
 
         return ReallocateResponse.builder()
-                .stockItemId(request.getStockItemId())
+                .sku(request.getSku())
                 .totalReallocated(totalReallocated)
                 .auditRecordsCreated(audits.size())
                 .atpAfterReallocation(atpAfterReallocation)
@@ -121,7 +124,7 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
             AllocationAuditReasonCode reasonCode, Instant now,
             int previousAllocatedQty, int newAllocatedQty) {
         return AllocationAuditEntity.builder()
-                .stockItemId(request.getStockItemId())
+                .stockItemId(request.getSku())
                 .reasonCode(reasonCode)
                 .triggeredBy(resolveTriggeredBy())
                 .triggerReferenceId(request.getTriggerReferenceId())

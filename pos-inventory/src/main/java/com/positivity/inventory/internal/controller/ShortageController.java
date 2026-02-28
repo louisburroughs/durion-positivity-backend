@@ -1,8 +1,8 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.inventory.internal.dto.shortage.ShortageResolutionRequest;
-import com.positivity.inventory.internal.dto.shortage.ShortageResolutionResponse;
+import com.positivity.inventory.dto.shortage.ShortageResolutionRequest;
+import com.positivity.inventory.dto.shortage.ShortageResolutionResponse;
 import com.positivity.inventory.service.ShortageResolutionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

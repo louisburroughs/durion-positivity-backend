@@ -1,9 +1,9 @@
 -- TODO(scaffold-remove-in-green): CAP-220-story-24
 CREATE TABLE inventory_allocation_audit (
     allocation_audit_id UUID PRIMARY KEY,
-    stock_item_id UUID NOT NULL,
+    stock_item_id VARCHAR(255) NOT NULL,
     reason_code VARCHAR(50) NOT NULL,
-    triggered_by VARCHAR(10) NOT NULL,
+    triggered_by VARCHAR(255) NOT NULL,
     trigger_reference_id VARCHAR(255),
     previous_state TEXT,
     new_state TEXT,

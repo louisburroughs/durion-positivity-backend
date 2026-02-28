@@ -1,12 +1,11 @@
-package com.positivity.inventory.internal.dto.shortage;
+package com.positivity.inventory.dto.shortage;
 
+import java.util.List;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor

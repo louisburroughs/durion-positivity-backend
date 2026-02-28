@@ -1,12 +1,10 @@
-package com.positivity.inventory.internal.dto.shortage;
+package com.positivity.inventory.dto.shortage;
 
-import com.positivity.inventory.internal.enums.ResolutionOptionType;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
 
 @Data
 @NoArgsConstructor
