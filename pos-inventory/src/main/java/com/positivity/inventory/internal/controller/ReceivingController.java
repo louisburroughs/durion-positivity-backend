@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.dto.InventoryErrorResponse;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
@@ -9,6 +10,12 @@ import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
 import com.positivity.inventory.service.ReceivingService;
 import com.positivity.security.common.SecurityContextHelper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/inventory/receiving")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Receiving", description = "Receiving session creation, item receiving, and cross-dock execution endpoints")
 public class ReceivingController {
 
     private final ReceivingService receivingService;
@@ -34,7 +42,18 @@ public class ReceivingController {
     @PostMapping("/sessions")
     @PreAuthorize("hasAuthority('inventory:receiving:create')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_CREATE", apiVersion = "1")
+    @Operation(
+            summary = "Create receiving session",
+            description = "Creates a receiving session from a source document (PO/ASN) using MANUAL or SCAN entry mode")
+    @ApiResponse(responseCode = "201", description = "Receiving session created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReceivingSessionResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure or source document already fully received", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "403", description = "User lacks required receiving:create authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Source document not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<ReceivingSessionResponse> createReceivingSession(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    description = "Receiving session creation payload",
+                    content = @Content(schema = @Schema(implementation = CreateReceivingSessionRequest.class)))
             @Valid @RequestBody CreateReceivingSessionRequest request) {
 
         String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
@@ -46,7 +65,14 @@ public class ReceivingController {
     @GetMapping("/sessions/{sessionId}")
     @PreAuthorize("hasAuthority('inventory:receiving:view')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_GET", apiVersion = "1")
+    @Operation(
+            summary = "Get receiving session",
+            description = "Retrieves receiving session details by session identifier")
+    @ApiResponse(responseCode = "200", description = "Receiving session found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReceivingSessionResponse.class)))
+    @ApiResponse(responseCode = "403", description = "User lacks required receiving:view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Receiving session not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<ReceivingSessionResponse> getReceivingSession(
+            @Parameter(description = "Receiving session identifier", required = true)
             @PathVariable UUID sessionId) {
 
         ReceivingSessionResponse response = receivingService.getReceivingSession(sessionId);
@@ -61,8 +87,20 @@ public class ReceivingController {
     @PostMapping("/sessions/{sessionId}/receive")
     @PreAuthorize("hasAuthority('inventory:receiving:complete')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_COMPLETE", apiVersion = "1")
+    @Operation(
+            summary = "Receive items into staging",
+            description = "Records received quantities for receiving session lines and generates receipt ledger/variance records")
+    @ApiResponse(responseCode = "200", description = "Items received successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReceiveItemsResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "403", description = "User lacks required receiving:complete authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Receiving session not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<ReceiveItemsResponse> receiveItemsIntoStaging(
+            @Parameter(description = "Receiving session identifier", required = true)
             @PathVariable UUID sessionId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    description = "Receive lines payload",
+                    content = @Content(schema = @Schema(implementation = ReceiveItemsRequest.class)))
             @Valid @RequestBody ReceiveItemsRequest request) {
 
         String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
@@ -82,9 +120,22 @@ public class ReceivingController {
     @PostMapping("/sessions/{sessionId}/lines/{lineId}/cross-dock")
     @PreAuthorize("hasAuthority('inventory:receiving:complete') and hasAuthority('inventory:issue:parts')")
     @EmitEvent(id = "INVENTORY_RECEIVING_CROSSDOCK", apiVersion = "1")
+    @Operation(
+            summary = "Cross-dock receiving line to workorder",
+            description = "Cross-docks received quantity from a session line directly to a workorder line with atomic receipt and issue ledger events")
+    @ApiResponse(responseCode = "200", description = "Cross-dock completed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CrossDockResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request or closed workorder", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "403", description = "User lacks required authority or part-match override permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Receiving session or line not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<CrossDockResponse> crossDockLineToWorkorder(
+            @Parameter(description = "Receiving session identifier", required = true)
             @PathVariable UUID sessionId,
+            @Parameter(description = "Receiving line identifier", required = true)
             @PathVariable UUID lineId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    description = "Cross-dock request payload",
+                    content = @Content(schema = @Schema(implementation = CrossDockRequest.class)))
             @Valid @RequestBody CrossDockRequest request) {
 
         String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
