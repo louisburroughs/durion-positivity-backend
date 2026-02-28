@@ -41,19 +41,12 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
             throw new IllegalArgumentException("reasonCode is required");
         }
 
-        if (request.getTimeEntryId() == null || request.getTimeEntryId().isBlank()) {
+        if (request.getTimeEntryId() == null) {
             throw new IllegalArgumentException("timeEntryId is required");
         }
 
-        final UUID timeEntryUuid;
-        try {
-            timeEntryUuid = UUID.fromString(request.getTimeEntryId());
-        } catch (IllegalArgumentException invalidTimeEntryId) {
-            throw new IllegalArgumentException("timeEntryId must be a valid UUID", invalidTimeEntryId);
-        }
-
         Optional<com.positivity.people.internal.entity.TimeEntry> entryOptional = timeEntryRepository
-                .findById(timeEntryUuid);
+                .findById(request.getTimeEntryId());
         if (entryOptional.isEmpty()) {
             throw new NotFoundException("Time entry not found");
         }
@@ -97,7 +90,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
     @Override
     @Transactional(readOnly = true)
     @NonNull
-    public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull String timeEntryId) {
+    public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull UUID timeEntryId) {
         return adjustmentRepository.findByTimeEntryId(timeEntryId).stream().map(this::toDto).toList();
     }
 
@@ -118,7 +111,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
         if (!allowed) {
             try {
                 TimeEntryAudit audit = new TimeEntryAudit();
-                audit.setTimeEntryId(adj.getTimeEntryId());
+                audit.setTimeEntryId(adj.getTimeEntryId().toString());
                 audit.setAction("ADJUSTMENT_APPROVE_FORBIDDEN");
                 audit.setActorId(auditActorId);
                 audit.setCorrelationId(correlationId);
@@ -137,7 +130,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 
         try {
             TimeEntryAudit audit = new TimeEntryAudit();
-            audit.setTimeEntryId(adj.getTimeEntryId());
+            audit.setTimeEntryId(adj.getTimeEntryId().toString());
             audit.setAction("ADJUSTMENT_APPROVED");
             audit.setActorId(auditActorId);
             audit.setCorrelationId(correlationId);

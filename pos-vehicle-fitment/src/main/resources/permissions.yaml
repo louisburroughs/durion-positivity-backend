@@ -1,0 +1,14 @@
+domain: vehicle-fitment
+serviceName: pos-vehicle-fitment
+version: "1.0"
+permissions:
+  - name: "vehicle-fitment:hint:view"
+    description: "View vehicle applicability hints"
+  - name: "vehicle-fitment:hint:create"
+    description: "Create vehicle applicability hints"
+  - name: "vehicle-fitment:hint:update"
+    description: "Update vehicle applicability hints"
+  - name: "vehicle-fitment:hint:delete"
+    description: "Delete vehicle applicability hints"
+  - name: "vehicle-fitment:catalog:view"
+    description: "View vehicle fitment catalog data"

@@ -10,8 +10,8 @@ public class TimeEntryAdjustment {
     @Schema(description = "Unique identifier for the adjustment", example = "123e4567-e89b-12d3-a456-426614174000", accessMode = Schema.AccessMode.READ_ONLY)
     private UUID adjustmentId;
     
-    @Schema(description = "Time entry identifier being adjusted", example = "te-12345", requiredMode = Schema.RequiredMode.REQUIRED)
-    private String timeEntryId;
+    @Schema(description = "Time entry identifier being adjusted", example = "123e4567-e89b-12d3-a456-426614174000", requiredMode = Schema.RequiredMode.REQUIRED)
+    private UUID timeEntryId;
     
     @Schema(description = "Reason code for the adjustment", example = "MISSED_BREAK", requiredMode = Schema.RequiredMode.REQUIRED)
     private String reasonCode;
@@ -51,11 +51,11 @@ public class TimeEntryAdjustment {
         this.adjustmentId = adjustmentId;
     }
 
-    public String getTimeEntryId() {
+    public UUID getTimeEntryId() {
         return timeEntryId;
     }
 
-    public void setTimeEntryId(String timeEntryId) {
+    public void setTimeEntryId(UUID timeEntryId) {
         this.timeEntryId = timeEntryId;
     }
 
