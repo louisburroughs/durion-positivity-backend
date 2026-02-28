@@ -34,10 +34,10 @@ class TimeEntryAdjustmentControllerTest {
         UUID timeEntryId = UUID.randomUUID();
         TimeEntryAdjustment a = new TimeEntryAdjustment();
         a.setAdjustmentId(UUID.randomUUID());
-        a.setTimeEntryId(timeEntryId.toString());
-        when(service.listForTimeEntry(timeEntryId.toString())).thenReturn(List.of(a));
+        a.setTimeEntryId(timeEntryId);
+        when(service.listForTimeEntry(timeEntryId)).thenReturn(List.of(a));
 
-        ResponseEntity<List<TimeEntryAdjustment>> resp = controller.listForTimeEntry(timeEntryId.toString());
+        ResponseEntity<List<TimeEntryAdjustment>> resp = controller.listForTimeEntry(timeEntryId);
         assertEquals(200, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertEquals(1, resp.getBody().size());
@@ -47,7 +47,7 @@ class TimeEntryAdjustmentControllerTest {
     void createAdjustment_success_returnsOk() {
         UUID timeEntryId = UUID.randomUUID();
         TimeEntryAdjustmentRequest req = new TimeEntryAdjustmentRequest();
-        req.setTimeEntryId(timeEntryId.toString());
+        req.setTimeEntryId(timeEntryId);
         req.setReasonCode("RC1");
         req.setMinutesDelta(15);
         req.setCreatedBy("tester");
@@ -66,7 +66,7 @@ class TimeEntryAdjustmentControllerTest {
     void createAdjustment_failure_throwsExceptionForHandler() {
         UUID timeEntryId = UUID.randomUUID();
         TimeEntryAdjustmentRequest req = new TimeEntryAdjustmentRequest();
-        req.setTimeEntryId(timeEntryId.toString());
+        req.setTimeEntryId(timeEntryId);
         req.setReasonCode(" ");
 
         when(service.createAdjustment(req)).thenThrow(new IllegalArgumentException("reasonCode is required"));

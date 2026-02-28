@@ -60,7 +60,7 @@ class TimeEntryAdjustmentServiceTest {
         UUID id = UUID.randomUUID();
         TimeEntryAdjustment adj = new TimeEntryAdjustment();
         adj.setAdjustmentId(id);
-        adj.setTimeEntryId("TE-1");
+        adj.setTimeEntryId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
         adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
 
         when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
@@ -83,7 +83,7 @@ class TimeEntryAdjustmentServiceTest {
         UUID id = UUID.randomUUID();
         TimeEntryAdjustment adj = new TimeEntryAdjustment();
         adj.setAdjustmentId(id);
-        adj.setTimeEntryId("TE-2");
+        adj.setTimeEntryId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
         adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
 
         when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
@@ -96,15 +96,14 @@ class TimeEntryAdjustmentServiceTest {
     }
 
     @Test
-    void createAdjustment_invalidUuid_throwsBadRequest() {
+    void createAdjustment_missingTimeEntryId_throwsBadRequest() {
         TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
         request.setReasonCode("RC1");
-        request.setTimeEntryId("not-a-uuid");
         request.setMinutesDelta(5);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> service.createAdjustment(request));
-        assertEquals("timeEntryId must be a valid UUID", ex.getMessage());
+        assertEquals("timeEntryId is required", ex.getMessage());
     }
 
     @Test
@@ -112,7 +111,7 @@ class TimeEntryAdjustmentServiceTest {
         UUID timeEntryId = UUID.randomUUID();
         TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
         request.setReasonCode("RC1");
-        request.setTimeEntryId(timeEntryId.toString());
+        request.setTimeEntryId(timeEntryId);
         request.setMinutesDelta(5);
 
         when(timeEntryRepository.findById(timeEntryId)).thenReturn(Optional.empty());
@@ -127,7 +126,7 @@ class TimeEntryAdjustmentServiceTest {
         UUID timeEntryId = UUID.randomUUID();
         TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
         request.setReasonCode("RC1");
-        request.setTimeEntryId(timeEntryId.toString());
+        request.setTimeEntryId(timeEntryId);
         request.setMinutesDelta(5);
 
         TimeEntry entry = new TimeEntry();

@@ -9,10 +9,10 @@ import java.util.UUID;
 public interface WorkSessionService {
 
     @NonNull
-    WorkSessionDto startSession(@NonNull String personId);
+    WorkSessionDto startSession(@NonNull UUID personId);
 
     @NonNull
-    WorkSessionDto stopSession(@NonNull String personId);
+    WorkSessionDto stopSession(@NonNull UUID personId);
 
     @NonNull
     BreakDto startBreak(@NonNull UUID sessionId);

@@ -25,8 +25,8 @@ public class WorkSession {
     @Column(name = "session_id", nullable = false, updatable = false, columnDefinition = "uuid")
     private UUID sessionId;
 
-    @Column(name = "person_id", nullable = false, length = 64)
-    private String personId;
+    @Column(name = "person_id", nullable = false, columnDefinition = "uuid")
+    private UUID personId;
 
     @Column(name = "status", nullable = false, length = 32)
     private String status;

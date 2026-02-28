@@ -2,11 +2,12 @@ package com.positivity.people.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Schema(description = "Request to create a time entry adjustment")
 public class TimeEntryAdjustmentRequest {
-    @Schema(description = "Time entry identifier to adjust", example = "te-12345", requiredMode = Schema.RequiredMode.REQUIRED)
-    private String timeEntryId;
+    @Schema(description = "Time entry identifier to adjust", example = "123e4567-e89b-12d3-a456-426614174000", requiredMode = Schema.RequiredMode.REQUIRED)
+    private UUID timeEntryId;
     
     @Schema(description = "Reason code for the adjustment", example = "MISSED_BREAK", requiredMode = Schema.RequiredMode.REQUIRED)
     private String reasonCode;
@@ -26,11 +27,11 @@ public class TimeEntryAdjustmentRequest {
     @Schema(description = "User creating the adjustment request", example = "employee-456")
     private String createdBy;
 
-    public String getTimeEntryId() {
+    public UUID getTimeEntryId() {
         return timeEntryId;
     }
 
-    public void setTimeEntryId(String timeEntryId) {
+    public void setTimeEntryId(UUID timeEntryId) {
         this.timeEntryId = timeEntryId;
     }
 

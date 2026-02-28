@@ -21,8 +21,8 @@ public class TimeEntryAdjustment {
     @Column(name = "adjustment_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID adjustmentId;
 
-    @Column(name = "time_entry_id", nullable = false)
-    private String timeEntryId;
+    @Column(name = "time_entry_id", nullable = false, columnDefinition = "UUID")
+    private UUID timeEntryId;
 
     @Column(name = "reason_code", length = 200)
     private String reasonCode;
@@ -76,11 +76,11 @@ public class TimeEntryAdjustment {
         this.adjustmentId = adjustmentId;
     }
 
-    public String getTimeEntryId() {
+    public UUID getTimeEntryId() {
         return timeEntryId;
     }
 
-    public void setTimeEntryId(String timeEntryId) {
+    public void setTimeEntryId(UUID timeEntryId) {
         this.timeEntryId = timeEntryId;
     }
 

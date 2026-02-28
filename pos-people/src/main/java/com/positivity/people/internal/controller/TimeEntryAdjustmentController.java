@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,7 +51,7 @@ public class TimeEntryAdjustmentController {
     })
     @GetMapping(value = "/{timeEntryId}/adjustments", produces = "application/json")
     @PreAuthorize("hasAuthority('people:timeAdjustment:view')")
-    public ResponseEntity<List<TimeEntryAdjustment>> listForTimeEntry(@PathVariable String timeEntryId) {
+    public ResponseEntity<List<TimeEntryAdjustment>> listForTimeEntry(@PathVariable UUID timeEntryId) {
         List<TimeEntryAdjustment> list = adjustmentService.listForTimeEntry(timeEntryId);
         return ResponseEntity.ok(list);
     }
