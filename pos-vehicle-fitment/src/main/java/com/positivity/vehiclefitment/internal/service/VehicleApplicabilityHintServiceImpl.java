@@ -5,6 +5,8 @@ import com.positivity.vehiclefitment.internal.entity.FitmentTag;
 import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
 import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
+import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,13 +21,14 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class VehicleApplicabilityHintService {
+public class VehicleApplicabilityHintServiceImpl implements VehicleApplicabilityHintService {
 
     private final VehicleApplicabilityHintRepository hintRepository;
 
     /**
      * Create a new vehicle applicability hint for a product.
      */
+    @Override
     @Transactional
     public HintResponse createHint(CreateHintRequest request) {
         log.info("Creating vehicle applicability hint for product {}", request.getProductId());
@@ -51,6 +54,7 @@ public class VehicleApplicabilityHintService {
     /**
      * Update an existing vehicle applicability hint.
      */
+    @Override
     @Transactional
     public HintResponse updateHint(UUID hintId, UpdateHintRequest request) {
         log.info("Updating vehicle applicability hint {}", hintId);
@@ -78,6 +82,7 @@ public class VehicleApplicabilityHintService {
     /**
      * Delete a vehicle applicability hint.
      */
+    @Override
     @Transactional
     public void deleteHint(UUID hintId) {
         log.info("Deleting vehicle applicability hint {}", hintId);
@@ -93,6 +98,7 @@ public class VehicleApplicabilityHintService {
     /**
      * Get a vehicle applicability hint by ID.
      */
+    @Override
     @Transactional(readOnly = true)
     public HintResponse getHint(UUID hintId) {
         log.info("Retrieving vehicle applicability hint {}", hintId);
@@ -106,6 +112,7 @@ public class VehicleApplicabilityHintService {
     /**
      * Get all hints for a specific product.
      */
+    @Override
     @Transactional(readOnly = true)
     public List<HintResponse> getHintsByProductId(UUID productId) {
         log.info("Retrieving hints for product {}", productId);
@@ -122,6 +129,7 @@ public class VehicleApplicabilityHintService {
      * A product matches if its hints contain tags that are compatible with all
      * provided attributes.
      */
+    @Override
     @Transactional(readOnly = true)
     public FilterProductsResponse filterProductsByVehicleAttributes(Map<String, String> vehicleAttributes) {
         log.info("Filtering products by vehicle attributes: {}", vehicleAttributes);

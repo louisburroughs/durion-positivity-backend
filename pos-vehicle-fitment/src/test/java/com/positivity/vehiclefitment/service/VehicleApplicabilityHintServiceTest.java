@@ -4,7 +4,8 @@ import com.positivity.vehiclefitment.internal.dto.*;
 import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
 import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
-import com.positivity.vehiclefitment.internal.service.VehicleApplicabilityHintService;
+import com.positivity.vehiclefitment.internal.service.VehicleApplicabilityHintServiceImpl;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +34,7 @@ class VehicleApplicabilityHintServiceTest {
     private VehicleApplicabilityHintRepository hintRepository;
 
     @InjectMocks
-    private VehicleApplicabilityHintService service;
+    private VehicleApplicabilityHintServiceImpl service;
 
     private CreateHintRequest createRequest;
     private VehicleApplicabilityHint mockHint;
