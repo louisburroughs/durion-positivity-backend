@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.entity;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -12,9 +13,13 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-/** Immutable audit record capturing the details of a scheduling conflict override. */
+/** Audit record capturing the details of a scheduling conflict override. */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "override_record")
 @Data
 @NoArgsConstructor
@@ -40,6 +45,14 @@ public class OverrideRecord {
 
     @Column(name = "conflict_details", columnDefinition = "TEXT")
     private String conflictDetails;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
     @PrePersist
     public void generateId() {
