@@ -52,6 +52,19 @@ public class ReservationEntity {
     @Builder.Default
     private int allocatedQuantity = 0;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private int priority = 5;
+
+    @Column(nullable = true)
+    private Instant waitingSince;
+
+    @Column(nullable = true)
+    private Instant dueDateTime;
+
+    @Column(nullable = true)
+    private Instant scheduleStartTime;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ReservationStatus status;
