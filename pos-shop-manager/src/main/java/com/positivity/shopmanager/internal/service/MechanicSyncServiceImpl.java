@@ -52,10 +52,17 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
             return;
         }
 
-        // AC4: monotonic ordering — skip stale or equal versions
+        // AC4: monotonic ordering — skip stale or equal versions but persist audit
+        // trail
         Optional<Mechanic> existing = mechanicRepository.findByPersonId(event.getPersonId());
         if (existing.isPresent() && event.getVersion() <= existing.get().getVersion()) {
+            persistIntegrationLog(event, "DISCARDED_STALE");
             return;
+        }
+
+        if (event.getEventType() == null) {
+            throw new IllegalArgumentException(
+                    "HrMechanicEvent.eventType must not be null, eventId=" + event.getEventId());
         }
 
         switch (event.getEventType()) {
@@ -159,28 +166,12 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
     @Override
     @Transactional
     public void reconcileFromHr() {
-        // No HR roster client is available; all locally-ACTIVE mechanics are
-        // unconditionally
-        // deactivated. This is intentional for the current scope — an HR client
-        // integration
-        // is a follow-up story.
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-        Instant now = Instant.now(clock);
-        List<Mechanic> localActive = mechanicRepository.findAllByStatus(MechanicStatus.ACTIVE);
-        for (Mechanic mechanic : localActive) {
-            String beforeState = mechanic.toString();
-            mechanic.setStatus(MechanicStatus.INACTIVE);
-            mechanic.setLastSyncedAt(now);
-            Mechanic saved = mechanicRepository.save(mechanic);
-            mechanicAuditLogRepository.save(MechanicAuditLog.builder()
-                    .personId(saved.getPersonId())
-                    .eventType("RECONCILE_DEACTIVATED")
-                    .beforeState(beforeState)
-                    .afterState(saved.toString())
-                    .appliedAt(now)
-                    .changedBy(actor)
-                    .build());
-        }
+        // HR reconciliation requires a live HR roster client which is not available in
+        // this scope.
+        // This method must not deactivate mechanics without confirmed HR data.
+        // A follow-up story will wire the HR client and implement safe reconciliation.
+        throw new UnsupportedOperationException(
+                "reconcileFromHr() requires an HR client integration — not yet implemented");
     }
 
     private void persistAuditLog(HrMechanicEvent event, String beforeState, String afterState) {
@@ -197,13 +188,17 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
     }
 
     private void persistIntegrationLog(HrMechanicEvent event) {
+        persistIntegrationLog(event, "PROCESSED");
+    }
+
+    private void persistIntegrationLog(HrMechanicEvent event, String status) {
         hrIntegrationLogRepository.save(HrIntegrationLog.builder()
                 .eventId(event.getEventId())
                 .personId(event.getPersonId())
-                .eventType(event.getEventType().name())
+                .eventType(event.getEventType() != null ? event.getEventType().name() : "UNKNOWN")
                 .receivedAt(Instant.now(clock))
                 .processedAt(Instant.now(clock))
-                .status("PROCESSED")
+                .status(status)
                 .build());
     }
 }

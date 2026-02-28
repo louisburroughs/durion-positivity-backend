@@ -39,11 +39,12 @@ public class ConflictOverrideController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('shopmgr.appointment.override')")
-    @EmitEvent(id = "APPOINTMENT_CONFLICT_OVERRIDE_CREATE", apiVersion = "1")
+    @EmitEvent(id = "SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE", apiVersion = "1")
     public @NonNull ConflictOverrideResponse executeOverride(
             @PathVariable @NonNull UUID appointmentId,
             @RequestBody @NonNull ConflictOverrideRequest request) {
-        // Merge path appointmentId into request if not set; validate consistency
+        // Validate that path appointmentId is consistent with request body
+        // appointmentId
         if (!appointmentId.equals(request.getAppointmentId())) {
             throw new IllegalArgumentException(
                     "Path appointmentId does not match request body appointmentId");

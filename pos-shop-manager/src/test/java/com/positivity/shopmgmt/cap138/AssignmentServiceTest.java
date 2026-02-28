@@ -39,6 +39,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 class AssignmentServiceTest {
@@ -65,6 +71,11 @@ class AssignmentServiceTest {
                                 assignmentRepository,
                                 assignmentMechanicRepository,
                                 FIXED_CLOCK);
+        }
+
+        @AfterEach
+        void clearSecurityContext() {
+                SecurityContextHolder.clearContext();
         }
 
         // --- AC-4: role validation ---
@@ -222,6 +233,11 @@ class AssignmentServiceTest {
                 when(assignmentMechanicRepository.findByAssignmentId(savedAssignment.getAssignmentId()))
                                 .thenReturn(List.of(savedMechLink));
 
+                var overrideAuth = new UsernamePasswordAuthenticationToken(
+                                "manager", null,
+                                List.of(new SimpleGrantedAuthority("workexec.assignment.override")));
+                SecurityContextHolder.getContext().setAuthentication(overrideAuth);
+
                 AssignmentResponse response = service.create(request);
 
                 assertThat(response.isOverride()).isTrue();
@@ -292,5 +308,127 @@ class AssignmentServiceTest {
                                 .firstName("Test")
                                 .lastName("Mechanic")
                                 .build();
+        }
+
+        private static Assignment buildSavedAssignment(UUID appointmentId) {
+                return Assignment.builder()
+                                .assignmentId(UUID.randomUUID())
+                                .appointmentId(appointmentId)
+                                .status(AssignmentStatusEnum.CONFIRMED)
+                                .version(1)
+                                .createdAt(FIXED_NOW)
+                                .updatedAt(FIXED_NOW)
+                                .build();
+        }
+
+        private static AssignmentMechanic buildMechLink(UUID assignmentId, UUID mechanicId,
+                        MechanicRoleEnum role) {
+                return AssignmentMechanic.builder()
+                                .id(UUID.randomUUID())
+                                .assignmentId(assignmentId)
+                                .mechanicId(mechanicId)
+                                .role(role)
+                                .build();
+        }
+
+        // --- F-06: single mechanic with null role defaults to LEAD ---
+
+        @Test
+        void ac4_singleMechanicNullRole_defaultsToLead() {
+                UUID appointmentId = UUID.randomUUID();
+                UUID mechanicId = UUID.randomUUID();
+                var request = CreateAssignmentRequest.builder()
+                                .appointmentId(appointmentId)
+                                .mechanics(List.of(MechanicAssignmentItem.builder()
+                                                .mechanicPersonId("P-001")
+                                                .role(null)
+                                                .build()))
+                                .build();
+
+                var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
+                var mechanic = buildMechanic(mechanicId, "P-001");
+                var savedAssignment = buildSavedAssignment(appointmentId);
+                var savedLink = buildMechLink(savedAssignment.getAssignmentId(), mechanicId, MechanicRoleEnum.LEAD);
+
+                when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+                when(mechanicRepository.findByPersonId("P-001")).thenReturn(Optional.of(mechanic));
+                when(assignmentRepository.save(any())).thenReturn(savedAssignment);
+                when(assignmentMechanicRepository.save(any())).thenReturn(savedLink);
+                when(assignmentMechanicRepository.findByAssignmentId(savedAssignment.getAssignmentId()))
+                                .thenReturn(List.of(savedLink));
+
+                var response = service.create(request);
+
+                assertThat(response.getMechanics()).hasSize(1);
+                assertThat(response.getMechanics().get(0).getRole()).isEqualTo(MechanicRole.LEAD);
+                verify(assignmentRepository).save(any());
+        }
+
+        // --- F-09: multiple mechanics with more than one LEAD throws ---
+
+        @Test
+        void ac4_multipleWithMultipleLeads_throwsIllegalArgument() {
+                var request = CreateAssignmentRequest.builder()
+                                .appointmentId(UUID.randomUUID())
+                                .mechanics(List.of(
+                                                MechanicAssignmentItem.builder().mechanicPersonId("P1")
+                                                                .role(MechanicRole.LEAD).build(),
+                                                MechanicAssignmentItem.builder().mechanicPersonId("P2")
+                                                                .role(MechanicRole.LEAD).build()))
+                                .build();
+
+                assertThatThrownBy(() -> service.create(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("exactly one LEAD");
+
+                verify(appointmentRepository, never()).findById(any());
+                verify(assignmentRepository, never()).save(any());
+        }
+
+        // --- F-10: override permission check ---
+
+        @Test
+        void ac10_overrideWithoutPermission_throwsAccessDenied() {
+                // SecurityContextHolder is empty in tests — canOverride=false
+                var request = CreateAssignmentRequest.builder()
+                                .appointmentId(UUID.randomUUID())
+                                .mechanics(List.of(MechanicAssignmentItem.builder()
+                                                .mechanicPersonId("P-001")
+                                                .role(MechanicRole.LEAD)
+                                                .build()))
+                                .override(true)
+                                .overrideReason("approved")
+                                .build();
+
+                assertThatThrownBy(() -> service.create(request))
+                                .isInstanceOf(AccessDeniedException.class);
+
+                verify(appointmentRepository, never()).findById(any());
+                verify(assignmentRepository, never()).save(any());
+        }
+
+        @Test
+        void ac10_overrideWithPermissionAndBlankReason_throwsIllegalArgument() {
+                var auth = new UsernamePasswordAuthenticationToken(
+                                "manager", null,
+                                List.of(new SimpleGrantedAuthority("workexec.assignment.override")));
+                SecurityContextHolder.getContext().setAuthentication(auth);
+
+                var request = CreateAssignmentRequest.builder()
+                                .appointmentId(UUID.randomUUID())
+                                .mechanics(List.of(MechanicAssignmentItem.builder()
+                                                .mechanicPersonId("P-001")
+                                                .role(MechanicRole.LEAD)
+                                                .build()))
+                                .override(true)
+                                .overrideReason("  ")
+                                .build();
+
+                assertThatThrownBy(() -> service.create(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("overrideReason");
+
+                verify(appointmentRepository, never()).findById(any());
+                verify(assignmentRepository, never()).save(any());
         }
 }

@@ -34,7 +34,7 @@ public class Mechanic {
     @Column(name = "mechanic_id", columnDefinition = "UUID")
     private UUID mechanicId;
 
-    @Column(name = "person_id")
+    @Column(name = "person_id", nullable = false, unique = true)
     private String personId;
 
     @Column(name = "first_name")
