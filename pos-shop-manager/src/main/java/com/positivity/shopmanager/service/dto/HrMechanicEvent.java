@@ -1,6 +1,6 @@
-package com.positivity.shopmanager.internal.dto;
+package com.positivity.shopmanager.service.dto;
 
-import com.positivity.shopmanager.internal.enums.HrEventType;
+import com.positivity.shopmanager.service.enums.HrEventType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -8,6 +8,10 @@ import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * Inbound HR integration event carrying mechanic data from the HR system.
+ * This is a public contract type on the service boundary (ADR-0026).
+ */
 @Data
 @Builder
 public class HrMechanicEvent {

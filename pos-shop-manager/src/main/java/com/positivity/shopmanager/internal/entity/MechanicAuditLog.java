@@ -43,6 +43,9 @@ public class MechanicAuditLog {
     @Column(name = "applied_at")
     private Instant appliedAt;
 
+    @Column(name = "changed_by")
+    private String changedBy;
+
     @PrePersist
     public void generateId() {
         if (id == null) {
