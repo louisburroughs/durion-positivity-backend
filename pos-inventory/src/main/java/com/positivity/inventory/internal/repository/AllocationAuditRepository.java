@@ -7,7 +7,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AllocationAuditRepository extends JpaRepository<AllocationAuditEntity, UUID> {
-    List<AllocationAuditEntity> findByStockItemId(String stockItemId);
+    List<AllocationAuditEntity> findByStockItemId(UUID stockItemId);
 
     List<AllocationAuditEntity> findByReasonCode(AllocationAuditReasonCode reasonCode);
 }

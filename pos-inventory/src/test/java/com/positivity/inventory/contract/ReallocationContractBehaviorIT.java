@@ -81,7 +81,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         /**
          * AC1: Verifies that POST /v1/inventory/allocations/reallocate with a valid
          * request and gateway reallocation authority returns 200 OK with
-         * {@code sku}, {@code totalReallocated}, {@code auditRecordsCreated},
+         * {@code stockItemId}, {@code totalReallocated}, {@code auditRecordsCreated},
          * and {@code atpAfterReallocation} fields per ADR-0017.
          *
          * Issue: #24
@@ -89,12 +89,12 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("POST /v1/inventory/allocations/reallocate with valid request → 200 OK with reallocation response")
         void contract_reallocate_withValidRequest_returns200WithResponseBody() throws Exception {
-                // Issue #24: AC1 — reallocate endpoint must return 200 with sku,
+                // Issue #24: AC1 — reallocate endpoint must return 200 with stockItemId,
                 // totalReallocated, auditRecordsCreated, atpAfterReallocation
-                String sku = UUID.randomUUID().toString();
+                UUID stockItemId = UUID.randomUUID();
 
                 ReallocateResponse mockResponse = ReallocateResponse.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .totalReallocated(3)
                                 .auditRecordsCreated(2)
                                 .atpAfterReallocation(7)
@@ -104,7 +104,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .thenReturn(mockResponse);
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("workorder-ref-001")
                                 .build();
@@ -113,7 +113,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.sku").value(sku))
+                                .andExpect(jsonPath("$.stockItemId").value(stockItemId.toString()))
                                 .andExpect(jsonPath("$.totalReallocated").value(3))
                                 .andExpect(jsonPath("$.auditRecordsCreated").value(2))
                                 .andExpect(jsonPath("$.atpAfterReallocation").value(7));
@@ -134,10 +134,10 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_reallocate_priorityChange_responseIncludesAuditCount() throws Exception {
                 // Issue #24: AC1 — audit record creation must be reflected in
                 // auditRecordsCreated field
-                String sku = UUID.randomUUID().toString();
+                UUID stockItemId = UUID.randomUUID();
 
                 ReallocateResponse mockResponse = ReallocateResponse.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .totalReallocated(5)
                                 .auditRecordsCreated(2)
                                 .atpAfterReallocation(0)
@@ -147,7 +147,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .thenReturn(mockResponse);
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("cap220-ref-002")
                                 .build();
@@ -178,10 +178,10 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_reallocate_atpAndTotalReallocatedInResponse() throws Exception {
                 // Issue #24: AC2/AC3 — response must carry totalReallocated and
                 // atpAfterReallocation
-                String sku = UUID.randomUUID().toString();
+                UUID stockItemId = UUID.randomUUID();
 
                 ReallocateResponse mockResponse = ReallocateResponse.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .totalReallocated(10)
                                 .auditRecordsCreated(1)
                                 .atpAfterReallocation(0)
@@ -191,7 +191,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .thenReturn(mockResponse);
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("cap220-ref-003")
                                 .build();
@@ -204,23 +204,23 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(jsonPath("$.atpAfterReallocation").value(0));
         }
 
-        // ─── AC4: Missing sku → 400 Bad Request ─────────────────────────────────────
+        // ─── AC4: Missing stockItemId → 400 Bad Request ─────────────────────────────
 
         /**
          * AC4: Verifies that POST /v1/inventory/allocations/reallocate with a missing
-         * (null) {@code sku} field returns 400 Bad Request per:
+         * (null) {@code stockItemId} field returns 400 Bad Request per:
          * <ul>
-         * <li>Bean Validation: {@code @NotBlank} on
-         * {@code ReallocateRequest.sku}</li>
+         * <li>Bean Validation: {@code @NotNull} on
+         * {@code ReallocateRequest.stockItemId}</li>
          * <li>ADR-0017: field validation → 400</li>
          * </ul>
          *
          * Issue: #24
          */
         @Test
-        @DisplayName("POST /v1/inventory/allocations/reallocate with missing sku → 400 Bad Request")
+        @DisplayName("POST /v1/inventory/allocations/reallocate with missing stockItemId → 400 Bad Request")
         void contract_reallocate_missingSku_returns400() throws Exception {
-                // Issue #24: AC4 — missing sku must produce 400 (bean validation via @NotBlank)
+                // Issue #24: AC4 — missing stockItemId must produce 400 (bean validation via @NotNull)
                 String requestBody = "{\"triggerType\":\"PRIORITY_CHANGE\",\"triggerReferenceId\":\"ref-007\"}";
 
                 mockMvc.perform(withReallocateAuth(post("/v1/inventory/allocations/reallocate"))
@@ -248,9 +248,9 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_reallocate_withoutAuthority_returns403() throws Exception {
                 // Issue #24: AC5 — missing inventory:allocations:reallocate authority must
                 // return 403
-                String sku = UUID.randomUUID().toString();
+                UUID stockItemId = UUID.randomUUID();
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("ref-noauth")
                                 .build();

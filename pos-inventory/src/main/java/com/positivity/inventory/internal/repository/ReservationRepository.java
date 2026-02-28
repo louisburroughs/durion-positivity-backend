@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ReservationRepository extends JpaRepository<ReservationEntity, UUID> {
 
-    List<ReservationEntity> findBySku(String sku);
+    List<ReservationEntity> findByStockItemId(UUID stockItemId);
 
     Optional<ReservationEntity> findByWorkorderLineId(UUID workorderLineId);
 }

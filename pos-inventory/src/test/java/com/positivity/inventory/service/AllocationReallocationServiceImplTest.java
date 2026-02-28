@@ -64,7 +64,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * {@link #AC2_insufficientStock_workorderReceivesZeroAllocation}</li>
  * <li>AC5 — ATP consistency: reallocation does not change ATP →
  * {@link #AC3_atpConsistency_atpUnchangedAfterReallocation}</li>
- * <li>Guard — null sku throws early →
+ * <li>Guard — null stockItemId throws early →
  * {@link #AC4_nullSku_throwsException}</li>
  * </ol>
  *
@@ -106,12 +106,12 @@ class AllocationReallocationServiceImplTest {
                 SecurityContextHolder.clearContext();
         }
 
-        private ReservationEntity buildReservation(UUID workorderId, String sku, int priority,
+        private ReservationEntity buildReservation(UUID workorderId, UUID stockItemId, int priority,
                         int required, Instant waitingSince) {
                 return ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID())
                                 .workorderLineId(workorderId)
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .requiredQuantity(required)
                                 .allocatedQuantity(0)
                                 .priority(priority)
@@ -139,25 +139,25 @@ class AllocationReallocationServiceImplTest {
                 // Issue #24: AC1 — high-priority workorder must receive stock before
                 // lower-priority
                 // Arrange
-                String sku = STOCK_ITEM_ID.toString();
+                UUID stockItemId = STOCK_ITEM_ID;
                 ReservationEntity highPrio = buildReservation(
                                 WORKORDER_HIGH_PRIO,
-                                sku,
+                                stockItemId,
                                 2,
                                 7,
                                 FIXED_NOW.minus(Duration.ofHours(48)));
-                ReservationEntity lowPrio = buildReservation(WORKORDER_LOW_PRIO, sku, 8, 5, null);
+                ReservationEntity lowPrio = buildReservation(WORKORDER_LOW_PRIO, stockItemId, 8, 5, null);
                 // AC5: previousTotalAllocated must be non-zero so the redistribution pool
                 // exists
                 highPrio.setAllocatedQuantity(5);
                 lowPrio.setAllocatedQuantity(5);
-                when(reservationRepository.findBySku(sku)).thenReturn(java.util.List.of(highPrio, lowPrio));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(10);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(highPrio, lowPrio));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId(WORKORDER_HIGH_PRIO.toString())
                                 .build();
@@ -169,9 +169,9 @@ class AllocationReallocationServiceImplTest {
                 assertThat(result.getTotalReallocated())
                                 .as("High-priority workorder must receive stock; totalReallocated must be > 0")
                                 .isGreaterThan(0);
-                assertThat(result.getSku())
-                                .as("Response sku must match the requested sku")
-                                .isEqualTo(sku);
+                assertThat(result.getStockItemId())
+                                .as("Response stockItemId must match the requested stockItemId")
+                                .isEqualTo(stockItemId);
         }
 
         // ─── AC1 audit: Audit record must be created with PRIORITY_CHANGE reason ─────
@@ -188,22 +188,22 @@ class AllocationReallocationServiceImplTest {
         void AC1_priorityChange_auditRecordCreatedWithReasonCode() {
                 // Issue #24: AC1 — audit record with PRIORITY_CHANGE reason must be persisted
                 // Arrange
-                String sku = STOCK_ITEM_ID.toString();
+                UUID stockItemId = STOCK_ITEM_ID;
                 // waitingSince=null ensures effectivePriority == priority (no aging), so the
                 // PRIORITY_CHANGE reason flows directly to the audit record.
-                ReservationEntity highPrio = buildReservation(WORKORDER_HIGH_PRIO, sku, 2, 7, null);
-                ReservationEntity lowPrio = buildReservation(WORKORDER_LOW_PRIO, sku, 8, 5, null);
+                ReservationEntity highPrio = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 2, 7, null);
+                ReservationEntity lowPrio = buildReservation(WORKORDER_LOW_PRIO, stockItemId, 8, 5, null);
                 // AC5: previousTotalAllocated must be non-zero so the redistribution pool
                 // exists
                 highPrio.setAllocatedQuantity(5);
                 lowPrio.setAllocatedQuantity(5);
-                when(reservationRepository.findBySku(sku)).thenReturn(java.util.List.of(highPrio, lowPrio));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(10);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(highPrio, lowPrio));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("cap220-audit-ref")
                                 .build();
@@ -248,15 +248,15 @@ class AllocationReallocationServiceImplTest {
                 // Issue #24: AC2 — no partial allocations; workorder must receive 0 when stock
                 // insufficient
                 // Arrange: only 3 units available, workorder needs 5
-                String sku = STOCK_ITEM_ID.toString();
-                ReservationEntity reservation = buildReservation(WORKORDER_LOW_PRIO, sku, 5, 5, null);
-                when(reservationRepository.findBySku(sku)).thenReturn(java.util.List.of(reservation));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(3);
+                UUID stockItemId = STOCK_ITEM_ID;
+                ReservationEntity reservation = buildReservation(WORKORDER_LOW_PRIO, stockItemId, 5, 5, null);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(reservation));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(3);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId(WORKORDER_LOW_PRIO.toString())
                                 .build();
@@ -294,18 +294,18 @@ class AllocationReallocationServiceImplTest {
                 int totalAllocatedBefore = 7;
                 int expectedAtp = onHand - totalAllocatedBefore; // 3
 
-                String sku = STOCK_ITEM_ID.toString();
-                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, sku, 3, 7, null);
+                UUID stockItemId = STOCK_ITEM_ID;
+                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 3, 7, null);
                 // PRCR-C02: pre-existing allocation of 7 units must be set so that
                 // previousTotalAllocated = 7, and ATP after reallocation = 10 - 7 = 3.
                 reservation.setAllocatedQuantity(7);
-                when(reservationRepository.findBySku(sku)).thenReturn(java.util.List.of(reservation));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(10);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(reservation));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("atp-consistency-ref")
                                 .build();
@@ -321,10 +321,10 @@ class AllocationReallocationServiceImplTest {
                                 .isEqualTo(expectedAtp);
         }
 
-        // ─── AC4: Null sku → exception (service-layer guard) ────────────────────────
+        // ─── AC4: Null stockItemId → exception (service-layer guard) ────────────────────────
 
         /**
-         * AC4: A {@code ReallocateRequest} with a null {@code sku} must cause
+         * AC4: A {@code ReallocateRequest} with a null {@code stockItemId} must cause
          * the service to throw rather than silently proceeding with a null reference.
          * Bean Validation on the controller enforces 400 at the HTTP layer; this test
          * verifies the service-layer guard.
@@ -336,17 +336,17 @@ class AllocationReallocationServiceImplTest {
          *
          */
         @Test
-        @DisplayName("AC4_nullSku: null sku → service throws runtime exception")
+        @DisplayName("AC4_nullSku: null stockItemId → service throws runtime exception")
         void AC4_nullSku_throwsException() {
-                // Issue #24: AC4 — null sku must not silently succeed at the service
+                // Issue #24: AC4 — null stockItemId must not silently succeed at the service
                 // layer
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(null)
+                                .stockItemId(null)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("ref-null-stock")
                                 .build();
 
-                // Act + Assert — service must fail fast on null sku.
+                // Act + Assert — service must fail fast on null stockItemId.
                 assertThatThrownBy(() -> service.reallocate(request))
                                 .isInstanceOf(RuntimeException.class);
         }
@@ -364,10 +364,10 @@ class AllocationReallocationServiceImplTest {
                 // 7
                 // workorderA is now same priority as workorderB → tie-break by waitingSince
                 // (workorderA wins)
-                String sku = STOCK_ITEM_ID.toString();
+                UUID stockItemId = STOCK_ITEM_ID;
                 Instant longAgo = FIXED_NOW.minus(Duration.ofHours(49));
-                ReservationEntity agedWaiter = buildReservation(WORKORDER_LOW_PRIO, sku, 8, 4, longAgo);
-                ReservationEntity freshHigher = buildReservation(WORKORDER_HIGH_PRIO, sku, 7, 4, null);
+                ReservationEntity agedWaiter = buildReservation(WORKORDER_LOW_PRIO, stockItemId, 8, 4, longAgo);
+                ReservationEntity freshHigher = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 7, 4, null);
                 // AC5: seed prior allocations so the redistribution pool
                 // (previousTotalAllocated)
                 // is non-zero; both reservations had 4 units allocated before this
@@ -375,13 +375,13 @@ class AllocationReallocationServiceImplTest {
                 agedWaiter.setAllocatedQuantity(4);
                 freshHigher.setAllocatedQuantity(4);
 
-                when(reservationRepository.findBySku(sku)).thenReturn(java.util.List.of(freshHigher, agedWaiter));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(5);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(freshHigher, agedWaiter));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(5);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("aging-test-ref")
                                 .build();
@@ -410,11 +410,11 @@ class AllocationReallocationServiceImplTest {
         void AC3_sortTieBreaker_earlierDueDateTimeWinsStock() {
                 // Issue #24: AC3 — tie-breaker sort key 2 (dueDateTime ASC): earlier deadline
                 // wins
-                String sku = STOCK_ITEM_ID.toString();
+                UUID stockItemId = STOCK_ITEM_ID;
                 ReservationEntity earlyDueDate = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID())
                                 .workorderLineId(WORKORDER_HIGH_PRIO)
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .requiredQuantity(5)
                                 .allocatedQuantity(0)
                                 .priority(5)
@@ -428,7 +428,7 @@ class AllocationReallocationServiceImplTest {
                 ReservationEntity lateDueDate = ReservationEntity.builder()
                                 .reservationId(UUID.randomUUID())
                                 .workorderLineId(WORKORDER_LOW_PRIO)
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .requiredQuantity(5)
                                 .allocatedQuantity(0)
                                 .priority(5)
@@ -443,13 +443,13 @@ class AllocationReallocationServiceImplTest {
                 // earlyDueDate wins the tie-break by dueDateTime.
                 lateDueDate.setAllocatedQuantity(5);
 
-                when(reservationRepository.findBySku(sku)).thenReturn(java.util.List.of(lateDueDate, earlyDueDate));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(5);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(java.util.List.of(lateDueDate, earlyDueDate));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(5);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("tie-breaker-test")
                                 .build();
@@ -468,10 +468,10 @@ class AllocationReallocationServiceImplTest {
         @DisplayName("resolveTriggeredBy: with authenticated principal → audit record captures username")
         void resolveTriggeredBy_withAuthenticatedPrincipal() {
                 // Arrange
-                String sku = STOCK_ITEM_ID.toString();
-                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, sku, 1, 5, null);
-                when(reservationRepository.findBySku(sku)).thenReturn(List.of(reservation));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(10);
+                UUID stockItemId = STOCK_ITEM_ID;
+                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 1, 5, null);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(List.of(reservation));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -482,7 +482,7 @@ class AllocationReallocationServiceImplTest {
                 SecurityContextHolder.setContext(securityContext);
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("MANUAL_OVERRIDE")
                                 .triggerReferenceId("auth-user-test")
                                 .build();
@@ -506,19 +506,19 @@ class AllocationReallocationServiceImplTest {
         @DisplayName("parseReasonCode: null triggerType → defaults to MANUAL_OVERRIDE")
         void parseReasonCode_withNullTriggerType() {
                 // Arrange
-                String sku = STOCK_ITEM_ID.toString();
-                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, sku, 1, 5, null);
+                UUID stockItemId = STOCK_ITEM_ID;
+                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 1, 5, null);
                 // AC5: seed allocation so the pool is non-zero and the reservation reaches the
                 // if-branch, producing an audit record with the parsed (not STOCK_SHORTAGE)
                 // reason.
                 reservation.setAllocatedQuantity(5);
-                when(reservationRepository.findBySku(sku)).thenReturn(List.of(reservation));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(10);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(List.of(reservation));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType(null) // Null trigger type
                                 .triggerReferenceId("null-trigger-test")
                                 .build();
@@ -543,18 +543,18 @@ class AllocationReallocationServiceImplTest {
         @DisplayName("parseReasonCode: SCHEDULE_CHANGE triggerType → audit has SCHEDULE_CHANGE reason")
         void parseReasonCode_withScheduleChangeTrigger() {
                 // Arrange
-                String sku = STOCK_ITEM_ID.toString();
-                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, sku, 1, 5, null);
+                UUID stockItemId = STOCK_ITEM_ID;
+                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 1, 5, null);
                 // AC5: seed allocation so the pool is non-zero and the reservation reaches the
                 // if-branch, producing an audit record with the parsed SCHEDULE_CHANGE reason.
                 reservation.setAllocatedQuantity(5);
-                when(reservationRepository.findBySku(sku)).thenReturn(List.of(reservation));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(10);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(List.of(reservation));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("SCHEDULE_CHANGE")
                                 .triggerReferenceId("schedule-change-test")
                                 .build();
@@ -579,24 +579,24 @@ class AllocationReallocationServiceImplTest {
         @DisplayName("computeEffectivePriority: waiting < grace period (12h) → no priority aging")
         void computeEffectivePriority_beforeGracePeriod_noAging() {
                 // Arrange
-                String sku = STOCK_ITEM_ID.toString();
+                UUID stockItemId = STOCK_ITEM_ID;
                 // Waiting for 12 hours, which is less than the 24-hour grace period
                 Instant waitingSince = FIXED_NOW.minus(Duration.ofHours(12));
-                ReservationEntity noAgingReservation = buildReservation(WORKORDER_LOW_PRIO, sku, 8, 5, waitingSince);
+                ReservationEntity noAgingReservation = buildReservation(WORKORDER_LOW_PRIO, stockItemId, 8, 5, waitingSince);
 
-                ReservationEntity higherPrioReservation = buildReservation(WORKORDER_HIGH_PRIO, sku, 7, 5, null);
+                ReservationEntity higherPrioReservation = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 7, 5, null);
                 // AC5: seed prior allocation on the lower-priority reservation so that
                 // previousTotalAllocated = 5 and the pool is available for redistribution.
                 noAgingReservation.setAllocatedQuantity(5);
 
-                when(reservationRepository.findBySku(sku))
+                when(reservationRepository.findByStockItemId(stockItemId))
                                 .thenReturn(List.of(noAgingReservation, higherPrioReservation));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(5);
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(5);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")
                                 .triggerReferenceId("no-aging-test")
                                 .build();
@@ -615,19 +615,19 @@ class AllocationReallocationServiceImplTest {
         @DisplayName("parseReasonCode: invalid triggerType → defaults to MANUAL_OVERRIDE")
         void parseReasonCode_withInvalidTriggerType() {
                 // Arrange
-                String sku = STOCK_ITEM_ID.toString();
-                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, sku, 1, 5, null);
+                UUID stockItemId = STOCK_ITEM_ID;
+                ReservationEntity reservation = buildReservation(WORKORDER_HIGH_PRIO, stockItemId, 1, 5, null);
                 // AC5: seed allocation so the pool is non-zero and the reservation reaches the
                 // if-branch, producing an audit record with MANUAL_OVERRIDE (fallback for
                 // invalid).
                 reservation.setAllocatedQuantity(5);
-                when(reservationRepository.findBySku(sku)).thenReturn(List.of(reservation));
-                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(sku)).thenReturn(10);
+                when(reservationRepository.findByStockItemId(stockItemId)).thenReturn(List.of(reservation));
+                when(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
                 ReallocateRequest request = ReallocateRequest.builder()
-                                .sku(sku)
+                                .stockItemId(stockItemId)
                                 .triggerType("INVALID_TRIGGER_TYPE") // Invalid trigger type
                                 .triggerReferenceId("invalid-trigger-test")
                                 .build();

@@ -16,7 +16,7 @@ public class CreateReservationRequest {
     private UUID workorderLineId;
 
     @NotNull
-    private String sku;
+    private UUID stockItemId;
 
     @Positive
     private int requiredQuantity;
