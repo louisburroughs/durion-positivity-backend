@@ -59,6 +59,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             substituteFuture.cancel(true);
+            externalFuture.cancel(true);
             log.warn("Product substitute client interrupted for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
         } catch (TimeoutException e) {
@@ -67,6 +68,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
             log.warn("Product substitute client timed out for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
         } catch (ExecutionException e) {
+            substituteFuture.cancel(true);
             log.warn("Product substitute client failed for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
         }
@@ -77,6 +79,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             externalFuture.cancel(true);
+            substituteFuture.cancel(true);
             log.warn("External availability client interrupted for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
         } catch (TimeoutException e) {
@@ -85,6 +88,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
             log.warn("External availability client timed out for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
         } catch (ExecutionException e) {
+            externalFuture.cancel(true);
             log.warn("External availability client failed for sku(mask)={}: {}", maskForLog(sku), e.getMessage());
             partialResultsBanner = true;
         }

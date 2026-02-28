@@ -86,6 +86,39 @@ paths:
           content:
             '*/*':
               schema: {}
+  /v1/appointments/{appointmentId}/reschedule:
+    put:
+      tags:
+      - Appointments API
+      summary: Reschedule appointment
+      description: Reschedule an existing appointment
+      operationId: rescheduleAppointment
+      parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RescheduleAppointmentRequest"
+        required: true
+      responses:
+        "200":
+          description: Appointment rescheduled successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
+        "409":
+          description: Appointment state conflict.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
   /v1/shop-manager/{locationId}/mobileUnit:
     post:
       tags:
@@ -141,47 +174,39 @@ paths:
           content:
             '*/*':
               schema: {}
-  /v1/shop-manager/appointments:
+  /v1/appointments:
     post:
       tags:
       - Appointments API
       summary: Create appointment
-      description: Create a new appointment (idempotent via Idempotency-Key header)
+      description: Create a new appointment
       operationId: createAppointment
-      parameters:
-      - name: Idempotency-Key
-        in: header
-        description: Idempotency key for safe retries
-        required: false
-        schema:
-          type: string
-      - name: X-Correlation-Id
-        in: header
-        description: Correlation ID for request tracing
-        required: false
-        schema:
-          type: string
       requestBody:
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/AppointmentCreateRequest"
+        required: true
       responses:
         "501":
           description: Not implemented.
           content:
             '*/*':
-              schema: {}
-        "409":
-          description: Scheduling conflict detected.
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
+        "400":
+          description: Validation error — requested slot is unavailable or request
+            fields are invalid.
           content:
             '*/*':
-              schema: {}
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
         "201":
           description: Appointment created successfully.
           content:
             '*/*':
-              schema: {}
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
   /v1/shop-manager/{locationId}/workorders/{workorderId}/operationalContext:
     get:
       tags:
@@ -293,34 +318,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ServiceEntityDTO"
-  /v1/shop-manager/{locationId}/schedules/view:
-    get:
-      tags:
-      - Schedule API
-      summary: View schedules
-      description: Read-only schedule view used by UI with optional filters.
-      operationId: viewSchedules
-      parameters:
-      - name: locationId
-        in: path
-        description: Shop location ID
-        required: true
-        schema:
-          type: integer
-          format: int64
-        example: 1
-      - name: filters
-        in: query
-        description: Optional filter parameters
-        required: false
-        schema:
-          type: string
-      responses:
-        "200":
-          description: Schedules retrieved successfully.
-          content:
-            '*/*':
-              schema: {}
   /v1/shop-manager/{locationId}/mobileUnit/{bayId}:
     get:
       tags:
@@ -434,7 +431,86 @@ paths:
           description: Bay not found.
         "204":
           description: Bay deleted successfully.
-  /v1/shop-manager/appointments/{appointmentId}:
+  /v1/schedules/view:
+    get:
+      tags:
+      - Schedule API
+      summary: View schedule
+      description: Read-only schedule view for a location and date.
+      operationId: viewSchedule
+      parameters:
+      - name: locationId
+        in: query
+        description: Location ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: date
+        in: query
+        description: Date in YYYY-MM-DD
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: resourceType
+        in: query
+        description: Optional resource type filter
+        required: false
+        schema:
+          type: string
+      - name: resourceId
+        in: query
+        description: Optional single resource filter
+        required: false
+        schema:
+          type: string
+      - name: includeAvailabilityOverlay
+        in: query
+        description: Include HR availability overlay
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - name: range
+        in: query
+        description: Schedule window range
+        required: false
+        schema:
+          type: string
+          default: LOCATION_HOURS
+      - name: X-Correlation-Id
+        in: header
+        description: Correlation ID for request tracing
+        required: false
+        schema:
+          type: string
+      responses:
+        "400":
+          description: Invalid input parameters
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ScheduleViewResponse"
+        "200":
+          description: Schedule retrieved successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ScheduleViewResponse"
+        "403":
+          description: Not authorized for this location
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ScheduleViewResponse"
+        "404":
+          description: Location or resource not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ScheduleViewResponse"
+  /v1/appointments/{appointmentId}:
     get:
       tags:
       - Appointments API
@@ -460,39 +536,147 @@ paths:
           description: Not implemented.
           content:
             '*/*':
-              schema: {}
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
         "404":
           description: Appointment not found.
           content:
             '*/*':
-              schema: {}
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
         "200":
           description: Appointment retrieved successfully.
           content:
             '*/*':
-              schema: {}
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
+  /v1/appointments/{appointmentId}/cancel:
+    delete:
+      tags:
+      - Appointments API
+      summary: Cancel appointment
+      description: Cancel a scheduled appointment
+      operationId: cancelAppointment
+      parameters:
+      - name: appointmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelAppointmentRequest"
+        required: true
+      responses:
+        "409":
+          description: Appointment state conflict.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
+        "200":
+          description: Appointment cancelled successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
 components:
   schemas:
+    RescheduleAppointmentRequest:
+      type: object
+      properties:
+        newStartAt:
+          type: string
+          format: date-time
+        newEndAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+      required:
+      - newEndAt
+      - newStartAt
+    AppointmentResponse:
+      type: object
+      properties:
+        appointmentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        resourceId:
+          type: string
+        crmCustomerId:
+          type: string
+          format: uuid
+        crmVehicleId:
+          type: string
+          format: uuid
+        startAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        cancellationReason:
+          type: string
+        cancellationNotes:
+          type: string
+        serviceRequestIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        customerSnapshot:
+          type: object
+          additionalProperties: {}
+        vehicleSnapshot:
+          type: object
+          additionalProperties: {}
     AppointmentCreateRequest:
       type: object
       description: Appointment creation request body
       properties:
-        sourceType:
+        crmCustomerId:
           type: string
-        sourceId:
+          format: uuid
+        crmVehicleId:
           type: string
-        facilityId:
+          format: uuid
+        locationId:
           type: string
-        scheduledStartDateTime:
+          format: uuid
+        resourceId:
           type: string
-        scheduledEndDateTime:
+        startAt:
           type: string
-        clientRequestId:
+          format: date-time
+        endAt:
           type: string
-        overrideSoftConflicts:
-          type: boolean
-        overrideReason:
+          format: date-time
+        serviceRequestIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        workorderLinkRef:
           type: string
+      required:
+      - crmCustomerId
+      - crmVehicleId
+      - endAt
+      - locationId
+      - serviceRequestIds
+      - startAt
     PersonDTO:
       type: object
       properties:
@@ -523,3 +707,89 @@ components:
           type: string
         description:
           type: string
+    ConflictDetails:
+      type: object
+      properties:
+        conflictingEventIds:
+          type: array
+          items:
+            type: string
+    ScheduleEventView:
+      type: object
+      properties:
+        eventId:
+          type: string
+        eventType:
+          type: string
+        subType:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        title:
+          type: string
+        hasConflict:
+          type: boolean
+        severity:
+          type: string
+        conflictDetails:
+          $ref: "#/components/schemas/ConflictDetails"
+    ScheduleResourceView:
+      type: object
+      properties:
+        resourceId:
+          type: string
+        resourceType:
+          type: string
+        resourceName:
+          type: string
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduleEventView"
+    ScheduleViewResponse:
+      type: object
+      properties:
+        locationId:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        viewGeneratedAt:
+          type: string
+          format: date-time
+        dayStartAt:
+          type: string
+          format: date-time
+        dayEndAt:
+          type: string
+          format: date-time
+        availabilityOverlayStatus:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        resources:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduleResourceView"
+    CancelAppointmentRequest:
+      type: object
+      properties:
+        cancellationReason:
+          type: string
+          enum:
+          - CUSTOMER_REQUEST
+          - TECHNICIAN_UNAVAILABLE
+          - WEATHER
+          - VEHICLE_NOT_READY
+          - OTHER
+        notes:
+          type: string
+      required:
+      - cancellationReason

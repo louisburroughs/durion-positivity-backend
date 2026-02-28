@@ -10,7 +10,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -53,16 +52,6 @@ public class WorkorderLaborEntry {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
 
     @NonNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -107,12 +96,10 @@ public class WorkorderLaborEntry {
     private UUID createdBy;
 
     @CreatedDate
-    @NonNull
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     @LastModifiedDate
-    @NonNull
     @Column(nullable = false)
     private Instant updatedAt;
 
