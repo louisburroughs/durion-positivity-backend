@@ -1,4 +1,4 @@
-package com.positivity.inventory.dto.shortage;
+package com.positivity.inventory.internal.dto.shortage;
 
 public enum ResolutionOptionType {
     SUBSTITUTE,

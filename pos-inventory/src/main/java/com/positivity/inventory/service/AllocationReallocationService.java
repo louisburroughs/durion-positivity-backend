@@ -1,8 +1,9 @@
 package com.positivity.inventory.service;
 
-import com.positivity.inventory.dto.reallocation.ReallocateRequest;
-import com.positivity.inventory.dto.reallocation.ReallocateResponse;
 import org.jspecify.annotations.NonNull;
+
+import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
+import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
 
 public interface AllocationReallocationService {
     @NonNull

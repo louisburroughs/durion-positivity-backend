@@ -153,6 +153,7 @@ public class CycleCountServiceImpl implements CycleCountService {
                                 .variance(variance)
                                 .recountSequenceNumber(newSequenceNumber)
                                 .recountOfCountEntryId(previousEntry.getCountEntryId())
+                                .countedAt(Instant.now(clock))
                                 .build();
 
                 recountEntry = countEntryRepository.save(recountEntry);

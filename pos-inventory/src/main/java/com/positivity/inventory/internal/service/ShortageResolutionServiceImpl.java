@@ -1,11 +1,11 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.dto.shortage.ShortageResolutionRequest;
-import com.positivity.inventory.dto.shortage.ResolutionOption;
-import com.positivity.inventory.dto.shortage.ResolutionOptionType;
-import com.positivity.inventory.dto.shortage.ShortageResolutionResponse;
 import com.positivity.inventory.internal.client.ExternalAvailabilityClient;
 import com.positivity.inventory.internal.client.ProductSubstituteClient;
+import com.positivity.inventory.internal.dto.shortage.ResolutionOption;
+import com.positivity.inventory.internal.dto.shortage.ResolutionOptionType;
+import com.positivity.inventory.internal.dto.shortage.ShortageResolutionRequest;
+import com.positivity.inventory.internal.dto.shortage.ShortageResolutionResponse;
 import com.positivity.inventory.service.ShortageResolutionService;
 import java.util.ArrayList;
 import java.util.Comparator;

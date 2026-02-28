@@ -41,7 +41,6 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private MockMvc mockMvc;
 
-        @Autowired
         private String inventoryPayload;
 
         @BeforeEach

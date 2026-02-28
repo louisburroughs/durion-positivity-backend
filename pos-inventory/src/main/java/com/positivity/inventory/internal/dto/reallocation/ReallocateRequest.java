@@ -1,4 +1,4 @@
-package com.positivity.inventory.dto.reallocation;
+package com.positivity.inventory.internal.dto.reallocation;
 
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;

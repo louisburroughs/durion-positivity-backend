@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.dto.reallocation.ReallocateRequest;
-import com.positivity.inventory.dto.reallocation.ReallocateResponse;
+import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
+import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
 import com.positivity.inventory.internal.entity.AllocationAuditEntity;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationAuditReasonCode;

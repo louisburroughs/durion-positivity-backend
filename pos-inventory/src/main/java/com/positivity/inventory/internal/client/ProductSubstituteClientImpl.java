@@ -1,7 +1,5 @@
 package com.positivity.inventory.internal.client;
 
-import com.positivity.inventory.dto.shortage.ResolutionOption;
-import com.positivity.inventory.dto.shortage.ResolutionOptionType;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -9,6 +7,9 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+
+import com.positivity.inventory.internal.dto.shortage.ResolutionOption;
+import com.positivity.inventory.internal.dto.shortage.ResolutionOptionType;
 
 @Component
 public class ProductSubstituteClientImpl implements ProductSubstituteClient {

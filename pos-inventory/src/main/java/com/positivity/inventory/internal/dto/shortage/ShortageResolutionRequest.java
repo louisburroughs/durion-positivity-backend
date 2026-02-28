@@ -1,4 +1,4 @@
-package com.positivity.inventory.dto.shortage;
+package com.positivity.inventory.internal.dto.shortage;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
