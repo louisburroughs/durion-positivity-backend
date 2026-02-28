@@ -1,0 +1,4 @@
+ALTER TABLE inventory_reservation ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 5;
+ALTER TABLE inventory_reservation ADD COLUMN IF NOT EXISTS waiting_since TIMESTAMP WITH TIME ZONE;
+ALTER TABLE inventory_reservation ADD COLUMN IF NOT EXISTS due_date_time TIMESTAMP WITH TIME ZONE;
+ALTER TABLE inventory_reservation ADD COLUMN IF NOT EXISTS schedule_start_time TIMESTAMP WITH TIME ZONE;

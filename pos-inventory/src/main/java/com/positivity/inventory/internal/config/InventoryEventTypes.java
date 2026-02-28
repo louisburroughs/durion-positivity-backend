@@ -17,7 +17,7 @@ public final class InventoryEventTypes {
 
         /**
          * All event type registrations for the inventory module.
-         * Total: 34 event types.
+         * Total: 36 event types (verified current registry count).
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -113,6 +113,16 @@ public final class InventoryEventTypes {
                                 EventTypeRegistration.write("INVENTORY_GOODS_RECEIPT_CREATE",
                                                 "Create a goods receipt").build(),
                                 EventTypeRegistration.fastRead("INVENTORY_GOODS_RECEIPT_GET",
-                                                "Get goods receipt by ID").build());
+                                                "Get goods receipt by ID").build(),
+
+                                // ReallocationController - 1 event
+                                EventTypeRegistration.write("INVENTORY_ALLOCATION_REALLOCATE",
+                                                "Trigger deterministic reallocation of reserved stock by priority")
+                                                .build(),
+
+                                // ShortageController - 1 event
+                                EventTypeRegistration.write("INVENTORY_SHORTAGE_RESOLVE",
+                                                "Resolve inventory shortage with substitute or backorder options")
+                                                .build());
         }
 }

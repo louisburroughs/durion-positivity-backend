@@ -50,3 +50,7 @@ permissions:
     description: "View goods receipt details"
   - name: "inventory:goods_receipt:override"
     description: "Allow over-receipt beyond PO open balance"
+  - name: "inventory:allocations:reallocate"
+    description: "Trigger deterministic reallocation of reserved stock across workorders by priority"
+  - name: "inventory:shortages:resolve"
+    description: "Resolve inventory shortages by requesting substitutes or external purchase options"
