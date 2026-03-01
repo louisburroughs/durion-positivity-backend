@@ -84,6 +84,19 @@ public class Invoice {
     @Column(name = "finalized_by", length = 64)
     private String finalizedBy;
 
+    // Pending Flyway migration: keep these fields transient until DB columns exist.
+    @Transient
+    private UUID glEntryId;
+
+    @Transient
+    private Instant revertedAt;
+
+    @Transient
+    private String reversionReason;
+
+    @Transient
+    private String revertedBy;
+
     @Version
     @Column(name = "version", nullable = false)
     private Integer version = 0;
@@ -276,6 +289,42 @@ public class Invoice {
 
     public void setFinalizedBy(@Nullable String finalizedBy) {
         this.finalizedBy = finalizedBy;
+    }
+
+    @Nullable
+    public UUID getGlEntryId() {
+        return glEntryId;
+    }
+
+    public void setGlEntryId(@Nullable UUID glEntryId) {
+        this.glEntryId = glEntryId;
+    }
+
+    @Nullable
+    public Instant getRevertedAt() {
+        return revertedAt;
+    }
+
+    public void setRevertedAt(@Nullable Instant revertedAt) {
+        this.revertedAt = revertedAt;
+    }
+
+    @Nullable
+    public String getReversionReason() {
+        return reversionReason;
+    }
+
+    public void setReversionReason(@Nullable String reversionReason) {
+        this.reversionReason = reversionReason;
+    }
+
+    @Nullable
+    public String getRevertedBy() {
+        return revertedBy;
+    }
+
+    public void setRevertedBy(@Nullable String revertedBy) {
+        this.revertedBy = revertedBy;
     }
 
     @NonNull

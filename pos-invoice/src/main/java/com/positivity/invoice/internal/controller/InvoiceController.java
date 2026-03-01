@@ -2,7 +2,10 @@ package com.positivity.invoice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
+import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
+import com.positivity.invoice.internal.dto.RevertRequest;
+import com.positivity.invoice.service.InvoiceFinalizationService;
 import com.positivity.invoice.service.InvoiceService;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
@@ -30,9 +33,12 @@ import java.util.UUID;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
+    private final InvoiceFinalizationService invoiceFinalizationService;
 
-    public InvoiceController(@NonNull InvoiceService invoiceService) {
+    public InvoiceController(@NonNull InvoiceService invoiceService,
+            @NonNull InvoiceFinalizationService invoiceFinalizationService) {
         this.invoiceService = invoiceService;
+        this.invoiceFinalizationService = invoiceFinalizationService;
     }
 
     @PostMapping
@@ -64,10 +70,25 @@ public class InvoiceController {
     }
 
     @PostMapping("/{invoiceId}/finalize")
-    @EmitEvent(id = "INVOICE_FINALIZE", apiVersion = "1")
-    @Operation(summary = "Finalize invoice", description = "Finalize draft invoice and prevent further modifications")
+    @EmitEvent(id = "INVOICE_FINALIZED", apiVersion = "1")
+    @Operation(summary = "Finalize invoice", description = "Transition invoice from DRAFT to FINALIZED; enforces permission matrix and emits InvoiceFinalized event for async GL posting (Story #13)")
     @ApiResponse(responseCode = "200", description = "Invoice finalized")
-    public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(@PathVariable @NonNull UUID invoiceId) {
-        return ResponseEntity.ok(invoiceService.finalizeInvoice(invoiceId));
+    @PreAuthorize("hasAuthority('FINALIZE_INVOICE')")
+    public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(
+            @PathVariable @NonNull UUID invoiceId,
+            @Valid @RequestBody @NonNull FinalizationRequest request) {
+        return ResponseEntity.ok(invoiceFinalizationService.finalize(invoiceId, request));
+    }
+
+    @PostMapping("/{invoiceId}/revert")
+    @EmitEvent(id = "INVOICE_DRAFT_REVERT", apiVersion = "1")
+    @Operation(summary = "Revert finalized invoice", description = "Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)")
+    @ApiResponse(responseCode = "200", description = "Invoice reverted to DRAFT")
+    @PreAuthorize("hasAuthority('FINALIZE_INVOICE')")
+    public ResponseEntity<InvoiceDetailsResponse> revertInvoice(
+            @PathVariable @NonNull UUID invoiceId,
+            @Valid @RequestBody @NonNull RevertRequest request) {
+        return ResponseEntity.ok(
+                invoiceFinalizationService.revert(invoiceId, request.getManagerApprovalCode(), request.getReason()));
     }
 }

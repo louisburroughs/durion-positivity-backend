@@ -76,3 +76,7 @@ permissions:
     description: "View parts on workorder"
   - name: "workorder:parts:add"
     description: "Add parts to workorder"
+  - name: "workorder:wip:view"
+    description: "View work-in-progress dashboard for workorders"
+  - name: "workorder:wip:view_all_locations"
+    description: "View WIP dashboard across all locations (not restricted to assigned location)"
