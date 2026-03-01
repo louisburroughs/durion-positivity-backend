@@ -17,9 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
+import com.positivity.accounting.internal.dto.RegenerateInvoiceFromWorkorderRequest;
 import com.positivity.accounting.service.BillingRulesService;
+import com.positivity.accounting.service.InvoiceRegenerationService;
 import com.positivity.accounting.service.InvoicePaymentStatusService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.dto.InvoiceGenerationResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -27,6 +30,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 
 /**
  * REST Controller for invoice payment operations.
@@ -40,12 +44,15 @@ public class InvoicePaymentController {
 
     private final InvoicePaymentStatusService paymentStatusService;
     private final BillingRulesService billingRulesService;
+    private final InvoiceRegenerationService invoiceRegenerationService;
 
     public InvoicePaymentController(
             InvoicePaymentStatusService paymentStatusService,
-            BillingRulesService billingRulesService) {
+            BillingRulesService billingRulesService,
+            InvoiceRegenerationService invoiceRegenerationService) {
         this.paymentStatusService = paymentStatusService;
         this.billingRulesService = billingRulesService;
+        this.invoiceRegenerationService = invoiceRegenerationService;
     }
 
     /**
@@ -87,11 +94,18 @@ public class InvoicePaymentController {
     @PostMapping("/v1/accounting/invoice/invoices")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Regenerate invoice from workorder", description = "Regenerate an invoice from a workorder.")
-    @ApiResponse(responseCode = "501", description = "Not implemented")
+    @ApiResponse(responseCode = "200", description = "Invoice regenerated")
+    @ApiResponse(responseCode = "404", description = "Workorder not found")
+    @ApiResponse(responseCode = "409", description = "Workorder is not in COMPLETED state")
+    @ApiResponse(responseCode = "503", description = "Workorder service unavailable")
     @EmitEvent(id = "ACCOUNTING_INVOICE_REGENERATE", apiVersion = "1")
-    public ResponseEntity<Void> regenerateInvoiceFromWorkorder(@RequestBody(required = false) Object body) {
-        log.info("Stub regenerateInvoiceFromWorkorder");
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    public ResponseEntity<InvoiceGenerationResponse> regenerateInvoiceFromWorkorder(
+            @Valid @RequestBody RegenerateInvoiceFromWorkorderRequest request) {
+        log.info("Regenerating invoice from workorder {}", request.getWorkorderId());
+        InvoiceGenerationResponse response = invoiceRegenerationService.regenerateInvoiceFromWorkorder(
+                request.getWorkorderId(),
+                request.getIdempotencyKey());
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/v1/accounting/invoice/rules/{customerId}")
