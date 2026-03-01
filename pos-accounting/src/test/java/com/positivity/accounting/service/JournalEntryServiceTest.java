@@ -182,6 +182,55 @@ class JournalEntryServiceTest {
                 .hasMessageContaining("Journal entry not found");
     }
 
+    @Test
+    @DisplayName("getJournalTraceability - returns related entries for source event")
+    void getJournalTraceability_withSourceEvent_success() {
+        // Arrange
+        JournalEntry entry = createBalancedEntry();
+        UUID relatedId = UUID.randomUUID();
+        JournalEntry related = createBalancedEntry();
+        related.setJournalEntryId(relatedId);
+
+        when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(entry));
+        when(journalEntryRepository.findBySourceEvent(testSourceEventId)).thenReturn(List.of(entry, related));
+        when(journalEntryRepository.findByReversalReference(testJournalEntryId)).thenReturn(Optional.empty());
+
+        // Act
+        var traceability = service.getJournalTraceability(testJournalEntryId);
+
+        // Assert
+        assertThat(traceability.getJournalEntryId()).isEqualTo(testJournalEntryId);
+        assertThat(traceability.getSourceEventId()).isEqualTo(testSourceEventId);
+        assertThat(traceability.getJournalEntry()).isNotNull();
+        assertThat(traceability.getRelatedJournalEntries()).hasSize(2);
+        assertThat(traceability.getRelatedJournalEntries())
+                .extracting(j -> j.getJournalEntryId())
+                .containsExactly(testJournalEntryId, relatedId);
+    }
+
+    @Test
+    @DisplayName("getJournalTraceability - resolves original entry via reversal reference")
+    void getJournalTraceability_resolvesOriginalViaReference() {
+        // Arrange
+        JournalEntry reversalEntry = createBalancedEntry();
+        UUID originalId = UUID.randomUUID();
+        JournalEntry originalEntry = createBalancedEntry();
+        originalEntry.setJournalEntryId(originalId);
+
+        when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(reversalEntry));
+        when(journalEntryRepository.findBySourceEvent(testSourceEventId))
+                .thenReturn(List.of(reversalEntry, originalEntry));
+        when(journalEntryRepository.findByReversalReference(testJournalEntryId))
+                .thenReturn(Optional.of(originalEntry));
+
+        // Act
+        var traceability = service.getJournalTraceability(testJournalEntryId);
+
+        // Assert
+        assertThat(traceability.getOriginalJournalEntry()).isNotNull();
+        assertThat(traceability.getOriginalJournalEntry().getJournalEntryId()).isEqualTo(originalId);
+    }
+
     // ===== UPDATE TESTS =====
 
     @Test

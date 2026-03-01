@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -11,6 +12,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.accounting.internal.dto.JournalEntryMapper;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
+import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
@@ -101,6 +105,46 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         return findById(journalEntryId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public JournalEntryTraceabilityResponse getJournalTraceability(UUID journalEntryId) {
+        JournalEntry entry = findById(journalEntryId);
+
+        List<JournalEntryResponse> relatedEntries;
+        if (entry.getSourceEventId() == null) {
+            relatedEntries = List.of(JournalEntryMapper.toResponse(entry));
+        } else {
+            relatedEntries = journalEntryRepository.findBySourceEvent(entry.getSourceEventId()).stream()
+                    .sorted(Comparator
+                            .comparing(JournalEntry::getTransactionDate, Comparator.nullsLast(Comparator.naturalOrder()))
+                            .thenComparing(JournalEntry::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .map(JournalEntryMapper::toResponse)
+                    .toList();
+        }
+
+        JournalEntryResponse originalEntry = toResponseOrNull(entry.getReversalJournalEntryId());
+        if (originalEntry == null) {
+            originalEntry = journalEntryRepository.findByReversalReference(journalEntryId)
+                    .map(JournalEntryMapper::toResponse)
+                    .orElse(null);
+        }
+
+        JournalEntryResponse reversalEntry = toResponseOrNull(entry.getReversedByJournalEntryId());
+        if (reversalEntry == null && entry.getReversalJournalEntryId() != null &&
+                (originalEntry == null || !entry.getReversalJournalEntryId().equals(originalEntry.getJournalEntryId()))) {
+            reversalEntry = toResponseOrNull(entry.getReversalJournalEntryId());
+        }
+
+        return JournalEntryTraceabilityResponse.builder()
+                .journalEntryId(entry.getJournalEntryId())
+                .sourceEventId(entry.getSourceEventId())
+                .journalEntry(JournalEntryMapper.toResponse(entry))
+                .originalJournalEntry(originalEntry)
+                .reversalJournalEntry(reversalEntry)
+                .relatedJournalEntries(relatedEntries)
+                .build();
+    }
+
     /**
      * Internal lookup — no transactional annotation so it inherits the caller's
      * transaction context without the proxy-bypass pitfall.
@@ -108,6 +152,15 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private JournalEntry findById(UUID journalEntryId) {
         return journalEntryRepository.findById(journalEntryId)
                 .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + journalEntryId));
+    }
+
+    private JournalEntryResponse toResponseOrNull(UUID journalEntryId) {
+        if (journalEntryId == null) {
+            return null;
+        }
+        return journalEntryRepository.findById(journalEntryId)
+                .map(JournalEntryMapper::toResponse)
+                .orElse(null);
     }
 
     /**

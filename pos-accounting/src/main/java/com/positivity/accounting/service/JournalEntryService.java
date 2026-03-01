@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 
@@ -34,6 +35,15 @@ public interface JournalEntryService {
      * </p>
      */
     JournalEntry getJournalEntry(UUID journalEntryId);
+
+    /**
+     * Retrieves traceability details for a journal entry, including related entries
+     * linked by source event and reversal relationships when available.
+     *
+     * @param journalEntryId journal entry identifier
+     * @return traceability response
+     */
+    JournalEntryTraceabilityResponse getJournalTraceability(UUID journalEntryId);
 
     /**
      * Updates a draft journal entry (DRAFT status only).

@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
+import com.positivity.accounting.internal.dto.GLAccountBalanceResponse;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
 import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
@@ -120,11 +121,12 @@ public class GLAccountController {
         @ApiResponse(responseCode = "200", description = "GL account deactivated")
         @ApiResponse(responseCode = "404", description = "GL account not found")
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_DEACTIVATE", apiVersion = "1")
-        public ResponseEntity<Void> deactivateGLAccount(
+        public ResponseEntity<GLAccountResponse> deactivateGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @RequestBody(required = false) Object request) {
-                log.info("Stub deactivateGLAccount");
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+                log.info("Deactivate GL account");
+                GLAccountResponse response = glAccountService.deactivateGLAccount(glAccountId);
+                return ResponseEntity.ok(response);
         }
 
         @PostMapping("/{glAccountId}/archive")
@@ -133,11 +135,12 @@ public class GLAccountController {
         @ApiResponse(responseCode = "200", description = "GL account archived")
         @ApiResponse(responseCode = "404", description = "GL account not found")
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ARCHIVE", apiVersion = "1")
-        public ResponseEntity<Void> archiveGLAccount(
+        public ResponseEntity<GLAccountResponse> archiveGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @RequestBody(required = false) Object request) {
-                log.info("Stub archiveGLAccount");
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+                log.info("Archive GL account");
+                GLAccountResponse response = glAccountService.archiveGLAccount(glAccountId);
+                return ResponseEntity.ok(response);
         }
 
         @GetMapping("/{glAccountId}/balance")
@@ -145,9 +148,10 @@ public class GLAccountController {
         @Operation(summary = "Get GL account balance", description = "Retrieve the current balance for a GL account.")
         @ApiResponse(responseCode = "200", description = "Balance returned")
         @ApiResponse(responseCode = "404", description = "GL account not found")
-        public ResponseEntity<Void> getAccountBalance(
+        public ResponseEntity<GLAccountBalanceResponse> getAccountBalance(
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId) {
-                log.info("Stub getAccountBalance");
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+                log.info("Get GL account balance");
+                GLAccountBalanceResponse response = glAccountService.getAccountBalance(glAccountId);
+                return ResponseEntity.ok(response);
         }
 }

@@ -90,9 +90,23 @@ public class InventoryAvailabilityController {
         return ResponseEntity.ok(inventoryLeadTimeService.queryLeadTime(productId, locationId));
     }
 
+    /**
+     * Not implemented by design.
+     *
+     * <p>Availability is a derived projection computed from inventory ledger events, not a mutable
+     * record that can be overwritten directly. Accepting direct writes here would bypass movement
+     * validation, break auditability, and risk ATP inconsistencies.
+     *
+     * <p>Use ledger-backed write APIs instead:
+     * POST /v1/inventory/stock-movements
+     * POST /v1/inventory/adjustments
+     */
     @PostMapping("/{productId}")
     @EmitEvent(id = "INVENTORY_AVAILABILITY_UPDATE", apiVersion = "1")
-    @Operation(summary = "Update inventory availability", description = "Updates availability for a product. Stub implementation.")
+    @Operation(
+            summary = "Update inventory availability",
+            description = "Not implemented by design. Availability is derived from ledger events and is read-only via this endpoint. "
+                    + "Use POST /v1/inventory/stock-movements or POST /v1/inventory/adjustments for inventory changes.")
     @ApiResponse(responseCode = "200", description = "Availability updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryAvailabilityResponse.class)))
     @ApiResponse(responseCode = "501", description = "Not implemented")
     public ResponseEntity<InventoryAvailabilityResponse> updateInventoryAvailability(

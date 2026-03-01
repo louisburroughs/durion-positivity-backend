@@ -239,6 +239,88 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         }
 
         /**
+         * Void a receivable payment so it can no longer be applied.
+         *
+         * <p>
+         * Guardrails:
+         * <ul>
+         * <li>Payment must exist</li>
+         * <li>Payment cannot be voided if any invoice applications already exist</li>
+         * <li>Operation is idempotent for already-voided payments</li>
+         * </ul>
+         *
+         * @param paymentId receivable payment ID
+         */
+        public void voidPayment(@NonNull UUID paymentId) {
+                ReceivablePayment payment = receivablePaymentRepository.findById(paymentId)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Payment not found: " + paymentId));
+
+                List<PaymentApplication> existingApplications = paymentApplicationRepository.findByPaymentId(paymentId);
+                if (!existingApplications.isEmpty()) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                        "Payment " + paymentId
+                                                        + " cannot be voided because invoice applications already exist. "
+                                                        + "Reverse payment applications first.");
+                }
+
+                if (payment.getStatus() == ReceivablePaymentStatus.FULLY_APPLIED
+                                && payment.getUnappliedAmount() != null
+                                && payment.getUnappliedAmount().compareTo(BigDecimal.ZERO) == 0) {
+                        log.info("Payment {} already voided/inactive; no action taken", paymentId);
+                        return;
+                }
+
+                payment.setUnappliedAmount(BigDecimal.ZERO);
+                payment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
+                payment.setUpdatedAt(Instant.now());
+                payment.setModifiedBy(getCurrentUser());
+
+                receivablePaymentRepository.save(payment);
+                log.info("Voided receivable payment {}", paymentId);
+        }
+
+        /**
+         * Reverse all payment applications for a payment.
+         *
+         * <p>
+         * Reuses single-application reversal logic so invoice restoration and audit
+         * behavior stay consistent.
+         *
+         * @param paymentId receivable payment ID
+         * @param reason    reversal reason
+         */
+        public void reversePayment(@NonNull UUID paymentId, @NonNull String reason) {
+                receivablePaymentRepository.findById(paymentId)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Payment not found: " + paymentId));
+
+                List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(paymentId);
+                if (applications.isEmpty()) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                        "Payment " + paymentId + " has no applications to reverse");
+                }
+
+                int reversedCount = 0;
+                for (PaymentApplication application : applications) {
+                        UUID applicationId = application.getPaymentApplicationId();
+                        if (reversalRepository.existsByOriginalPaymentApplicationId(applicationId)) {
+                                continue;
+                        }
+
+                        reversePaymentApplication(applicationId, reason);
+                        reversedCount++;
+                }
+
+                if (reversedCount == 0) {
+                        log.info("All payment applications for payment {} were already reversed", paymentId);
+                        return;
+                }
+
+                log.info("Reversed {} payment applications for payment {}", reversedCount, paymentId);
+        }
+
+        /**
          * Reverse a payment application (compensating transaction).
          * 
          * Business Rules (from Issue #114):

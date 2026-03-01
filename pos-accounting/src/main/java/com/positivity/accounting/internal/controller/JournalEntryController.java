@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryMapper;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
+import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
 import com.positivity.accounting.internal.dto.PagedResponse;
 import com.positivity.accounting.service.JournalEntryService;
 import com.positivity.events.EmitEvent;
@@ -83,6 +84,18 @@ public class JournalEntryController {
                 log.debug("Getting journal entry: {}", journalEntryId);
                 var entry = journalEntryService.getJournalEntry(journalEntryId);
                 return ResponseEntity.ok(JournalEntryMapper.toResponse(entry));
+        }
+
+        @GetMapping("/{journalEntryId}/traceability")
+        @PreAuthorize("hasAuthority('accounting:je:view')")
+        @Operation(summary = "Get journal traceability", description = "Trace a journal entry across related records.")
+        @ApiResponse(responseCode = "200", description = "Journal traceability returned")
+        @ApiResponse(responseCode = "404", description = "Journal entry not found")
+        public ResponseEntity<JournalEntryTraceabilityResponse> getJournalTraceability(
+                        @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId) {
+                log.debug("Getting journal traceability: {}", journalEntryId);
+                var traceability = journalEntryService.getJournalTraceability(journalEntryId);
+                return ResponseEntity.ok(traceability);
         }
 
         @PostMapping

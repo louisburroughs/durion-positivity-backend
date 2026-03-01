@@ -540,6 +540,167 @@ class PaymentApplicationServiceTest {
         }
 
         // ========================================
+        // voidPayment() Tests
+        // ========================================
+
+        @Test
+        @DisplayName("Should void payment when no applications exist")
+        void testVoidPayment_Success() {
+                // Arrange
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of());
+                when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                // Act
+                service.voidPayment(testPaymentId);
+
+                // Assert
+                assertThat(testPayment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+                assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("0");
+                verify(receivablePaymentRepository).save(testPayment);
+        }
+
+        @Test
+        @DisplayName("Should fail void when payment not found")
+        void testVoidPayment_NotFound() {
+                // Arrange
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.empty());
+
+                // Act & Assert
+                assertThatThrownBy(() -> service.voidPayment(testPaymentId))
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("Payment not found")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("Should fail void when payment already has applications")
+        void testVoidPayment_ConflictWhenApplied() {
+                // Arrange
+                PaymentApplication existing = new PaymentApplication();
+                existing.setPaymentApplicationId(UUID.randomUUID());
+                existing.setPaymentId(testPaymentId);
+                existing.setInvoiceId(testInvoiceId);
+                existing.setAppliedAmount(new BigDecimal("100.00"));
+
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of(existing));
+
+                // Act & Assert
+                assertThatThrownBy(() -> service.voidPayment(testPaymentId))
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("cannot be voided")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.CONFLICT);
+
+                verify(receivablePaymentRepository, never()).save(any());
+        }
+
+        // ========================================
+        // reversePayment() Tests
+        // ========================================
+
+        @Test
+        @DisplayName("Should reverse payment by reusing payment-application reversal")
+        void testReversePayment_Success() {
+                // Arrange
+                UUID applicationId = UUID.randomUUID();
+                PaymentApplication application = new PaymentApplication();
+                application.setPaymentApplicationId(applicationId);
+                application.setPaymentId(testPaymentId);
+                application.setCustomerId(testCustomerId);
+                application.setInvoiceId(testInvoiceId);
+                application.setAppliedAmount(new BigDecimal("500.00"));
+                application.setCurrency("USD");
+                application.setApplicationRequestId(testApplicationRequestId);
+                application.setApplicationTimestamp(Instant.now());
+
+                testPayment.setUnappliedAmount(new BigDecimal("500.00"));
+
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of(application));
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                                .thenReturn(false);
+                when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
+                when(paymentApplicationReversalRepository.save(any(PaymentApplicationReversal.class)))
+                                .thenAnswer(invocation -> {
+                                        PaymentApplicationReversal rev = invocation.getArgument(0);
+                                        if (rev.getReversalId() == null) {
+                                                rev.setReversalId(UUID.randomUUID());
+                                        }
+                                        return rev;
+                                });
+                when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+                when(invoiceServiceClient.reversePaymentApplication(any(), any())).thenReturn(
+                                createReversePaymentResponse(testInvoiceId, "500.00", "1000.00"));
+
+                // Act
+                service.reversePayment(testPaymentId, "Customer requested full reversal");
+
+                // Assert
+                assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("1000.00");
+                verify(invoiceServiceClient).reversePaymentApplication(eq(testInvoiceId), any());
+                verify(paymentApplicationReversalRepository).save(any(PaymentApplicationReversal.class));
+        }
+
+        @Test
+        @DisplayName("Should fail reversePayment when payment not found")
+        void testReversePayment_NotFound() {
+                // Arrange
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.empty());
+
+                // Act & Assert
+                assertThatThrownBy(() -> service.reversePayment(testPaymentId, "Customer requested reversal"))
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("Payment not found")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("Should fail reversePayment when payment has no applications")
+        void testReversePayment_NoApplications() {
+                // Arrange
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of());
+
+                // Act & Assert
+                assertThatThrownBy(() -> service.reversePayment(testPaymentId, "Customer requested reversal"))
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("has no applications to reverse")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.CONFLICT);
+        }
+
+        @Test
+        @DisplayName("Should no-op reversePayment when all applications are already reversed")
+        void testReversePayment_AllAlreadyReversed_NoOp() {
+                // Arrange
+                UUID applicationId = UUID.randomUUID();
+                PaymentApplication application = new PaymentApplication();
+                application.setPaymentApplicationId(applicationId);
+                application.setPaymentId(testPaymentId);
+                application.setInvoiceId(testInvoiceId);
+                application.setAppliedAmount(new BigDecimal("100.00"));
+
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of(application));
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                                .thenReturn(true);
+
+                // Act
+                service.reversePayment(testPaymentId, "Retry reversal");
+
+                // Assert
+                verify(paymentApplicationRepository, never()).findById(applicationId);
+                verify(paymentApplicationReversalRepository, never()).save(any(PaymentApplicationReversal.class));
+                verify(invoiceServiceClient, never()).reversePaymentApplication(any(), any());
+        }
+
+        // ========================================
         // reversePaymentApplication() Tests
         // ========================================
 
