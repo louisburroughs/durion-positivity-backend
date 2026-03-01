@@ -49,6 +49,12 @@ class EstimateSearchServiceTest {
     @Mock
     private EstimateRepository estimateRepository;
 
+    /**
+     * Required for {@code @InjectMocks} constructor wiring, but not called in the
+     * search path (line items are intentionally omitted from paginated search
+     * summaries — {@code partItems}/{@code laborItems} return empty lists). LENIENT
+     * strictness prevents unused-stub failures.
+     */
     @Mock
     private EstimateItemRepository estimateItemRepository;
 

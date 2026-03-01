@@ -157,6 +157,9 @@ public class EstimateServiceImpl implements EstimateService {
                                 .taxAmount(estimate.getTaxAmount())
                                 .total(estimate.getTotal())
                                 .currencyUomId(estimate.getCurrencyUomId())
+                                // Line items intentionally omitted in paginated search summaries for
+                                // performance;
+                                // use getEstimateById to retrieve full line item detail.
                                 .partItems(List.of())
                                 .laborItems(List.of())
                                 .build();
