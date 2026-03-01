@@ -24,58 +24,63 @@ import java.util.UUID;
 @Builder
 public class EstimateSummaryResponse {
 
-    private UUID id;
-    private String estimateNumber;
-    private LocalDateTime createdAt;
-    private LocalDateTime expiresAt;
-    private UUID customerId;
-    private UUID vehicleId;
-    private String locationId;
+        private UUID id;
+        private String estimateNumber;
+        private LocalDateTime createdAt;
+        private LocalDateTime expiresAt;
+        private UUID customerId;
+        private UUID vehicleId;
+        private UUID locationId;
 
-    /** Current lifecycle status of the estimate. */
-    private EstimateStatus status;
+        /** Current lifecycle status of the estimate. */
+        private EstimateStatus status;
 
-    // Grouped line items
-    private List<EstimateItemResponse> partItems;
-    private List<EstimateItemResponse> laborItems;
+        // Grouped line items
+        private List<EstimateItemResponse> partItems;
+        private List<EstimateItemResponse> laborItems;
 
-    // Financial breakdown
-    private BigDecimal subtotal;
-    private BigDecimal taxAmount;
-    private BigDecimal total;
+        // Financial breakdown
+        private BigDecimal subtotal;
+        private BigDecimal taxAmount;
+        private BigDecimal total;
 
-    private String currencyUomId;
+        private String currencyUomId;
 
-    /**
-     * Build summary from estimate and its items.
-     */
-    @NonNull
-    public static EstimateSummaryResponse fromEstimateAndItems(
-            @NonNull Estimate estimate,
-            @NonNull List<EstimateItem> items) {
+        /**
+         * Build summary from estimate and its items.
+         */
+        @NonNull
+        public static EstimateSummaryResponse fromEstimateAndItems(
+                        @NonNull Estimate estimate,
+                        @NonNull List<EstimateItem> items) {
 
-        List<EstimateItemResponse> partItems = items.stream()
-                .filter(item -> item.getItemType() == com.positivity.workorder.internal.entity.EstimateItemType.PART)
-                .map(EstimateItemResponse::fromEntity)
-                .toList();
+                List<EstimateItemResponse> partItems = items.stream()
+                                .filter(item -> item
+                                                .getItemType() == com.positivity.workorder.internal.entity.EstimateItemType.PART)
+                                .map(EstimateItemResponse::fromEntity)
+                                .toList();
 
-        List<EstimateItemResponse> laborItems = items.stream()
-                .filter(item -> item.getItemType() == com.positivity.workorder.internal.entity.EstimateItemType.LABOR)
-                .map(EstimateItemResponse::fromEntity)
-                .toList();
+                List<EstimateItemResponse> laborItems = items.stream()
+                                .filter(item -> item
+                                                .getItemType() == com.positivity.workorder.internal.entity.EstimateItemType.LABOR)
+                                .map(EstimateItemResponse::fromEntity)
+                                .toList();
 
-        return EstimateSummaryResponse.builder()
-                .id(estimate.getId())
-                .estimateNumber(estimate.getEstimateNumber())
-                .createdAt(estimate.getCreatedAt())
-                .customerId(estimate.getCustomerId())
-                .vehicleId(estimate.getVehicleId())
-                .partItems(partItems)
-                .laborItems(laborItems)
-                .subtotal(estimate.getSubtotal())
-                .taxAmount(estimate.getTaxAmount())
-                .total(estimate.getTotal())
-                .currencyUomId(estimate.getCurrencyUomId())
-                .build();
-    }
+                return EstimateSummaryResponse.builder()
+                                .id(estimate.getId())
+                                .estimateNumber(estimate.getEstimateNumber())
+                                .createdAt(estimate.getCreatedAt())
+                                .expiresAt(estimate.getExpiresAt())
+                                .customerId(estimate.getCustomerId())
+                                .vehicleId(estimate.getVehicleId())
+                                .locationId(estimate.getLocationId())
+                                .status(estimate.getStatus())
+                                .partItems(partItems)
+                                .laborItems(laborItems)
+                                .subtotal(estimate.getSubtotal())
+                                .taxAmount(estimate.getTaxAmount())
+                                .total(estimate.getTotal())
+                                .currencyUomId(estimate.getCurrencyUomId())
+                                .build();
+        }
 }
