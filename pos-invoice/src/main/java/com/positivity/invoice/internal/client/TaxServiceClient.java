@@ -28,7 +28,9 @@ public class TaxServiceClient {
 
     @NonNull
     public BigDecimal calculateTax(@NonNull BigDecimal subtotal, String partyId) {
-        log.debug("Calculating tax for subtotal {} and partyId {}", subtotal, partyId);
+        if (log.isDebugEnabled()) {
+            log.debug("Calculating tax for subtotal {} and partyId(mask) {}", subtotal, maskForLog(partyId));
+        }
 
         TaxCalculationResponse response = restClient.post()
                 .uri("/calculate")
@@ -54,5 +56,20 @@ public class TaxServiceClient {
             return fallback.setScale(4, RoundingMode.HALF_UP);
         }
         return value.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 }

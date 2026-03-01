@@ -48,18 +48,18 @@ public class InvoiceFinalizedEventHandler {
     @EventListener
     public void onInvoiceFinalized(@NonNull InvoiceFinalizedEvent event) {
         UUID invoiceId = event.invoiceId();
-        log.info("GL posting handler invoked: invoiceId={}, workorderId={}, amount={}",
-                invoiceId, event.workorderId(), event.grandTotal());
+        log.info("GL posting handler invoked: invoiceId(mask)={}, workorderId(mask)={}, amount={}",
+                maskForLog(invoiceId), maskForLog(event.workorderId()), event.grandTotal());
 
         invoiceRepository.findById(invoiceId).ifPresentOrElse(
                 invoice -> postToGl(invoice, event),
-                () -> log.warn("GL posting skipped — invoice not found: invoiceId={}", invoiceId));
+                () -> log.warn("GL posting skipped — invoice not found: invoiceId(mask)={}", maskForLog(invoiceId)));
     }
 
     private void postToGl(@NonNull Invoice invoice, @NonNull InvoiceFinalizedEvent event) {
         // Idempotency guard: skip if already POSTED
         if (invoice.getStatus() == InvoiceStatus.POSTED) {
-            log.info("GL posting skipped — invoice already POSTED: invoiceId={}", invoice.getId());
+            log.info("GL posting skipped — invoice already POSTED: invoiceId(mask)={}", maskForLog(invoice.getId()));
             return;
         }
 
@@ -72,13 +72,29 @@ public class InvoiceFinalizedEventHandler {
             invoice.setGlEntryId(glEntryId);
             invoiceRepository.save(invoice);
 
-            log.info("GL posting succeeded: invoiceId={}, glEntryId={}, amount={}",
-                    invoice.getId(), glEntryId, event.grandTotal());
+            log.info("GL posting succeeded: invoiceId(mask)={}, glEntryId(mask)={}, amount={}",
+                    maskForLog(invoice.getId()), maskForLog(glEntryId), event.grandTotal());
         } catch (Exception e) {
-            log.error("GL posting failed: invoiceId={}, error={}", invoice.getId(), e.getMessage(), e);
+            log.error("GL posting failed: invoiceId(mask)={}, error={}", maskForLog(invoice.getId()), e.getMessage(),
+                    e);
 
             invoice.setStatus(InvoiceStatus.ERROR);
             invoiceRepository.save(invoice);
         }
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 }

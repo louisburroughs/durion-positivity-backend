@@ -1,12 +1,12 @@
 package com.positivity.workorder.internal.scheduled;
 
-import com.positivity.workorder.internal.service.EstimateServiceImpl;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
 import com.positivity.workorder.service.EstimateService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 /**
  * Scheduled job to expire pending approvals that have exceeded their approval

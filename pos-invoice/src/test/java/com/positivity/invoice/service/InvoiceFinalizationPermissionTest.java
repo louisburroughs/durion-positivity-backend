@@ -97,7 +97,7 @@ class InvoiceFinalizationPermissionTest {
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = buildRequest(null);
 
-        assertThatCode(() -> service.finalize(invoiceId, request))
+        assertThatCode(() -> service.completeInvoice(invoiceId, request))
                 .doesNotThrowAnyException();
     }
 
@@ -114,7 +114,7 @@ class InvoiceFinalizationPermissionTest {
                 .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("500.01"))));
         FinalizationRequest request = buildRequest(null);
 
-        assertThatThrownBy(() -> service.finalize(invoiceId, request))
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -133,7 +133,7 @@ class InvoiceFinalizationPermissionTest {
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = buildRequest("MGR-APPROVAL-XYZ");
 
-        InvoiceDetailsResponse response = service.finalize(invoiceId, request);
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
     }
@@ -157,7 +157,7 @@ class InvoiceFinalizationPermissionTest {
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = buildRequest(null);
 
-        InvoiceDetailsResponse response = service.finalize(invoiceId, request);
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
     }
@@ -178,7 +178,7 @@ class InvoiceFinalizationPermissionTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(finalizedInvoice(UUID.randomUUID())));
         FinalizationRequest request = buildRequest(null);
 
-        assertThatThrownBy(() -> service.finalize(invoiceId, request))
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageMatching("(?i).*finalized.*");
     }
