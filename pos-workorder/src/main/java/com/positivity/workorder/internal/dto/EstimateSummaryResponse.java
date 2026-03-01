@@ -8,6 +8,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
 
+import com.positivity.workorder.internal.enums.EstimateStatus;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,8 +27,13 @@ public class EstimateSummaryResponse {
     private UUID id;
     private String estimateNumber;
     private LocalDateTime createdAt;
+    private LocalDateTime expiresAt;
     private UUID customerId;
     private UUID vehicleId;
+    private String locationId;
+
+    /** Current lifecycle status of the estimate. */
+    private EstimateStatus status;
 
     // Grouped line items
     private List<EstimateItemResponse> partItems;
