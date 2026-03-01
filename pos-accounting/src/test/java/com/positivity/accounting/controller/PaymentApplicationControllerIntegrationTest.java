@@ -116,6 +116,101 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         }
 
         // ========================================
+        // Legacy payment lifecycle stubs
+        // ========================================
+
+        @Test
+        @DisplayName("PA-000: Void payment successfully when no applications exist")
+        void testVoidPayment_Success() throws Exception {
+                createTestPayment(testPaymentId, testCustomerId, "1000.00");
+
+                mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/void"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andDo(print())
+                                .andExpect(status().isNoContent());
+
+                ReceivablePayment payment = receivablePaymentRepository.findById(testPaymentId).orElseThrow();
+                assertThat(payment.getStatus()).isEqualTo(ReceivablePaymentStatus.FULLY_APPLIED);
+                assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("0.00");
+        }
+
+        @Test
+        @DisplayName("PA-000a: Void payment returns 409 when applications already exist")
+        void testVoidPayment_ConflictWhenApplied() throws Exception {
+                createTestPayment(testPaymentId, testCustomerId, "1000.00");
+
+                PaymentApplication application = new PaymentApplication();
+                application.setPaymentApplicationId(UUID.randomUUID());
+                application.setPaymentId(testPaymentId);
+                application.setCustomerId(testCustomerId);
+                application.setInvoiceId(testInvoice1Id);
+                application.setAppliedAmount(new BigDecimal("100.00"));
+                application.setCurrency("USD");
+                application.setApplicationRequestId(UUID.randomUUID().toString());
+                application.setApplicationTimestamp(Instant.now());
+                application.setCreatedBy("testuser");
+                application.setCreatedAt(Instant.now());
+                paymentApplicationRepository.save(application);
+
+                mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/void"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andDo(print())
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        @DisplayName("PA-000b: Reverse payment successfully when applications exist")
+        void testReversePayment_Success() throws Exception {
+                createTestPayment(testPaymentId, testCustomerId, "1000.00");
+
+                PaymentApplication application = new PaymentApplication();
+                application.setPaymentApplicationId(UUID.randomUUID());
+                application.setPaymentId(testPaymentId);
+                application.setCustomerId(testCustomerId);
+                application.setInvoiceId(testInvoice1Id);
+                application.setAppliedAmount(new BigDecimal("300.00"));
+                application.setCurrency("USD");
+                application.setApplicationRequestId(UUID.randomUUID().toString());
+                application.setApplicationTimestamp(Instant.now());
+                application.setCreatedBy("testuser");
+                application.setCreatedAt(Instant.now());
+                paymentApplicationRepository.save(application);
+
+                ReceivablePayment payment = receivablePaymentRepository.findById(testPaymentId).orElseThrow();
+                payment.setUnappliedAmount(new BigDecimal("700.00"));
+                receivablePaymentRepository.save(payment);
+
+                PaymentApplicationReversalRequest request = new PaymentApplicationReversalRequest();
+                request.setReason("Customer requested payment reversal");
+
+                mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/reverse"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andDo(print())
+                                .andExpect(status().isNoContent());
+
+                ReceivablePayment updated = receivablePaymentRepository.findById(testPaymentId).orElseThrow();
+                assertThat(updated.getUnappliedAmount()).isEqualByComparingTo("1000.00");
+        }
+
+        @Test
+        @DisplayName("PA-000c: Reverse payment returns 409 when no applications exist")
+        void testReversePayment_ConflictWhenNoApplications() throws Exception {
+                createTestPayment(testPaymentId, testCustomerId, "1000.00");
+
+                PaymentApplicationReversalRequest request = new PaymentApplicationReversalRequest();
+                request.setReason("Customer requested payment reversal");
+
+                mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/reverse"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andDo(print())
+                                .andExpect(status().isConflict());
+        }
+
+        // ========================================
         // POST /v1/accounting/payments/{paymentId}/applications
         // ========================================
 

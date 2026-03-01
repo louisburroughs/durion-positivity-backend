@@ -45,6 +45,36 @@ public class PaymentApplicationController {
 
         private final PaymentApplicationService paymentApplicationService;
 
+        @PostMapping("/payments/{paymentId}/void")
+        @PreAuthorize("hasAuthority('accounting:ap:pay')")
+        @Operation(summary = "Void payment", description = "Void a payment before settlement.")
+        @ApiResponse(responseCode = "204", description = "Payment voided")
+        @ApiResponse(responseCode = "404", description = "Payment not found")
+        @ApiResponse(responseCode = "409", description = "Payment already applied; reverse applications first")
+        @EmitEvent(id = "ACCOUNTING_PAYMENT_VOID", apiVersion = "1")
+        public ResponseEntity<Void> voidPayment(
+                        @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
+                        @RequestBody(required = false) Object body) {
+                log.info("Voiding payment {}", paymentId);
+                paymentApplicationService.voidPayment(paymentId);
+                return ResponseEntity.noContent().build();
+        }
+
+        @PostMapping("/payments/{paymentId}/reverse")
+        @PreAuthorize("hasAuthority('accounting:ap:pay')")
+        @Operation(summary = "Reverse payment", description = "Reverse a previously applied payment.")
+        @ApiResponse(responseCode = "204", description = "Payment applications reversed")
+        @ApiResponse(responseCode = "404", description = "Payment not found")
+        @ApiResponse(responseCode = "409", description = "Payment has no applications to reverse")
+        @EmitEvent(id = "ACCOUNTING_PAYMENT_REVERSE", apiVersion = "1")
+        public ResponseEntity<Void> reversePayment(
+                        @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
+                        @Valid @RequestBody PaymentApplicationReversalRequest request) {
+                log.info("Reversing payment {} with reason: {}", paymentId, request.getReason());
+                paymentApplicationService.reversePayment(paymentId, request.getReason());
+                return ResponseEntity.noContent().build();
+        }
+
         /**
          * Apply a payment to one or more invoices.
          * 

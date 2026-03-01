@@ -27,6 +27,12 @@ public interface PaymentApplicationService {
             @NonNull UUID paymentId,
             @NonNull PaymentApplicationRequest request);
 
+    void voidPayment(@NonNull UUID paymentId);
+
+    void reversePayment(
+            @NonNull UUID paymentId,
+            @NonNull String reason);
+
     @NonNull
     PaymentApplicationReversal reversePaymentApplication(
             @NonNull UUID paymentApplicationId,

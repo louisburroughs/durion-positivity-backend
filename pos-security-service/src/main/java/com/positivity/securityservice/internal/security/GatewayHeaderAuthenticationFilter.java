@@ -1,0 +1,59 @@
+package com.positivity.securityservice.internal.security;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+/**
+ * Reads gateway-authentication headers and populates SecurityContext.
+ */
+public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final String HEADER_AUTHORITIES = "X-Authorities";
+    private static final String HEADER_USER = "X-User";
+    private static final String HEADER_USER_ID = "X-User-Id";
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        String authoritiesHeader = request.getHeader(HEADER_AUTHORITIES);
+        String userHeader = request.getHeader(HEADER_USER);
+        String userIdHeader = request.getHeader(HEADER_USER_ID);
+
+        if (authoritiesHeader != null && !authoritiesHeader.isBlank()) {
+            List<SimpleGrantedAuthority> authorities = parseAuthorities(authoritiesHeader);
+            String username = userHeader != null && !userHeader.isBlank() ? userHeader : "gateway-user";
+            String userId = userIdHeader != null && !userIdHeader.isBlank() ? userIdHeader : username;
+
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                    username, null, authorities);
+            authentication.setDetails(Map.of("userId", userId, "username", username));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        filterChain.doFilter(request, response);
+    }
+
+    private List<SimpleGrantedAuthority> parseAuthorities(String authoritiesHeader) {
+        if (authoritiesHeader == null || authoritiesHeader.isBlank()) {
+            return Collections.emptyList();
+        }
+        return Arrays.stream(authoritiesHeader.split(","))
+                .map(String::trim)
+                .filter(authority -> !authority.isEmpty())
+                .map(SimpleGrantedAuthority::new)
+                .toList();
+    }
+}

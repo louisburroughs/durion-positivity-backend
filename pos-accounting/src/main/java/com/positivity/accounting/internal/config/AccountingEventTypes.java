@@ -54,7 +54,7 @@ public final class AccountingEventTypes {
                                 EventTypeRegistration.write("ACCOUNTING_POSTING_RULE_ARCHIVE",
                                                 "Archive a posting rule set").build(),
 
-                                // AccountingController - 4 events (legacy paths)
+                                // Legacy payment/gl-account path events - 4 events
                                 EventTypeRegistration.approval("ACCOUNTING_PAYMENT_VOID",
                                                 "Void a payment before settlement").build(),
                                 EventTypeRegistration.approval("ACCOUNTING_PAYMENT_REVERSE",
