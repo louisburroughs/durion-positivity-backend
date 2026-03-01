@@ -84,6 +84,16 @@ public class Invoice {
     @Column(name = "finalized_by", length = 64)
     private String finalizedBy;
 
+    // -- Story #13 scaffold columns (nullable, no migration added yet) --
+    @Column(name = "gl_entry_id", columnDefinition = "UUID", nullable = true)
+    private UUID glEntryId;
+
+    @Column(name = "reverted_at", nullable = true)
+    private Instant revertedAt;
+
+    @Column(name = "reversion_reason", length = 512, nullable = true)
+    private String reversionReason;
+
     @Version
     @Column(name = "version", nullable = false)
     private Integer version = 0;
@@ -276,6 +286,33 @@ public class Invoice {
 
     public void setFinalizedBy(@Nullable String finalizedBy) {
         this.finalizedBy = finalizedBy;
+    }
+
+    @Nullable
+    public UUID getGlEntryId() {
+        return glEntryId;
+    }
+
+    public void setGlEntryId(@Nullable UUID glEntryId) {
+        this.glEntryId = glEntryId;
+    }
+
+    @Nullable
+    public Instant getRevertedAt() {
+        return revertedAt;
+    }
+
+    public void setRevertedAt(@Nullable Instant revertedAt) {
+        this.revertedAt = revertedAt;
+    }
+
+    @Nullable
+    public String getReversionReason() {
+        return reversionReason;
+    }
+
+    public void setReversionReason(@Nullable String reversionReason) {
+        this.reversionReason = reversionReason;
     }
 
     @NonNull

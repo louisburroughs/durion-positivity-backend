@@ -2,9 +2,11 @@ package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
+import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.dto.InvoiceItemResponse;
+import com.positivity.invoice.service.InvoiceFinalizationService;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.InvoiceAdjustment;
 import com.positivity.invoice.internal.entity.InvoiceItem;
@@ -40,12 +42,15 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
+    private final InvoiceFinalizationService invoiceFinalizationService;
 
     public InvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
-            @NonNull TaxServiceClient taxServiceClient) {
+            @NonNull TaxServiceClient taxServiceClient,
+            @NonNull InvoiceFinalizationService invoiceFinalizationService) {
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
+        this.invoiceFinalizationService = invoiceFinalizationService;
     }
 
     @Override
@@ -128,6 +133,22 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         Invoice saved = invoiceRepository.save(invoice);
         return toDetailsResponse(saved);
+    }
+
+    @Override
+    @NonNull
+    public InvoiceDetailsResponse finalizeInvoice(@NonNull UUID invoiceId, @NonNull FinalizationRequest request) {
+        // Story #13 scaffold — delegates to InvoiceFinalizationService
+        return invoiceFinalizationService.finalize(invoiceId, request);
+    }
+
+    @Override
+    @NonNull
+    public InvoiceDetailsResponse revertFinalization(@NonNull UUID invoiceId,
+            @NonNull String managerApprovalCode,
+            @NonNull String reason) {
+        // Story #13 scaffold — delegates to InvoiceFinalizationService
+        return invoiceFinalizationService.revert(invoiceId, managerApprovalCode, reason);
     }
 
     @NonNull

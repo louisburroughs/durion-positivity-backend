@@ -6,3 +6,5 @@ permissions:
     description: "Manage invoice lifecycle operations"
   - name: "invoice:billing-rules"
     description: "Manage invoice billing rules and defaults"
+  - name: "FINALIZE_INVOICE"
+    description: "Finalize a draft invoice; Service Advisor limited to ≤$500 without manager approval, Shop Manager unlimited (Story #13, AC3)"

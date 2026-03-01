@@ -55,6 +55,36 @@ public final class InvoiceEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // ==================== STORY #13 — FINALIZATION EVENTS ====================
+
+        /** AC3/AC4: Manager approval requested before finalization */
+        public static final EventTypeRegistration INVOICE_FINALIZATION_REQUESTED = EventTypeRegistration
+                        .approval("INVOICE_FINALIZATION_REQUESTED",
+                                        "Manager approval requested for invoice finalization")
+                        .apiVersion("1")
+                        .build();
+
+        /** AC4: Invoice successfully finalized — triggers async GL posting */
+        public static final EventTypeRegistration INVOICE_FINALIZED = EventTypeRegistration
+                        .write("INVOICE_FINALIZED",
+                                        "Invoice finalized and InvoiceFinalized event emitted for GL posting")
+                        .apiVersion("1")
+                        .build();
+
+        /** AC5: Invoice posted to General Ledger successfully */
+        public static final EventTypeRegistration INVOICE_POSTED_TO_GL = EventTypeRegistration
+                        .write("INVOICE_POSTED_TO_GL",
+                                        "Invoice posted to General Ledger with GL entry ID")
+                        .apiVersion("1")
+                        .build();
+
+        /** AC5: GL posting failed; invoice marked ERROR for retry */
+        public static final EventTypeRegistration INVOICE_POSTING_FAILED = EventTypeRegistration
+                        .write("INVOICE_POSTING_FAILED",
+                                        "Invoice GL posting failed; status set to ERROR for retry")
+                        .apiVersion("1")
+                        .build();
+
         /**
          * Returns all event type registrations for the Invoice module.
          */
@@ -65,6 +95,10 @@ public final class InvoiceEventTypes {
                                 INVOICE_CREATE,
                                 INVOICE_GET,
                                 INVOICE_ADJUSTMENT_APPLY,
-                                INVOICE_FINALIZE);
+                                INVOICE_FINALIZE,
+                                INVOICE_FINALIZATION_REQUESTED,
+                                INVOICE_FINALIZED,
+                                INVOICE_POSTED_TO_GL,
+                                INVOICE_POSTING_FAILED);
         }
 }
