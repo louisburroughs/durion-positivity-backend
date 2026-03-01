@@ -32,8 +32,7 @@ public interface EstimateService {
         /**
          * Paginated search for estimates by optional customer and/or vehicle filter.
          * At least one of {@code customerId} or {@code vehicleId} should be provided;
-         * if both are {@code null} all estimates are returned without location-based
-         * filtering.
+         * if both are {@code null} all estimates are returned (unfiltered).
          *
          * @param customerId filter by customer UUID (optional)
          * @param vehicleId  filter by vehicle UUID (optional)
