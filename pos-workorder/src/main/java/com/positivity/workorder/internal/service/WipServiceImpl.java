@@ -1,7 +1,13 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
+import com.positivity.workorder.internal.dto.WorkorderStatusHistoryEntry;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderStateTransition;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import com.positivity.workorder.service.WipService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,31 +15,104 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
-/**
- * Stub implementation of {@link WipService}.
- *
- * <p>
- * <strong>NOTE:</strong> Story #14 full implementation pending. Both methods
- * intentionally throw {@link UnsupportedOperationException} to make the RED
- * phase explicit.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class WipServiceImpl implements WipService {
 
+    private static final Set<WorkorderStatus> ACTIVE_WIP_STATUSES = EnumSet.of(
+            WorkorderStatus.APPROVED,
+            WorkorderStatus.ASSIGNED,
+            WorkorderStatus.WORK_IN_PROGRESS,
+            WorkorderStatus.AWAITING_PARTS,
+            WorkorderStatus.AWAITING_APPROVAL,
+            WorkorderStatus.READY_FOR_PICKUP);
+
+    private final WorkorderRepository workorderRepository;
+    private final WorkorderStateTransitionRepository stateTransitionRepository;
+
     @Override
+    @Transactional(readOnly = true)
     public Page<WorkorderStatusView> getWipWorkorders(@NonNull String locationId,
             boolean multiLocation,
             @NonNull Pageable pageable) {
-        throw new UnsupportedOperationException("WIPServiceImpl.getWipWorkorders: not yet implemented");
+        log.debug("Fetching WIP workorders: multiLocation={}", multiLocation);
+        if (multiLocation) {
+            return workorderRepository.findByStatusIn(ACTIVE_WIP_STATUSES, pageable)
+                    .map(this::toStatusView);
+        }
+
+        UUID shopUuid = UUID.fromString(locationId);
+        return workorderRepository.findByShopIdAndStatusIn(shopUuid, ACTIVE_WIP_STATUSES, pageable)
+                .map(this::toStatusView);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public WorkorderStatusDetail getWipDetail(@NonNull UUID workorderId) {
-        throw new UnsupportedOperationException("WIPServiceImpl.getWipDetail: not yet implemented");
+        log.debug("Fetching WIP detail for workorder");
+        Workorder wo = workorderRepository.findById(workorderId)
+                .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
+
+        List<WorkorderStateTransition> transitions = stateTransitionRepository.findByWorkorderId(workorderId);
+        List<WorkorderStatusHistoryEntry> history = transitions.stream()
+                .map(t -> WorkorderStatusHistoryEntry.builder()
+                        .status(t.getToStatus())
+                        .changedAt(t.getTransitionedAt())
+                        .changedBy(t.getTransitionedBy())
+                        .reason(t.getReason())
+                        .build())
+                .toList();
+
+        List<String> partsBlocking = wo.getStatus() == WorkorderStatus.AWAITING_PARTS
+                ? List.of("PARTS_PENDING")
+                : List.of();
+
+        Instant lastUpdatedAt = wo.getUpdatedAt() != null
+                ? wo.getUpdatedAt().toInstant(ZoneOffset.UTC)
+                : Instant.now();
+        String locationId = wo.getShopId() != null ? wo.getShopId().toString() : "";
+
+        return WorkorderStatusDetail.builder()
+                .workorderId(wo.getId())
+                .status(wo.getStatus())
+                .assignedTechnicianId(null)
+                .locationId(locationId)
+                .estimatedCompletionTime(null)
+                .customerName(wo.getCustomerId() != null ? "customer-" + wo.getCustomerId() : "")
+                .vehicleInfo(wo.getVehicleId() != null ? "vehicle-" + wo.getVehicleId() : "")
+                .lastUpdatedAt(lastUpdatedAt)
+                .statusHistory(history)
+                .partsBlocking(partsBlocking)
+                .phoneNumber(null)
+                .vehicleVin(null)
+                .serviceDescription("")
+                .internalNotes(null)
+                .build();
+    }
+
+    private WorkorderStatusView toStatusView(Workorder wo) {
+        Instant lastUpdatedAt = wo.getUpdatedAt() != null
+                ? wo.getUpdatedAt().toInstant(ZoneOffset.UTC)
+                : Instant.now();
+        return WorkorderStatusView.builder()
+                .workorderId(wo.getId())
+                .status(wo.getStatus())
+                .assignedTechnicianId(null)
+                .locationId(wo.getShopId() != null ? wo.getShopId().toString() : "")
+                .estimatedCompletionTime(null)
+                .customerName(wo.getCustomerId() != null ? "customer-" + wo.getCustomerId() : "")
+                .vehicleInfo(wo.getVehicleId() != null ? "vehicle-" + wo.getVehicleId() : "")
+                .lastUpdatedAt(lastUpdatedAt)
+                .build();
     }
 }

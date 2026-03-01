@@ -2,9 +2,13 @@ package com.positivity.workorder.service;
 
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import com.positivity.workorder.internal.service.WipServiceImpl;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,15 +18,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -48,11 +58,54 @@ import static org.mockito.Mockito.when;
 @DisplayName("WipService Unit Tests")
 class WipServiceImplTest {
 
+    private static final String LOCATION_1 = "11111111-1111-1111-1111-111111111111";
+    private static final String LOCATION_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    private static final UUID LOCATION_2_UUID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+
     @Mock
     private WorkorderRepository workorderRepository;
 
+    @Mock
+    private WorkorderStateTransitionRepository stateTransitionRepository;
+
     @InjectMocks
     private WipServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        lenient()
+                .when(workorderRepository.findByShopIdAndStatusIn(any(UUID.class), anyCollection(),
+                        any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    UUID shopId = invocation.getArgument(0);
+                    Pageable pageable = invocation.getArgument(2);
+                    List<Workorder> all = buildSingleLocationWorkorders(shopId);
+                    return toPage(all, pageable);
+                });
+
+        lenient().when(workorderRepository.findByStatusIn(anyCollection(), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(1);
+                    List<Workorder> all = buildMultiLocationWorkorders();
+                    return toPage(all, pageable);
+                });
+
+        lenient().when(workorderRepository.findById(any(UUID.class)))
+                .thenAnswer(invocation -> Optional
+                        .of(buildAwaitingPartsWorkorder(invocation.getArgument(0), UUID.fromString(LOCATION_1))));
+
+        lenient().when(stateTransitionRepository.findByWorkorderId(any(UUID.class)))
+                .thenAnswer(invocation -> List.of(
+                        WorkorderStateTransition.builder()
+                                .id(UUID.randomUUID())
+                                .workorderId(invocation.getArgument(0))
+                                .fromStatus(WorkorderStatus.ASSIGNED)
+                                .toStatus(WorkorderStatus.AWAITING_PARTS)
+                                .transitionedAt(Instant.now())
+                                .transitionedBy("system")
+                                .reason("parts delayed")
+                                .build()));
+    }
 
     // -------------------------------------------------------------------------
     // AC1 / AC8 — single-location scope, active statuses only
@@ -66,7 +119,7 @@ class WipServiceImplTest {
     @DisplayName("getWipWorkorders: single-location request returns only workorders for that location")
     void getWipWorkorders_singleLocation_returnsOnlyWorkordersForThatLocation() {
         // Arrange
-        String locationId = "loc-1";
+        String locationId = LOCATION_1;
         Pageable pageable = PageRequest.of(0, 20);
 
         // Act
@@ -90,7 +143,7 @@ class WipServiceImplTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         // Act
-        Page<WorkorderStatusView> result = service.getWipWorkorders("loc-1", false, pageable);
+        Page<WorkorderStatusView> result = service.getWipWorkorders(LOCATION_1, false, pageable);
 
         // Assert
         assertThat(result.getContent())
@@ -106,7 +159,7 @@ class WipServiceImplTest {
     @DisplayName("getWipWorkorders: multiLocation=false scopes result to the given locationId")
     void getWipWorkorders_multiLocationFalse_scopsToSingleLocation() {
         // Arrange
-        String locationId = "loc-A";
+        String locationId = LOCATION_A;
         Pageable pageable = PageRequest.of(0, 20);
 
         // Act
@@ -133,7 +186,7 @@ class WipServiceImplTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         // Act — real impl must widen scope when multiLocation=true
-        Page<WorkorderStatusView> result = service.getWipWorkorders("loc-1", true, pageable);
+        Page<WorkorderStatusView> result = service.getWipWorkorders(LOCATION_1, true, pageable);
 
         // Assert — result is well-formed; location diversity is verified here
         assertThat(result).isNotNull();
@@ -165,7 +218,7 @@ class WipServiceImplTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         // Act
-        Page<WorkorderStatusView> result = service.getWipWorkorders("loc-1", false, pageable);
+        Page<WorkorderStatusView> result = service.getWipWorkorders(LOCATION_1, false, pageable);
 
         // Assert — at least one view in the result must represent an unassigned
         // workorder
@@ -191,7 +244,7 @@ class WipServiceImplTest {
         Pageable pageable = PageRequest.of(0, pageSize);
 
         // Act
-        Page<WorkorderStatusView> result = service.getWipWorkorders("loc-1", false, pageable);
+        Page<WorkorderStatusView> result = service.getWipWorkorders(LOCATION_1, false, pageable);
 
         // Assert
         assertThat(result.getContent().size())
@@ -295,7 +348,7 @@ class WipServiceImplTest {
         Pageable pageable = PageRequest.of(0, 50);
 
         // Act
-        Page<WorkorderStatusView> result = service.getWipWorkorders("loc-1", true, pageable);
+        Page<WorkorderStatusView> result = service.getWipWorkorders(LOCATION_1, true, pageable);
 
         // Assert — all active status variants must appear at least once
         List<WorkorderStatus> activeStatuses = List.of(
@@ -313,5 +366,58 @@ class WipServiceImplTest {
         assertThat(returnedStatuses)
                 .as("WIP list must include all six active status variants")
                 .containsAll(activeStatuses);
+    }
+
+    private static List<Workorder> buildSingleLocationWorkorders(UUID locationId) {
+        return List.of(
+                workorderWithStatus(locationId, WorkorderStatus.APPROVED),
+                workorderWithStatus(locationId, WorkorderStatus.ASSIGNED),
+                workorderWithStatus(locationId, WorkorderStatus.WORK_IN_PROGRESS),
+                workorderWithStatus(locationId, WorkorderStatus.AWAITING_PARTS),
+                workorderWithStatus(locationId, WorkorderStatus.AWAITING_APPROVAL),
+                workorderWithStatus(locationId, WorkorderStatus.READY_FOR_PICKUP));
+    }
+
+    private static List<Workorder> buildMultiLocationWorkorders() {
+        UUID loc1 = UUID.fromString(LOCATION_1);
+        return List.of(
+                workorderWithStatus(loc1, WorkorderStatus.APPROVED),
+                workorderWithStatus(LOCATION_2_UUID, WorkorderStatus.ASSIGNED),
+                workorderWithStatus(loc1, WorkorderStatus.WORK_IN_PROGRESS),
+                workorderWithStatus(LOCATION_2_UUID, WorkorderStatus.AWAITING_PARTS),
+                workorderWithStatus(loc1, WorkorderStatus.AWAITING_APPROVAL),
+                workorderWithStatus(LOCATION_2_UUID, WorkorderStatus.READY_FOR_PICKUP));
+    }
+
+    private static Workorder workorderWithStatus(UUID shopId, WorkorderStatus status) {
+        return Workorder.builder()
+                .id(UUID.randomUUID())
+                .shopId(shopId)
+                .customerId(UUID.randomUUID())
+                .vehicleId(UUID.randomUUID())
+                .status(status)
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private static Workorder buildAwaitingPartsWorkorder(UUID workorderId, UUID shopId) {
+        return Workorder.builder()
+                .id(workorderId)
+                .shopId(shopId)
+                .customerId(UUID.randomUUID())
+                .vehicleId(UUID.randomUUID())
+                .status(WorkorderStatus.AWAITING_PARTS)
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private static Page<Workorder> toPage(List<Workorder> all, Pageable pageable) {
+        int start = (int) pageable.getOffset();
+        if (start >= all.size()) {
+            return new PageImpl<>(List.of(), pageable, all.size());
+        }
+
+        int end = Math.min(start + pageable.getPageSize(), all.size());
+        return new PageImpl<>(all.subList(start, end), pageable, all.size());
     }
 }
