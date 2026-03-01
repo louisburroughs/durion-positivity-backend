@@ -17,7 +17,7 @@ public final class InventoryEventTypes {
 
         /**
          * All event type registrations for the inventory module.
-         * Total: 36 event types (verified current registry count).
+         * Total: 37 event types (verified current registry count).
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -40,6 +40,9 @@ public final class InventoryEventTypes {
                                                 "Update inventory availability for a product").build(),
                                 EventTypeRegistration.fastRead("INVENTORY_AVAILABILITY_QUERY",
                                                 "Query on-hand and ATP availability by productSku and locationId")
+                                                .build(),
+                                EventTypeRegistration.fastRead("INVENTORY_LEAD_TIME_QUERY",
+                                                "Query dynamic lead time by productId and locationId")
                                                 .build(),
 
                                 // PickingListController - 1 event

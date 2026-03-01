@@ -59,6 +59,39 @@ public class InventoryClientImpl implements InventoryClient {
                 response.unitOfMeasure()));
     }
 
+    @Override
+    public Optional<LeadTimeClientResponse> fetchLeadTime(UUID productId, UUID locationId) {
+        log.debug("Fetching lead time: productId={}, locationId={}", productId, locationId);
+        try {
+            LeadTimeServiceResponse response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v1/inventory/availability/lead-time")
+                            .queryParam("productId", productId)
+                            .queryParam("locationId", locationId)
+                            .build())
+                    .header("X-User", "pos-catalog-service")
+                    .header("X-Authorities", "inventory:availability:read")
+                    .retrieve()
+                    .body(LeadTimeServiceResponse.class);
+
+            if (response == null) {
+                log.warn("Inventory lead-time service returned null for productId={}", productId);
+                return Optional.empty();
+            }
+
+            return Optional.of(new LeadTimeClientResponse(
+                    response.minDays(),
+                    response.maxDays(),
+                    response.displayText(),
+                    response.source(),
+                    response.confidence(),
+                    response.asOf()));
+        } catch (Exception ex) {
+            log.debug("Lead-time lookup unavailable for productId={}: {}", productId, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Internal response shape (mirrors pos-inventory API contract)
     // -----------------------------------------------------------------------
@@ -68,5 +101,14 @@ public class InventoryClientImpl implements InventoryClient {
             int allocatedQuantity,
             int availableToPromiseQuantity,
             String unitOfMeasure) {
+    }
+
+    private record LeadTimeServiceResponse(
+            Integer minDays,
+            Integer maxDays,
+            String displayText,
+            String source,
+            String confidence,
+            java.time.Instant asOf) {
     }
 }
