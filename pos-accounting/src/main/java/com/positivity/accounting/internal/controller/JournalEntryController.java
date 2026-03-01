@@ -150,9 +150,7 @@ public class JournalEntryController {
         public ResponseEntity<JournalEntryResponse> reverseJournalEntry(
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
                         @Valid @RequestBody JournalEntryReversalRequest request) {
-                if (log.isInfoEnabled()) {
-                        log.info("Reversing journal entry: {} with reason: {}", journalEntryId, request.getReason());
-                }
+
                 var reversed = journalEntryService.reverseJournalEntry(journalEntryId, request.getReason());
                 return ResponseEntity.ok(JournalEntryMapper.toResponse(reversed));
         }

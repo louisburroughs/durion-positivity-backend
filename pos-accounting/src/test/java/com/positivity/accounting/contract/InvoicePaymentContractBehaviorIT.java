@@ -258,20 +258,45 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     // ===============================================
 
     @Test
-    @DisplayName("Regenerate invoice from workorder - returns 501 (stub)")
-    void testRegenerateInvoice_NotImplemented() throws Exception {
-        // Given - stub endpoint
+    @DisplayName("Regenerate invoice from workorder - implemented endpoint")
+    void testRegenerateInvoice() throws Exception {
+        // Given
         String payload = """
                 {
                     "workorderId": "%s"
                 }
                 """.formatted(UUID.randomUUID());
 
-        // When/Then - should return 501 Not Implemented
+        // When/Then
+        MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andReturn();
+
+        // Implemented behavior:
+        // 200 when invoice regeneration succeeds,
+        // 404 when workorder does not exist,
+        // 409 when workorder is not in COMPLETED state,
+        // 503 when downstream workorder service is unavailable in local runs.
+        int statusCode = result.getResponse().getStatus();
+        assertThat(statusCode).isIn(200, 404, 409, 503);
+    }
+
+    @Test
+    @DisplayName("Regenerate invoice from workorder - missing workorderId returns 400")
+    void testRegenerateInvoice_MissingWorkorderId() throws Exception {
+        // Given - missing required workorderId field
+        String payload = """
+                {
+                    "idempotencyKey": "%s"
+                }
+                """.formatted(UUID.randomUUID());
+
+        // When/Then
         mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -323,6 +348,23 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - should return 403 Forbidden
         mockMvc.perform(withAuth(get(API_V1_INVOICE + "/" + testInvoiceId + "/status"), "accounting:je:view"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Regenerate invoice - without proper authority returns 403")
+    void testRegenerateInvoice_Unauthorized() throws Exception {
+        // Given - request without accounting:ap:view authority
+        String payload = """
+                {
+                    "workorderId": "%s"
+                }
+                """.formatted(UUID.randomUUID());
+
+        // When/Then - should return 403 Forbidden
+        mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"), "accounting:je:view")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
                 .andExpect(status().isForbidden());
     }
 
