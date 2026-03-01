@@ -5,6 +5,8 @@ import com.positivity.catalog.internal.client.PricingClient;
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDetailView.*;
 import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.entity.ProductReplacementEntity;
+import com.positivity.catalog.internal.repository.ProductReplacementRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.service.ProductDetailService;
 
@@ -13,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,8 +35,10 @@ import java.util.UUID;
 public class ProductDetailServiceImpl implements ProductDetailService {
 
     private final ProductRepository productRepository;
+    private final ProductReplacementRepository productReplacementRepository;
     private final PricingClient pricingClient;
     private final InventoryClient inventoryClient;
+    private final ObjectMapper objectMapper;
 
     @Value("${pos.price.default-customer-tier-id:00000000-0000-0000-0000-000000000001}")
     private UUID defaultCustomerTierId;
@@ -209,15 +215,17 @@ public class ProductDetailServiceImpl implements ProductDetailService {
      * This is the fallback when dynamic lead time is unavailable.
      */
     private LeadTimeInfo getCatalogLeadTime(ProductEntity product, Instant requestTime) {
-        // TODO: Add leadTimeHintDays field to ProductEntity
-        // For now, return generic catalog hint
+        CatalogLeadTimeHint hint = extractCatalogLeadTimeHint(product);
+        LeadTimeRange range = normalizeCatalogLeadTimeRange(hint.minDays(), hint.maxDays());
+        String displayText = resolveCatalogLeadTimeDisplayText(hint.displayText(), range.minDays(), range.maxDays());
+
         return LeadTimeInfo.builder()
                 .source(LeadTimeSource.CATALOG)
-                .minDays(3)
-                .maxDays(7)
-                .displayText("3-7 business days (estimated)")
+                .minDays(range.minDays())
+                .maxDays(range.maxDays())
+                .displayText(displayText)
                 .asOf(requestTime)
-                .confidence(DataConfidence.LOW)
+                .confidence(hint.hasHint() ? DataConfidence.MEDIUM : DataConfidence.LOW)
                 .build();
     }
 
@@ -262,9 +270,23 @@ public class ProductDetailServiceImpl implements ProductDetailService {
      * Fetches substitution hints from catalog.
      */
     private List<SubstitutionHint> fetchSubstitutions(UUID productId) {
-        // TODO: Implement when substitution relationship is added to data model
         log.debug("Fetching substitutions for productId={}", productId);
-        return new ArrayList<>();
+        if (productId == null) {
+            return List.of();
+        }
+
+        Instant now = Instant.now();
+        try {
+            return productReplacementRepository
+                    .findByOriginalProductIdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId)
+                    .stream()
+                    .filter(replacement -> isEffectiveReplacement(replacement, now))
+                    .map(this::toSubstitutionHint)
+                    .toList();
+        } catch (Exception ex) {
+            log.warn("Failed to fetch substitutions for productId={}: {}", productId, ex.getMessage());
+            return List.of();
+        }
     }
 
     /**
@@ -303,5 +325,130 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         } catch (IllegalArgumentException ex) {
             return DataConfidence.MEDIUM;
         }
+    }
+
+    private Integer readInteger(JsonNode node, String... keys) {
+        for (String key : keys) {
+            JsonNode value = node.get(key);
+            if (value == null || value.isNull()) {
+                continue;
+            }
+            if (value.isInt()) {
+                return value.asInt();
+            }
+            if (value.isTextual()) {
+                String raw = value.asText();
+                if (raw != null && !raw.isBlank()) {
+                    try {
+                        return Integer.parseInt(raw.trim());
+                    } catch (NumberFormatException ignored) {
+                        // Keep trying other keys.
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private String readString(JsonNode node, String... keys) {
+        for (String key : keys) {
+            JsonNode value = node.get(key);
+            if (value == null || value.isNull()) {
+                continue;
+            }
+            String text = value.asText(null);
+            if (text != null && !text.isBlank()) {
+                return text.trim();
+            }
+        }
+        return null;
+    }
+
+    private boolean isEffectiveReplacement(ProductReplacementEntity replacement, Instant now) {
+        return replacement.getEffectiveAt() == null || !replacement.getEffectiveAt().isAfter(now);
+    }
+
+    private SubstitutionHint toSubstitutionHint(ProductReplacementEntity replacement) {
+        String reason = replacement.getNotes();
+        if (reason == null || reason.isBlank()) {
+            reason = "Replacement option";
+        }
+        return SubstitutionHint.builder()
+                .productId(replacement.getReplacementProductId() != null
+                        ? replacement.getReplacementProductId().toString()
+                        : null)
+                .reason(reason)
+                .build();
+    }
+
+    private CatalogLeadTimeHint extractCatalogLeadTimeHint(ProductEntity product) {
+        if (product == null || product.getAttributes() == null || product.getAttributes().isBlank()) {
+            return CatalogLeadTimeHint.empty();
+        }
+        try {
+            JsonNode attributes = objectMapper.readTree(product.getAttributes());
+            Integer exactDays = readInteger(
+                    attributes,
+                    "leadTimeDays",
+                    "lead_time_days",
+                    "leadTimeHintDays",
+                    "lead_time_hint_days");
+            Integer minDays = readInteger(
+                    attributes,
+                    "leadTimeMinDays",
+                    "lead_time_min_days",
+                    "leadTimeDaysMin",
+                    "lead_time_days_min");
+            Integer maxDays = readInteger(
+                    attributes,
+                    "leadTimeMaxDays",
+                    "lead_time_max_days",
+                    "leadTimeDaysMax",
+                    "lead_time_days_max");
+            if (exactDays != null) {
+                minDays = minDays == null ? exactDays : minDays;
+                maxDays = maxDays == null ? exactDays : maxDays;
+            }
+
+            String displayText = readString(
+                    attributes,
+                    "leadTimeDisplayText",
+                    "lead_time_display_text",
+                    "leadTimeText",
+                    "lead_time_text");
+            boolean hasHint = minDays != null || maxDays != null || displayText != null;
+            return new CatalogLeadTimeHint(minDays, maxDays, displayText, hasHint);
+        } catch (Exception ex) {
+            log.debug("Unable to parse product attributes for catalog lead time, using defaults: {}", ex.getMessage());
+            return CatalogLeadTimeHint.empty();
+        }
+    }
+
+    private LeadTimeRange normalizeCatalogLeadTimeRange(Integer minDays, Integer maxDays) {
+        int resolvedMin = minDays == null ? (maxDays == null ? 3 : maxDays) : minDays;
+        int resolvedMax = maxDays == null ? resolvedMin : maxDays;
+        if (resolvedMin <= resolvedMax) {
+            return new LeadTimeRange(resolvedMin, resolvedMax);
+        }
+        return new LeadTimeRange(resolvedMax, resolvedMin);
+    }
+
+    private String resolveCatalogLeadTimeDisplayText(String displayText, int minDays, int maxDays) {
+        if (displayText != null && !displayText.isBlank()) {
+            return displayText;
+        }
+        if (minDays == maxDays) {
+            return minDays + " business days (estimated)";
+        }
+        return minDays + "-" + maxDays + " business days (estimated)";
+    }
+
+    private record CatalogLeadTimeHint(Integer minDays, Integer maxDays, String displayText, boolean hasHint) {
+        private static CatalogLeadTimeHint empty() {
+            return new CatalogLeadTimeHint(null, null, null, false);
+        }
+    }
+
+    private record LeadTimeRange(int minDays, int maxDays) {
     }
 }
