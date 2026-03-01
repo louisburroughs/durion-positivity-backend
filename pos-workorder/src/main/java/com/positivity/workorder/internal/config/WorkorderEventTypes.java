@@ -138,6 +138,13 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** Paginated search for estimates by optional customer and/or vehicle filter (Story #15) */
+        public static final EventTypeRegistration WORKORDER_ESTIMATE_SEARCH = EventTypeRegistration
+                        .search("WORKORDER_ESTIMATE_SEARCH",
+                                        "Paginated search for estimates by customer and/or vehicle")
+                        .apiVersion("1")
+                        .build();
+
         /** Create a new estimate */
         public static final EventTypeRegistration WORKORDER_ESTIMATE_CREATE = EventTypeRegistration
                         .write("WORKORDER_ESTIMATE_CREATE",
@@ -402,6 +409,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_ESTIMATE_SEARCH_BY_CUSTOMER,
                         WORKORDER_ESTIMATE_SEARCH_BY_SHOP,
                         WORKORDER_ESTIMATE_SEARCH_BY_LOCATION,
+                        WORKORDER_ESTIMATE_SEARCH,
                         WORKORDER_ESTIMATE_CREATE,
                         WORKORDER_ESTIMATE_DECLINE,
                         WORKORDER_ESTIMATE_REOPEN,

@@ -15,6 +15,8 @@ import jakarta.persistence.EntityNotFoundException;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -117,6 +119,16 @@ public class EstimateServiceImpl implements EstimateService {
                                 .stream()
                                 .map(EstimateResponse::fromEntity)
                                 .toList();
+        }
+
+        @Override
+        @NonNull
+        public Page<EstimateSummaryResponse> searchEstimates(
+                        @Nullable UUID customerId,
+                        @Nullable UUID vehicleId,
+                        @NonNull Pageable pageable) {
+                throw new UnsupportedOperationException(
+                                "EstimateServiceImpl.searchEstimates: not yet implemented (Story #15)");
         }
 
         /**

@@ -5,6 +5,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateItemResponse;
@@ -23,6 +28,23 @@ public interface EstimateService {
     List<EstimateResponse> getEstimatesByCustomer(UUID customerId);
 
     List<EstimateResponse> getEstimatesByLocation(UUID locationId);
+
+    /**
+     * Paginated search for estimates by optional customer and/or vehicle filter.
+     * At least one of {@code customerId} or {@code vehicleId} should be provided;
+     * if both are {@code null} all estimates are returned (scoped to the caller's
+     * location unless the caller has the multi-location permission).
+     *
+     * @param customerId filter by customer UUID (optional)
+     * @param vehicleId  filter by vehicle UUID (optional)
+     * @param pageable   pagination and sorting configuration
+     * @return page of estimate summaries
+     */
+    @NonNull
+    Page<EstimateSummaryResponse> searchEstimates(
+            @Nullable UUID customerId,
+            @Nullable UUID vehicleId,
+            @NonNull Pageable pageable);
 
     /**
      * Create a new draft estimate with proper validation and defaulting

@@ -9,6 +9,9 @@ import jakarta.persistence.EntityNotFoundException;
 
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -111,6 +114,26 @@ public class EstimateController {
     public List<EstimateResponse> getEstimatesByLocation(
             @Parameter(description = "ID of the location", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable UUID locationId) {
         return estimateService.getEstimatesByLocation(locationId);
+    }
+
+    @Operation(summary = "Search estimates",
+            description = "Paginated search for estimates filtered by optional customerId and/or vehicleId.")
+    @ApiResponse(responseCode = "200", description = "Page of estimate summaries returned.")
+    @GetMapping("/search")
+    @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    public ResponseEntity<Page<EstimateSummaryResponse>> searchEstimates(
+            @Parameter(description = "Filter by customer UUID (optional)")
+            @RequestParam(required = false) @Nullable UUID customerId,
+            @Parameter(description = "Filter by vehicle UUID (optional)")
+            @RequestParam(required = false) @Nullable UUID vehicleId,
+            @PageableDefault(size = 25) Pageable pageable) {
+
+        log.debug("Estimate search: customerId={}, vehicleId={}, pageable={}",
+                customerId, vehicleId, pageable);
+        Page<EstimateSummaryResponse> result =
+                estimateService.searchEstimates(customerId, vehicleId, pageable);
+        return ResponseEntity.ok(result);
     }
 
     @Operation(summary = "Create a new draft estimate", description = "Create a new estimate in DRAFT status for a customer and vehicle. "
