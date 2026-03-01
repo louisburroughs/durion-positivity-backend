@@ -16,6 +16,7 @@ import java.util.UUID;
 @RestControllerAdvice(assignableTypes = InvoiceController.class)
 public class InvoiceExceptionHandler {
 
+        private static final String X_CORRELATION_ID = "X-Correlation-Id";
         private static final String MESSAGE = "message";
         private static final String ERROR = "error";
         private static final String TIMESTAMP = "timestamp";
@@ -28,7 +29,7 @@ public class InvoiceExceptionHandler {
                         InvoiceNotFoundException ex, HttpServletRequest request) {
                 String correlationId = correlationId(request);
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                                .header("X-Correlation-Id", correlationId)
+                                .header(X_CORRELATION_ID, correlationId)
                                 .body(Map.of(
                                                 TIMESTAMP, Instant.now().toString(),
                                                 ERROR, "NOT_FOUND",
@@ -43,7 +44,7 @@ public class InvoiceExceptionHandler {
                         InvalidInvoiceStateException ex, HttpServletRequest request) {
                 String correlationId = correlationId(request);
                 return ResponseEntity.status(HttpStatus.CONFLICT)
-                                .header("X-Correlation-Id", correlationId)
+                                .header(X_CORRELATION_ID, correlationId)
                                 .body(Map.of(
                                                 TIMESTAMP, Instant.now().toString(),
                                                 ERROR, "INVALID_STATE",
@@ -62,7 +63,7 @@ public class InvoiceExceptionHandler {
                         IllegalStateException ex, HttpServletRequest request) {
                 String correlationId = correlationId(request);
                 return ResponseEntity.status(HttpStatus.CONFLICT)
-                                .header("X-Correlation-Id", correlationId)
+                                .header(X_CORRELATION_ID, correlationId)
                                 .body(Map.of(
                                                 TIMESTAMP, Instant.now().toString(),
                                                 ERROR, "CONFLICT",
@@ -78,7 +79,7 @@ public class InvoiceExceptionHandler {
                 String correlationId = correlationId(request);
                 String msg = ex.getMessage() != null ? ex.getMessage() : "";
                 List<Map<String, Object>> fieldErrors = msg.toLowerCase().contains("approval code")
-                                ? List.of(Map.of("field", "managerApprovalCode", "message", msg))
+                                ? List.of(Map.of("field", "managerApprovalCode", MESSAGE, msg))
                                 : List.of();
                 java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
                 body.put(TIMESTAMP, Instant.now().toString());
@@ -89,12 +90,12 @@ public class InvoiceExceptionHandler {
                 body.put(MESSAGE, msg);
                 body.put("fieldErrors", fieldErrors);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                                .header("X-Correlation-Id", correlationId)
+                                .header(X_CORRELATION_ID, correlationId)
                                 .body(body);
         }
 
         private static String correlationId(HttpServletRequest request) {
-                String header = request.getHeader("X-Correlation-Id");
+                String header = request.getHeader(X_CORRELATION_ID);
                 return (header != null && !header.isBlank()) ? header : UUID.randomUUID().toString();
         }
 }

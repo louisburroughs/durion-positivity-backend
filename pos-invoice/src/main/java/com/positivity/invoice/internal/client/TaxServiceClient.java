@@ -28,7 +28,9 @@ public class TaxServiceClient {
 
     @NonNull
     public BigDecimal calculateTax(@NonNull BigDecimal subtotal, String partyId) {
-        log.debug("Calculating tax for subtotal {} and partyId(mask) {}", subtotal, maskForLog(partyId));
+        if (log.isDebugEnabled()) {
+            log.debug("Calculating tax for subtotal {} and partyId(mask) {}", subtotal, maskForLog(partyId));
+        }
 
         TaxCalculationResponse response = restClient.post()
                 .uri("/calculate")

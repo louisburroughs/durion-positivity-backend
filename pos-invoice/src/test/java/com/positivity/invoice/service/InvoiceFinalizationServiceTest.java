@@ -184,7 +184,7 @@ class InvoiceFinalizationServiceTest {
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         FinalizationRequest request = shopManagerRequest();
 
-        InvoiceDetailsResponse response = service.finalize(invoiceId, request);
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
         assertThat(response.getFinalizedAt()).isNotNull();
@@ -203,7 +203,7 @@ class InvoiceFinalizationServiceTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(finalizedInvoice(UUID.randomUUID())));
         FinalizationRequest request = shopManagerRequest();
 
-        assertThatThrownBy(() -> service.finalize(invoiceId, request))
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -226,7 +226,7 @@ class InvoiceFinalizationServiceTest {
         // No approval code, no SHOP_MANAGER role in context → rejected
         FinalizationRequest request = serviceAdvisorRequest(null);
 
-        assertThatThrownBy(() -> service.finalize(invoiceId, request))
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageMatching("(?i).*approval.*");
     }
@@ -244,7 +244,7 @@ class InvoiceFinalizationServiceTest {
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = shopManagerRequest();
 
-        InvoiceDetailsResponse response = service.finalize(invoiceId, request);
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
     }
@@ -263,7 +263,7 @@ class InvoiceFinalizationServiceTest {
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = serviceAdvisorRequest("MGR-APPROVAL-001");
 
-        InvoiceDetailsResponse response = service.finalize(invoiceId, request);
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
     }
@@ -297,7 +297,7 @@ class InvoiceFinalizationServiceTest {
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         FinalizationRequest request = shopManagerRequest();
 
-        InvoiceDetailsResponse response = service.finalize(invoiceId, request);
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
 
         assertThat(response.getItems()).isNotNull();
         assertThat(response.getItems()).hasSize(1);

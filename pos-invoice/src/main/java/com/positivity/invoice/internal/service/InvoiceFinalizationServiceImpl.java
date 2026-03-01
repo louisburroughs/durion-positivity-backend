@@ -48,6 +48,8 @@ import java.util.UUID;
 @Service
 public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationService {
 
+    private static final String SYSTEM = "system";
+
     private static final Logger log = LoggerFactory.getLogger(InvoiceFinalizationServiceImpl.class);
 
     static final BigDecimal SERVICE_ADVISOR_LIMIT = new BigDecimal("500.00");
@@ -93,7 +95,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                     false);
         }
 
-        BigDecimal total = invoice.getTotal() != null ? invoice.getTotal() : BigDecimal.ZERO;
+        BigDecimal total = invoice.getTotal();
         boolean requiresApproval = total.compareTo(SERVICE_ADVISOR_LIMIT) > 0;
 
         return new FinalizationEligibilityResult(true, null, requiresApproval);
@@ -113,7 +115,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      */
     @Override
     @NonNull
-    public InvoiceDetailsResponse finalize(@NonNull UUID invoiceId, @NonNull FinalizationRequest request) {
+    public InvoiceDetailsResponse completeInvoice(@NonNull UUID invoiceId, @NonNull FinalizationRequest request) {
         // AC4: only DRAFT invoices are eligible for finalization.
         // Reject any non-DRAFT state (e.g., FINALIZED, POSTED, ERROR) with conflict.
         Optional<Invoice> existingOpt = invoiceRepository.findById(invoiceId);
@@ -137,7 +139,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         // AC4: Transition DRAFT → FINALIZED
         Instant now = Instant.now();
         // ADR-0018: finalizedBy from SecurityContext, never from request body
-        String finalizedBy = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String finalizedBy = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
 
         if (existingOpt.isPresent()) {
             Invoice invoice = existingOpt.get();
@@ -197,12 +199,15 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
 
         // Transition back to DRAFT
         // ADR-0018: audit the actor performing the reversion
-        String revertedBy = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String revertedBy = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         String redactedCode = managerApprovalCode.length() > 4
                 ? managerApprovalCode.substring(0, 4) + "****"
                 : "****";
-        log.info("Invoice reversion: actor(mask)={}, invoiceId(mask)={}, approvalCode={}",
-                maskForLog(revertedBy), maskForLog(invoiceId), redactedCode);
+
+        if (log.isInfoEnabled()) {
+            log.info("Invoice reversion: actor(mask)={}, invoiceId(mask)={}, approvalCode={}",
+                    maskForLog(revertedBy), maskForLog(invoiceId), redactedCode);
+        }
 
         invoice.setStatus(InvoiceStatus.DRAFT);
         invoice.setRevertedAt(Instant.now());
@@ -242,13 +247,16 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                                 + SERVICE_ADVISOR_LIMIT + " without a manager approval code");
             }
             // M4: Audit the manager approval override
-            String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+            String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             String redactedCode = approvalCode.length() > 4
                     ? approvalCode.substring(0, 4) + "****"
                     : "****";
-            log.info(
-                    "Manager approval override applied: actor(mask)={}, approvalCode={}, invoiceId(mask)={}, amount={}",
-                    maskForLog(actor), redactedCode, maskForLog(invoiceId), invoiceTotal);
+
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Manager approval override applied: actor(mask)={}, approvalCode={}, invoiceId(mask)={}, amount={}",
+                        maskForLog(actor), redactedCode, maskForLog(invoiceId), invoiceTotal);
+            }
         }
     }
 
