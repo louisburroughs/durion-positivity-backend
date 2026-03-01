@@ -51,15 +51,21 @@ public class WipServiceImpl implements WipService {
                     .map(this::toStatusView);
         }
 
-        UUID shopUuid = UUID.fromString(locationId);
-        return workorderRepository.findByShopIdAndStatusIn(shopUuid, ACTIVE_WIP_STATUSES, pageable)
-                .map(this::toStatusView);
+        // F5: Guard malformed locationId — propagate as 400-producing exception
+        // (ADR-0017)
+        try {
+            UUID shopUuid = UUID.fromString(locationId);
+            return workorderRepository.findByShopIdAndStatusIn(shopUuid, ACTIVE_WIP_STATUSES, pageable)
+                    .map(this::toStatusView);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("locationId is not a valid UUID: " + locationId, e);
+        }
     }
 
     @Override
     @Transactional(readOnly = true)
     public WorkorderStatusDetail getWipDetail(@NonNull UUID workorderId) {
-        log.debug("Fetching WIP detail for workorder");
+        log.debug("Fetching WIP detail: workorderId={}", workorderId);
         Workorder wo = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
 
@@ -73,6 +79,8 @@ public class WipServiceImpl implements WipService {
                         .build())
                 .toList();
 
+        // TODO(#14): Resolve blocking part numbers from workorder parts line items
+        // (Inventory SoR)
         List<String> partsBlocking = wo.getStatus() == WorkorderStatus.AWAITING_PARTS
                 ? List.of("PARTS_PENDING")
                 : List.of();
@@ -85,16 +93,20 @@ public class WipServiceImpl implements WipService {
         return WorkorderStatusDetail.builder()
                 .workorderId(wo.getId())
                 .status(wo.getStatus())
+                // TODO(#14): Resolve from TechnicianAssignment entity; null = unassigned
                 .assignedTechnicianId(null)
                 .locationId(locationId)
                 .estimatedCompletionTime(null)
+                // TODO(#14): Resolve customerName/phoneNumber from CRM service
                 .customerName(wo.getCustomerId() != null ? "customer-" + wo.getCustomerId() : "")
+                .phoneNumber(null)
+                // TODO(#14): Resolve vehicleInfo/vehicleVin from VehicleReference service
                 .vehicleInfo(wo.getVehicleId() != null ? "vehicle-" + wo.getVehicleId() : "")
+                .vehicleVin(null)
                 .lastUpdatedAt(lastUpdatedAt)
                 .statusHistory(history)
                 .partsBlocking(partsBlocking)
-                .phoneNumber(null)
-                .vehicleVin(null)
+                // TODO(#14): Resolve serviceDescription from workorder service lines
                 .serviceDescription("")
                 .internalNotes(null)
                 .build();
@@ -107,10 +119,13 @@ public class WipServiceImpl implements WipService {
         return WorkorderStatusView.builder()
                 .workorderId(wo.getId())
                 .status(wo.getStatus())
+                // TODO(#14): Resolve from TechnicianAssignment entity; null = unassigned
                 .assignedTechnicianId(null)
                 .locationId(wo.getShopId() != null ? wo.getShopId().toString() : "")
                 .estimatedCompletionTime(null)
+                // TODO(#14): Resolve customerName from CRM service
                 .customerName(wo.getCustomerId() != null ? "customer-" + wo.getCustomerId() : "")
+                // TODO(#14): Resolve vehicleInfo from VehicleReference service
                 .vehicleInfo(wo.getVehicleId() != null ? "vehicle-" + wo.getVehicleId() : "")
                 .lastUpdatedAt(lastUpdatedAt)
                 .build();

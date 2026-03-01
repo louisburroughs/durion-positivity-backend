@@ -39,17 +39,11 @@ import static org.mockito.Mockito.when;
  * Unit tests for {@link WipServiceImpl} — WIP status visibility.
  *
  * <p>
- * Asserts acceptance criteria behavior for Story #14 (CAP-248):
- * "WIP Status Visibility for Active Workorders". All tests are intentionally
- * RED while {@link WipServiceImpl} stubs both methods with
- * {@link UnsupportedOperationException}; they will turn GREEN once the
- * real implementation is provided by the Lead Coder team.
- *
- * <p>
- * Mock stubs for repository interactions are set up where the repository
- * call site is well-defined (e.g. {@code findById}). Additional stubs for
- * query-method calls (e.g. paginated active-status queries) must be wired by
- * the Lead Coder alongside the repository method definitions in GREEN phase.
+ * Verifies acceptance criteria for Story #14 (CAP-248):
+ * "Workexec: Display Work In Progress Status for Active Workorders".
+ * All 10 tests cover service-layer behaviour across single/multi-location
+ * scoping, active-status filtering, pagination, unassigned workorder handling,
+ * detail view contents, and error paths.
  *
  * Issue: #14
  */
