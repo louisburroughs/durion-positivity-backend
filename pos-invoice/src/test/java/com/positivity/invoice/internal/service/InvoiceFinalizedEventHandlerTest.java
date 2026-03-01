@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,8 +55,8 @@ class InvoiceFinalizedEventHandlerTest {
 
         verify(invoiceRepository).findById(invoiceId);
         verify(invoiceRepository).save(invoice);
-        assert (invoice.getStatus() == InvoiceStatus.POSTED);
-        assert (invoice.getGlEntryId() != null);
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.POSTED);
+        assertThat(invoice.getGlEntryId()).isNotNull();
     }
 
     @Test
@@ -81,7 +82,7 @@ class InvoiceFinalizedEventHandlerTest {
         // fails),
         // and once for the error path.
         verify(invoiceRepository, times(2)).save(invoice);
-        assert (invoice.getStatus() == InvoiceStatus.ERROR);
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.ERROR);
     }
 
     @Test

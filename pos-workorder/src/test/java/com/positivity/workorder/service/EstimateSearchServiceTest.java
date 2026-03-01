@@ -29,16 +29,15 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.service.EstimateServiceImpl;
 
 /**
- * TDD unit tests for the paginated estimate search behaviour introduced in
+ * Unit tests for the paginated estimate search behaviour introduced in
  * Story #15.
  *
  * <p>
- * Tests drive the acceptance criteria for
- * {@code EstimateService#searchEstimates(UUID, UUID, Pageable)}. All tests are
- * RED until {@code EstimateServiceImpl} replaces the
- * {@code UnsupportedOperationException} stub with a real implementation. Once
- * GREEN, mocks are already wired so every assertion passes without
- * modification.
+ * Covers the acceptance criteria for
+ * {@code EstimateService#searchEstimates(UUID, UUID, Pageable)}. The
+ * implementation is complete in {@code EstimateServiceImpl} and all 8 tests
+ * pass (GREEN). Mocks are wired once in each test so assertions remain
+ * independent and deterministic.
  *
  * Issue: #15 (CAP-248)
  */

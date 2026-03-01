@@ -151,7 +151,7 @@ class WipServiceImplTest {
      */
     @Test
     @DisplayName("getWipWorkorders: multiLocation=false scopes result to the given locationId")
-    void getWipWorkorders_multiLocationFalse_scopsToSingleLocation() {
+    void getWipWorkorders_multiLocationFalse_scopesToSingleLocation() {
         // Arrange
         String locationId = LOCATION_A;
         Pageable pageable = PageRequest.of(0, 20);
@@ -193,8 +193,8 @@ class WipServiceImplTest {
                 .distinct()
                 .count();
         assertThat(distinctLocations)
-                .as("multi-location mode should be capable of returning workorders from more than one location")
-                .isGreaterThanOrEqualTo(1);
+                .as("multi-location mode must return workorders from more than one location")
+                .isGreaterThanOrEqualTo(2);
     }
 
     // -------------------------------------------------------------------------
@@ -309,18 +309,10 @@ class WipServiceImplTest {
         when(workorderRepository.findById(unknownId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        try {
-            WorkorderStatusDetail result = service.getWipDetail(unknownId);
-            // If the call returned without throwing, the impl silently returned a value
-            // for an unknown ID — that is a contract violation.
-            assertThat(result)
-                    .as("getWipDetail must not return a non-null result for an unknown workorder ID")
-                    .isNull();
-        } catch (IllegalArgumentException | NoSuchElementException expected) {
-            // Correct behaviour: the impl threw the expected typed exception.
-        }
-        // If UnsupportedOperationException propagates uncaught here, the impl is not
-        // yet complete.
+        org.junit.jupiter.api.Assertions.assertThrows(
+                Exception.class,
+                () -> service.getWipDetail(unknownId),
+                "getWipDetail must throw for an unknown workorder ID, not return silently");
     }
 
     // -------------------------------------------------------------------------

@@ -26,28 +26,30 @@ public class InvoiceExceptionHandler {
         @ExceptionHandler(InvoiceNotFoundException.class)
         public ResponseEntity<Map<String, Object>> handleInvoiceNotFound(
                         InvoiceNotFoundException ex, HttpServletRequest request) {
+                String correlationId = correlationId(request);
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                                .header("X-Correlation-Id", correlationId(request))
+                                .header("X-Correlation-Id", correlationId)
                                 .body(Map.of(
                                                 TIMESTAMP, Instant.now().toString(),
                                                 ERROR, "NOT_FOUND",
                                                 CODE, "NOT_FOUND",
                                                 STATUS, HttpStatus.NOT_FOUND.value(),
-                                                CORRELATION_ID, correlationId(request),
+                                                CORRELATION_ID, correlationId,
                                                 MESSAGE, ex.getMessage()));
         }
 
         @ExceptionHandler(InvalidInvoiceStateException.class)
         public ResponseEntity<Map<String, Object>> handleInvalidInvoiceState(
                         InvalidInvoiceStateException ex, HttpServletRequest request) {
+                String correlationId = correlationId(request);
                 return ResponseEntity.status(HttpStatus.CONFLICT)
-                                .header("X-Correlation-Id", correlationId(request))
+                                .header("X-Correlation-Id", correlationId)
                                 .body(Map.of(
                                                 TIMESTAMP, Instant.now().toString(),
                                                 ERROR, "INVALID_STATE",
                                                 CODE, "INVALID_STATE",
                                                 STATUS, HttpStatus.CONFLICT.value(),
-                                                CORRELATION_ID, correlationId(request),
+                                                CORRELATION_ID, correlationId,
                                                 MESSAGE, ex.getMessage()));
         }
 
@@ -58,20 +60,22 @@ public class InvoiceExceptionHandler {
         @ExceptionHandler(IllegalStateException.class)
         public ResponseEntity<Map<String, Object>> handleIllegalState(
                         IllegalStateException ex, HttpServletRequest request) {
+                String correlationId = correlationId(request);
                 return ResponseEntity.status(HttpStatus.CONFLICT)
-                                .header("X-Correlation-Id", correlationId(request))
+                                .header("X-Correlation-Id", correlationId)
                                 .body(Map.of(
                                                 TIMESTAMP, Instant.now().toString(),
                                                 ERROR, "CONFLICT",
                                                 CODE, "CONFLICT",
                                                 STATUS, HttpStatus.CONFLICT.value(),
-                                                CORRELATION_ID, correlationId(request),
+                                                CORRELATION_ID, correlationId,
                                                 MESSAGE, ex.getMessage()));
         }
 
         @ExceptionHandler(IllegalArgumentException.class)
         public ResponseEntity<Map<String, Object>> handleIllegalArgument(
                         IllegalArgumentException ex, HttpServletRequest request) {
+                String correlationId = correlationId(request);
                 String msg = ex.getMessage() != null ? ex.getMessage() : "";
                 List<Map<String, Object>> fieldErrors = msg.toLowerCase().contains("approval code")
                                 ? List.of(Map.of("field", "managerApprovalCode", "message", msg))
@@ -81,11 +85,11 @@ public class InvoiceExceptionHandler {
                 body.put(ERROR, "VALIDATION_ERROR");
                 body.put(CODE, "VALIDATION_ERROR");
                 body.put(STATUS, HttpStatus.BAD_REQUEST.value());
-                body.put(CORRELATION_ID, correlationId(request));
+                body.put(CORRELATION_ID, correlationId);
                 body.put(MESSAGE, msg);
                 body.put("fieldErrors", fieldErrors);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                                .header("X-Correlation-Id", correlationId(request))
+                                .header("X-Correlation-Id", correlationId)
                                 .body(body);
         }
 
