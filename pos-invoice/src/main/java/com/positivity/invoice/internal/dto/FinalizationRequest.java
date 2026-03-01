@@ -5,7 +5,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Request payload for invoice finalization.
  *
- * <p>Role/permission level is derived from the authenticated principal in
+ * <p>
+ * Role/permission level is derived from the authenticated principal in
  * {@code SecurityContext} — never supplied by the caller (ADR-0018).
  */
 public class FinalizationRequest {

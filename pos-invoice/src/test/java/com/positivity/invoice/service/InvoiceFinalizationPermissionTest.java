@@ -68,7 +68,9 @@ class InvoiceFinalizationPermissionTest {
         SecurityContextHolder.clearContext();
     }
 
-    /** Sets up a SHOP_MANAGER role in the security context for tests that need it. */
+    /**
+     * Sets up a SHOP_MANAGER role in the security context for tests that need it.
+     */
     private void withShopManagerContext() {
         var auth = new UsernamePasswordAuthenticationToken(
                 "manager-001", null,
@@ -88,7 +90,8 @@ class InvoiceFinalizationPermissionTest {
     @Test
     void serviceAdvisor_canFinalize_invoiceBelow500() {
         UUID invoiceId = UUID.randomUUID();
-        // SERVICE_ADVISOR (no SecurityContext = default, not SHOP_MANAGER); $499.99 within cap
+        // SERVICE_ADVISOR (no SecurityContext = default, not SHOP_MANAGER); $499.99
+        // within cap
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("499.99"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -123,7 +126,8 @@ class InvoiceFinalizationPermissionTest {
     @Test
     void serviceAdvisor_canFinalize_invoiceAbove500_withManagerApprovalCode() {
         UUID invoiceId = UUID.randomUUID();
-        // SERVICE_ADVISOR with approval code; invoice $750 > cap → allowed (override audited)
+        // SERVICE_ADVISOR with approval code; invoice $750 > cap → allowed (override
+        // audited)
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("750.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -186,7 +190,8 @@ class InvoiceFinalizationPermissionTest {
     /**
      * Builds a {@link FinalizationRequest} with the given approval code.
      *
-     * <p>Role is derived from {@code SecurityContext} at call time (ADR-0018),
+     * <p>
+     * Role is derived from {@code SecurityContext} at call time (ADR-0018),
      * not from this request.
      *
      * @param approvalCode manager approval code; {@code null} when not provided

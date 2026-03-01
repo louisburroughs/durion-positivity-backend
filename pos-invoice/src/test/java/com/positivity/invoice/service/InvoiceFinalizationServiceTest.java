@@ -68,7 +68,9 @@ class InvoiceFinalizationServiceTest {
         SecurityContextHolder.clearContext();
     }
 
-    /** Sets up a SHOP_MANAGER role in the security context for tests that need it. */
+    /**
+     * Sets up a SHOP_MANAGER role in the security context for tests that need it.
+     */
     private void withShopManagerContext() {
         var auth = new UsernamePasswordAuthenticationToken(
                 "manager-001", null,
@@ -98,12 +100,29 @@ class InvoiceFinalizationServiceTest {
     }
 
     /**
+     * AC2: An invoice not found in the repository is treated as ineligible.
+     * The reason message must reference workorder data being incomplete.
+     */
+    @Test
+    void checkEligibility_returnsIneligible_whenInvoiceNotFound() {
+        UUID invoiceId = UUID.randomUUID();
+
+        FinalizationEligibilityResult result = service.checkEligibility(invoiceId);
+
+        assertThat(result.eligible()).isFalse();
+        assertThat(result.reason()).isNotBlank();
+    }
+
+    /**
      * AC2: A non-DRAFT invoice (e.g. FINALIZED) must be blocked from
-     * re-finalization.
+     * re-finalization. The reason must reference the current status.
      */
     @Test
     void checkEligibility_returnsIneligible_whenInvoiceNotInDraftStatus() {
         UUID invoiceId = UUID.randomUUID();
+        Invoice finalized = new Invoice();
+        finalized.setStatus(InvoiceStatus.FINALIZED);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(finalized));
 
         FinalizationEligibilityResult result = service.checkEligibility(invoiceId);
 
@@ -199,7 +218,8 @@ class InvoiceFinalizationServiceTest {
     @Test
     void finalize_throws_whenPermissionLevelInsufficientForAmount() {
         UUID invoiceId = UUID.randomUUID();
-        // M5: stub invoice with total > $500 so the permission check exercises SERVICE_ADVISOR path
+        // M5: stub invoice with total > $500 so the permission check exercises
+        // SERVICE_ADVISOR path
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("500.01"))));
         // No approval code, no SHOP_MANAGER role in context → rejected
@@ -267,6 +287,23 @@ class InvoiceFinalizationServiceTest {
         InvoiceDetailsResponse response = service.revert(invoiceId, "MGR-APPROVAL-001", "Customer dispute");
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
+        // ADR-0018: actor from SecurityContext; no auth in test → defaults to "system"
+        assertThat(response.getRevertedBy()).isEqualTo("system");
+    }
+
+    /**
+     * AC6: Revert must reject an invoice that is not in FINALIZED status.
+     * A DRAFT invoice, for example, should throw {@link InvalidInvoiceStateException}.
+     */
+    @Test
+    void revert_throws_whenInvoiceNotFinalized() {
+        UUID invoiceId = UUID.randomUUID();
+        Invoice draftInv = draftInvoice(UUID.randomUUID(), BigDecimal.ZERO);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInv));
+
+        assertThatThrownBy(() -> service.revert(invoiceId, "MGR-APPROVAL-001", "Incorrect state"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageMatching("(?i).*not in FINALIZED.*");
     }
 
     /**
@@ -309,9 +346,12 @@ class InvoiceFinalizationServiceTest {
     /**
      * Builds a {@link FinalizationRequest} for a SERVICE_ADVISOR actor.
      *
-     * <p>Role is derived from SecurityContext (no SecurityContext = SERVICE_ADVISOR constraints apply).
+     * <p>
+     * Role is derived from SecurityContext (no SecurityContext = SERVICE_ADVISOR
+     * constraints apply).
      *
-     * @param managerApprovalCode optional manager code; {@code null} means no approval supplied
+     * @param managerApprovalCode optional manager code; {@code null} means no
+     *                            approval supplied
      * @return configured request
      */
     private FinalizationRequest serviceAdvisorRequest(String managerApprovalCode) {
@@ -323,7 +363,9 @@ class InvoiceFinalizationServiceTest {
     /**
      * Builds a {@link FinalizationRequest} for a SHOP_MANAGER actor.
      *
-     * <p>Callers must set up the security context with ROLE_SHOP_MANAGER before invoking
+     * <p>
+     * Callers must set up the security context with ROLE_SHOP_MANAGER before
+     * invoking
      * {@code service.finalize()} to exercise the shop-manager code path.
      *
      * @return empty request (no fields needed for SHOP_MANAGER path)
