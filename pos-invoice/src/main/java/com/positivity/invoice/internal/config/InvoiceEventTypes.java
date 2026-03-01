@@ -50,11 +50,6 @@ public final class InvoiceEventTypes {
                         .apiVersion("1")
                         .build();
 
-        public static final EventTypeRegistration INVOICE_FINALIZE = EventTypeRegistration.approval("INVOICE_FINALIZE",
-                        "Finalize and issue invoice")
-                        .apiVersion("1")
-                        .build();
-
         // ==================== STORY #13 — FINALIZATION EVENTS ====================
 
         /** AC3/AC4: Manager approval requested before finalization */
@@ -102,7 +97,6 @@ public final class InvoiceEventTypes {
                                 INVOICE_CREATE,
                                 INVOICE_GET,
                                 INVOICE_ADJUSTMENT_APPLY,
-                                INVOICE_FINALIZE,
                                 INVOICE_FINALIZATION_REQUESTED,
                                 INVOICE_FINALIZED,
                                 INVOICE_POSTED_TO_GL,

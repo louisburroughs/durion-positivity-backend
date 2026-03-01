@@ -25,7 +25,4 @@ public interface InvoiceService {
 
     @NonNull
     InvoiceDetailsResponse applyAdjustment(@NonNull UUID invoiceId, @NonNull AdjustmentRequest request);
-
-    @NonNull
-    InvoiceDetailsResponse finalizeInvoice(@NonNull UUID invoiceId);
 }

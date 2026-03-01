@@ -157,8 +157,12 @@ class InvoiceFinalizationServiceTest {
     @Test
     void finalize_transitionsInvoiceFromDraftToFinalized_andEmitsEvent() {
         UUID invoiceId = UUID.randomUUID();
+        UUID workorderId = UUID.randomUUID();
+        Invoice draft = draftInvoice(workorderId, BigDecimal.ZERO);
+        draft.setId(invoiceId);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         FinalizationRequest request = shopManagerRequest();
-        // No repository stub → in-memory path; finalizedBy comes from SecurityContext
 
         InvoiceDetailsResponse response = service.finalize(invoiceId, request);
 

@@ -94,6 +94,9 @@ public class Invoice {
     @Column(name = "reversion_reason", length = 512, nullable = true)
     private String reversionReason;
 
+    @Column(name = "reverted_by", length = 64, nullable = true)
+    private String revertedBy;
+
     @Version
     @Column(name = "version", nullable = false)
     private Integer version = 0;
@@ -313,6 +316,15 @@ public class Invoice {
 
     public void setReversionReason(@Nullable String reversionReason) {
         this.reversionReason = reversionReason;
+    }
+
+    @Nullable
+    public String getRevertedBy() {
+        return revertedBy;
+    }
+
+    public void setRevertedBy(@Nullable String revertedBy) {
+        this.revertedBy = revertedBy;
     }
 
     @NonNull

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -26,6 +27,7 @@ public class InvoiceExceptionHandler {
         public ResponseEntity<Map<String, Object>> handleInvoiceNotFound(
                         InvoiceNotFoundException ex, HttpServletRequest request) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                .header("X-Correlation-Id", correlationId(request))
                                 .body(Map.of(
                                                 TIMESTAMP, Instant.now().toString(),
                                                 ERROR, "NOT_FOUND",
@@ -39,6 +41,7 @@ public class InvoiceExceptionHandler {
         public ResponseEntity<Map<String, Object>> handleInvalidInvoiceState(
                         InvalidInvoiceStateException ex, HttpServletRequest request) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .header("X-Correlation-Id", correlationId(request))
                                 .body(Map.of(
                                                 TIMESTAMP, Instant.now().toString(),
                                                 ERROR, "INVALID_STATE",
@@ -56,6 +59,7 @@ public class InvoiceExceptionHandler {
         public ResponseEntity<Map<String, Object>> handleIllegalState(
                         IllegalStateException ex, HttpServletRequest request) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .header("X-Correlation-Id", correlationId(request))
                                 .body(Map.of(
                                                 TIMESTAMP, Instant.now().toString(),
                                                 ERROR, "CONFLICT",
@@ -68,14 +72,21 @@ public class InvoiceExceptionHandler {
         @ExceptionHandler(IllegalArgumentException.class)
         public ResponseEntity<Map<String, Object>> handleIllegalArgument(
                         IllegalArgumentException ex, HttpServletRequest request) {
+                String msg = ex.getMessage() != null ? ex.getMessage() : "";
+                List<Map<String, Object>> fieldErrors = msg.toLowerCase().contains("approval code")
+                                ? List.of(Map.of("field", "managerApprovalCode", "message", msg))
+                                : List.of();
+                java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+                body.put(TIMESTAMP, Instant.now().toString());
+                body.put(ERROR, "VALIDATION_ERROR");
+                body.put(CODE, "VALIDATION_ERROR");
+                body.put(STATUS, HttpStatus.BAD_REQUEST.value());
+                body.put(CORRELATION_ID, correlationId(request));
+                body.put(MESSAGE, msg);
+                body.put("fieldErrors", fieldErrors);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                                .body(Map.of(
-                                                TIMESTAMP, Instant.now().toString(),
-                                                ERROR, "VALIDATION_ERROR",
-                                                CODE, "VALIDATION_ERROR",
-                                                STATUS, HttpStatus.BAD_REQUEST.value(),
-                                                CORRELATION_ID, correlationId(request),
-                                                MESSAGE, ex.getMessage()));
+                                .header("X-Correlation-Id", correlationId(request))
+                                .body(body);
         }
 
         private static String correlationId(HttpServletRequest request) {
