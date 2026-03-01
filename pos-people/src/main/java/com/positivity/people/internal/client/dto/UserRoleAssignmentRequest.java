@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 @Data
@@ -15,6 +16,7 @@ import java.util.UUID;
 public class UserRoleAssignmentRequest {
     private UUID userId;
     private String roleCode;
+    private Set<UUID> locationIds;
     private UUID locationId;
     private LocalDateTime startDate;
     private LocalDateTime endDate;

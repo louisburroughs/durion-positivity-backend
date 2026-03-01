@@ -17,7 +17,7 @@ public final class PeopleEventTypes {
 
         /**
          * All event type registrations for the people module.
-         * Total: 29 event types.
+         * Total: 30 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -98,6 +98,10 @@ public final class PeopleEventTypes {
                                                 "Create role assignment for a person").build(),
                                 EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_REVOKE",
                                                 "Revoke role assignment for a person").build(),
+
+                                // PeopleAvailabilityController - 1 event
+                                EventTypeRegistration.fastRead("PEOPLE_AVAILABILITY_LIST",
+                                                "List people availability with optional location/date filters").build(),
 
                                 // PeopleReportsController - 2 events
                                 EventTypeRegistration.search("REPORT_ATTENDANCE_VS_JOBTIME_GENERATED",
