@@ -300,7 +300,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
-                                .andExpect(status().isUnprocessableEntity());
+                                .andExpect(status().isUnprocessableContent());
         }
 
         @Test

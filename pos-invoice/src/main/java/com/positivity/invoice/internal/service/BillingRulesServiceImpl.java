@@ -62,11 +62,11 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         BillingRules billingRules;
         if (existing.isPresent()) {
             billingRules = existing.get();
-            log.info("Updating billing rules for partyId={}", billingRulesDTO.getPartyId());
+            log.info("Updating billing rules for partyId(mask)={}", maskForLog(billingRulesDTO.getPartyId()));
         } else {
             billingRules = new BillingRules();
             billingRules.setPartyId(billingRulesDTO.getPartyId());
-            log.info("Creating billing rules for partyId={}", billingRulesDTO.getPartyId());
+            log.info("Creating billing rules for partyId(mask)={}", maskForLog(billingRulesDTO.getPartyId()));
         }
 
         billingRules.setPurchaseOrderRequired(billingRulesDTO.isPurchaseOrderRequired());
@@ -85,11 +85,11 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         // Idempotent - check if exists first
         Optional<BillingRules> existing = repository.findByPartyId(partyId);
         if (existing.isPresent()) {
-            log.debug("Billing rules already exist for partyId={}, returning existing", partyId);
+            log.debug("Billing rules already exist for partyId(mask)={}, returning existing", maskForLog(partyId));
             return toDTO(existing.get());
         }
 
-        log.info("Creating default billing rules for new commercial account partyId={}", partyId);
+        log.info("Creating default billing rules for new commercial account partyId(mask)={}", maskForLog(partyId));
 
         BillingRules billingRules = new BillingRules();
         billingRules.setPartyId(partyId);
@@ -107,6 +107,21 @@ public class BillingRulesServiceImpl implements BillingRulesService {
     @NonNull
     public String getCurrentUserId() {
         return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 
     private BillingRulesDTO toDTO(@NonNull BillingRules entity) {
