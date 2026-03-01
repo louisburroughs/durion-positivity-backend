@@ -72,6 +72,17 @@ public class AssignmentServiceImpl implements AssignmentService {
                             + appointment.getStatus());
         }
 
+        List<AssignmentStatusEnum> activeStatuses = List.of(
+                AssignmentStatusEnum.CONFIRMED,
+                AssignmentStatusEnum.IN_PROGRESS);
+        assignmentRepository
+                .findByAppointmentIdAndStatusIn(request.getAppointmentId(), activeStatuses)
+                .ifPresent(existing -> {
+                    throw new IllegalStateException(
+                            "An active assignment already exists for appointment: "
+                                    + request.getAppointmentId());
+                });
+
         Instant now = Instant.now(clock);
 
         // Resolve all mechanics first — fail fast before any persistence
@@ -133,6 +144,11 @@ public class AssignmentServiceImpl implements AssignmentService {
 
     /** F-09: Enforce exactly one LEAD mechanic for multi-mechanic assignments. */
     private static void validateLeadConstraint(List<MechanicAssignmentItem> mechanics) {
+        if (mechanics.size() > 1 && mechanics.stream().anyMatch(m -> m.getRole() == null)) {
+            throw new IllegalArgumentException(
+                    "All mechanics in a multi-mechanic assignment must have an explicit role");
+        }
+
         long leadCount = mechanics.stream()
                 .filter(m -> m.getRole() == MechanicRole.LEAD)
                 .count();

@@ -500,7 +500,7 @@ paths:
         required: true
       responses:
         "200":
-          description: Link already exists and is returned
+          description: Person-user link already exists
           content:
             '*/*':
               schema:
@@ -518,7 +518,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "201":
-          description: Link created successfully
+          description: Person-user link created successfully
           content:
             '*/*':
               schema:
@@ -544,7 +544,7 @@ paths:
         required: true
       responses:
         "200":
-          description: Link already exists and is returned
+          description: Person-user link already exists
           content:
             '*/*':
               schema:
@@ -562,7 +562,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "201":
-          description: Link created successfully
+          description: Person-user link created successfully
           content:
             '*/*':
               schema:
