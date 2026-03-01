@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
 
         Optional<Appointment> findByAppointmentIdAndStatus(UUID appointmentId, AppointmentStatus status);
+        Optional<Appointment> findByIdempotencyKey(String idempotencyKey);
 
         @Query("""
                         SELECT appointment

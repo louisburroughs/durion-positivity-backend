@@ -91,14 +91,53 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final SourceEligibilityService sourceEligibilityService;
     private final Clock clock;
 
+    /**
+     * Creates an appointment from an Estimate or Workorder.
+     * Performs eligibility checks and conflict detection.
+     * 
+     * Per DECISION-SHOPMGMT-014: supports idempotency via idempotencyKey.
+     * Per DECISION-SHOPMGMT-011: correlationId propagates to downstream services
+     * and error responses.
+     * 
+     * @param request        The appointment create request
+     * @param idempotencyKey Optional idempotency key (Idempotency-Key header)
+     * @param correlationId  Optional request correlation ID (X-Correlation-Id
+     *                       header)
+     * @return AppointmentResponse with appointmentId and facility timezone
+     * @throws com.positivity.shopmanager.internal.exception.SourceNotEligibleException  on
+     *                                                                                   eligibility
+     *                                                                                   failure
+     *                                                                                   (422)
+     * @throws com.positivity.shopmanager.internal.exception.SchedulingConflictException on
+     *                                                                                   conflict
+     *                                                                                   detection
+     *                                                                                   (409)
+     */
     @Override
     @Transactional
-    public AppointmentResponse createAppointment(@NonNull AppointmentCreateRequest request) {
+    public AppointmentResponse createAppointment(
+            @NonNull AppointmentCreateRequest request,
+            String idempotencyKey,
+            UUID correlationId) {
+        UUID normalizedCorrelationId = normalizeCorrelationId(correlationId);
+        String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+        log.info("Create appointment requested. locationId={}, resourceId={}, correlationId={}, idempotencyKey={}",
+                request.getLocationId(), request.getResourceId(), normalizedCorrelationId, normalizedIdempotencyKey);
+
         validateTimeRange(request.getStartAt(), request.getEndAt());
         if (request.getServiceRequestIds() == null || request.getServiceRequestIds().isEmpty()) {
             throw new AppointmentValidationException("serviceRequestIds must contain at least one entry");
         }
         validateCrmIdentifiers(request.getCrmCustomerId(), request.getCrmVehicleId());
+
+        if (normalizedIdempotencyKey != null) {
+            Appointment existing = appointmentRepository.findByIdempotencyKey(normalizedIdempotencyKey).orElse(null);
+            if (existing != null) {
+                ensureIdempotentRequestMatches(existing, request);
+                return toResponse(existing);
+            }
+        }
+
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         Map<String, Object> customerSnapshot;
         Map<String, Object> vehicleSnapshot;
@@ -141,6 +180,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .endAt(request.getEndAt())
                 .createdBy(actor)
                 .workorderLinkRef(request.getWorkorderLinkRef())
+                .idempotencyKey(normalizedIdempotencyKey)
                 .build();
 
         Appointment saved = appointmentRepository.save(appointment);
@@ -157,32 +197,15 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     /**
-     * Creates an appointment from an Estimate or workorder.
-     * Performs eligibility checks and conflict detection.
-     * 
-     * Per DECISION-SHOPMGMT-014: supports idempotency via idempotencyKey.
+     * Reschedules an existing appointment to a new time slot.
      * Per DECISION-SHOPMGMT-011: correlationId propagates to downstream services
-     * and error responses.
+     * and
+     * error responses.
      * 
-     * @param request        The appointment create request
-     * @param idempotencyKey Optional idempotency key (Idempotency-Key header)
-     * @param correlationId  Optional request correlation ID (X-Correlation-Id
-     *                       header)
-     * @return AppointmentResponse with appointmentId and facility timezone
-     * @throws com.positivity.shopmanager.internal.exception.SourceNotEligibleException  on
-     *                                                                                   eligibility
-     *                                                                                   failure
-     *                                                                                   (422)
-     * @throws com.positivity.shopmanager.internal.exception.SchedulingConflictException on
-     *                                                                                   conflict
-     *                                                                                   detection
-     *                                                                                   (409)
+     * @param appointmentId The appointment identifier
+     * @param request       The reschedule request with newStartAt and newEndAt
+     * @return AppointmentResponse with updated appointment details
      */
-    @Override
-    public AppointmentResponse create(AppointmentCreateRequest request, String idempotencyKey, UUID correlationId) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
     @Override
     @Transactional
     public AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId,
@@ -233,6 +256,15 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return toResponse(saved);
     }
 
+    /**
+     * Cancels an existing appointment with a specified reason and optional notes.
+     * Per DECISION-SHOPMGMT-011: correlationId propagates to downstream services
+     * and error responses.
+     * 
+     * @param appointmentId The appointment identifier
+     * @param request       The cancel request with reason and optional notes
+     * @return AppointmentResponse with updated appointment details
+     */
     @Override
     @Transactional
     public AppointmentResponse cancelAppointment(@NonNull UUID appointmentId,
@@ -452,6 +484,44 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return UUID.randomUUID();
     }
 
+    private String normalizeIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return null;
+        }
+        String normalized = idempotencyKey.trim();
+        if (normalized.isEmpty()) {
+            throw new AppointmentValidationException("Idempotency-Key must not be blank");
+        }
+        if (normalized.length() > 128) {
+            throw new AppointmentValidationException("Idempotency-Key must be 128 characters or fewer");
+        }
+        return normalized;
+    }
+
+    private void ensureIdempotentRequestMatches(Appointment existing, AppointmentCreateRequest request) {
+        List<UUID> existingServiceRequestIds = normalizeServiceRequestIds(
+                loadServiceRequestIds(existing.getAppointmentId()));
+        List<UUID> requestedServiceRequestIds = normalizeServiceRequestIds(request.getServiceRequestIds());
+        boolean matches = Objects.equals(existing.getLocationId(), request.getLocationId())
+                && Objects.equals(existing.getResourceId(), request.getResourceId())
+                && Objects.equals(existing.getCrmCustomerId(), request.getCrmCustomerId())
+                && Objects.equals(existing.getCrmVehicleId(), request.getCrmVehicleId())
+                && Objects.equals(existing.getStartAt(), request.getStartAt())
+                && Objects.equals(existing.getEndAt(), request.getEndAt())
+                && Objects.equals(existing.getWorkorderLinkRef(), request.getWorkorderLinkRef())
+                && Objects.equals(existingServiceRequestIds, requestedServiceRequestIds);
+        if (!matches) {
+            throw new AppointmentValidationException("Idempotency-Key was already used with a different request");
+        }
+    }
+
+    private List<UUID> normalizeServiceRequestIds(List<UUID> serviceRequestIds) {
+        if (serviceRequestIds == null || serviceRequestIds.isEmpty()) {
+            return List.of();
+        }
+        return serviceRequestIds.stream().sorted().distinct().toList();
+    }
+
     private String validateAndResolveSourceStatus(String sourceType, String sourceId, UUID facilityId) {
         String facilityRef = facilityId.toString();
         return switch (sourceType) {
@@ -566,18 +636,15 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             Map<String, List<ResourceLaneKey>> technicianLanesByResourceId,
             Map<ResourceLaneKey, String> resourceNames) {
         for (var technician : shop.getTechnicians()) {
-            if (technician == null || technician.getId() == null) {
-                continue;
-            }
-
-            List<ResourceLaneKey> technicianLanes = technicianLanesByResourceId.get(technician.getId().toString());
-            if (technicianLanes == null) {
-                continue;
-            }
-
-            String technicianName = resolveTechnicianDisplayName(technician.getId().toString(), technician.getPersonId());
-            for (ResourceLaneKey laneKey : technicianLanes) {
-                resourceNames.put(laneKey, technicianName);
+            if (technician != null && technician.getId() != null) {
+                List<ResourceLaneKey> technicianLanes = technicianLanesByResourceId.get(technician.getId().toString());
+                if (technicianLanes != null) {
+                    String technicianName = resolveTechnicianDisplayName(technician.getId().toString(),
+                            technician.getPersonId());
+                    for (ResourceLaneKey laneKey : technicianLanes) {
+                        resourceNames.put(laneKey, technicianName);
+                    }
+                }
             }
         }
     }

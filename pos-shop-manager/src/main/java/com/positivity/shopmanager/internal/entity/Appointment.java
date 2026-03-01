@@ -84,6 +84,9 @@ public class Appointment {
     @Column(name = "workorder_link_ref", length = 255)
     private String workorderLinkRef;
 
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "cancellation_reason", length = 128)
     private CancellationReasonCode cancellationReasonCode;

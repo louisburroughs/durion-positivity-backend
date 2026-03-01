@@ -46,9 +46,11 @@ public class AppointmentsController {
     @PostMapping("/appointments")
     @PreAuthorize("hasAnyAuthority('appointments:create','shop:schedule:edit')")
     public ResponseEntity<AppointmentResponse> createAppointment(
-            @Parameter(description = "Appointment creation request body") @Valid @RequestBody AppointmentCreateRequest request) {
-        log.info("Create appointment requested.");
-        AppointmentResponse response = appointmentsService.createAppointment(request);
+            @Parameter(description = "Appointment creation request body") @Valid @RequestBody AppointmentCreateRequest request,
+            @Parameter(description = "Idempotency key for safe retries") @org.springframework.web.bind.annotation.RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "Correlation ID for request tracing") @org.springframework.web.bind.annotation.RequestHeader(value = "X-Correlation-Id", required = false) UUID correlationId) {
+        log.info("Create appointment requested. X-Correlation-Id={}, Idempotency-Key={}", correlationId, idempotencyKey);
+        AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, correlationId);
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{appointmentId}")
                 .buildAndExpand(response.getAppointmentId())
