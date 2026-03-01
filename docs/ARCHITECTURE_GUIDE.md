@@ -40,11 +40,13 @@ The backend implements a **dynamic port strategy** for development flexibility a
 ### Dynamic Ports (Ephemeral)
 
 All downstream services use `server.port: 0`:
+
 - pos-catalog, pos-customer, pos-inventory, pos-order, pos-accounting
 - pos-workorder, pos-shop-manager, pos-location, pos-people
 - pos-vehicle-*, pos-price, pos-invoice, pos-inquiry, pos-event-receiver
 
 **How it works:**
+
 1. Service starts with `server.port: 0`
 2. OS assigns available ephemeral port
 3. Service registers with Eureka using actual assigned port
@@ -227,7 +229,7 @@ public class LoadBalancedClientConfig {
 ### Service Name Registry
 
 | Module | Eureka Service Name | Gateway Path |
-|--------|---------------------|--------------|
+| -------- | --------------------- | -------------- |
 | pos-accounting | `accounting` | `/accounting/**` |
 | pos-catalog | `catalog` | `/catalog/**` |
 | pos-customer | `customer` | `/customer/**` |
@@ -245,7 +247,7 @@ public class LoadBalancedClientConfig {
 ### Stack Overview
 
 | Component | Image | Port | Purpose |
-|-----------|-------|------|---------|
+| ----------- | ------- | ------ | --------- |
 | Jaeger | jaegertracing/all-in-one:1.54 | 16686 | Distributed tracing UI |
 | Prometheus | prom/prometheus:v2.49.1 | 9090 | Metrics collection |
 | Grafana | grafana/grafana:10.3.3 | 3000 | Visualization |
@@ -358,7 +360,7 @@ if (!response.ok) {
 ### Connection Details
 
 | Property | Value |
-|----------|-------|
+| ---------- | ------- |
 | Host | `postgres` (Docker) / `localhost` (host) |
 | Port | 5432 |
 | Username | `${POSTGRES_USER}` |
