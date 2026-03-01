@@ -1,6 +1,6 @@
 package com.positivity.poseventreceiver.internal.controller;
 
-// NOTE: Do NOT import EmitEvent here - see warning in class below
+// WARN: Do NOT import EmitEvent here - see warning in class below
 import com.positivity.poseventreceiver.internal.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 

@@ -25,6 +25,8 @@ import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.enums.TaxReferenceType;
+import com.positivity.workorder.internal.client.DocumentClient;
+import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -40,6 +42,7 @@ import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.EstimateSnapshot;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.event.EstimateCreatedEvent;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -67,22 +70,18 @@ public class EstimateServiceImpl implements EstimateService {
         private final ApplicationEventPublisher eventPublisher;
         private final BillingRulesClientService billingRulesClientService;
         private final TaxClient taxClient;
+        private final PeopleLocationClient peopleLocationClient;
+        private final DocumentClient documentClient;
         private final ObjectMapper objectMapper;
 
         // Configuration defaults
         private static final String DEFAULT_CURRENCY = "USD";
         private static final String DEFAULT_TAX_REGION_ID_PROPERTY = "workorder.estimate.default-tax-region-id";
+        private static final String FALLBACK_LOCATION_ID_PROPERTY = "workorder.estimate.fallback-location-id";
         private static final UUID DEFAULT_TAX_REGION_ID = UUID.fromString(
                         System.getProperty(DEFAULT_TAX_REGION_ID_PROPERTY, "00000000-0000-0000-0000-000000000001"));
-        private static final UUID DEFAULT_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001"); // NOTE:
-                                                                                                                 // Extract
-                                                                                                                 // from
-                                                                                                                 // JWT
-                                                                                                                 // claims
-                                                                                                                 // via
-                                                                                                                 // pos-security-service
-                                                                                                                 // (locationId
-                                                                                                                 // claim)
+        private static final UUID FALLBACK_LOCATION_ID = UUID.fromString(
+                        System.getProperty(FALLBACK_LOCATION_ID_PROPERTY, "00000000-0000-0000-0000-000000000001"));
 
         // Tax category constants
         private static final String TAX_CATEGORY_GOODS = "GOODS";
@@ -197,7 +196,8 @@ public class EstimateServiceImpl implements EstimateService {
                 // Apply defaults
                 UUID locationId = request.getLocationId() != null
                                 ? request.getLocationId()
-                                : DEFAULT_LOCATION_ID;
+                                : peopleLocationClient.resolveCurrentUserPrimaryLocation()
+                                                .orElse(FALLBACK_LOCATION_ID);
                 String currencyUomId = request.getCurrencyUomId() != null
                                 ? request.getCurrencyUomId()
                                 : DEFAULT_CURRENCY;
@@ -230,7 +230,15 @@ public class EstimateServiceImpl implements EstimateService {
                 log.info("Estimate created successfully: estimateId={}, estimateNumber={}",
                                 saved.getId(), saved.getEstimateNumber());
 
-                // NOTE: Emit EstimateCreated audit event
+                eventPublisher.publishEvent(EstimateCreatedEvent.builder()
+                                .estimateId(saved.getId())
+                                .estimateNumber(saved.getEstimateNumber())
+                                .customerId(saved.getCustomerId())
+                                .vehicleId(saved.getVehicleId())
+                                .locationId(saved.getLocationId())
+                                .createdBy(username)
+                                .timestamp(Instant.now())
+                                .build());
 
                 return EstimateResponse.fromEntity(saved);
         }
@@ -1047,10 +1055,119 @@ public class EstimateServiceImpl implements EstimateService {
 
                 log.info("Retrieved summary for estimate {}: {} items", estimateId, items.size());
 
-                // NOTE: PDF generation not implemented - requires document service integration
-                // (issue #169)
-
                 return EstimateSummaryResponse.fromEstimateAndItems(estimate, items);
+        }
+
+        /**
+         * Generate a PDF document for an estimate via pos-documents service.
+         * Builds a Markdown representation of the estimate including header,
+         * line items grouped by type, and financial totals, then renders it
+         * as a PDF through the document service.
+         *
+         * @param estimateId estimate to generate PDF for
+         * @return PDF content as byte array
+         */
+        @Override
+        @NonNull
+        public byte[] generateEstimatePdf(@NonNull UUID estimateId) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+
+                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+
+                String markdown = buildEstimateMarkdown(estimate, items);
+
+                log.info("Generating PDF for estimate {}, markdown length={}", estimateId, markdown.length());
+
+                return documentClient.renderPdf(markdown);
+        }
+
+        /**
+         * Build a Markdown document from estimate data and line items.
+         * Groups items by type (parts vs labor) and includes financial summary.
+         */
+        private String buildEstimateMarkdown(@NonNull Estimate estimate, @NonNull List<EstimateItem> items) {
+                var sb = new StringBuilder();
+
+                // Header
+                sb.append("# Estimate ").append(estimate.getEstimateNumber()).append("\n\n");
+                sb.append("**Status:** ").append(estimate.getStatus()).append("  \n");
+                sb.append("**Date:** ").append(estimate.getCreatedAt()).append("  \n");
+                sb.append("**Customer ID:** ").append(estimate.getCustomerId()).append("  \n");
+                sb.append("**Vehicle ID:** ").append(estimate.getVehicleId()).append("  \n");
+                sb.append("**Location ID:** ").append(estimate.getLocationId()).append("  \n");
+
+                if (estimate.getExpiresAt() != null) {
+                        sb.append("**Expires:** ").append(estimate.getExpiresAt()).append("  \n");
+                }
+                sb.append("\n---\n\n");
+
+                // Partition items by type
+                List<EstimateItem> partItems = items.stream()
+                                .filter(i -> i.getItemType() == EstimateItemType.PART)
+                                .toList();
+                List<EstimateItem> laborItems = items.stream()
+                                .filter(i -> i.getItemType() == EstimateItemType.LABOR)
+                                .toList();
+
+                // Parts table
+                if (!partItems.isEmpty()) {
+                        sb.append("## Parts\n\n");
+                        sb.append("| Description | Qty | Unit Price | Line Total |\n");
+                        sb.append("|-------------|-----|------------|------------|\n");
+                        for (EstimateItem item : partItems) {
+                                appendItemRow(sb, item);
+                        }
+                        sb.append("\n");
+                }
+
+                // Labor table
+                if (!laborItems.isEmpty()) {
+                        sb.append("## Labor\n\n");
+                        sb.append("| Description | Qty | Unit Price | Line Total |\n");
+                        sb.append("|-------------|-----|------------|------------|\n");
+                        for (EstimateItem item : laborItems) {
+                                appendItemRow(sb, item);
+                        }
+                        sb.append("\n");
+                }
+
+                // Financial summary
+                sb.append("---\n\n");
+                sb.append("## Totals\n\n");
+                sb.append("| | Amount |\n");
+                sb.append("|---|--------|\n");
+                sb.append("| **Subtotal** | ").append(formatAmount(estimate.getSubtotal())).append(" |\n");
+                sb.append("| **Tax** | ").append(formatAmount(estimate.getTaxAmount())).append(" |\n");
+                sb.append("| **Total** | ").append(formatAmount(estimate.getTotal())).append(" |\n");
+
+                if (estimate.getCurrencyUomId() != null) {
+                        sb.append("\n*Currency: ").append(estimate.getCurrencyUomId()).append("*\n");
+                }
+
+                return sb.toString();
+        }
+
+        /**
+         * Append a single line item row to the Markdown table.
+         */
+        private void appendItemRow(@NonNull StringBuilder sb, @NonNull EstimateItem item) {
+                BigDecimal qty = item.getQuantity() != null ? item.getQuantity() : BigDecimal.ONE;
+                BigDecimal price = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
+                BigDecimal lineTotal = qty.multiply(price).setScale(2, java.math.RoundingMode.HALF_UP);
+
+                sb.append("| ").append(item.getDescription() != null ? item.getDescription() : "—")
+                                .append(" | ").append(qty)
+                                .append(" | ").append(formatAmount(price))
+                                .append(" | ").append(formatAmount(lineTotal))
+                                .append(" |\n");
+        }
+
+        /**
+         * Format a BigDecimal amount for display, with null handling.
+         */
+        private String formatAmount(BigDecimal amount) {
+                return amount != null ? amount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() : "0.00";
         }
 
         /**

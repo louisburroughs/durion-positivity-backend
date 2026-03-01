@@ -215,6 +215,16 @@ public interface EstimateService {
                         String notes);
 
         /**
+         * Generate a PDF document for an estimate.
+         * Renders estimate details and line items as a PDF via pos-documents service.
+         *
+         * @param estimateId estimate to generate PDF for
+         * @return PDF content as byte array
+         */
+        @NonNull
+        byte[] generateEstimatePdf(@NonNull UUID estimateId);
+
+        /**
          * Find and expire estimates in PENDING_APPROVAL state that have exceeded their
          * approval window.
          * CAP:003 Issue #204 - Handle Approval Expiration

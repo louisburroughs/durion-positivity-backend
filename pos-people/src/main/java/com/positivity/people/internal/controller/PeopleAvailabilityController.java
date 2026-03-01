@@ -21,6 +21,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import com.positivity.people.internal.dto.PrimaryLocationResponse;
+
 @Slf4j
 @Tag(name = "People Availability API", description = "Operations for querying people availability")
 @RestController
@@ -40,5 +42,17 @@ public class PeopleAvailabilityController {
             @Parameter(description = "Filter by date (ISO format: yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         log.info("Fetching people availability for locationId={}, date={}", locationId, date);
         return ResponseEntity.ok(peopleAvailabilityService.getPeopleAvailability(locationId, date));
+    }
+
+    @Operation(summary = "Get current user's primary location", description = "Resolve the authenticated user's primary active location from their staffing assignments.")
+    @ApiResponse(responseCode = "200", description = "Primary location resolved successfully.")
+    @ApiResponse(responseCode = "404", description = "No active location assignment found for current user.")
+    @GetMapping("/me/primary-location")
+    @EmitEvent(id = "PEOPLE_PRIMARY_LOCATION_GET", apiVersion = "1")
+    @PreAuthorize("hasAuthority('people:availability:view')")
+    public ResponseEntity<PrimaryLocationResponse> getCurrentUserPrimaryLocation() {
+        UUID locationId = peopleAvailabilityService.resolveCurrentUserPrimaryLocationId();
+        log.info("Resolved primary location {} for current user", locationId);
+        return ResponseEntity.ok(PrimaryLocationResponse.builder().locationId(locationId).build());
     }
 }

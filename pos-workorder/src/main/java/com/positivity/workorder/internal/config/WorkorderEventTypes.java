@@ -315,6 +315,13 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** Generate PDF document for an estimate */
+        public static final EventTypeRegistration ESTIMATE_PDF_GENERATE = EventTypeRegistration
+                        .search("ESTIMATE_PDF_GENERATE",
+                                        "Generate PDF document for estimate via pos-documents service")
+                        .apiVersion("1")
+                        .build();
+
         /** Create a historical snapshot of an estimate */
         public static final EventTypeRegistration ESTIMATE_SNAPSHOT_CREATE = EventTypeRegistration
                         .write("ESTIMATE_SNAPSHOT_CREATE",
@@ -428,6 +435,7 @@ public final class WorkorderEventTypes {
                         ESTIMATE_CALCULATE,
                         // Estimate summary (CAP:002)
                         ESTIMATE_SUMMARY_VIEW,
+                        ESTIMATE_PDF_GENERATE,
                         ESTIMATE_SNAPSHOT_CREATE,
                         // Parts usage events (CAP:005 Story #158)
                         WORKORDER_PART_ISSUE,
