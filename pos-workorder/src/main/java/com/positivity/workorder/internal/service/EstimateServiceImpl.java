@@ -127,8 +127,39 @@ public class EstimateServiceImpl implements EstimateService {
                         @Nullable UUID customerId,
                         @Nullable UUID vehicleId,
                         @NonNull Pageable pageable) {
-                throw new UnsupportedOperationException(
-                                "EstimateServiceImpl.searchEstimates: not yet implemented (Story #15)");
+                Page<Estimate> estimates;
+
+                if (customerId != null && vehicleId != null) {
+                        estimates = estimateRepository.findByCustomerIdAndVehicleId(customerId, vehicleId, pageable);
+                } else if (customerId != null) {
+                        estimates = estimateRepository.findByCustomerId(customerId, pageable);
+                } else if (vehicleId != null) {
+                        estimates = estimateRepository.findByVehicleId(vehicleId, pageable);
+                } else {
+                        estimates = estimateRepository.findAll(pageable);
+                }
+
+                return estimates.map(this::toEstimateSummaryResponse);
+        }
+
+        @NonNull
+        private EstimateSummaryResponse toEstimateSummaryResponse(@NonNull Estimate estimate) {
+                return EstimateSummaryResponse.builder()
+                                .id(estimate.getId())
+                                .estimateNumber(estimate.getEstimateNumber())
+                                .status(estimate.getStatus())
+                                .customerId(estimate.getCustomerId())
+                                .vehicleId(estimate.getVehicleId())
+                                .locationId(estimate.getLocationId() != null ? estimate.getLocationId().toString() : null)
+                                .createdAt(estimate.getCreatedAt())
+                                .expiresAt(estimate.getExpiresAt())
+                                .subtotal(estimate.getSubtotal())
+                                .taxAmount(estimate.getTaxAmount())
+                                .total(estimate.getTotal())
+                                .currencyUomId(estimate.getCurrencyUomId())
+                                .partItems(List.of())
+                                .laborItems(List.of())
+                                .build();
         }
 
         /**
