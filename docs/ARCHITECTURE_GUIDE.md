@@ -32,7 +32,7 @@ The backend implements a **dynamic port strategy** for development flexibility a
 ### Fixed Ports
 
 | Component | Port | Environment | Notes |
-|----------- | ------ | ------------- | -------|
+| ----------- | ------ | ------------- | ------- |
 | API Gateway | 8080 | All | Single external entry point |
 | Eureka Server | 8761 | Dev/local | Service registry |
 | Management (Actuator) | Internal-only | Prod | Health, metrics, prometheus |
@@ -229,7 +229,7 @@ public class LoadBalancedClientConfig {
 ### Service Name Registry
 
 | Module | Eureka Service Name | Gateway Path |
-|-------- | --------------------- | --------------|
+| -------- | --------------------- | -------------- |
 | pos-accounting | `accounting` | `/accounting/**` |
 | pos-catalog | `catalog` | `/catalog/**` |
 | pos-customer | `customer` | `/customer/**` |
@@ -247,7 +247,7 @@ public class LoadBalancedClientConfig {
 ### Stack Overview
 
 | Component | Image | Port | Purpose |
-|----------- | ------- | ------ | ---------|
+| ----------- | ------- | ------ | --------- |
 | Jaeger | jaegertracing/all-in-one:1.54 | 16686 | Distributed tracing UI |
 | Prometheus | prom/prometheus:v2.49.1 | 9090 | Metrics collection |
 | Grafana | grafana/grafana:10.3.3 | 3000 | Visualization |
@@ -360,7 +360,7 @@ if (!response.ok) {
 ### Connection Details
 
 | Property | Value |
-|---------- | -------|
+| ---------- | ------- |
 | Host | `postgres` (Docker) / `localhost` (host) |
 | Port | 5432 |
 | Username | `${POSTGRES_USER}` |
