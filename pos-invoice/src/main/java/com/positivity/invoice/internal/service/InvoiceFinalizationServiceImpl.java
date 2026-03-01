@@ -2,8 +2,10 @@ package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
+import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
+import com.positivity.invoice.internal.dto.InvoiceItemResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -277,6 +280,32 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         response.setRevertedAt(invoice.getRevertedAt());
         response.setReversionReason(invoice.getReversionReason());
         response.setRevertedBy(invoice.getRevertedBy());
+        List<InvoiceItemResponse> itemResponses = invoice.getItems().stream()
+                .map(item -> {
+                    InvoiceItemResponse ir = new InvoiceItemResponse();
+                    ir.setId(item.getId());
+                    ir.setDescription(item.getDescription());
+                    ir.setQuantity(item.getQuantity());
+                    ir.setUnitPrice(item.getUnitPrice());
+                    ir.setAmount(item.getLineTotal());
+                    ir.setWorkorderItemId(item.getWorkorderItemId());
+                    return ir;
+                })
+                .toList();
+        response.setItems(itemResponses);
+        List<InvoiceAdjustmentResponse> adjustmentResponses = invoice.getAdjustmentEntries().stream()
+                .map(adj -> {
+                    InvoiceAdjustmentResponse ar = new InvoiceAdjustmentResponse();
+                    ar.setId(adj.getId());
+                    ar.setType(adj.getType());
+                    ar.setAmount(adj.getAmount());
+                    ar.setReason(adj.getReason());
+                    ar.setAuthorizedBy(adj.getAuthorizedBy());
+                    ar.setCreatedAt(adj.getCreatedAt());
+                    return ar;
+                })
+                .toList();
+        response.setAdjustmentEntries(adjustmentResponses);
         return response;
     }
 }
