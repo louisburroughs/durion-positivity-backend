@@ -299,11 +299,6 @@ class WipServiceImplTest {
      * AC7: requesting a non-existent workorder must throw
      * {@link IllegalArgumentException} or {@link NoSuchElementException} — not
      * return {@code null} silently.
-     *
-     * <p>
-     * In RED the stub throws {@link UnsupportedOperationException}, which
-     * propagates and fails the test. In GREEN the real impl throws the expected
-     * typed exception, the catch block fires and the test passes.
      */
     @Test
     @DisplayName("getWipDetail: unknown workorder ID throws IllegalArgumentException or NoSuchElementException")
@@ -322,9 +317,9 @@ class WipServiceImplTest {
                     .as("getWipDetail must not return a non-null result for an unknown workorder ID")
                     .isNull();
         } catch (IllegalArgumentException | NoSuchElementException expected) {
-            // Correct behaviour in GREEN — the real impl threw the right exception.
+            // Correct behaviour: the impl threw the expected typed exception.
         }
-        // UnsupportedOperationException (RED stub) propagates uncaught → test FAILS
+        // If UnsupportedOperationException propagates uncaught here, the impl is not yet complete.
     }
 
     // -------------------------------------------------------------------------
