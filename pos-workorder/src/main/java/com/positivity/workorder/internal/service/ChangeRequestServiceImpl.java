@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import tools.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.entity.*;
 import com.positivity.workorder.internal.entity.ChangeRequest.ChangeRequestStatus;
@@ -11,15 +12,20 @@ import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.security.common.SecurityContextHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.web.client.RestClient;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.zip.CRC32;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +37,11 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     private final WorkorderPartRepository workOrderPartRepository;
     private final ApprovalRecordRepository approvalRecordRepository;
     private final IdempotencyService idempotencyService;
+    private final RestClient documentServiceRestClient;
+    private final ObjectMapper objectMapper;
+
+    @Value("${pos.documents.supplemental-estimate-template:DEFAULT_STANDARD_TEMPLATE}")
+    private String supplementalEstimateTemplateId;
 
     /**
      * Create a new change request with associated work order items.
@@ -96,9 +107,11 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             }
         }
 
-        // TODO: Generate supplemental PDF estimate
-        // changeRequest.setSupplementalEstimatePdfId(generateSupplementalEstimate(changeRequest));
-        // changeRequestRepository.save(changeRequest);
+        Long supplementalEstimatePdfId = generateSupplementalEstimate(changeRequest, dto);
+        if (supplementalEstimatePdfId != null) {
+            changeRequest.setSupplementalEstimatePdfId(supplementalEstimatePdfId);
+            changeRequest = changeRequestRepository.save(changeRequest);
+        }
 
         return changeRequest;
     }
@@ -518,5 +531,82 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             part.setStatus(newStatus);
             workOrderPartRepository.save(part);
         }
+    }
+
+    private Long generateSupplementalEstimate(ChangeRequest changeRequest, CreateChangeRequestDTO dto) {
+        try {
+            String contentJson = buildSupplementalEstimateContent(changeRequest, dto);
+
+            Map<String, Object> renderRequest = new LinkedHashMap<>();
+            renderRequest.put("format", "JSON");
+            renderRequest.put("templateId", supplementalEstimateTemplateId);
+            renderRequest.put("content", contentJson);
+
+            byte[] renderedPdf = documentServiceRestClient.post()
+                    .uri("/api/documents/render")
+                    .body(renderRequest)
+                    .retrieve()
+                    .body(byte[].class);
+
+            if (renderedPdf == null || renderedPdf.length == 0) {
+                throw new IllegalStateException("Document service returned empty supplemental estimate PDF");
+            }
+
+            return generatePdfReferenceId(renderedPdf);
+        } catch (Exception e) {
+            log.warn("Failed to generate supplemental estimate PDF for change request {}: {}",
+                    changeRequest.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    private String buildSupplementalEstimateContent(ChangeRequest changeRequest, CreateChangeRequestDTO dto) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("documentType", "SUPPLEMENTAL_ESTIMATE");
+            payload.put("changeRequestId", String.valueOf(changeRequest.getId()));
+            payload.put("workorderId", String.valueOf(changeRequest.getWorkorderId()));
+            payload.put("requestedByUserId", String.valueOf(changeRequest.getRequestedByUserId()));
+            payload.put("requestedAt", String.valueOf(changeRequest.getRequestedAt()));
+            payload.put("status", String.valueOf(changeRequest.getStatus()));
+            payload.put("description", changeRequest.getDescription());
+            payload.put("isEmergencyException", Boolean.TRUE.equals(changeRequest.getIsEmergencyException()));
+            payload.put("exceptionReason", changeRequest.getExceptionReason());
+            payload.put("services", mapItems(dto.getServices()));
+            payload.put("parts", mapItems(dto.getParts()));
+            payload.put("serviceCount", dto.getServices() == null ? 0 : dto.getServices().size());
+            payload.put("partCount", dto.getParts() == null ? 0 : dto.getParts().size());
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize supplemental estimate content", e);
+        }
+    }
+
+    private List<Map<String, Object>> mapItems(List<CreateChangeRequestDTO.WorkorderItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+
+        return items.stream()
+                .map(item -> {
+                    Map<String, Object> mapped = new LinkedHashMap<>();
+                    mapped.put("serviceEntityId", item.getServiceEntityId());
+                    mapped.put("productEntityId", item.getProductEntityId());
+                    mapped.put("nonInventoryProductEntityId", item.getNonInventoryProductEntityId());
+                    mapped.put("quantity", item.getQuantity());
+                    mapped.put("isEmergencySafety", Boolean.TRUE.equals(item.getIsEmergencySafety()));
+                    mapped.put("photoEvidenceUrl", item.getPhotoEvidenceUrl());
+                    mapped.put("photoNotPossible", Boolean.TRUE.equals(item.getPhotoNotPossible()));
+                    mapped.put("emergencyNotes", item.getEmergencyNotes());
+                    return mapped;
+                })
+                .toList();
+    }
+
+    private Long generatePdfReferenceId(byte[] renderedPdf) {
+        CRC32 checksum = new CRC32();
+        checksum.update(renderedPdf);
+        long value = checksum.getValue();
+        return value == 0L ? 1L : value;
     }
 }
