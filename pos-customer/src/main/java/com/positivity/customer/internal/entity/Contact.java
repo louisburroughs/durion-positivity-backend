@@ -59,6 +59,10 @@ public class Contact {
     @Schema(description = "Phone number of the contact", example = "+1-555-9999")
     private String phoneNumber;
 
+    @Transient
+    @Schema(description = "Preferred method of contact", example = "EMAIL")
+    private PreferredContactMethod preferredContactMethod = PreferredContactMethod.NONE;
+
     @Column(nullable = false)
     @Schema(description = "Indicates if the contact is active for the party", example = "true")
     private boolean active = true;
@@ -88,8 +92,8 @@ public class Contact {
         this.contactId = id;
     }
 
-    public void setPreferredContactMethod(PreferredContactMethod email2) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setPreferredContactMethod'");
+    public void setPreferredContactMethod(PreferredContactMethod preferredContactMethod) {
+        this.preferredContactMethod = preferredContactMethod == null ? PreferredContactMethod.NONE
+                : preferredContactMethod;
     }
 }

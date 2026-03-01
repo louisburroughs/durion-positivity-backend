@@ -30,6 +30,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher;
 
     @Override
     @Transactional
@@ -53,7 +54,9 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setStatus(ProductStatus.ACTIVE);
         entity.setCategory(resolveCategory(request.getCategoryId()));
 
-        return toDto(productRepository.save(entity));
+        ProductEntity saved = productRepository.save(entity);
+        productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        return toDto(saved);
     }
 
     @Override
@@ -85,7 +88,9 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setSpecifications(request.getAttributes());
         entity.setCategory(resolveCategory(request.getCategoryId()));
 
-        return toDto(productRepository.save(entity));
+        ProductEntity saved = productRepository.save(entity);
+        productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        return toDto(saved);
     }
 
     @Override
@@ -93,7 +98,9 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
     public ProductDto changeProductStatus(@NonNull UUID productId, @NonNull ProductStatus newStatus) {
         ProductEntity entity = findProduct(productId);
         entity.setStatus(newStatus);
-        return toDto(productRepository.save(entity));
+        ProductEntity saved = productRepository.save(entity);
+        productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        return toDto(saved);
     }
 
     @Override

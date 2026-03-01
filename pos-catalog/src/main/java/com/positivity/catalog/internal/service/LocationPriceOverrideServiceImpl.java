@@ -38,16 +38,19 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
     private final GuardrailPolicyRepository guardrailPolicyRepository;
     private final ApprovalRequestRepository approvalRequestRepository;
     private final ProductRepository productRepository;
+    private final ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher;
 
     public LocationPriceOverrideServiceImpl(
             LocationPriceOverrideRepository locationPriceOverrideRepository,
             GuardrailPolicyRepository guardrailPolicyRepository,
             ApprovalRequestRepository approvalRequestRepository,
-            ProductRepository productRepository) {
+            ProductRepository productRepository,
+            ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher) {
         this.locationPriceOverrideRepository = locationPriceOverrideRepository;
         this.guardrailPolicyRepository = guardrailPolicyRepository;
         this.approvalRequestRepository = approvalRequestRepository;
         this.productRepository = productRepository;
+        this.productDetailCacheInvalidationPublisher = productDetailCacheInvalidationPublisher;
     }
 
     @Override
@@ -123,6 +126,8 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
             approvalRequest = createApprovalRequest(savedOverride);
         }
 
+        productDetailCacheInvalidationPublisher.invalidateProductAtLocation(
+                savedOverride.getProductId(), savedOverride.getLocationId());
         return toResponse(savedOverride, approvalRequest);
     }
 
@@ -189,6 +194,8 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
         approvalRequest.setResolvedAt(Instant.now());
         ApprovalRequestEntity savedApproval = approvalRequestRepository.save(approvalRequest);
 
+        productDetailCacheInvalidationPublisher.invalidateProductAtLocation(
+                saved.getProductId(), saved.getLocationId());
         return toResponse(saved, savedApproval);
     }
 
@@ -223,6 +230,8 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
         approvalRequest.setResolvedAt(Instant.now());
         ApprovalRequestEntity savedApproval = approvalRequestRepository.save(approvalRequest);
 
+        productDetailCacheInvalidationPublisher.invalidateProductAtLocation(
+                saved.getProductId(), saved.getLocationId());
         return toResponse(saved, savedApproval);
     }
 

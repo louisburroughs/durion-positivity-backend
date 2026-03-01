@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
@@ -54,6 +55,8 @@ public class OutboxProcessor {
     private static final int BATCH_SIZE = 10;
     private static final int MAX_RETRIES = 5;
     private static final Duration RETRY_DELAY = Duration.ofSeconds(30);
+    private static final Map<String, Class<?>> EVENT_TYPE_REGISTRY = Map.of(
+            APPaymentGLPostingEvent.class.getName(), APPaymentGLPostingEvent.class);
 
     /**
      * Scheduled task to process pending outbox events.
@@ -122,15 +125,17 @@ public class OutboxProcessor {
      */
     private @NonNull Object deserializeEvent(@NonNull EventOutbox outbox) throws JsonProcessingException {
         String eventType = outbox.getEventType();
-
-        // Map event type to concrete class
-        // TODO: Make this extensible via registry pattern if more event types are added
-        Class<?> eventClass = switch (eventType) {
-            case "com.positivity.accounting.internal.dto.APPaymentGLPostingEvent" -> APPaymentGLPostingEvent.class;
-            default -> throw new IllegalArgumentException("Unsupported event type: " + eventType);
-        };
+        Class<?> eventClass = resolveEventClass(eventType);
 
         return objectMapper.readValue(outbox.getPayload(), eventClass);
+    }
+
+    private @NonNull Class<?> resolveEventClass(@NonNull String eventType) {
+        Class<?> eventClass = EVENT_TYPE_REGISTRY.get(eventType);
+        if (eventClass == null) {
+            throw new IllegalArgumentException("Unsupported event type: " + eventType);
+        }
+        return eventClass;
     }
 
     /**
