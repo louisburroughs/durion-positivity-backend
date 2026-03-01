@@ -81,7 +81,7 @@ public class InvoiceController {
     }
 
     @PostMapping("/{invoiceId}/revert")
-    @EmitEvent(id = "INVOICE_FINALIZATION_REQUESTED", apiVersion = "1")
+    @EmitEvent(id = "INVOICE_DRAFT_REVERT", apiVersion = "1")
     @Operation(summary = "Revert finalized invoice", description = "Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)")
     @ApiResponse(responseCode = "200", description = "Invoice reverted to DRAFT")
     @PreAuthorize("hasAuthority('FINALIZE_INVOICE')")

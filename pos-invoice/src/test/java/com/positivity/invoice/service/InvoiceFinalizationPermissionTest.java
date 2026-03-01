@@ -6,20 +6,27 @@ import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
@@ -50,11 +57,24 @@ class InvoiceFinalizationPermissionTest {
     @Mock
     private InvoiceRepository invoiceRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 
-    private static final String SERVICE_ADVISOR = "SERVICE_ADVISOR";
-    private static final String SHOP_MANAGER = "SHOP_MANAGER";
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    /** Sets up a SHOP_MANAGER role in the security context for tests that need it. */
+    private void withShopManagerContext() {
+        var auth = new UsernamePasswordAuthenticationToken(
+                "manager-001", null,
+                List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
 
     // -------------------------------------------------------------------------
     // AC3 — SERVICE_ADVISOR permission matrix
@@ -68,8 +88,11 @@ class InvoiceFinalizationPermissionTest {
     @Test
     void serviceAdvisor_canFinalize_invoiceBelow500() {
         UUID invoiceId = UUID.randomUUID();
-        // Issue #13: $499.99 is below the $500 SERVICE_ADVISOR limit
-        FinalizationRequest request = buildRequest(SERVICE_ADVISOR, new BigDecimal("499.99"), null);
+        // SERVICE_ADVISOR (no SecurityContext = default, not SHOP_MANAGER); $499.99 within cap
+        when(invoiceRepository.findById(invoiceId))
+                .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("499.99"))));
+        when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        FinalizationRequest request = buildRequest(null);
 
         assertThatCode(() -> service.finalize(invoiceId, request))
                 .doesNotThrowAnyException();
@@ -83,9 +106,10 @@ class InvoiceFinalizationPermissionTest {
     @Test
     void serviceAdvisor_cannotFinalize_invoiceAbove500_withoutManagerApproval() {
         UUID invoiceId = UUID.randomUUID();
-        // Issue #13: $500.01 exceeds SERVICE_ADVISOR limit; null approval code means no
-        // override
-        FinalizationRequest request = buildRequest(SERVICE_ADVISOR, new BigDecimal("500.01"), null);
+        // SERVICE_ADVISOR (no context); invoice total $500.01 > cap; no approval code
+        when(invoiceRepository.findById(invoiceId))
+                .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("500.01"))));
+        FinalizationRequest request = buildRequest(null);
 
         assertThatThrownBy(() -> service.finalize(invoiceId, request))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -99,8 +123,11 @@ class InvoiceFinalizationPermissionTest {
     @Test
     void serviceAdvisor_canFinalize_invoiceAbove500_withManagerApprovalCode() {
         UUID invoiceId = UUID.randomUUID();
-        // Issue #13: approval code present — override path; audit expected
-        FinalizationRequest request = buildRequest(SERVICE_ADVISOR, new BigDecimal("750.00"), "MGR-APPROVAL-XYZ");
+        // SERVICE_ADVISOR with approval code; invoice $750 > cap → allowed (override audited)
+        when(invoiceRepository.findById(invoiceId))
+                .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("750.00"))));
+        when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        FinalizationRequest request = buildRequest("MGR-APPROVAL-XYZ");
 
         InvoiceDetailsResponse response = service.finalize(invoiceId, request);
 
@@ -119,8 +146,12 @@ class InvoiceFinalizationPermissionTest {
     @Test
     void shopManager_canFinalize_invoiceAboveAnyAmount() {
         UUID invoiceId = UUID.randomUUID();
-        // Issue #13: $10000 — well above any role cap; SHOP_MANAGER must succeed
-        FinalizationRequest request = buildRequest(SHOP_MANAGER, new BigDecimal("10000.00"), null);
+        // C1: SHOP_MANAGER role in SecurityContext → bypasses all amount caps
+        withShopManagerContext();
+        when(invoiceRepository.findById(invoiceId))
+                .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("10000.00"))));
+        when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        FinalizationRequest request = buildRequest(null);
 
         InvoiceDetailsResponse response = service.finalize(invoiceId, request);
 
@@ -141,7 +172,7 @@ class InvoiceFinalizationPermissionTest {
     void finalization_isIdempotent_whenInvoiceAlreadyFinalized() {
         UUID invoiceId = UUID.randomUUID();
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(finalizedInvoice(UUID.randomUUID())));
-        FinalizationRequest request = buildRequest(SHOP_MANAGER, new BigDecimal("200.00"), null);
+        FinalizationRequest request = buildRequest(null);
 
         assertThatThrownBy(() -> service.finalize(invoiceId, request))
                 .isInstanceOf(IllegalStateException.class)
@@ -153,25 +184,26 @@ class InvoiceFinalizationPermissionTest {
     // -------------------------------------------------------------------------
 
     /**
-     * Builds a {@link FinalizationRequest} for the given permission level and
-     * amount.
+     * Builds a {@link FinalizationRequest} with the given approval code.
      *
-     * @param permissionLevel role constant (SERVICE_ADVISOR or SHOP_MANAGER)
-     * @param amountLimit     invoice grand total driving permission enforcement
-     * @param approvalCode    manager approval code; {@code null} when not provided
-     * @return configured request ready for {@code service.finalize(...)}
+     * <p>Role is derived from {@code SecurityContext} at call time (ADR-0018),
+     * not from this request.
+     *
+     * @param approvalCode manager approval code; {@code null} when not provided
+     * @return configured request
      */
-    private FinalizationRequest buildRequest(String permissionLevel, BigDecimal amountLimit, String approvalCode) {
+    private FinalizationRequest buildRequest(String approvalCode) {
         FinalizationRequest req = new FinalizationRequest();
-        req.setPermissionLevel(permissionLevel);
-        req.setAmountLimit(amountLimit);
         req.setManagerApprovalCode(approvalCode);
-        req.setManagerApprovalRequired(approvalCode != null);
-        String actor = SHOP_MANAGER.equals(permissionLevel) ? "manager-001" : "advisor-001";
-        req.setRequestedBy(actor);
-        req.setFinalizedBy(actor);
-        req.setFinalizedAt(Instant.now());
         return req;
+    }
+
+    private Invoice draftInvoice(UUID workorderId, BigDecimal total) {
+        Invoice invoice = new Invoice();
+        invoice.setWorkorderId(workorderId);
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        invoice.setTotal(total);
+        return invoice;
     }
 
     private Invoice finalizedInvoice(UUID workorderId) {

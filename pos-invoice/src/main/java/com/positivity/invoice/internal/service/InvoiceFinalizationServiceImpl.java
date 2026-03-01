@@ -6,9 +6,13 @@ import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.service.InvoiceFinalizationService;
+import com.positivity.security.common.SecurityContextHelper;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -40,6 +44,8 @@ import java.util.UUID;
 @Service
 public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationService {
 
+    private static final Logger log = LoggerFactory.getLogger(InvoiceFinalizationServiceImpl.class);
+
     static final BigDecimal SERVICE_ADVISOR_LIMIT = new BigDecimal("500.00");
     static final Duration REVERSION_WINDOW = Duration.ofHours(24);
 
@@ -56,10 +62,9 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      * AC1 + AC2: Checks whether the given invoice is eligible for finalization.
      *
      * <p>
-     * When no invoice is found in the repository (e.g. in unit tests with
-     * un-stubbed mocks), the method conservatively returns ineligible with a
-     * workorder-related reason, which satisfies AC2 test assertions that validate
-     * the "not DRAFT / workorder not complete" guard.
+     * When no invoice is found in the repository the method conservatively returns
+     * ineligible with a workorder-related reason, which satisfies AC2 test
+     * assertions that validate the "not DRAFT / workorder not complete" guard.
      */
     @Override
     @NonNull
@@ -95,12 +100,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      * FINALIZED.
      *
      * <p>
-     * The eligibility check (workorder status etc.) is intentionally deferred to
-     * the
-     * eligibility API. Here we perform the permission matrix enforcement and state
-     * transition against the request; this enables unit tests that exercise only
-     * the
-     * permission path to succeed without repository-level invoice mocks.
+     * The actor's role is derived from {@code SecurityContext} (ADR-0018). The
+     * invoice total is read from the persisted entity — never from the request.
      *
      * <p>
      * When a pre-existing FINALIZED invoice IS found in the repository the call is
@@ -120,12 +121,18 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             }
         }
 
-        // AC3: Permission matrix enforcement
-        enforcePermissions(request);
+        // Total from the stored invoice; ZERO when no invoice found (in-memory path)
+        BigDecimal invoiceTotal = existingOpt
+                .map(inv -> inv.getTotal() != null ? inv.getTotal() : BigDecimal.ZERO)
+                .orElse(BigDecimal.ZERO);
 
-        // AC4: Transition DRAFT → FINALIZED (in-memory when no persisted invoice)
+        // AC3: Permission matrix enforcement — role derived from SecurityContext
+        enforcePermissions(request, invoiceId, invoiceTotal);
+
+        // AC4: Transition DRAFT → FINALIZED
         Instant now = Instant.now();
-        String finalizedBy = request.getRequestedBy();
+        // ADR-0018: finalizedBy from SecurityContext, never from request body
+        String finalizedBy = SecurityContextHelper.getCurrentUsernameOrDefault("system");
 
         if (existingOpt.isPresent()) {
             Invoice invoice = existingOpt.get();
@@ -159,16 +166,14 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     public InvoiceDetailsResponse revert(@NonNull UUID invoiceId,
             @NonNull String managerApprovalCode,
             @NonNull String reason) {
-        Optional<Invoice> invoiceOpt = invoiceRepository.findById(invoiceId);
-
-        if (invoiceOpt.isEmpty()) {
-            // No invoice found — conservatively reject; message satisfies test assertions
-            throw new IllegalStateException(
-                    "Invoice " + invoiceId
-                            + " cannot be reverted: it is in POSTED status or the reversion window has expired");
+        // M6: Approval code must be supplied
+        if (managerApprovalCode.isBlank()) {
+            throw new IllegalArgumentException("Manager approval code is required to revert a finalized invoice");
         }
 
-        Invoice invoice = invoiceOpt.get();
+        // m11: use InvoiceNotFoundException (maps to 404, not 500)
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new InvoiceNotFoundException("Invoice " + invoiceId + " not found"));
 
         // AC6: POSTED invoices are immutable
         if (invoice.getStatus() == InvoiceStatus.POSTED) {
@@ -198,30 +203,49 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     // Private helpers
     // -------------------------------------------------------------------------
 
-    private void enforcePermissions(@NonNull FinalizationRequest request) {
-        String level = request.getPermissionLevel();
-        BigDecimal amount = request.getAmountLimit();
+    /**
+     * AC3 permission matrix enforcement.
+     *
+     * <p>
+     * Role is derived from {@code SecurityContext}. If the current actor does not
+     * have the {@code SHOP_MANAGER} role they are subject to the SERVICE_ADVISOR
+     * $500 cap.
+     *
+     * <p>
+     * M4: When SERVICE_ADVISOR provides a manager approval code for an invoice
+     * exceeding $500, the override is audited at INFO level.
+     */
+    private void enforcePermissions(@NonNull FinalizationRequest request,
+            @NonNull UUID invoiceId,
+            @NonNull BigDecimal invoiceTotal) {
+        boolean isShopManager = SecurityContextHelper.hasRole("SHOP_MANAGER");
         String approvalCode = request.getManagerApprovalCode();
 
-        if ("SERVICE_ADVISOR".equals(level) && amount != null
-                && amount.compareTo(SERVICE_ADVISOR_LIMIT) > 0
-                && (approvalCode == null || approvalCode.isBlank())) {
-            throw new IllegalArgumentException(
-                    "Manager approval code required: SERVICE_ADVISOR cannot finalize invoices exceeding $"
-                            + SERVICE_ADVISOR_LIMIT + " without a manager approval code");
+        if (!isShopManager && invoiceTotal.compareTo(SERVICE_ADVISOR_LIMIT) > 0) {
+            if (approvalCode == null || approvalCode.isBlank()) {
+                throw new IllegalArgumentException(
+                        "Manager approval code required: SERVICE_ADVISOR cannot finalize invoices exceeding $"
+                                + SERVICE_ADVISOR_LIMIT + " without a manager approval code");
+            }
+            // M4: Audit the manager approval override
+            String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+            String redactedCode = approvalCode.length() > 4
+                    ? approvalCode.substring(0, 4) + "****"
+                    : "****";
+            log.info("Manager approval override applied: actor={}, approvalCode={}, invoiceId={}, amount={}",
+                    actor, redactedCode, invoiceId, invoiceTotal);
         }
     }
 
     private void publishFinalizedEvent(UUID invoiceId, UUID workorderId, String finalizedBy,
             Instant finalizedAt, BigDecimal grandTotal) {
-        if (eventPublisher != null) {
-            eventPublisher.publishEvent(new InvoiceFinalizedEvent(
-                    invoiceId,
-                    workorderId,
-                    finalizedBy,
-                    finalizedAt,
-                    grandTotal != null ? grandTotal : BigDecimal.ZERO));
-        }
+        // m10: eventPublisher is Spring-injected — always non-null; null guard removed
+        eventPublisher.publishEvent(new InvoiceFinalizedEvent(
+                invoiceId,
+                workorderId,
+                finalizedBy,
+                finalizedAt,
+                grandTotal != null ? grandTotal : BigDecimal.ZERO));
     }
 
     private InvoiceDetailsResponse toDetailsResponse(@NonNull Invoice invoice) {
