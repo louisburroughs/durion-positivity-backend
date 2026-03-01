@@ -32,8 +32,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -324,12 +326,12 @@ public class PriceBookServiceImpl implements PriceBookService {
     }
 
     private int precedenceScore(PriceBookRuleEntity rule, ProductEntity product) {
-        if (rule.getTargetType() == PriceBookRuleTargetType.SKU && rule.getTargetId() != null
-                && rule.getTargetId().equals(product.getId())) {
+        if (rule.getTargetType() == PriceBookRuleTargetType.SKU
+                && skuTargetMatches(rule.getTargetId(), product)) {
             return 3;
         }
-        if (rule.getTargetType() == PriceBookRuleTargetType.CATEGORY && rule.getTargetId() != null
-                && product.getCategory() != null && rule.getTargetId().equals(product.getCategory().getId())) {
+        if (rule.getTargetType() == PriceBookRuleTargetType.CATEGORY
+                && taxonomyTargetMatches(rule.getTargetId(), product)) {
             return 2;
         }
         if (rule.getTargetType() == PriceBookRuleTargetType.GLOBAL) {
@@ -340,11 +342,8 @@ public class PriceBookServiceImpl implements PriceBookService {
 
     private boolean isRuleApplicable(PriceBookRuleEntity rule, ResolvePriceRequestDto request, ProductEntity product) {
         boolean targetMatch = switch (rule.getTargetType()) {
-            case SKU -> rule.getTargetId() != null && rule.getTargetId().equals(request.getProductId());
-            // TODO(CAP-167): replace direct category-id equality with taxonomy-aware
-            // traversal when category hierarchy data is available.
-            case CATEGORY -> rule.getTargetId() != null && product.getCategory() != null
-                    && rule.getTargetId().equals(product.getCategory().getId());
+            case SKU -> skuTargetMatches(rule.getTargetId(), product);
+            case CATEGORY -> taxonomyTargetMatches(rule.getTargetId(), product);
             case GLOBAL -> true;
         };
 
@@ -359,6 +358,25 @@ public class PriceBookServiceImpl implements PriceBookService {
             case CUSTOMER_TIER -> request.getCustomerTier() != null
                     && request.getCustomerTier().equals(rule.getConditionValue());
         };
+    }
+
+    private boolean skuTargetMatches(UUID targetId, ProductEntity product) {
+        return targetId != null && product != null && targetId.equals(product.getId());
+    }
+
+    private boolean taxonomyTargetMatches(UUID targetId, ProductEntity product) {
+        if (targetId == null || product == null) {
+            return false;
+        }
+
+        Set<UUID> taxonomyNodeIds = new HashSet<>();
+        if (product.getCategory() != null && product.getCategory().getId() != null) {
+            taxonomyNodeIds.add(product.getCategory().getId());
+        }
+        if (product.getSubcategory() != null && product.getSubcategory().getId() != null) {
+            taxonomyNodeIds.add(product.getSubcategory().getId());
+        }
+        return taxonomyNodeIds.contains(targetId);
     }
 
     private List<UUID> resolveCandidatePriceBookIds(ResolvePriceRequestDto request) {
