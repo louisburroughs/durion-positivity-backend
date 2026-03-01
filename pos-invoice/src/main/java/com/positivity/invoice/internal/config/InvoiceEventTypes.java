@@ -85,6 +85,13 @@ public final class InvoiceEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** AC6: Invoice successfully reverted from FINALIZED back to DRAFT */
+        public static final EventTypeRegistration INVOICE_DRAFT_REVERT = EventTypeRegistration
+                        .approval("INVOICE_DRAFT_REVERT",
+                                        "Revert finalized invoice to draft (Story #13, AC6)")
+                        .apiVersion("1")
+                        .build();
+
         /**
          * Returns all event type registrations for the Invoice module.
          */
@@ -99,6 +106,7 @@ public final class InvoiceEventTypes {
                                 INVOICE_FINALIZATION_REQUESTED,
                                 INVOICE_FINALIZED,
                                 INVOICE_POSTED_TO_GL,
-                                INVOICE_POSTING_FAILED);
+                                INVOICE_POSTING_FAILED,
+                                INVOICE_DRAFT_REVERT);
         }
 }

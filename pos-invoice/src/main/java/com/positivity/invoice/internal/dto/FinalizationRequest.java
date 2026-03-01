@@ -2,78 +2,24 @@ package com.positivity.invoice.internal.dto;
 
 import org.jspecify.annotations.Nullable;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-
+/**
+ * Request payload for invoice finalization.
+ *
+ * <p>Role/permission level is derived from the authenticated principal in
+ * {@code SecurityContext} — never supplied by the caller (ADR-0018).
+ */
 public class FinalizationRequest {
 
-    private String finalizedBy;
-    private Instant finalizedAt;
-
-    // -- Story #13 scaffold fields --
-    private String requestedBy;
-    private String permissionLevel;
-    private BigDecimal amountLimit;
-    private boolean managerApprovalRequired;
-
+    /**
+     * Optional manager approval code. Required when the authenticated actor is a
+     * SERVICE_ADVISOR and the invoice total exceeds $500.
+     */
     @Nullable
     private String managerApprovalCode;
 
+    /** Optional free-text reason for overriding the amount limit. */
     @Nullable
     private String overrideReason;
-
-    @Nullable
-    public String getFinalizedBy() {
-        return finalizedBy;
-    }
-
-    public void setFinalizedBy(@Nullable String finalizedBy) {
-        this.finalizedBy = finalizedBy;
-    }
-
-    @Nullable
-    public Instant getFinalizedAt() {
-        return finalizedAt;
-    }
-
-    public void setFinalizedAt(@Nullable Instant finalizedAt) {
-        this.finalizedAt = finalizedAt;
-    }
-
-    @Nullable
-    public String getRequestedBy() {
-        return requestedBy;
-    }
-
-    public void setRequestedBy(@Nullable String requestedBy) {
-        this.requestedBy = requestedBy;
-    }
-
-    @Nullable
-    public String getPermissionLevel() {
-        return permissionLevel;
-    }
-
-    public void setPermissionLevel(@Nullable String permissionLevel) {
-        this.permissionLevel = permissionLevel;
-    }
-
-    @Nullable
-    public BigDecimal getAmountLimit() {
-        return amountLimit;
-    }
-
-    public void setAmountLimit(@Nullable BigDecimal amountLimit) {
-        this.amountLimit = amountLimit;
-    }
-
-    public boolean isManagerApprovalRequired() {
-        return managerApprovalRequired;
-    }
-
-    public void setManagerApprovalRequired(boolean managerApprovalRequired) {
-        this.managerApprovalRequired = managerApprovalRequired;
-    }
 
     @Nullable
     public String getManagerApprovalCode() {
