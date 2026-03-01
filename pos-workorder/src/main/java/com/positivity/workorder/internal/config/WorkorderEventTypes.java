@@ -360,6 +360,23 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // ==================== WIP DASHBOARD EVENTS (CAP-248 Story #14)
+        // ====================
+
+        /** List WIP workorders for a location */
+        public static final EventTypeRegistration WORKORDER_WIP_LIST = EventTypeRegistration
+                        .search("WORKORDER_WIP_LIST",
+                                        "Retrieve work-in-progress workorders for a location")
+                        .apiVersion("1")
+                        .build();
+
+        /** Retrieve full WIP detail for a given workorder */
+        public static final EventTypeRegistration WORKORDER_WIP_VIEW = EventTypeRegistration
+                        .fastRead("WORKORDER_WIP_VIEW",
+                                        "Retrieve full WIP detail for a given workorder")
+                        .apiVersion("1")
+                        .build();
+
         // ==================== ALL EVENT TYPES ====================
 
         /** All event types for registration at startup */
@@ -420,5 +437,8 @@ public final class WorkorderEventTypes {
                         WORKORDER_APPROVAL_CONFIG_LIST,
                         WORKORDER_APPROVAL_CONFIG_CREATE,
                         WORKORDER_APPROVAL_CONFIG_UPDATE,
-                        WORKORDER_APPROVAL_CONFIG_DELETE);
+                        WORKORDER_APPROVAL_CONFIG_DELETE,
+                        // WIP dashboard events (CAP-248 Story #14)
+                        WORKORDER_WIP_LIST,
+                        WORKORDER_WIP_VIEW);
 }
