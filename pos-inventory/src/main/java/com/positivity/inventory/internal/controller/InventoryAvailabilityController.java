@@ -3,9 +3,11 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.InventoryErrorResponse;
-import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.dto.InventoryAvailabilityResponse;
+import com.positivity.inventory.internal.dto.LeadTimeView;
+import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.service.InventoryAvailabilityService;
+import com.positivity.inventory.service.InventoryLeadTimeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -31,9 +33,13 @@ import java.util.UUID;
 public class InventoryAvailabilityController {
 
     private final InventoryAvailabilityService availabilityService;
+    private final InventoryLeadTimeService inventoryLeadTimeService;
 
-    public InventoryAvailabilityController(InventoryAvailabilityService availabilityService) {
+    public InventoryAvailabilityController(
+            InventoryAvailabilityService availabilityService,
+            InventoryLeadTimeService inventoryLeadTimeService) {
         this.availabilityService = availabilityService;
+        this.inventoryLeadTimeService = inventoryLeadTimeService;
     }
 
     @GetMapping("/{productId}")
@@ -65,6 +71,23 @@ public class InventoryAvailabilityController {
         log.info("GET /v1/inventory/availability/query productSku={} locationId={}", productSku, locationId);
         return ResponseEntity.ok(
                 availabilityService.queryAvailability(productSku, locationId, storageLocationId));
+    }
+
+    @GetMapping("/lead-time")
+    @EmitEvent(id = "INVENTORY_LEAD_TIME_QUERY", apiVersion = "1")
+    @Operation(summary = "Query product lead time", description = "Returns dynamic lead-time estimate for a product at a location.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Lead-time view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LeadTimeView.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Lead-time data not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    })
+    public ResponseEntity<LeadTimeView> queryLeadTime(
+            @Parameter(description = "Product identifier", required = true) @RequestParam UUID productId,
+            @Parameter(description = "Location identifier", required = true) @RequestParam UUID locationId) {
+        log.info("GET /v1/inventory/availability/lead-time productId={} locationId={}", productId, locationId);
+        return ResponseEntity.ok(inventoryLeadTimeService.queryLeadTime(productId, locationId));
     }
 
     @PostMapping("/{productId}")

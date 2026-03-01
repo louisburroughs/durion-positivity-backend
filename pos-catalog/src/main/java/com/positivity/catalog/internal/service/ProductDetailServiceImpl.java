@@ -181,17 +181,21 @@ public class ProductDetailServiceImpl implements ProductDetailService {
      */
     private LeadTimeInfo getLeadTimeInfo(UUID productId, UUID locationId, Instant requestTime, ProductEntity product) {
         try {
-            // TODO: Try to fetch dynamic lead time from Inventory/Supply Chain service
             log.debug("Attempting to fetch dynamic lead time for productId={}", productId);
+            Optional<InventoryClient.LeadTimeClientResponse> leadTimeOpt = inventoryClient.fetchLeadTime(productId,
+                    locationId);
+            if (leadTimeOpt.isEmpty()) {
+                return getCatalogLeadTime(product, requestTime);
+            }
 
-            // Mock: Return dynamic lead time with HIGH confidence
+            InventoryClient.LeadTimeClientResponse leadTime = leadTimeOpt.get();
             return LeadTimeInfo.builder()
-                    .source(LeadTimeSource.INVENTORY)
-                    .minDays(2)
-                    .maxDays(5)
-                    .displayText("2-5 business days")
-                    .asOf(requestTime)
-                    .confidence(DataConfidence.HIGH)
+                    .source(parseLeadTimeSource(leadTime.source()))
+                    .minDays(leadTime.minDays())
+                    .maxDays(leadTime.maxDays())
+                    .displayText(leadTime.displayText())
+                    .asOf(leadTime.asOf() != null ? leadTime.asOf() : requestTime)
+                    .confidence(parseDataConfidence(leadTime.confidence()))
                     .build();
 
         } catch (Exception e) {
@@ -276,6 +280,28 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             return DataConfidence.MEDIUM;
         } else {
             return DataConfidence.LOW;
+        }
+    }
+
+    private LeadTimeSource parseLeadTimeSource(String source) {
+        if (source == null || source.isBlank()) {
+            return LeadTimeSource.INVENTORY;
+        }
+        try {
+            return LeadTimeSource.valueOf(source);
+        } catch (IllegalArgumentException ex) {
+            return LeadTimeSource.INVENTORY;
+        }
+    }
+
+    private DataConfidence parseDataConfidence(String confidence) {
+        if (confidence == null || confidence.isBlank()) {
+            return DataConfidence.MEDIUM;
+        }
+        try {
+            return DataConfidence.valueOf(confidence);
+        } catch (IllegalArgumentException ex) {
+            return DataConfidence.MEDIUM;
         }
     }
 }

@@ -81,4 +81,22 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
     Integer calculateOnHandQuantityAtLocation(
             @Param("locationId") UUID locationId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+
+    @Query("""
+            SELECT e.stockItemId AS stockItemId, COALESCE(SUM(e.changeInQuantity), 0) AS onHandQuantity
+            FROM InventoryLedgerEntry e
+            WHERE e.locationId = :locationId
+              AND e.eventType IN :eventTypes
+            GROUP BY e.stockItemId
+            HAVING COALESCE(SUM(e.changeInQuantity), 0) > 0
+            """)
+    List<LocationOnHand> findPositiveOnHandByLocation(
+            @Param("locationId") UUID locationId,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+
+    interface LocationOnHand {
+        String getStockItemId();
+
+        Long getOnHandQuantity();
+    }
 }
