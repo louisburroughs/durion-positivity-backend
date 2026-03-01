@@ -4,6 +4,7 @@ import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
@@ -270,6 +271,38 @@ class InvoiceFinalizationServiceTest {
     // -------------------------------------------------------------------------
     // AC6 — Revert to DRAFT within 24h window, manager approval required
     // -------------------------------------------------------------------------
+
+    // -------------------------------------------------------------------------
+    // AC1 — Line item mapping in response
+    // -------------------------------------------------------------------------
+
+    /**
+     * AC1: finalize() response must include mapped line items from the invoice
+     * entity. Verifies that toDetailsResponse() correctly maps InvoiceItem to
+     * InvoiceItemResponse.
+     */
+    @Test
+    void finalize_responseContainsLineItems_whenInvoiceHasItems() {
+        UUID invoiceId = UUID.randomUUID();
+        UUID workorderId = UUID.randomUUID();
+        Invoice draft = draftInvoice(workorderId, new BigDecimal("99.00"));
+        draft.setId(invoiceId);
+        InvoiceItem item = new InvoiceItem();
+        item.setDescription("Oil Change");
+        item.setQuantity(BigDecimal.ONE);
+        item.setUnitPrice(new BigDecimal("99.00"));
+        item.setLineTotal(new BigDecimal("99.00"));
+        draft.addItem(item);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        FinalizationRequest request = shopManagerRequest();
+
+        InvoiceDetailsResponse response = service.finalize(invoiceId, request);
+
+        assertThat(response.getItems()).isNotNull();
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getDescription()).isEqualTo("Oil Change");
+    }
 
     /**
      * AC6: Revert within the 24h window with a valid manager approval code must
