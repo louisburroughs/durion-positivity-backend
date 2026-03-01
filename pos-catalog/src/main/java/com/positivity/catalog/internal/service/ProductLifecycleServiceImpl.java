@@ -43,17 +43,20 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
     private final Counter lifecycleUpdateSuccessCounter;
     private final Counter lifecycleUpdateDeniedCounter;
     private final Clock clock;
+    private final ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher;
 
     public ProductLifecycleServiceImpl(
             ProductRepository productRepository,
             ProductReplacementRepository productReplacementRepository,
             MeterRegistry meterRegistry,
-            Clock clock) {
+            Clock clock,
+            ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher) {
         this.productRepository = productRepository;
         this.productReplacementRepository = productReplacementRepository;
         this.lifecycleUpdateSuccessCounter = meterRegistry.counter("product.lifecycle.state_change.success.count");
         this.lifecycleUpdateDeniedCounter = meterRegistry.counter("product.lifecycle.state_change.denied.count");
         this.clock = clock;
+        this.productDetailCacheInvalidationPublisher = productDetailCacheInvalidationPublisher;
     }
 
     @Override
@@ -184,6 +187,7 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
         product.setLastStateChangedAt(currentInstant());
         product.setLifecycleOverrideReason(request.getOverrideReason());
         ProductEntity saved = productRepository.save(product);
+        productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
 
         lifecycleUpdateSuccessCounter.increment();
         log.info(
@@ -228,6 +232,7 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
         replacement.setEffectiveAt(request.getEffectiveAt() != null ? request.getEffectiveAt() : currentInstant());
 
         ProductReplacementEntity saved = productReplacementRepository.save(replacement);
+        productDetailCacheInvalidationPublisher.invalidateProduct(productId);
 
         return ProductLifecycleResponse.ReplacementOption.builder()
                 .replacementId(saved.getReplacementId())

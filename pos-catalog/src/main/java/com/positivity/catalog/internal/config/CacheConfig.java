@@ -1,13 +1,13 @@
 package com.positivity.catalog.internal.config;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CachingConfigurer;
-import org.springframework.cache.concurrent.ConcurrentMapCache;
-import org.springframework.cache.support.SimpleCacheManager;
+import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.Arrays;
+import java.time.Duration;
 
 /**
  * Cache configuration for product detail views.
@@ -20,25 +20,20 @@ import java.util.Arrays;
  * - Lead time (dynamic): 5 minutes
  * - Catalog static: 24 hours
  * 
- * For V1: Using simple in-memory cache with TTL-only invalidation.
- * TODO: Add event-driven cache invalidation keys when eventing is available.
+ * For V1: Using Caffeine in-memory cache with 15-second TTL plus
+ * event-driven key eviction for product detail updates.
  */
 @Configuration
 public class CacheConfig implements CachingConfigurer {
 
     /**
      * Configure cache manager with product detail cache.
-     * Note: SimpleCacheManager with ConcurrentMapCache doesn't support TTL natively.
-     * For production, consider using Caffeine or Redis with TTL support.
      */
     @Bean
     @Override
     public CacheManager cacheManager() {
-        SimpleCacheManager cacheManager = new SimpleCacheManager();
-        cacheManager.setCaches(Arrays.asList(
-            new ConcurrentMapCache("productDetails")
-            // TODO: Replace with Caffeine cache with 15-second TTL for production
-        ));
+        CaffeineCacheManager cacheManager = new CaffeineCacheManager("productDetails");
+        cacheManager.setCaffeine(Caffeine.newBuilder().expireAfterWrite(Duration.ofSeconds(15)));
         return cacheManager;
     }
 }
