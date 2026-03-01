@@ -63,7 +63,7 @@ public class AppointmentsController {
     @PreAuthorize("hasAnyAuthority('appointments:view','shop:schedule:view')")
     public ResponseEntity<AppointmentResponse> getAppointment(
             @Parameter(description = "Appointment ID", example = "appt-123") @PathVariable String appointmentId,
-            @Parameter(description = "Correlation ID for request tracing") @org.springframework.web.bind.annotation.RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+            @Parameter(description = "Correlation ID for request tracing") @org.springframework.web.bind.annotation.RequestHeader(value = "X-Correlation-Id", required = false) UUID correlationId) {
         log.info("Load appointment requested. appointmentId={}, X-Correlation-Id={}", appointmentId, correlationId);
         AppointmentResponse response = appointmentsService.getById(appointmentId, correlationId);
         return ResponseEntity.ok(response);

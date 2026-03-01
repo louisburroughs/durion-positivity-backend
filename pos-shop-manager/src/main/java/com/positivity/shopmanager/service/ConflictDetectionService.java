@@ -3,6 +3,7 @@ package com.positivity.shopmanager.service;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.ConflictResponse;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
+import java.util.UUID;
 
 /**
  * Service for detecting scheduling conflicts during appointment creation.
@@ -22,7 +23,7 @@ public interface ConflictDetectionService {
      *                                     (caller decides how to handle based on
      *                                     conflict severity and user permissions)
      */
-    void detectConflicts(AppointmentCreateRequest request, String correlationId) throws SchedulingConflictException;
+    void detectConflicts(AppointmentCreateRequest request, UUID correlationId) throws SchedulingConflictException;
 
     /**
      * Checks if the proposed appointment time is within facility operating hours.

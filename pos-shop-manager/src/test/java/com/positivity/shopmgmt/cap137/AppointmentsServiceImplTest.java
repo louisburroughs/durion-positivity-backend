@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +40,7 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
 import com.positivity.shopmanager.service.AppointmentLoadService;
+import com.positivity.shopmanager.service.SourceEligibilityService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -84,6 +86,9 @@ class AppointmentsServiceImplTest {
         @Mock
         private ShopRepository shopRepository;
 
+        @Mock
+        private SourceEligibilityService sourceEligibilityService;
+
         private AppointmentsServiceImpl appointmentsService;
 
         @BeforeEach
@@ -99,6 +104,7 @@ class AppointmentsServiceImplTest {
                                 hrAvailabilityClient,
                                 eventPublisher,
                                 shopRepository,
+                                sourceEligibilityService,
                                 Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC));
         }
 
@@ -245,7 +251,7 @@ class AppointmentsServiceImplTest {
                                 any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of());
                 when(shopRepository.existsById(locationId)).thenReturn(true);
 
-                ScheduleViewResponse response = appointmentsService.getScheduleView(request, "corr-1");
+                ScheduleViewResponse response = appointmentsService.getScheduleView(request, UUID.randomUUID());
 
                 assertEquals(locationId, response.getLocationId());
                 assertEquals(request.getDate(), response.getDate());
@@ -267,7 +273,7 @@ class AppointmentsServiceImplTest {
                 when(shopRepository.existsById(locationId)).thenReturn(false);
 
                 assertThrows(LocationNotFoundException.class,
-                                () -> appointmentsService.getScheduleView(request, "corr-2"));
+                                () -> appointmentsService.getScheduleView(request, UUID.randomUUID()));
         }
 
         @Test
@@ -298,7 +304,7 @@ class AppointmentsServiceImplTest {
                                 any(UUID.class), any(Instant.class), any(Instant.class)))
                                 .thenReturn(List.of(first, second));
 
-                ScheduleViewResponse response = appointmentsService.getScheduleView(request, "corr-3");
+                ScheduleViewResponse response = appointmentsService.getScheduleView(request, UUID.randomUUID());
 
                 assertEquals(1, response.getResources().size());
                 var events = response.getResources().get(0).getEvents();
@@ -325,7 +331,7 @@ class AppointmentsServiceImplTest {
                 when(hrAvailabilityClient.getAvailabilityOverlay(anyString(), any(LocalDate.class)))
                                 .thenThrow(new RuntimeException("HR unavailable"));
 
-                ScheduleViewResponse response = appointmentsService.getScheduleView(request, "corr-4");
+                ScheduleViewResponse response = appointmentsService.getScheduleView(request, UUID.randomUUID());
 
                 assertEquals("UNAVAILABLE", response.getAvailabilityOverlayStatus());
                 assertEquals(List.of("HR_SYSTEM_UNAVAILABLE"), response.getWarnings());
@@ -409,16 +415,45 @@ class AppointmentsServiceImplTest {
 
         @Test
         void loadCreateModel_delegatesToAppointmentLoadService() {
+                UUID facilityId = UUID.randomUUID();
                 AppointmentCreateModel expected = new AppointmentCreateModel();
-                expected.setFacilityId("fac-1");
-                when(appointmentLoadService.loadCreateModel("WORKORDER", "wo-1", "fac-1", "corr-5"))
+                when(shopRepository.existsById(facilityId)).thenReturn(true);
+                when(sourceEligibilityService.getWorkOrderStatus("wo-1", facilityId.toString())).thenReturn("OPEN");
+                when(appointmentLoadService.getFacilityTimeZoneId(facilityId)).thenReturn("UTC");
+                UUID correlationId = UUID.randomUUID();
+                when(appointmentLoadService.loadCreateModel("WORKORDER", "wo-1", facilityId, correlationId))
                                 .thenReturn(expected);
 
-                AppointmentCreateModel actual = appointmentsService.loadCreateModel("WORKORDER", "wo-1", "fac-1",
-                                "corr-5");
+                AppointmentCreateModel actual = appointmentsService.loadCreateModel("WORKORDER", "wo-1", facilityId,
+                                correlationId);
 
-                assertEquals(expected.getFacilityId(), actual.getFacilityId());
-                verify(appointmentLoadService).loadCreateModel("WORKORDER", "wo-1", "fac-1", "corr-5");
+                assertEquals(facilityId.toString(), actual.getFacilityId());
+                assertEquals("WORKORDER", actual.getSourceType());
+                assertEquals("wo-1", actual.getSourceId());
+                assertEquals("OPEN", actual.getSourceStatus());
+                assertEquals("UTC", actual.getFacilityTimeZoneId());
+                assertEquals("wo-1", actual.getWorkOrderId());
+                verify(sourceEligibilityService).validateWorkOrderEligibility("wo-1", facilityId.toString());
+                verify(appointmentLoadService).loadCreateModel("WORKORDER", "wo-1", facilityId, correlationId);
+        }
+
+        @Test
+        void loadCreateModel_generatesCorrelationId_whenMissing() {
+                UUID facilityId = UUID.randomUUID();
+                AppointmentCreateModel expected = new AppointmentCreateModel();
+                ArgumentCaptor<UUID> correlationCaptor = ArgumentCaptor.forClass(UUID.class);
+
+                when(shopRepository.existsById(facilityId)).thenReturn(true);
+                when(sourceEligibilityService.getWorkOrderStatus("wo-1", facilityId.toString())).thenReturn("OPEN");
+                when(appointmentLoadService.getFacilityTimeZoneId(facilityId)).thenReturn("UTC");
+                when(appointmentLoadService.loadCreateModel(eq("WORKORDER"), eq("wo-1"), eq(facilityId), any(UUID.class)))
+                                .thenReturn(expected);
+
+                appointmentsService.loadCreateModel("WORKORDER", "wo-1", facilityId, null);
+
+                verify(appointmentLoadService).loadCreateModel(eq("WORKORDER"), eq("wo-1"), eq(facilityId),
+                                correlationCaptor.capture());
+                assertNotNull(correlationCaptor.getValue());
         }
 
         private ScheduleViewRequest scheduleRequest(UUID locationId, LocalDate date,

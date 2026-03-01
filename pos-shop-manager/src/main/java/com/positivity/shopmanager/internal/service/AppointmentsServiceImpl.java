@@ -41,6 +41,7 @@ import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shopmanager.service.AppointmentLoadService;
 import com.positivity.shopmanager.service.AppointmentsService;
+import com.positivity.shopmanager.service.SourceEligibilityService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -87,6 +88,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final HrAvailabilityClient hrAvailabilityClient;
     private final ApplicationEventPublisher eventPublisher;
     private final ShopRepository shopRepository;
+    private final SourceEligibilityService sourceEligibilityService;
     private final Clock clock;
 
     @Override
@@ -177,7 +179,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      *                                                                                   (409)
      */
     @Override
-    public AppointmentResponse create(AppointmentCreateRequest request, String idempotencyKey, String correlationId) {
+    public AppointmentResponse create(AppointmentCreateRequest request, String idempotencyKey, UUID correlationId) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -278,19 +280,28 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * @return AppointmentCreateModel with facility context and operating hours
      */
     @Override
-    public AppointmentCreateModel loadCreateModel(String sourceType, String sourceId, String facilityId,
-            String correlationId) {
+    public AppointmentCreateModel loadCreateModel(String sourceType, String sourceId, UUID facilityId,
+            UUID correlationId) {
+        UUID normalizedCorrelationId = normalizeCorrelationId(correlationId);
         log.info("[AppointmentsService] loadCreateModel sourceType={}, sourceId={}, facilityId={}, correlationId={}",
-                sourceType, sourceId, facilityId, correlationId);
+                sourceType, sourceId, facilityId, normalizedCorrelationId);
 
-        // TODO: Implementation:
-        // 1. Validate facility scoping (ensure user has access to facility per
-        // DECISION-SHOPMGMT-012)
-        // 2. Validate source document exists and is eligible per DECISION-SHOPMGMT-013
-        // 3. Load source status, suggested times, facility timezone, operating hours
-        // 4. Return AppointmentCreateModel
+        validateLoadCreateModelInputs(sourceType, sourceId, facilityId);
+        if (!locationLooksKnown(facilityId)) {
+            throw new LocationNotFoundException(facilityId);
+        }
 
-        return appointmentLoadService.loadCreateModel(sourceType, sourceId, facilityId, correlationId);
+        String normalizedSourceType = normalizeSourceType(sourceType);
+        String sourceStatus = validateAndResolveSourceStatus(normalizedSourceType, sourceId, facilityId);
+
+        AppointmentCreateModel model = appointmentLoadService
+                .loadCreateModel(normalizedSourceType, sourceId, facilityId, normalizedCorrelationId);
+        if (model == null) {
+            model = new AppointmentCreateModel();
+        }
+
+        enrichCreateModel(model, normalizedSourceType, sourceId, facilityId, sourceStatus);
+        return model;
     }
 
     /**
@@ -303,13 +314,16 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * @return AppointmentResponse with appointment details
      */
     @Override
-    public AppointmentResponse getById(String appointmentId, String correlationId) {
+    public AppointmentResponse getById(String appointmentId, UUID correlationId) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull ScheduleViewResponse getScheduleView(@NonNull ScheduleViewRequest request, String correlationId) {
+    public @NonNull ScheduleViewResponse getScheduleView(@NonNull ScheduleViewRequest request, UUID correlationId) {
+        UUID normalizedCorrelationId = normalizeCorrelationId(correlationId);
+        log.debug("Building schedule view for location {} with correlationId={}",
+                request.getLocationId(), normalizedCorrelationId);
         ZoneId zoneId = resolveZoneId(request.getLocationId());
         LocalDate targetDate = request.getDate();
 
@@ -349,9 +363,11 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             }
         }
 
+        Map<ResourceLaneKey, String> resourceNames = resolveResourceNames(request.getLocationId(),
+                filteredByType.keySet());
         List<ScheduleViewResponse.ScheduleResourceView> resources = filteredByType.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .map(entry -> toResourceView(entry.getKey(), entry.getValue()))
+                .map(entry -> toResourceView(entry.getKey(), entry.getValue(), resourceNames.get(entry.getKey())))
                 .toList();
 
         ScheduleViewResponse response = new ScheduleViewResponse();
@@ -413,9 +429,77 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return shopRepository.existsById(locationId);
     }
 
+    private void validateLoadCreateModelInputs(String sourceType, String sourceId, UUID facilityId) {
+        if (sourceType == null || sourceType.isBlank()) {
+            throw new AppointmentValidationException("sourceType is required");
+        }
+        if (sourceId == null || sourceId.isBlank()) {
+            throw new AppointmentValidationException("sourceId is required");
+        }
+        if (facilityId == null) {
+            throw new AppointmentValidationException("facilityId is required");
+        }
+    }
+
+    private String normalizeSourceType(String sourceType) {
+        return sourceType.trim().toUpperCase(java.util.Locale.ROOT);
+    }
+
+    private UUID normalizeCorrelationId(UUID correlationId) {
+        if (correlationId != null) {
+            return correlationId;
+        }
+        return UUID.randomUUID();
+    }
+
+    private String validateAndResolveSourceStatus(String sourceType, String sourceId, UUID facilityId) {
+        String facilityRef = facilityId.toString();
+        return switch (sourceType) {
+            case "ESTIMATE" -> {
+                sourceEligibilityService.validateEstimateEligibility(sourceId, facilityRef);
+                yield sourceEligibilityService.getEstimateStatus(sourceId, facilityRef);
+            }
+            case "WORKORDER" -> {
+                sourceEligibilityService.validateWorkOrderEligibility(sourceId, facilityRef);
+                yield sourceEligibilityService.getWorkOrderStatus(sourceId, facilityRef);
+            }
+            default -> throw new AppointmentValidationException("sourceType must be ESTIMATE or WORKORDER");
+        };
+    }
+
+    private void enrichCreateModel(
+            AppointmentCreateModel model,
+            String sourceType,
+            String sourceId,
+            UUID facilityId,
+            String sourceStatus) {
+        model.setFacilityId(facilityId.toString());
+        model.setSourceType(sourceType);
+        model.setSourceId(sourceId);
+        model.setSourceStatus(sourceStatus);
+        model.setFacilityTimeZoneId(resolveCreateModelTimeZone(facilityId));
+
+        if ("ESTIMATE".equals(sourceType)) {
+            model.setEstimateId(sourceId);
+            model.setWorkOrderId(null);
+            return;
+        }
+        model.setWorkOrderId(sourceId);
+        model.setEstimateId(null);
+    }
+
+    private String resolveCreateModelTimeZone(UUID facilityId) {
+        String timeZone = appointmentLoadService.getFacilityTimeZoneId(facilityId);
+        if (timeZone != null && !timeZone.isBlank()) {
+            return timeZone;
+        }
+        return resolveZoneId(facilityId).getId();
+    }
+
     private ScheduleViewResponse.ScheduleResourceView toResourceView(
             ResourceLaneKey laneKey,
-            List<ScheduleViewResponse.ScheduleEventView> events) {
+            List<ScheduleViewResponse.ScheduleEventView> events,
+            String resourceName) {
         List<ScheduleViewResponse.ScheduleEventView> sorted = events.stream()
                 .sorted(Comparator.comparing(ScheduleViewResponse.ScheduleEventView::getStartTime)
                         .thenComparing(ScheduleViewResponse.ScheduleEventView::getEndTime)
@@ -427,11 +511,82 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         ScheduleViewResponse.ScheduleResourceView resourceView = new ScheduleViewResponse.ScheduleResourceView();
         resourceView.setResourceId(laneKey.resourceId());
         resourceView.setResourceType(laneKey.resourceType());
-        // TODO(#74-resourceName): Resolve resource display name from shop resource
-        // entity; using resourceId as fallback.
-        resourceView.setResourceName(laneKey.resourceId());
+        resourceView.setResourceName(resourceName);
         resourceView.setEvents(sorted);
         return resourceView;
+    }
+
+    private Map<ResourceLaneKey, String> resolveResourceNames(UUID locationId, Set<ResourceLaneKey> laneKeys) {
+        Map<ResourceLaneKey, String> resourceNames = HashMap.newHashMap(laneKeys.size());
+        if (laneKeys.isEmpty()) {
+            return resourceNames;
+        }
+
+        Map<String, List<ResourceLaneKey>> technicianLanesByResourceId = indexResourceLanes(laneKeys, resourceNames);
+        if (technicianLanesByResourceId.isEmpty()) {
+            return resourceNames;
+        }
+
+        Shop shop = shopRepository.findById(locationId).orElse(null);
+        if (!shopHasTechnicians(shop)) {
+            return resourceNames;
+        }
+
+        applyTechnicianDisplayNames(shop, technicianLanesByResourceId, resourceNames);
+        return resourceNames;
+    }
+
+    private Map<String, List<ResourceLaneKey>> indexResourceLanes(
+            Set<ResourceLaneKey> laneKeys,
+            Map<ResourceLaneKey, String> resourceNames) {
+        Map<String, List<ResourceLaneKey>> technicianLanesByResourceId = new HashMap<>();
+        for (ResourceLaneKey laneKey : laneKeys) {
+            resourceNames.put(laneKey, defaultResourceDisplayName(laneKey));
+            if ("TECHNICIAN".equalsIgnoreCase(laneKey.resourceType())) {
+                technicianLanesByResourceId.computeIfAbsent(laneKey.resourceId(), ignored -> new ArrayList<>())
+                        .add(laneKey);
+            }
+        }
+        return technicianLanesByResourceId;
+    }
+
+    private String defaultResourceDisplayName(ResourceLaneKey laneKey) {
+        if ("UNASSIGNED".equals(laneKey.resourceId())) {
+            return "Unassigned";
+        }
+        return laneKey.resourceId();
+    }
+
+    private boolean shopHasTechnicians(Shop shop) {
+        return shop != null && shop.getTechnicians() != null && !shop.getTechnicians().isEmpty();
+    }
+
+    private void applyTechnicianDisplayNames(
+            Shop shop,
+            Map<String, List<ResourceLaneKey>> technicianLanesByResourceId,
+            Map<ResourceLaneKey, String> resourceNames) {
+        for (var technician : shop.getTechnicians()) {
+            if (technician == null || technician.getId() == null) {
+                continue;
+            }
+
+            List<ResourceLaneKey> technicianLanes = technicianLanesByResourceId.get(technician.getId().toString());
+            if (technicianLanes == null) {
+                continue;
+            }
+
+            String technicianName = resolveTechnicianDisplayName(technician.getId().toString(), technician.getPersonId());
+            for (ResourceLaneKey laneKey : technicianLanes) {
+                resourceNames.put(laneKey, technicianName);
+            }
+        }
+    }
+
+    private String resolveTechnicianDisplayName(String technicianId, Long personId) {
+        if (personId == null) {
+            return technicianId;
+        }
+        return "Technician " + personId;
     }
 
     private ScheduleViewResponse.ScheduleEventView toScheduleEvent(Appointment appointment) {

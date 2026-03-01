@@ -10,13 +10,14 @@ import com.positivity.shopmanager.service.ConflictDetectionService;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
 public class ConflictDetectionServiceImpl implements ConflictDetectionService {
 
     @Override
-    public void detectConflicts(AppointmentCreateRequest request, String correlationId)
+    public void detectConflicts(AppointmentCreateRequest request, UUID correlationId)
             throws SchedulingConflictException {
         log.debug("Detecting conflicts for appointment: correlationId={}", correlationId);
     }
