@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -21,8 +22,13 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
+import com.positivity.accounting.internal.entity.DefaultGLMapping;
+import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 
 import java.time.Instant;
@@ -42,10 +48,17 @@ import java.time.Instant;
 @DisplayName("Suspense Queue Reprocessing Contract Behavioral Tests (CAP:055)")
 public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
 
+        private static final String REPROCESS_SUCCESS_EVENT_TYPE = "INVOICE_RECEIVED_SUCCESS";
+        private static final String REPROCESS_FAILURE_EVENT_TYPE = "INVOICE_RECEIVED_FAILURE";
+
         @Autowired
         private AccountingEventRepository accountingEventRepository;
         @Autowired
         private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
+        @Autowired
+        private GLAccountRepository glAccountRepository;
+        @Autowired
+        private DefaultGLMappingRepository defaultGLMappingRepository;
 
         private static final String API_V1 = "/v1/accounting/events";
 
@@ -53,6 +66,10 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
         void setUp() {
                 reprocessingAttemptHistoryRepository.deleteAll();
                 accountingEventRepository.deleteAll();
+                defaultGLMappingRepository.deleteAll();
+                glAccountRepository.deleteAll();
+
+                createDefaultMappingForSuccessfulReprocessing();
         }
 
         // ===============================================
@@ -64,7 +81,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
         public void testReprocessSuspendedEventSuccessful() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
-                submitRequest.setEventType("INVOICE_RECEIVED");
+                submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
                 submitRequest.setOrganizationId(UUID.randomUUID());
                 submitRequest.setSourceSystem("TEST_SYSTEM");
                 submitRequest.setTransactionDate(LocalDateTime.now());
@@ -83,7 +100,8 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Manually mark event as SUSPENDED for this test
                 // In production, this would happen through the posting rule engine
-                markEventAsSuspended(UUID.fromString(eventId), "Test setup: simulating rule engine suspension");
+                markEventAsSuspendedForSuccessPath(UUID.fromString(eventId),
+                                "Test setup: simulating rule engine suspension");
 
                 // Act: Reprocess the suspended event
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -105,7 +123,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
         public void testReprocessSuspendedEventAccepted() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
-                submitRequest.setEventType("INVOICE_RECEIVED");
+                submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
                 submitRequest.setOrganizationId(UUID.randomUUID());
                 submitRequest.setSourceSystem("TEST_SYSTEM");
                 submitRequest.setTransactionDate(LocalDateTime.now());
@@ -169,7 +187,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
         public void testReprocessingAttemptHistoryMaintainedSuccess() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
-                submitRequest.setEventType("INVOICE_RECEIVED");
+                submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
                 submitRequest.setOrganizationId(UUID.randomUUID());
                 submitRequest.setSourceSystem("TEST_SYSTEM");
                 submitRequest.setTransactionDate(LocalDateTime.now());
@@ -185,6 +203,9 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                                 .andReturn();
 
                 String eventId = extractEventIdFromResponse(submitResult);
+
+                markEventAsSuspendedForSuccessPath(UUID.fromString(eventId),
+                                "Test setup: simulating suspended event for success history");
 
                 // Act: Reprocess the event
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -210,7 +231,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
         public void testReprocessingAttemptHistoryMaintainedFailure() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
-                submitRequest.setEventType("INVOICE_RECEIVED");
+                submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
                 submitRequest.setOrganizationId(UUID.randomUUID());
                 submitRequest.setSourceSystem("TEST_SYSTEM");
                 submitRequest.setTransactionDate(LocalDateTime.now());
@@ -226,6 +247,8 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                                 .andReturn();
 
                 String eventId = extractEventIdFromResponse(submitResult);
+
+                markEventAsSuspended(UUID.fromString(eventId), "Test setup: simulating suspended event for failure history");
 
                 // Act: Reprocess the event
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -331,6 +354,24 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                 accountingEventRepository.save(event);
         }
 
+        private void markEventAsSuspendedForSuccessPath(UUID eventId, String errorMessage) {
+                AccountingEvent event = accountingEventRepository.findById(eventId)
+                                .orElseThrow(() -> new IllegalStateException("Event not found: " + eventId));
+                event.setStatus(AccountingEventStatus.SUSPENDED);
+                event.setErrorMessage(errorMessage);
+
+                if (event.getPayload() != null) {
+                        Object nestedPayload = event.getPayload().get("payload");
+                        if (nestedPayload instanceof Map<?, ?> payloadMap && payloadMap.get("amount") != null) {
+                                Map<String, Object> normalizedPayload = new HashMap<>(event.getPayload());
+                                normalizedPayload.put("amount", payloadMap.get("amount"));
+                                event.setPayload(normalizedPayload);
+                        }
+                }
+
+                accountingEventRepository.save(event);
+        }
+
         /**
          * Helper method to create a fully PROCESSED event for testing idempotency.
          * Returns the event ID of the created event.
@@ -351,5 +392,34 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
                 AccountingEvent saved = accountingEventRepository.save(event);
                 return saved.getEventId();
+        }
+
+        private void createDefaultMappingForSuccessfulReprocessing() {
+                GLAccount debitAccount = new GLAccount();
+                debitAccount.setAccountCode("11" + UUID.randomUUID().toString().substring(0, 8));
+                debitAccount.setAccountName("Suspense Test Debit");
+                debitAccount.setAccountType(AccountType.ASSET);
+                debitAccount.setActivationDate(LocalDateTime.now().minusDays(1));
+                debitAccount.setCreatedBy("test-user");
+                debitAccount.setModifiedBy("test-user");
+                debitAccount = glAccountRepository.save(debitAccount);
+
+                GLAccount creditAccount = new GLAccount();
+                creditAccount.setAccountCode("41" + UUID.randomUUID().toString().substring(0, 8));
+                creditAccount.setAccountName("Suspense Test Credit");
+                creditAccount.setAccountType(AccountType.REVENUE);
+                creditAccount.setActivationDate(LocalDateTime.now().minusDays(1));
+                creditAccount.setCreatedBy("test-user");
+                creditAccount.setModifiedBy("test-user");
+                creditAccount = glAccountRepository.save(creditAccount);
+
+                DefaultGLMapping mapping = new DefaultGLMapping();
+                mapping.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
+                mapping.setOrganizationId(null);
+                mapping.setDebitAccountId(debitAccount.getGlAccountId());
+                mapping.setCreditAccountId(creditAccount.getGlAccountId());
+                mapping.setDescription("Test default mapping for suspense queue success");
+                mapping.setActive(true);
+                defaultGLMappingRepository.save(mapping);
         }
 }

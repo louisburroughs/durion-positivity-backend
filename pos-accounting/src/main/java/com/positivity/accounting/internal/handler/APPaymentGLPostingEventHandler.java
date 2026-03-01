@@ -108,6 +108,7 @@ public class APPaymentGLPostingEventHandler {
         payload.put("eventType", "AP_PAYMENT_GL_POSTING");
         payload.put("sourceSystem", "POS");
         payload.put("transactionDate", event.getGatewayTimestamp());
+        payload.put("organizationId", event.getOrganizationId());
 
         // Payment details
         Map<String, Object> paymentDetails = new HashMap<>();

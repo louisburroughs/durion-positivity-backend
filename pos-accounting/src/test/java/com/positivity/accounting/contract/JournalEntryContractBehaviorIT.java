@@ -295,12 +295,12 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
                                                                 .build()))
                                 .build();
 
-                // When/Then - expect 400 Bad Request
+                // When/Then - expect 422 Unprocessable Content
                 mockMvc.perform(withAuth(post(API_V1_JOURNAL_ENTRIES))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
-                                .andExpect(status().isBadRequest());
+                                .andExpect(status().isUnprocessableEntity());
         }
 
         @Test
@@ -344,12 +344,12 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
                                                                 .build()))
                                 .build();
 
-                // Then - expect 400 Bad Request (immutability violation)
+                // Then - expect 409 Conflict (immutability violation)
                 mockMvc.perform(withAuth(put(API_V1_JOURNAL_ENTRIES + "/{journalEntryId}", entryId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(updateRequest)))
                                 .andDo(print())
-                                .andExpect(status().isBadRequest());
+                                .andExpect(status().isConflict());
         }
 
         // ===============================================

@@ -76,14 +76,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "400":
-          description: Invalid preference data
+        "200":
+          description: Preferences updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "200":
-          description: Preferences updated successfully
+        "400":
+          description: Invalid preference data
           content:
             '*/*':
               schema:
@@ -135,14 +135,14 @@ paths:
               $ref: "#/components/schemas/PreferencesMergeDto"
         required: true
       responses:
-        "200":
-          description: Preferences merged successfully
+        "404":
+          description: No existing preferences to merge into
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "404":
-          description: No existing preferences to merge into
+        "200":
+          description: Preferences merged successfully
           content:
             '*/*':
               schema:
@@ -427,14 +427,14 @@ paths:
           type: boolean
           default: false
       responses:
-        "200":
-          description: Search results returned
+        "400":
+          description: Invalid search query
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
-        "400":
-          description: Invalid search query
+        "200":
+          description: Search results returned
           content:
             '*/*':
               schema:
@@ -453,14 +453,14 @@ paths:
               $ref: "#/components/schemas/SearchVehiclesRequest"
         required: true
       responses:
-        "200":
-          description: Search results returned
+        "400":
+          description: Invalid search query
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
-        "400":
-          description: Invalid search query
+        "200":
+          description: Search results returned
           content:
             '*/*':
               schema:

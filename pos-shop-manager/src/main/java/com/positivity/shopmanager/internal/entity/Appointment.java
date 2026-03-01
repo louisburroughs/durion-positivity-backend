@@ -91,6 +91,14 @@ public class Appointment {
     @Column(name = "cancellation_notes", length = 1000)
     private String cancellationNotes;
 
+    /**
+     * Set to {@code true} when this appointment was scheduled despite a detected
+     * conflict.
+     */
+    @Builder.Default
+    @Column(name = "is_conflict_override", nullable = false)
+    private boolean isConflictOverride = false;
+
     @PrePersist
     public void generateAppointmentId() {
         if (appointmentId == null) {

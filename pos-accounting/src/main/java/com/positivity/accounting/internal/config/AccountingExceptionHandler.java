@@ -8,11 +8,13 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.EnvelopeErrorResponse;
 import com.positivity.accounting.internal.dto.ErrorResponse;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 
 /**
  * Standardized error responses for security-related exceptions.
@@ -66,6 +68,25 @@ public class AccountingExceptionHandler {
         String code = resolveStateErrorCode(ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(EnvelopeErrorResponse.of(code, ex.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateAccountCodeException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateAccountCode(DuplicateAccountCodeException ex) {
+        ErrorResponse body = ErrorResponse.builder()
+                .errorCode("DUPLICATE_ACCOUNT_CODE")
+                .message(ex.getMessage())
+                .build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex) {
+        String message = ex.getReason() != null ? ex.getReason() : ex.getMessage();
+        ErrorResponse body = ErrorResponse.builder()
+                .errorCode("REQUEST_FAILED")
+                .message(message)
+                .build();
+        return ResponseEntity.status(ex.getStatusCode()).body(body);
     }
 
     private String resolveStateErrorCode(String message) {

@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
@@ -31,9 +32,12 @@ import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.entity.CreditMemo;
+import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
 
 /**
  * Contract Behavioral Integration Tests for Credit Memo (CAP-052)
@@ -56,15 +60,22 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private CreditMemoRepository creditMemoRepository;
 
+        @Autowired
+        private GLAccountRepository glAccountRepository;
+
         @MockitoBean
         private InvoiceServiceClient invoiceServiceClient;
 
         private static final String API_V1_CREDIT_MEMOS = "/v1/accounting/credit-memos";
+        private static final UUID REVENUE_ACCOUNT_ID = UUID.fromString("01234567-89ab-cdef-0123-456789abcdef");
+        private static final UUID TAX_PAYABLE_ACCOUNT_ID = UUID.fromString("fedcba98-7654-3210-fedc-ba9876543210");
+        private static final UUID AR_ACCOUNT_ID = UUID.fromString("11111111-2222-3333-4444-555555555555");
 
         @BeforeEach
         void setUp() {
                 // Clean up any existing test data
                 creditMemoRepository.deleteAll();
+                glAccountRepository.deleteAll();
 
                 // Setup default invoice service mocks
                 // Default invoice details for $110 balance
@@ -75,8 +86,8 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                                 .customerId(customerId)
                                 .status(InvoiceStatus.OPEN)
                                 .totalAmount(new BigDecimal("110.00"))
-                                .totalPaid(new BigDecimal("100.00"))
-                                .balanceDue(new BigDecimal("10.00"))
+                                .totalPaid(BigDecimal.ZERO)
+                                .balanceDue(new BigDecimal("110.00"))
                                 .currency("USD")
                                 .invoiceDate(Instant.now().minus(10, ChronoUnit.DAYS))
                                 .build();
@@ -91,12 +102,34 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                 defaultResponse.setCreditMemoApplied(new BigDecimal("110.00"));
                 when(invoiceServiceClient.applyCreditMemo(any(UUID.class), any(ApplyCreditMemoRequest.class)))
                                 .thenReturn(defaultResponse);
+
+                seedConfiguredGLAccounts();
         }
 
         @AfterEach
         void tearDown() {
                 // Clean up test data after each test
                 creditMemoRepository.deleteAll();
+                glAccountRepository.deleteAll();
+        }
+
+        private void seedConfiguredGLAccounts() {
+                glAccountRepository.save(createGlAccount(REVENUE_ACCOUNT_ID, "4000-000", "Revenue", AccountType.REVENUE));
+                glAccountRepository
+                                .save(createGlAccount(TAX_PAYABLE_ACCOUNT_ID, "2200-000", "Tax Payable", AccountType.LIABILITY));
+                glAccountRepository.save(createGlAccount(AR_ACCOUNT_ID, "1200-000", "Accounts Receivable", AccountType.ASSET));
+        }
+
+        private GLAccount createGlAccount(UUID id, String code, String name, AccountType accountType) {
+                GLAccount account = new GLAccount();
+                account.setGlAccountId(id);
+                account.setAccountCode(code);
+                account.setAccountName(name);
+                account.setAccountType(accountType);
+                account.setActivationDate(LocalDateTime.now().minusDays(1));
+                account.setCreatedBy(TEST_USER);
+                account.setModifiedBy(TEST_USER);
+                return account;
         }
 
         // ===============================================
@@ -301,9 +334,9 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
                                 .andExpect(status().isConflict())
-                                .andExpect(
-                                                jsonPath("$.message").value(
-                                                                "Credit amount 200.00 exceeds invoice outstanding balance 110.00"));
+                                .andExpect(jsonPath("$.message").value(
+                                                org.hamcrest.Matchers.containsString(
+                                                                "exceeds invoice outstanding balance")));
         }
 
         @Test

@@ -16,6 +16,7 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityNotFoundException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -103,7 +104,7 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
      */
     private InvoiceStatusResponse buildInvoiceStatusResponse(UUID invoiceId) {
         InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(invoiceId)
-                .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
+                .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
 
         return new InvoiceStatusResponse(
                 statusView.getInvoiceId(),
