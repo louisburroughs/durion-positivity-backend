@@ -139,7 +139,10 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         // Lines can be updated (add/remove as long as entry remains balanced)
         // For now, disallow line updates; require delete + recreate for complex changes
         if (updates.getLines() != null && !updates.getLines().isEmpty()) {
-            entry.setLines(updates.getLines());
+            // Keep the managed collection instance to avoid orphan-removal dereference
+            // exceptions during flush.
+            entry.getLines().clear();
+            entry.getLines().addAll(updates.getLines());
             initializeLineMetadata(entry);
         }
 

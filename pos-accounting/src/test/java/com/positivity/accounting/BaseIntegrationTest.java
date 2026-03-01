@@ -5,11 +5,14 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+
+import com.positivity.accounting.config.TestPaymentGatewayConfig;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -47,6 +50,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@Import(TestPaymentGatewayConfig.class)
 public abstract class BaseIntegrationTest {
 
     @Autowired

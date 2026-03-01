@@ -11,17 +11,23 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
 
-    Optional<Appointment> findByAppointmentIdAndStatus(UUID appointmentId, AppointmentStatus status);
+        Optional<Appointment> findByAppointmentIdAndStatus(UUID appointmentId, AppointmentStatus status);
 
-    @Query("""
-            SELECT appointment
-            FROM Appointment appointment
-            WHERE appointment.locationId = :locationId
-              AND appointment.startAt < :dayEndAt
-              AND appointment.endAt > :dayStartAt
-            """)
-    List<Appointment> findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-            UUID locationId,
-            Instant dayEndAt,
-            Instant dayStartAt);
+        @Query("""
+                        SELECT appointment
+                        FROM Appointment appointment
+                        WHERE appointment.locationId = :locationId
+                          AND appointment.startAt < :dayEndAt
+                          AND appointment.endAt > :dayStartAt
+                        """)
+        List<Appointment> findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
+                        UUID locationId,
+                        Instant dayEndAt,
+                        Instant dayStartAt);
+
+        List<Appointment> findByResourceIdAndResourceTypeAndStartAtLessThanAndEndAtGreaterThan(
+                        String resourceId,
+                        String resourceType,
+                        Instant windowEnd,
+                        Instant windowStart);
 }

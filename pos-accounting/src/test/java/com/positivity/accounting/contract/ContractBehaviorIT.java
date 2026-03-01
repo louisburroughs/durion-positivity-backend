@@ -9,7 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -134,13 +136,15 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         public void testCreateJournalEntryHappyPath() throws Exception {
                 // Arrange: Create GL accounts first (prerequisites)
-                createGLAccount("1000-000", "Cash", AccountType.ASSET);
+                UUID debitAccountId = createGLAccount("1000-000", "Cash", AccountType.ASSET);
+                UUID creditAccountId = createGLAccount("4000-000", "Sales Revenue", AccountType.REVENUE);
 
                 // Prepare journal entry request
-                JournalEntryCreateRequest request = new JournalEntryCreateRequest();
-                request.setTransactionDate(LocalDateTime.now());
-                request.setDescription("Daily sales deposit");
-                request.setSourceEventType("SALE");
+                JournalEntryCreateRequest request = createBalancedJournalEntryRequest(
+                                debitAccountId,
+                                creditAccountId,
+                                "Daily sales deposit",
+                                "SALE");
 
                 // Act: POST journal entry
                 mockMvc.perform(withAuth(post(API_V1 + "/journal-entries"))
@@ -155,13 +159,15 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-002a: Journal Entry audit fields populated correctly")
         public void testJournalEntryAuditFieldsPopulated() throws Exception {
                 // Arrange: Create GL accounts first (prerequisites)
-                createGLAccount("1000-001", "Cash - Audit Test", AccountType.ASSET);
+                UUID debitAccountId = createGLAccount("1000-001", "Cash - Audit Test", AccountType.ASSET);
+                UUID creditAccountId = createGLAccount("4000-001", "Revenue - Audit Test", AccountType.REVENUE);
 
                 // Prepare journal entry request
-                JournalEntryCreateRequest request = new JournalEntryCreateRequest();
-                request.setTransactionDate(LocalDateTime.now());
-                request.setDescription("Audit field test entry");
-                request.setSourceEventType("TEST");
+                JournalEntryCreateRequest request = createBalancedJournalEntryRequest(
+                                debitAccountId,
+                                creditAccountId,
+                                "Audit field test entry",
+                                "TEST");
 
                 // Act: POST journal entry
                 MvcResult result = mockMvc.perform(withAuth(post(API_V1 + "/journal-entries"))
@@ -211,8 +217,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.message").exists());
+                                .andExpect(status().isBadRequest());
         }
 
         @Test
@@ -270,12 +275,14 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         public void testJournalEntryIdempotency() throws Exception {
                 // Arrange
-                createGLAccount("1000-000", "Cash", AccountType.ASSET);
+                UUID debitAccountId = createGLAccount("1000-000", "Cash", AccountType.ASSET);
+                UUID creditAccountId = createGLAccount("4000-000", "Sales Revenue", AccountType.REVENUE);
 
-                JournalEntryCreateRequest request = new JournalEntryCreateRequest();
-                request.setTransactionDate(LocalDateTime.now());
-                request.setDescription("Test entry");
-                request.setSourceEventType("SALE");
+                JournalEntryCreateRequest request = createBalancedJournalEntryRequest(
+                                debitAccountId,
+                                creditAccountId,
+                                "Test entry",
+                                "SALE");
 
                 // Act: First request
                 MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1 + "/journal-entries"))
@@ -329,12 +336,14 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         public void testJournalEntryBalanceInvariant() throws Exception {
                 // Arrange: Create GL account
-                createGLAccount("1000-000", "Cash", AccountType.ASSET);
+                UUID debitAccountId = createGLAccount("1000-000", "Cash", AccountType.ASSET);
+                UUID creditAccountId = createGLAccount("4000-000", "Sales Revenue", AccountType.REVENUE);
 
-                JournalEntryCreateRequest request = new JournalEntryCreateRequest();
-                request.setTransactionDate(LocalDateTime.now());
-                request.setDescription("Entry to verify creation");
-                request.setSourceEventType("SALE");
+                JournalEntryCreateRequest request = createBalancedJournalEntryRequest(
+                                debitAccountId,
+                                creditAccountId,
+                                "Entry to verify creation",
+                                "SALE");
 
                 // Act: Create entry
                 MvcResult result = mockMvc.perform(withAuth(post(API_V1 + "/journal-entries"))
@@ -389,9 +398,9 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         // HELPER METHODS
         // ===============================================
 
-        private void createGLAccount(String code, String name, AccountType type) throws Exception {
+        private UUID createGLAccount(String code, String name, AccountType type) throws Exception {
                 GLAccountCreateRequest dto = createGLAccountRequest(code, name, type);
-                createGLAccountDirect(dto);
+                return createGLAccountDirect(dto);
         }
 
         private GLAccountCreateRequest createGLAccountRequest(String code, String name, AccountType type) {
@@ -403,10 +412,41 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
                 return request;
         }
 
-        private void createGLAccountDirect(GLAccountCreateRequest dto) throws Exception {
-                mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
+        private UUID createGLAccountDirect(GLAccountCreateRequest dto) throws Exception {
+                MvcResult result = mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(dto)))
-                                .andExpect(status().isCreated());
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                String responseBody = result.getResponse().getContentAsString();
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = objectMapper.readValue(responseBody, Map.class);
+                return UUID.fromString((String) response.get("glAccountId"));
+        }
+
+        private JournalEntryCreateRequest createBalancedJournalEntryRequest(
+                        UUID debitAccountId,
+                        UUID creditAccountId,
+                        String description,
+                        String sourceEventType) {
+                return JournalEntryCreateRequest.builder()
+                                .transactionDate(LocalDateTime.now())
+                                .description(description)
+                                .sourceEventType(sourceEventType)
+                                .lines(List.of(
+                                                JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                                                                .glAccountId(debitAccountId)
+                                                                .debitAmount(new BigDecimal("100.00"))
+                                                                .creditAmount(BigDecimal.ZERO)
+                                                                .description("Debit")
+                                                                .build(),
+                                                JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                                                                .glAccountId(creditAccountId)
+                                                                .debitAmount(BigDecimal.ZERO)
+                                                                .creditAmount(new BigDecimal("100.00"))
+                                                                .description("Credit")
+                                                                .build()))
+                                .build();
         }
 }

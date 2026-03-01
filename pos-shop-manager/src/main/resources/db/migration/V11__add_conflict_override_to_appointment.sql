@@ -1,0 +1,2 @@
+ALTER TABLE appointment
+    ADD COLUMN IF NOT EXISTS is_conflict_override BOOLEAN NOT NULL DEFAULT FALSE;

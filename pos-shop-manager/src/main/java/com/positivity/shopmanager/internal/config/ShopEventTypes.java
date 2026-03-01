@@ -17,7 +17,7 @@ public final class ShopEventTypes {
 
         /**
          * All event type registrations for the shop manager module.
-         * Total: 7 event types.
+         * Total: 14 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -47,6 +47,15 @@ public final class ShopEventTypes {
                                 EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CANCEL",
                                                 "Cancel an appointment").build(),
                                 EventTypeRegistration.fastRead("SHOPMGR_SCHEDULE_VIEW",
-                                                "View schedule by location and resource filters").build());
+                                                "View schedule by location and resource filters").build(),
+                                // ConflictOverrideController - 1 event
+                                EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE",
+                                                "Override appointment scheduling conflict with manager permission")
+                                                .build(),
+                                // AssignmentController - 2 events
+                                EventTypeRegistration.write("SHOPMGR_ASSIGNMENT_CREATED",
+                                                "Mechanic and resource assignment created for an appointment").build(),
+                                EventTypeRegistration.fastRead("SHOPMGR_ASSIGNMENT_LIST_FETCHED",
+                                                "List mechanic and resource assignments for an appointment").build());
         }
 }

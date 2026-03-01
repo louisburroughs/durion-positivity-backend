@@ -48,6 +48,7 @@ import lombok.RequiredArgsConstructor;
 public class APPaymentServiceImpl implements APPaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(APPaymentServiceImpl.class);
+    private static final UUID DEFAULT_ORGANIZATION_ID = UUID.fromString("00000000-0000-4000-a000-000000000010");
 
     private final APPaymentRepository paymentRepository;
     private final APPaymentAllocationRepository allocationRepository;
@@ -147,6 +148,7 @@ public class APPaymentServiceImpl implements APPaymentService {
 
             APPaymentGLPostingEvent glPostingEvent = APPaymentGLPostingEvent.builder()
                     .eventId(UUID.randomUUID())
+                    .organizationId(DEFAULT_ORGANIZATION_ID)
                     .paymentId(payment.getPaymentId())
                     .paymentRef(payment.getPaymentRef())
                     .vendorId(payment.getVendorId())
