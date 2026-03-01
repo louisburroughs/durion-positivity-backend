@@ -319,7 +319,8 @@ class WipServiceImplTest {
         } catch (IllegalArgumentException | NoSuchElementException expected) {
             // Correct behaviour: the impl threw the expected typed exception.
         }
-        // If UnsupportedOperationException propagates uncaught here, the impl is not yet complete.
+        // If UnsupportedOperationException propagates uncaught here, the impl is not
+        // yet complete.
     }
 
     // -------------------------------------------------------------------------

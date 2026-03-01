@@ -138,7 +138,10 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
-        /** Paginated search for estimates by optional customer and/or vehicle filter (Story #15) */
+        /**
+         * Paginated search for estimates by optional customer and/or vehicle filter
+         * (Story #15)
+         */
         public static final EventTypeRegistration WORKORDER_ESTIMATE_SEARCH = EventTypeRegistration
                         .search("WORKORDER_ESTIMATE_SEARCH",
                                         "Paginated search for estimates by customer and/or vehicle")
