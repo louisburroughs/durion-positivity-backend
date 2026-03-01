@@ -3,10 +3,16 @@ package com.positivity.workorder.service;
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
+import com.positivity.workorder.internal.service.CustomerReferenceService;
+import com.positivity.workorder.internal.service.VehicleReferenceService;
 import com.positivity.workorder.internal.service.WipServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +28,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -62,6 +69,21 @@ class WipServiceImplTest {
         @Mock
         private WorkorderStateTransitionRepository stateTransitionRepository;
 
+        @Mock
+        private TechnicianAssignmentRepository technicianAssignmentRepository;
+
+        @Mock
+        private WorkorderPartRepository workorderPartRepository;
+
+        @Mock
+        private WorkorderServiceRepository workorderServiceRepository;
+
+        @Mock
+        private CustomerReferenceService customerReferenceService;
+
+        @Mock
+        private VehicleReferenceService vehicleReferenceService;
+
         @InjectMocks
         private WipServiceImpl service;
 
@@ -100,6 +122,27 @@ class WipServiceImplTest {
                                                                 .transitionedBy("system")
                                                                 .reason("parts delayed")
                                                                 .build()));
+
+                lenient().when(technicianAssignmentRepository.findByWorkorderIdInAndCurrentTrue(any()))
+                                .thenReturn(List.of());
+                lenient().when(technicianAssignmentRepository.findByWorkorderIdAndCurrentTrue(any(UUID.class)))
+                                .thenReturn(Optional.empty());
+
+                lenient().when(workorderPartRepository.findByWorkorderId(any(UUID.class))).thenReturn(List.of());
+                lenient().when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(any(UUID.class)))
+                                .thenReturn(List.of());
+                lenient().when(workorderServiceRepository.findByWorkOrder_Id(any(UUID.class))).thenReturn(List.of());
+
+                lenient().when(customerReferenceService.resolveAll(any())).thenReturn(java.util.Map.of());
+                lenient().when(vehicleReferenceService.resolveAll(any())).thenReturn(java.util.Map.of());
+                lenient().when(customerReferenceService.resolve(any(UUID.class)))
+                                .thenAnswer(invocation -> new CustomerReferenceService.CustomerContact(
+                                                "customer-" + invocation.getArgument(0),
+                                                null));
+                lenient().when(vehicleReferenceService.resolve(any(UUID.class)))
+                                .thenAnswer(invocation -> new VehicleReferenceService.VehicleReference(
+                                                "vehicle-" + invocation.getArgument(0),
+                                                null));
         }
 
         // -------------------------------------------------------------------------
@@ -294,6 +337,42 @@ class WipServiceImplTest {
                                 .isNotEmpty();
         }
 
+        @Test
+        @DisplayName("getWipDetail: partsBlocking includes only parts with unfulfilled quantity gap")
+        void getWipDetail_partsBlocking_usesQuantityGapRule() {
+                UUID workorderId = UUID.randomUUID();
+                WorkorderPart partReady = buildPart("Oil Filter", new BigDecimal("1.00"), new BigDecimal("1.00"),
+                                BigDecimal.ZERO, BigDecimal.ZERO);
+                WorkorderPart partBlocked = buildPart("Brake Pad Kit", new BigDecimal("2.00"), new BigDecimal("1.00"),
+                                BigDecimal.ZERO, BigDecimal.ZERO);
+                when(workorderRepository.findById(workorderId))
+                                .thenReturn(Optional.of(buildAwaitingPartsWorkorder(workorderId, UUID.fromString(LOCATION_1))));
+                when(workorderPartRepository.findByWorkorderId(workorderId))
+                                .thenReturn(List.of(partReady, partBlocked));
+                when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of());
+
+                WorkorderStatusDetail detail = service.getWipDetail(workorderId);
+
+                assertThat(detail.getPartsBlocking()).containsExactly("Brake Pad Kit");
+        }
+
+        @Test
+        @DisplayName("getWipDetail: fully covered part quantities fall back to generic PARTS_PENDING token")
+        void getWipDetail_partsBlocking_fallsBackWhenNoQuantityGap() {
+                UUID workorderId = UUID.randomUUID();
+                WorkorderPart coveredPart = buildPart("Cabin Filter", new BigDecimal("1.00"), new BigDecimal("1.00"),
+                                BigDecimal.ZERO, BigDecimal.ZERO);
+                when(workorderRepository.findById(workorderId))
+                                .thenReturn(Optional.of(buildAwaitingPartsWorkorder(workorderId, UUID.fromString(LOCATION_1))));
+                when(workorderPartRepository.findByWorkorderId(workorderId))
+                                .thenReturn(List.of(coveredPart));
+                when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of());
+
+                WorkorderStatusDetail detail = service.getWipDetail(workorderId);
+
+                assertThat(detail.getPartsBlocking()).containsExactly("PARTS_PENDING");
+        }
+
         // -------------------------------------------------------------------------
         // AC7 — service unavailability / unknown workorder
         // -------------------------------------------------------------------------
@@ -393,6 +472,23 @@ class WipServiceImplTest {
                                 .vehicleId(UUID.randomUUID())
                                 .status(WorkorderStatus.AWAITING_PARTS)
                                 .updatedAt(LocalDateTime.now())
+                                .build();
+        }
+
+        private static com.positivity.workorder.internal.entity.WorkorderPart buildPart(
+                        String description,
+                        BigDecimal quantity,
+                        BigDecimal issued,
+                        BigDecimal consumed,
+                        BigDecimal returned) {
+                return com.positivity.workorder.internal.entity.WorkorderPart.builder()
+                                .id(UUID.randomUUID())
+                                .description(description)
+                                .quantity(quantity)
+                                .quantityIssued(issued)
+                                .quantityConsumed(consumed)
+                                .quantityReturned(returned)
+                                .status(com.positivity.workorder.internal.enums.WorkorderItemStatus.OPEN)
                                 .build();
         }
 

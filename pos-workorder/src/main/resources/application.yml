@@ -67,5 +67,9 @@ springdoc:
     path: /swagger-ui.html
 
 pos:
+  customer:
+    base-url: ${POS_CUSTOMER_BASE_URL:http://pos-customer:8084}
+  vehicle:
+    base-url: ${POS_VEHICLE_BASE_URL:http://pos-vehicle:8088}
   tax:
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
