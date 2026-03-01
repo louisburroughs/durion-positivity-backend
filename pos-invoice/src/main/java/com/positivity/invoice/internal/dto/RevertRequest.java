@@ -3,13 +3,15 @@ package com.positivity.invoice.internal.dto;
 import org.jspecify.annotations.NonNull;
 
 /**
- * Request payload for reverting a finalized invoice back to DRAFT (Story #13, AC6).
+ * Request payload for reverting a finalized invoice back to DRAFT (Story #13,
+ * AC6).
  *
- * <p>Reversion is only permitted:
+ * <p>
+ * Reversion is only permitted:
  * <ul>
- *   <li>Within 24h of finalization</li>
- *   <li>Before the invoice has been POSTED to the general ledger</li>
- *   <li>When a valid manager approval code is provided</li>
+ * <li>Within 24h of finalization</li>
+ * <li>Before the invoice has been POSTED to the general ledger</li>
+ * <li>When a valid manager approval code is provided</li>
  * </ul>
  */
 public class RevertRequest {

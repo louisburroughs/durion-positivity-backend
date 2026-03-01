@@ -6,6 +6,7 @@ import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.service.InvoiceFinalizationService;
@@ -168,10 +169,17 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new InvoiceNotFoundException("Invoice " + invoiceId + " not found"));
 
-        // AC6: POSTED invoices are immutable
+        // AC6: POSTED invoices are immutable — checked before FINALIZED guard so POSTED
+        // gets its own explicit rejection message
         if (invoice.getStatus() == InvoiceStatus.POSTED) {
             throw new IllegalStateException(
                     "Invoice " + invoiceId + " is in POSTED status and cannot be reverted");
+        }
+
+        // AC6: Invoice must be in FINALIZED status to be reverted (NF1)
+        if (invoice.getStatus() != InvoiceStatus.FINALIZED) {
+            throw new InvalidInvoiceStateException(
+                    "Invoice " + invoiceId + " is not in FINALIZED status and cannot be reverted");
         }
 
         // AC6: Check 24h reversion window
@@ -268,6 +276,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         response.setFinalizedBy(invoice.getFinalizedBy());
         response.setRevertedAt(invoice.getRevertedAt());
         response.setReversionReason(invoice.getReversionReason());
+        response.setRevertedBy(invoice.getRevertedBy());
         return response;
     }
 }

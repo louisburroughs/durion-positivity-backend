@@ -19,5 +19,5 @@ public class PosInvoiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(PosInvoiceApplication.class, args);
     }
-    
+
 }
