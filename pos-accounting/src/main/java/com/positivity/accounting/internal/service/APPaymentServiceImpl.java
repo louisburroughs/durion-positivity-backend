@@ -11,10 +11,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
@@ -29,6 +26,8 @@ import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
+import com.positivity.accounting.internal.payment.GatewayPaymentRequest;
+import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
 import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
@@ -55,15 +54,9 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final VendorBillRepository billRepository;
     private final PaymentGatewayProvider paymentGateway;
     private final OutboxService outboxService;
+    private final APPaymentFailurePersistenceService paymentFailurePersistenceService;
 
-    // Self-injection for accessing proxied @Transactional methods
-    // Field injection required for self-reference; constructor injection not
-    // applicable
-    @SuppressWarnings("java:S6813")
-    @Autowired
-    @Lazy
-    private APPaymentService self;
-
+ 
     @Override
     @Transactional
     @SuppressWarnings({ "java:S1181", "java:S2221" }) // Catching Exception is intentional for gateway-level failures
@@ -101,36 +94,36 @@ public class APPaymentServiceImpl implements APPaymentService {
                 paymentSource = "UNSPECIFIED";
             }
             // Call payment gateway with idempotency key
-            var gatewayRequest = new PaymentGatewayProvider.GatewayPaymentRequest(
-                    request.getPaymentRef(), // Use paymentRef as idempotency key
-                    request.getGrossAmount(),
-                    request.getCurrency(),
-                    request.getPaymentMethod(),
-                    request.getVendorId().toString(),
-                    paymentSource,
-                    request.getMemo(),
-                    "ap_payment"); // metadata tags
+            GatewayPaymentRequest gatewayRequest = GatewayPaymentRequest.builder()
+                    .idempotencyKey(request.getPaymentRef()) // Use paymentRef as idempotency key
+                    .amount(request.getGrossAmount())
+                    .currency(request.getCurrency())
+                    .paymentMethod(request.getPaymentMethod())
+                    .vendorId(request.getVendorId().toString())
+                    .paymentSource(paymentSource)
+                    .memo(request.getMemo())
+                    .metadata(java.util.List.of("ap_payment")) // metadata tags
+                    .build();
 
-            PaymentGatewayProvider.GatewayPaymentResponse gatewayResponse = paymentGateway
-                    .executePayment(gatewayRequest);
+            GatewayPaymentResponse gatewayResponse = paymentGateway.executePayment(gatewayRequest);
 
             // Capture gateway response
-            payment.setGatewayTransactionId(gatewayResponse.transactionId());
+            payment.setGatewayTransactionId(gatewayResponse.getTransactionId());
             payment.setGatewayTimestamp(Instant.now());
-            payment.setGatewayResponse(gatewayResponse.rawResponse());
+            payment.setGatewayResponse(gatewayResponse.getRawResponse());
 
             // Map gateway status to payment status
-            switch (gatewayResponse.status()) {
+            switch (gatewayResponse.getStatus()) {
                 case SUCCEEDED, AUTHORIZED -> payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
                 case PENDING -> payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
                 case DECLINED, FAILED -> {
                     payment.setStatus(APPaymentStatus.GATEWAY_FAILED);
                     payment.setGatewayResponse(
-                            "Gateway declined: " + (gatewayResponse.failureReason() != null
-                                    ? gatewayResponse.failureReason()
+                            "Gateway declined: " + (gatewayResponse.getFailureReason() != null
+                                    ? gatewayResponse.getFailureReason()
                                     : "Unknown reason"));
                     throw new PaymentGatewayException(
-                            "Payment declined by gateway: " + gatewayResponse.failureReason());
+                            "Payment declined by gateway: " + gatewayResponse.getFailureReason());
                 }
             }
 
@@ -201,43 +194,10 @@ public class APPaymentServiceImpl implements APPaymentService {
             // Gateway-level failures: persist failure state in separate transaction for
             // audit/idempotency
             // Best effort: keep failure state even when gateway call fails.
-            persistGatewayFailure(payment.getPaymentId(), e.getMessage());
+            paymentFailurePersistenceService.persistGatewayFailure(payment.getPaymentId(), e.getMessage());
             // Exception carries context and will be logged in exception handler
             throw new PaymentGatewayException(
                     "Payment gateway communication failure", request.getPaymentRef(), e);
-        }
-    }
-
-    /**
-     * Persists gateway failure state in a separate transaction.
-     * 
-     * This method uses REQUIRES_NEW propagation to ensure the failure state is
-     * persisted
-     * even when the parent transaction rolls back. This is critical for audit
-     * trails and
-     * idempotency - we need to record that a payment attempt was made and failed.
-     * 
-     * @param paymentId    the payment ID
-     * @param errorMessage the error message from the gateway
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    @SuppressWarnings({ "java:S1181", "java:S2221" }) // Catching Exception intentional for best-effort persistence
-    protected void persistGatewayFailure(@NonNull UUID paymentId, String errorMessage) {
-        try {
-            Optional<APPayment> paymentOpt = paymentRepository.findById(paymentId);
-            if (paymentOpt.isPresent()) {
-                APPayment payment = paymentOpt.get();
-                payment.setStatus(APPaymentStatus.GATEWAY_FAILED);
-                payment.setGatewayResponse(errorMessage);
-                paymentRepository.save(payment);
-                log.info("Persisted gateway failure for payment {}", paymentId);
-            } else {
-                log.warn("Could not find payment {} to persist gateway failure", paymentId);
-            }
-        } catch (Exception ex) {
-            log.error("Failed to persist gateway failure for payment {}: {}", paymentId, ex.getMessage(), ex);
-            // Exception is logged; not rethrown as this is best-effort persistence
-            // Throwing here would cause the parent transaction to fail
         }
     }
 
