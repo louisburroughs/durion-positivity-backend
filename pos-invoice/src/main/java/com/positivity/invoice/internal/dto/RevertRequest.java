@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import org.jspecify.annotations.NonNull;
 
 /**
@@ -17,9 +18,11 @@ import org.jspecify.annotations.NonNull;
 public class RevertRequest {
 
     @NonNull
+    @NotBlank
     private String managerApprovalCode;
 
     @NonNull
+    @NotBlank
     private String reason;
 
     @NonNull

@@ -84,17 +84,17 @@ public class Invoice {
     @Column(name = "finalized_by", length = 64)
     private String finalizedBy;
 
-    // -- Story #13 scaffold columns (nullable, no migration added yet) --
-    @Column(name = "gl_entry_id", columnDefinition = "UUID", nullable = true)
+    // Pending Flyway migration: keep these fields transient until DB columns exist.
+    @Transient
     private UUID glEntryId;
 
-    @Column(name = "reverted_at", nullable = true)
+    @Transient
     private Instant revertedAt;
 
-    @Column(name = "reversion_reason", length = 512, nullable = true)
+    @Transient
     private String reversionReason;
 
-    @Column(name = "reverted_by", length = 64, nullable = true)
+    @Transient
     private String revertedBy;
 
     @Version

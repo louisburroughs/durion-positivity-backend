@@ -40,7 +40,7 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.BillingRulesClientService;
 import com.positivity.workorder.internal.client.TaxClient;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class EstimateServiceImplTest {

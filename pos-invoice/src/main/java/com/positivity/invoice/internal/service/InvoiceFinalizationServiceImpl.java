@@ -114,14 +114,15 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     @Override
     @NonNull
     public InvoiceDetailsResponse finalize(@NonNull UUID invoiceId, @NonNull FinalizationRequest request) {
-        // Idempotency guard — reject if invoice is already finalized (when found in
-        // repo)
+        // AC4: only DRAFT invoices are eligible for finalization.
+        // Reject any non-DRAFT state (e.g., FINALIZED, POSTED, ERROR) with conflict.
         Optional<Invoice> existingOpt = invoiceRepository.findById(invoiceId);
         if (existingOpt.isPresent()) {
             Invoice existing = existingOpt.get();
-            if (existing.getStatus() == InvoiceStatus.FINALIZED) {
+            if (existing.getStatus() != InvoiceStatus.DRAFT) {
                 throw new IllegalStateException(
-                        "Invoice " + invoiceId + " is already finalized and cannot be finalized again");
+                        "Invoice " + invoiceId + " is in " + existing.getStatus()
+                                + " status and cannot be finalized");
             }
         }
 
