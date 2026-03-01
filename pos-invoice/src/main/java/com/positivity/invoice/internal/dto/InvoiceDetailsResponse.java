@@ -26,6 +26,8 @@ public class InvoiceDetailsResponse {
     private Instant updatedAt;
     private Instant finalizedAt;
     private String finalizedBy;
+    private Instant revertedAt;
+    private String reversionReason;
     private List<InvoiceItemResponse> items = new ArrayList<>();
     private List<InvoiceAdjustmentResponse> adjustmentEntries = new ArrayList<>();
 
@@ -162,6 +164,24 @@ public class InvoiceDetailsResponse {
 
     public void setFinalizedBy(@Nullable String finalizedBy) {
         this.finalizedBy = finalizedBy;
+    }
+
+    @Nullable
+    public Instant getRevertedAt() {
+        return revertedAt;
+    }
+
+    public void setRevertedAt(@Nullable Instant revertedAt) {
+        this.revertedAt = revertedAt;
+    }
+
+    @Nullable
+    public String getReversionReason() {
+        return reversionReason;
+    }
+
+    public void setReversionReason(@Nullable String reversionReason) {
+        this.reversionReason = reversionReason;
     }
 
     public List<InvoiceItemResponse> getItems() {

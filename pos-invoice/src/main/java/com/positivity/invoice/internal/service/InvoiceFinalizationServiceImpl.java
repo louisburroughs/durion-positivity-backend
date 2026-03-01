@@ -146,14 +146,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
 
             return toDetailsResponse(saved);
         } else {
-            // No persisted invoice — build in-memory response (unit-test path, no
-            // repository mock)
-            InvoiceDetailsResponse response = new InvoiceDetailsResponse();
-            response.setStatus(InvoiceStatus.FINALIZED);
-            response.setFinalizedAt(now);
-            response.setFinalizedBy(finalizedBy);
-            response.setInvoiceId(invoiceId);
-            return response;
+            throw new InvoiceNotFoundException("Invoice " + invoiceId + " not found");
         }
     }
 
@@ -191,9 +184,17 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         }
 
         // Transition back to DRAFT
+        // ADR-0018: audit the actor performing the reversion
+        String revertedBy = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String redactedCode = managerApprovalCode.length() > 4
+                ? managerApprovalCode.substring(0, 4) + "****"
+                : "****";
+        log.info("Invoice reversion: actor={}, invoiceId={}, approvalCode={}", revertedBy, invoiceId, redactedCode);
+
         invoice.setStatus(InvoiceStatus.DRAFT);
         invoice.setRevertedAt(Instant.now());
         invoice.setReversionReason(reason);
+        invoice.setRevertedBy(revertedBy);
         Invoice saved = invoiceRepository.save(invoice);
 
         return toDetailsResponse(saved);
@@ -265,6 +266,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         response.setUpdatedAt(invoice.getUpdatedAt());
         response.setFinalizedAt(invoice.getFinalizedAt());
         response.setFinalizedBy(invoice.getFinalizedBy());
+        response.setRevertedAt(invoice.getRevertedAt());
+        response.setReversionReason(invoice.getReversionReason());
         return response;
     }
 }

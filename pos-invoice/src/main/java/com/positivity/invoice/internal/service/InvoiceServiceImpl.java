@@ -13,7 +13,6 @@ import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.service.InvoiceService;
-import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
@@ -35,8 +34,6 @@ import java.util.UUID;
 @Service
 @Transactional
 public class InvoiceServiceImpl implements InvoiceService {
-
-    private static final String SYSTEM_USER = "system";
 
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
@@ -101,30 +98,6 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         invoice.addAdjustment(adjustment);
         recalculateTotals(invoice);
-
-        Invoice saved = invoiceRepository.save(invoice);
-        return toDetailsResponse(saved);
-    }
-
-    @Override
-    @NonNull
-    public InvoiceDetailsResponse finalizeInvoice(@NonNull UUID invoiceId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
-
-        if (invoice.getStatus() == InvoiceStatus.FINALIZED) {
-            return toDetailsResponse(invoice);
-        }
-
-        validateDraftState(invoice);
-
-        if (invoice.getInvoiceNumber() == null || invoice.getInvoiceNumber().isBlank()) {
-            invoice.setInvoiceNumber(generateInvoiceNumber(invoice));
-        }
-
-        invoice.setStatus(InvoiceStatus.FINALIZED);
-        invoice.setFinalizedAt(Instant.now());
-        invoice.setFinalizedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER));
 
         Invoice saved = invoiceRepository.save(invoice);
         return toDetailsResponse(saved);
@@ -285,6 +258,8 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setUpdatedAt(invoice.getUpdatedAt());
         response.setFinalizedAt(invoice.getFinalizedAt());
         response.setFinalizedBy(invoice.getFinalizedBy());
+        response.setRevertedAt(invoice.getRevertedAt());
+        response.setReversionReason(invoice.getReversionReason());
 
         List<InvoiceItemResponse> itemResponses = invoice.getItems().stream()
                 .sorted(Comparator.comparing(item -> Objects.requireNonNullElse(item.getId(), UUID.randomUUID())))
