@@ -2,6 +2,7 @@ package com.positivity.invoice.service;
 
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
+import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
@@ -13,11 +14,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 /**
  * Permission matrix unit tests for {@link InvoiceFinalizationService} — Story
@@ -137,6 +140,7 @@ class InvoiceFinalizationPermissionTest {
     @Test
     void finalization_isIdempotent_whenInvoiceAlreadyFinalized() {
         UUID invoiceId = UUID.randomUUID();
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(finalizedInvoice(UUID.randomUUID())));
         FinalizationRequest request = buildRequest(SHOP_MANAGER, new BigDecimal("200.00"), null);
 
         assertThatThrownBy(() -> service.finalize(invoiceId, request))
@@ -168,5 +172,15 @@ class InvoiceFinalizationPermissionTest {
         req.setFinalizedBy(actor);
         req.setFinalizedAt(Instant.now());
         return req;
+    }
+
+    private Invoice finalizedInvoice(UUID workorderId) {
+        Invoice invoice = new Invoice();
+        invoice.setWorkorderId(workorderId);
+        invoice.setStatus(InvoiceStatus.FINALIZED);
+        invoice.setTotal(BigDecimal.ZERO);
+        invoice.setFinalizedAt(Instant.now().minusSeconds(3600));
+        invoice.setFinalizedBy("manager-001");
+        return invoice;
     }
 }
