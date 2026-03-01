@@ -34,6 +34,10 @@ ALTER TABLE assignment
 CREATE INDEX IF NOT EXISTS idx_assignment_appointment_id
     ON assignment (appointment_id);
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_assignment_appointment_active
+    ON assignment (appointment_id)
+    WHERE status IN ('CONFIRMED', 'IN_PROGRESS');
+
 CREATE TABLE IF NOT EXISTS assignment_mechanic (
     id UUID PRIMARY KEY,
     assignment_id UUID NOT NULL,
@@ -107,17 +111,30 @@ CREATE INDEX IF NOT EXISTS idx_hr_integration_log_person_id
 
 CREATE TABLE IF NOT EXISTS mechanic (
     mechanic_id UUID PRIMARY KEY,
-    person_id VARCHAR(255),
+    person_id VARCHAR(255) NOT NULL,
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     status VARCHAR(255),
     hire_date DATE,
     termination_date DATE,
-    version INTEGER,
+    version INTEGER NOT NULL DEFAULT 0,
     last_synced_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE mechanic
+    ALTER COLUMN person_id SET NOT NULL;
+
+ALTER TABLE mechanic
+    ALTER COLUMN version SET DEFAULT 0;
+
+UPDATE mechanic
+SET version = 0
+WHERE version IS NULL;
+
+ALTER TABLE mechanic
+    ALTER COLUMN version SET NOT NULL;
 
 ALTER TABLE mechanic
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
@@ -140,6 +157,9 @@ ALTER TABLE mechanic
     ALTER COLUMN updated_at SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_mechanic_person_id
+    ON mechanic (person_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mechanic_person_id
     ON mechanic (person_id);
 
 CREATE INDEX IF NOT EXISTS idx_mechanic_status

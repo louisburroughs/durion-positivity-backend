@@ -99,6 +99,27 @@ class AssignmentServiceTest {
                 verify(assignmentRepository, never()).save(any());
         }
 
+        // --- C2-F-02: multi-mechanic with null role throws ---
+
+        @Test
+        void c2_f02_multiMechanicWithNullRole_throwsIllegalArgument() {
+                var request = CreateAssignmentRequest.builder()
+                                .appointmentId(UUID.randomUUID())
+                                .mechanics(List.of(
+                                                MechanicAssignmentItem.builder().mechanicPersonId("P1")
+                                                                .role(MechanicRole.LEAD).build(),
+                                                MechanicAssignmentItem.builder().mechanicPersonId("P2")
+                                                                .role(null).build()))
+                                .build();
+
+                assertThatThrownBy(() -> service.create(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("explicit role");
+
+                verify(appointmentRepository, never()).findById(any());
+                verify(assignmentRepository, never()).save(any());
+        }
+
         // --- appointment must exist (hard block) ---
 
         @Test
@@ -128,6 +149,28 @@ class AssignmentServiceTest {
                 assertThatThrownBy(() -> service.create(request))
                                 .isInstanceOf(IllegalStateException.class)
                                 .hasMessageContaining("SCHEDULED");
+
+                verify(assignmentRepository, never()).save(any());
+        }
+
+        // --- C2-F-03: duplicate active assignment throws ---
+
+        @Test
+        void c2_f03_duplicateActiveAssignment_throwsIllegalState() {
+                UUID appointmentId = UUID.randomUUID();
+                var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
+                var existingAssignment = buildSavedAssignment(appointmentId);
+                var request = buildSingleLeadRequest(appointmentId, "P-001");
+
+                when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+                when(assignmentRepository.findByAppointmentIdAndStatusIn(
+                                appointmentId,
+                                List.of(AssignmentStatusEnum.CONFIRMED, AssignmentStatusEnum.IN_PROGRESS)))
+                                .thenReturn(Optional.of(existingAssignment));
+
+                assertThatThrownBy(() -> service.create(request))
+                                .isInstanceOf(IllegalStateException.class)
+                                .hasMessageContaining("active assignment already exists");
 
                 verify(assignmentRepository, never()).save(any());
         }
