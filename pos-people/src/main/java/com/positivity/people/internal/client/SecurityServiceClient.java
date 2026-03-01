@@ -2,6 +2,8 @@ package com.positivity.people.internal.client;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
@@ -18,6 +20,7 @@ import com.positivity.people.internal.client.dto.RoleAssignment;
 import com.positivity.people.internal.client.dto.RoleAssignmentRequest;
 import com.positivity.people.internal.client.dto.RoleDto;
 import com.positivity.people.internal.client.dto.ScopeType;
+import com.positivity.people.internal.client.dto.User;
 import com.positivity.people.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.people.internal.client.dto.UserRoleDto;
 
@@ -30,6 +33,47 @@ public class SecurityServiceClient {
 
         public SecurityServiceClient(@Qualifier("securityServiceRestClient") RestClient restClient) {
                 this.restClient = restClient;
+        }
+
+        @NonNull
+        public Optional<User> getUserByUsername(@NonNull String username) {
+                log.debug("Fetching user by username: {}", username);
+
+                List<User> users = restClient.get()
+                                .uri("/v1/users")
+                                .retrieve()
+                                .onStatus(statusCode -> statusCode.value() == 400,
+                                                (request, response) -> {
+                                                        throw new IllegalArgumentException(
+                                                                        "Invalid username for security lookup: "
+                                                                                        + username);
+                                                })
+                                .onStatus(statusCode -> statusCode.value() == 401 || statusCode.value() == 403,
+                                                (request, response) -> {
+                                                        int statusCode = response.getStatusCode().value();
+                                                        throw new SecurityServiceException(
+                                                                        "Not authorized to query users in security service",
+                                                                        statusCode);
+                                                })
+                                .onStatus(HttpStatusCode::is5xxServerError,
+                                                (request, response) -> {
+                                                        int statusCode = response.getStatusCode().value();
+                                                        throw new SecurityServiceException(
+                                                                        "Security service failed while fetching users",
+                                                                        statusCode);
+                                                })
+                                .body(new ParameterizedTypeReference<List<User>>() {
+                                });
+
+                if (users == null) {
+                        throw new IllegalStateException(
+                                        "Security service returned null response for user lookup");
+                }
+
+                return users.stream()
+                                .filter(user -> user.getUsername() != null
+                                                && username.equalsIgnoreCase(user.getUsername()))
+                                .findFirst();
         }
 
         /**
@@ -165,14 +209,15 @@ public class SecurityServiceClient {
                 }
 
                 // Build the proper RoleAssignmentRequest matching the API contract
-                // Note: API supports multiple location IDs per assignment, but currently only
-                // passing one
+                Set<String> scopeLocationIds = request.getLocationIds() != null && !request.getLocationIds().isEmpty()
+                                ? request.getLocationIds().stream().map(UUID::toString)
+                                                .collect(java.util.stream.Collectors.toSet())
+                                : request.getLocationId() != null ? Set.of(request.getLocationId().toString()) : null;
                 RoleAssignmentRequest apiRequest = new RoleAssignmentRequest(
                                 userIdUuid,
                                 role.getId(),
-                                request.getLocationId() != null ? ScopeType.LOCATION : ScopeType.GLOBAL,
-                                request.getLocationId() != null ? java.util.Set.of(request.getLocationId().toString())
-                                                : null,
+                                scopeLocationIds != null ? ScopeType.LOCATION : ScopeType.GLOBAL,
+                                scopeLocationIds,
                                 request.getStartDate() != null ? request.getStartDate().toLocalDate() : null,
                                 request.getEndDate() != null ? request.getEndDate().toLocalDate() : null);
 
@@ -215,17 +260,12 @@ public class SecurityServiceClient {
                 // First, get the role by name to obtain its UUID
                 Role role = getRoleByName(roleCode);
 
-                // Get all current assignments for the user with full RoleAssignment objects
+                // Get all assignments for the user with full RoleAssignment objects
 
-                @SuppressWarnings("java:S125") // Not a code block, but a parameter name that looks like a code block
-                // TODO: Update pos-security-service to make /v1/roles/assignments/user/{userId}
-                // retrieve
-                // current AND future-dated roles when includeHistory=false, or add a new flag
-                // if required
                 List<RoleAssignment> fullAssignments = restClient.get()
                                 .uri(uriBuilder -> uriBuilder
                                                 .path("/v1/roles/assignments/user/{userId}")
-                                                .queryParam("includeHistory", false)
+                                                .queryParam("includeHistory", true)
                                                 .build(userId))
                                 .retrieve()
                                 .onStatus(statusCode -> statusCode.value() == 404,
@@ -248,8 +288,14 @@ public class SecurityServiceClient {
                         throw new IllegalStateException("Security service returned null response");
                 }
 
+                java.time.LocalDate today = java.time.LocalDate.now();
+                List<RoleAssignment> currentAndFutureAssignments = fullAssignments.stream()
+                                .filter(assignment -> assignment.getEffectiveEndDate() == null
+                                                || !assignment.getEffectiveEndDate().isBefore(today))
+                                .toList();
+
                 // Find the assignment for this specific role
-                java.util.UUID assignmentId = fullAssignments.stream()
+                java.util.UUID assignmentId = currentAndFutureAssignments.stream()
                                 .filter(fa -> role.getId().equals(fa.getRole().getId()))
                                 .map(RoleAssignment::getId)
                                 .findFirst()

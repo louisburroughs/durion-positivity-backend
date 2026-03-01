@@ -2,6 +2,8 @@ package com.positivity.location.internal.client;
 
 import com.positivity.security.common.GatewaySecurityConstants;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.Data;
+
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
@@ -64,15 +66,8 @@ public class LocationInventoryInquiryClient {
         throw new IllegalStateException("Missing bearer token for inventory inquiry request");
     }
 
+    @Data
     private static class LocationInventoryInquiryResponse {
         private int onHandQuantity;
-
-        public int getOnHandQuantity() {
-            return onHandQuantity;
-        }
-
-        public void setOnHandQuantity(int onHandQuantity) {
-            this.onHandQuantity = onHandQuantity;
-        }
     }
 }

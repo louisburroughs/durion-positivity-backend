@@ -1,5 +1,6 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.client.SecurityServiceClient;
 import com.positivity.people.internal.dto.Person;
 import com.positivity.people.internal.dto.ResolvePersonRequest;
 import com.positivity.people.internal.dto.ResolvePersonResponse;
@@ -31,6 +32,7 @@ public class PersonServiceImpl implements PersonService {
     private static final int FIRST_NAME_WEIGHT = 5;
 
     private final PersonRepository personRepository;
+    private final SecurityServiceClient securityServiceClient;
 
     @Value("${pos.people.matching.threshold:30}")
     private int defaultMatchingThreshold;
@@ -149,11 +151,9 @@ public class PersonServiceImpl implements PersonService {
         personRepository.deleteById(id);
     }
 
-    // Stub for username validation against pos-security-service
     private boolean validateUsernameWithSecurityService(String username) {
-        // TODO: Integrate with pos-security-service
-        // For now, accept any username not already in use
-        return !personRepository.existsByUsername(username);
+        return securityServiceClient.getUserByUsername(username).isPresent()
+                && !personRepository.existsByUsername(username);
     }
 
     private int resolveThreshold(Integer thresholdOverride) {
