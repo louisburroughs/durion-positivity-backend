@@ -196,9 +196,9 @@ class EstimateServiceImplTest {
         estimate.setStatus(EstimateStatus.PENDING_APPROVAL);
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
         when(estimateRepository.save(any(Estimate.class))).thenAnswer(i -> i.getArgument(0));
-        ApprovalConfiguration config = ApprovalConfiguration.builder().id(UUID.randomUUID()).declineExpiryDays(30).build();
+        ApprovalConfiguration config = ApprovalConfiguration.builder().id(UUID.randomUUID()).declineExpiryDays(30)
+                .build();
         // when(approvalConfigurationRepository.findById(any())).thenReturn(Optional.empty());
-
 
         EstimateResponse result = estimateService.declineEstimate(estimate.getId(), "reason");
 
@@ -209,7 +209,8 @@ class EstimateServiceImplTest {
     void addEstimateItem_valid_addsItem() {
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
         when(estimateItemRepository.save(any(EstimateItem.class))).thenAnswer(i -> i.getArgument(0));
-        AddEstimateItemRequest request = new AddEstimateItemRequest(EstimateItemType.PART, "description", BigDecimal.ONE, BigDecimal.TEN, "taxCode", UUID.randomUUID(), null);
+        AddEstimateItemRequest request = new AddEstimateItemRequest(EstimateItemType.PART, "description",
+                BigDecimal.ONE, BigDecimal.TEN, "taxCode", UUID.randomUUID(), null);
 
         EstimateItemResponse result = estimateService.addEstimateItem(estimate.getId(), request, "testuser");
 
@@ -220,7 +221,8 @@ class EstimateServiceImplTest {
     void updateEstimateItem_valid_updatesItem() {
         EstimateItem item = EstimateItem.builder().id(UUID.randomUUID()).estimateId(estimate.getId()).build();
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
-        when(estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(any(UUID.class), any(UUID.class))).thenReturn(Optional.of(item));
+        when(estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(any(UUID.class), any(UUID.class)))
+                .thenReturn(Optional.of(item));
         when(estimateItemRepository.save(any(EstimateItem.class))).thenAnswer(i -> i.getArgument(0));
         UpdateEstimateItemRequest request = new UpdateEstimateItemRequest("new description", null, null, null);
 
@@ -233,7 +235,8 @@ class EstimateServiceImplTest {
     void deleteEstimateItem_valid_deletesItem() {
         EstimateItem item = EstimateItem.builder().id(UUID.randomUUID()).estimateId(estimate.getId()).build();
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
-        when(estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(any(UUID.class), any(UUID.class))).thenReturn(Optional.of(item));
+        when(estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(any(UUID.class), any(UUID.class)))
+                .thenReturn(Optional.of(item));
 
         estimateService.deleteEstimateItem(estimate.getId(), item.getId());
 
