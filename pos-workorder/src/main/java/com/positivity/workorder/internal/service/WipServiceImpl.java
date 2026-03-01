@@ -113,6 +113,7 @@ public class WipServiceImpl implements WipService {
                                 .build();
         }
 
+        @SuppressWarnings("java:S3358")
         private WorkorderStatusView toStatusView(Workorder wo) {
                 Instant lastUpdatedAt = wo.getUpdatedAt() != null
                                 ? wo.getUpdatedAt().toInstant(ZoneOffset.UTC)
