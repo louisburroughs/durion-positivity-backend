@@ -238,22 +238,27 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
                 throw e; // Re-throw - no override
             }
         } else {
-            log.warn("Location compatibility override requested for location(mask)={}, sku(mask)={}, reason={}",
-                    maskForLog(request.getDestinationLocationId()),
-                    maskForLog(request.getSkuId()),
-                    request.getOverrideReasonCode());
+            if (log.isWarnEnabled()) {
+                log.warn("Location compatibility override requested for location(mask)={}, sku(mask)={}, reason={}",
+                        maskForLog(request.getDestinationLocationId()),
+                        maskForLog(request.getSkuId()),
+                        request.getOverrideReasonCode());
+            }
 
             enforceOverridePermission(PutawayPermissions.OVERRIDE_LOCATION_COMPATIBILITY);
             validateOverrideAuditFields(result, request, "COMPATIBILITY");
             String actorId = SecurityContextHelper.getCurrentUserIdOrDefault("system");
-            log.info(
-                    "Audit compatibility override: location={}, sku={}, reason={}, approvedBy={}, actor={}, permission={}",
-                    maskForLog(request.getDestinationLocationId()),
-                    maskForLog(request.getSkuId()),
-                    request.getOverrideReasonCode(),
-                    maskForLog(request.getApprovedBy()),
-                    maskForLog(actorId),
-                    PutawayPermissions.OVERRIDE_LOCATION_COMPATIBILITY);
+
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Audit compatibility override: location={}, sku={}, reason={}, approvedBy={}, actor={}, permission={}",
+                        maskForLog(request.getDestinationLocationId()),
+                        maskForLog(request.getSkuId()),
+                        request.getOverrideReasonCode(),
+                        maskForLog(request.getApprovedBy()),
+                        maskForLog(actorId),
+                        PutawayPermissions.OVERRIDE_LOCATION_COMPATIBILITY);
+            }
             result.addWarning("COMPATIBILITY_OVERRIDDEN",
                     "Location compatibility check was overridden");
         }

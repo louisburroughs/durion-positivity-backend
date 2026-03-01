@@ -17,7 +17,7 @@ public interface InvoiceFinalizationService {
     FinalizationEligibilityResult checkEligibility(@NonNull UUID invoiceId);
 
     @NonNull
-    InvoiceDetailsResponse finalize(@NonNull UUID invoiceId, @NonNull FinalizationRequest request);
+    InvoiceDetailsResponse completeInvoice(@NonNull UUID invoiceId, @NonNull FinalizationRequest request);
 
     @NonNull
     InvoiceDetailsResponse revert(@NonNull UUID invoiceId,

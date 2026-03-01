@@ -142,6 +142,13 @@ public class EstimateServiceImpl implements EstimateService {
                 return estimates.map(this::toEstimateSummaryResponse);
         }
 
+        /**
+         * Line items intentionally omitted in paginated search summaries for
+         * performance use getEstimateById to retrieve full line item detail.
+         * 
+         * @param estimate
+         * @return
+         */
         @NonNull
         private EstimateSummaryResponse toEstimateSummaryResponse(@NonNull Estimate estimate) {
                 return EstimateSummaryResponse.builder()
@@ -157,9 +164,6 @@ public class EstimateServiceImpl implements EstimateService {
                                 .taxAmount(estimate.getTaxAmount())
                                 .total(estimate.getTotal())
                                 .currencyUomId(estimate.getCurrencyUomId())
-                                // Line items intentionally omitted in paginated search summaries for
-                                // performance;
-                                // use getEstimateById to retrieve full line item detail.
                                 .partItems(List.of())
                                 .laborItems(List.of())
                                 .build();

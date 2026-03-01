@@ -77,7 +77,7 @@ public class InvoiceController {
     public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(
             @PathVariable @NonNull UUID invoiceId,
             @Valid @RequestBody @NonNull FinalizationRequest request) {
-        return ResponseEntity.ok(invoiceFinalizationService.finalize(invoiceId, request));
+        return ResponseEntity.ok(invoiceFinalizationService.completeInvoice(invoiceId, request));
     }
 
     @PostMapping("/{invoiceId}/revert")
