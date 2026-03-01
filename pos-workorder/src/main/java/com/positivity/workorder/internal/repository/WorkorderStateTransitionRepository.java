@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -9,5 +10,9 @@ import java.util.UUID;
 
 @Repository
 public interface WorkorderStateTransitionRepository extends JpaRepository<WorkorderStateTransition, UUID> {
-    List<WorkorderStateTransition> findByWorkorderIdOrderByTransitionedAtDesc(UUID workorderId);
+    @NonNull
+    List<WorkorderStateTransition> findByWorkorderId(@NonNull UUID workorderId);
+
+    @NonNull
+    List<WorkorderStateTransition> findByWorkorderIdOrderByTransitionedAtDesc(@NonNull UUID workorderId);
 }

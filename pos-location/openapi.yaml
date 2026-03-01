@@ -1583,6 +1583,10 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         size:
           type: integer
           format: int32
@@ -1595,10 +1599,6 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -1671,6 +1671,10 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         size:
           type: integer
           format: int32
@@ -1683,10 +1687,6 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -1733,6 +1733,10 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         size:
           type: integer
           format: int32
@@ -1745,10 +1749,6 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -1782,6 +1782,10 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         size:
           type: integer
           format: int32
@@ -1794,10 +1798,6 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         numberOfElements:
           type: integer
           format: int32

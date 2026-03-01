@@ -7,6 +7,10 @@ import java.util.UUID;
 
 public class InvalidInvoiceStateException extends RuntimeException {
 
+    public InvalidInvoiceStateException(@NonNull String message) {
+        super(message);
+    }
+
     public InvalidInvoiceStateException(
             @NonNull UUID invoiceId,
             @NonNull InvoiceStatus actual,

@@ -1,10 +1,14 @@
 package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,4 +42,13 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      */
     @NonNull
     Optional<Workorder> findByInvoiceId(@NonNull UUID invoiceId);
+
+    @NonNull
+    Page<Workorder> findByShopIdAndStatusIn(@NonNull UUID shopId,
+            @NonNull Collection<WorkorderStatus> statuses,
+            @NonNull Pageable pageable);
+
+    @NonNull
+    Page<Workorder> findByStatusIn(@NonNull Collection<WorkorderStatus> statuses,
+            @NonNull Pageable pageable);
 }

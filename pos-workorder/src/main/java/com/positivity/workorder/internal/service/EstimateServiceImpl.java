@@ -15,6 +15,8 @@ import jakarta.persistence.EntityNotFoundException;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -117,6 +119,50 @@ public class EstimateServiceImpl implements EstimateService {
                                 .stream()
                                 .map(EstimateResponse::fromEntity)
                                 .toList();
+        }
+
+        @Override
+        @NonNull
+        public Page<EstimateSummaryResponse> searchEstimates(
+                        @Nullable UUID customerId,
+                        @Nullable UUID vehicleId,
+                        @NonNull Pageable pageable) {
+                Page<Estimate> estimates;
+
+                if (customerId != null && vehicleId != null) {
+                        estimates = estimateRepository.findByCustomerIdAndVehicleId(customerId, vehicleId, pageable);
+                } else if (customerId != null) {
+                        estimates = estimateRepository.findByCustomerId(customerId, pageable);
+                } else if (vehicleId != null) {
+                        estimates = estimateRepository.findByVehicleId(vehicleId, pageable);
+                } else {
+                        estimates = estimateRepository.findAll(pageable);
+                }
+
+                return estimates.map(this::toEstimateSummaryResponse);
+        }
+
+        @NonNull
+        private EstimateSummaryResponse toEstimateSummaryResponse(@NonNull Estimate estimate) {
+                return EstimateSummaryResponse.builder()
+                                .id(estimate.getId())
+                                .estimateNumber(estimate.getEstimateNumber())
+                                .status(estimate.getStatus())
+                                .customerId(estimate.getCustomerId())
+                                .vehicleId(estimate.getVehicleId())
+                                .locationId(estimate.getLocationId())
+                                .createdAt(estimate.getCreatedAt())
+                                .expiresAt(estimate.getExpiresAt())
+                                .subtotal(estimate.getSubtotal())
+                                .taxAmount(estimate.getTaxAmount())
+                                .total(estimate.getTotal())
+                                .currencyUomId(estimate.getCurrencyUomId())
+                                // Line items intentionally omitted in paginated search summaries for
+                                // performance;
+                                // use getEstimateById to retrieve full line item detail.
+                                .partItems(List.of())
+                                .laborItems(List.of())
+                                .build();
         }
 
         /**
