@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -32,4 +33,7 @@ public interface TechnicianAssignmentRepository extends JpaRepository<Technician
      */
     @NonNull
     List<TechnicianAssignment> findByWorkorderIdOrderByAssignedAtDesc(@NonNull UUID workorderId);
+
+    @NonNull
+    List<TechnicianAssignment> findByWorkorderIdInAndCurrentTrue(@NonNull Set<UUID> workorderIds);
 }
