@@ -36,15 +36,14 @@ class InvoiceFinalizedEventHandlerTest {
         invoiceId = UUID.randomUUID();
         invoice = new Invoice();
         invoice.setId(invoiceId);
-        invoice.setStatus(InvoiceStatus.PENDING);
+        invoice.setStatus(InvoiceStatus.FINALIZED);
 
         event = new InvoiceFinalizedEvent(
-            invoiceId,
-            UUID.randomUUID(),
-            "test-actor",
-            Instant.now(),
-            BigDecimal.valueOf(100.00)
-        );
+                invoiceId,
+                UUID.randomUUID(),
+                "test-actor",
+                Instant.now(),
+                BigDecimal.valueOf(100.00));
     }
 
     @Test
@@ -55,8 +54,8 @@ class InvoiceFinalizedEventHandlerTest {
 
         verify(invoiceRepository).findById(invoiceId);
         verify(invoiceRepository).save(invoice);
-        assert(invoice.getStatus() == InvoiceStatus.POSTED);
-        assert(invoice.getGlEntryId() != null);
+        assert (invoice.getStatus() == InvoiceStatus.POSTED);
+        assert (invoice.getGlEntryId() != null);
     }
 
     @Test
@@ -73,15 +72,16 @@ class InvoiceFinalizedEventHandlerTest {
     @Test
     void onInvoiceFinalized_shouldUpdateStatusToErrorOnException() {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(invoice));
-        // The first save attempt inside postToGl will throw an exception
-        doThrow(new RuntimeException("DB error")).when(invoiceRepository).save(invoice);
+        // First save (success path) throws; second save (error-state persist) succeeds
+        doThrow(new RuntimeException("DB error")).doReturn(invoice).when(invoiceRepository).save(invoice);
 
         eventHandler.onInvoiceFinalized(event);
 
-        // The handler should try to save twice: once for the success path (which fails),
+        // The handler should try to save twice: once for the success path (which
+        // fails),
         // and once for the error path.
         verify(invoiceRepository, times(2)).save(invoice);
-        assert(invoice.getStatus() == InvoiceStatus.ERROR);
+        assert (invoice.getStatus() == InvoiceStatus.ERROR);
     }
 
     @Test

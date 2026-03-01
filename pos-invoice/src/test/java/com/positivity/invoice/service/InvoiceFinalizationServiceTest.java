@@ -326,7 +326,8 @@ class InvoiceFinalizationServiceTest {
 
     /**
      * AC6: Revert must reject an invoice that is not in FINALIZED status.
-     * A DRAFT invoice, for example, should throw {@link InvalidInvoiceStateException}.
+     * A DRAFT invoice, for example, should throw
+     * {@link InvalidInvoiceStateException}.
      */
     @Test
     void revert_throws_whenInvoiceNotFinalized() {
