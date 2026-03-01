@@ -546,7 +546,7 @@ public class EstimateController {
 
     @Operation(summary = "Get estimate summary (customer-facing)", description = "Retrieve a customer-facing summary of an estimate with grouped line items (parts and labor) "
             +
-            "and financial breakdown. PDF generation not implemented (requires document service integration).")
+            "and financial breakdown. Use the /{estimateId}/pdf endpoint to generate a PDF document.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Summary retrieved successfully"),
             @ApiResponse(responseCode = "404", description = "Estimate not found")
@@ -562,6 +562,36 @@ public class EstimateController {
         } catch (IllegalArgumentException e) {
             log.warn("Estimate {} not found for summary: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
+    @Operation(summary = "Generate estimate PDF", description = "Generate a PDF document for an estimate containing header details, "
+            +
+            "line items grouped by type (parts and labor), and financial totals. "
+            +
+            "Rendered via pos-documents service.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "PDF generated successfully", content = @Content(mediaType = "application/pdf")),
+            @ApiResponse(responseCode = "404", description = "Estimate not found"),
+            @ApiResponse(responseCode = "502", description = "Document service unavailable")
+    })
+    @GetMapping(value = "/{estimateId}/pdf", produces = "application/pdf")
+    @EmitEvent(id = "ESTIMATE_PDF_GENERATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    public ResponseEntity<byte[]> generateEstimatePdf(
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+        try {
+            byte[] pdfBytes = estimateService.generateEstimatePdf(estimateId);
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=\"estimate-" + estimateId + ".pdf\"")
+                    .header("Content-Type", "application/pdf")
+                    .body(pdfBytes);
+        } catch (IllegalArgumentException e) {
+            log.warn("Estimate {} not found for PDF generation: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            log.error("Failed to generate PDF for estimate {}: {}", estimateId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).build();
         }
     }
 

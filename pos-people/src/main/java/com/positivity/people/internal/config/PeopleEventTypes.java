@@ -99,9 +99,11 @@ public final class PeopleEventTypes {
                                 EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_REVOKE",
                                                 "Revoke role assignment for a person").build(),
 
-                                // PeopleAvailabilityController - 1 event
+                                // PeopleAvailabilityController - 2 events
                                 EventTypeRegistration.fastRead("PEOPLE_AVAILABILITY_LIST",
                                                 "List people availability with optional location/date filters").build(),
+                                EventTypeRegistration.fastRead("PEOPLE_PRIMARY_LOCATION_GET",
+                                                "Get current user primary location from staffing assignments").build(),
 
                                 // PeopleReportsController - 2 events
                                 EventTypeRegistration.search("REPORT_ATTENDANCE_VS_JOBTIME_GENERATED",

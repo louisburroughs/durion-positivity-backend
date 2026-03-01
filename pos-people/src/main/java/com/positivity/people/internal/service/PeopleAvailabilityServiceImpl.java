@@ -64,6 +64,12 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
                 .toList();
     }
 
+    @Override
+    @NonNull
+    public UUID resolveCurrentUserPrimaryLocationId() {
+        return resolveRequesterLocationId(LocalDate.now());
+    }
+
     @NonNull
     private UUID resolveRequesterLocationId(@NonNull LocalDate targetDate) {
         String currentUserId = SecurityContextHelper.getCurrentUserId()
