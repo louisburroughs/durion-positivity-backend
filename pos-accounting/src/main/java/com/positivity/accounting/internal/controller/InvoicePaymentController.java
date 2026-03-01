@@ -15,7 +15,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
+import com.positivity.accounting.service.BillingRulesService;
 import com.positivity.accounting.service.InvoicePaymentStatusService;
 import com.positivity.events.EmitEvent;
 
@@ -37,9 +39,13 @@ public class InvoicePaymentController {
     private static final Logger log = LoggerFactory.getLogger(InvoicePaymentController.class);
 
     private final InvoicePaymentStatusService paymentStatusService;
+    private final BillingRulesService billingRulesService;
 
-    public InvoicePaymentController(InvoicePaymentStatusService paymentStatusService) {
+    public InvoicePaymentController(
+            InvoicePaymentStatusService paymentStatusService,
+            BillingRulesService billingRulesService) {
         this.paymentStatusService = paymentStatusService;
+        this.billingRulesService = billingRulesService;
     }
 
     /**
@@ -108,10 +114,13 @@ public class InvoicePaymentController {
     @GetMapping("/v1/accounting/invoice/rules/{customerId}")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Get billing rules", description = "Retrieve billing rules for a customer.")
-    @ApiResponse(responseCode = "501", description = "Not implemented")
-    public ResponseEntity<Void> getBillingRules(
+    @ApiResponse(responseCode = "200", description = "Billing rules returned")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
+    @ApiResponse(responseCode = "503", description = "Customer service unavailable")
+    public ResponseEntity<BillingRuleRefResponse> getBillingRules(
             @Parameter(description = "Customer identifier") @PathVariable UUID customerId) {
-        log.info("Stub getBillingRules customerId={}", customerId);
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        log.info("Fetching billing rules for customer {}", customerId);
+        BillingRuleRefResponse rules = billingRulesService.getBillingRules(customerId);
+        return ResponseEntity.ok(rules);
     }
 }
