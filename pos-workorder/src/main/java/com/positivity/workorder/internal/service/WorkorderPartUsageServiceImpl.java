@@ -40,7 +40,7 @@ import com.positivity.workorder.service.WorkorderPartUsageService;
 @Service
 public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService {
     private static final String PART_NOT_FOUND = "Part not found: ";
-    private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT = "Idempotency key {} already processed, returning existing event {}";
+    private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT = "Idempotency key already processed, returning existing event {}";
     private static final String EVENT_NOT_FOUND = "Event not found: ";
     private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
 
@@ -90,7 +90,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             Optional<UUID> existingEventId = idempotencyService.getExistingPartUsageEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT,
-                        idempotencyKey, existingEventId.get());
+                        existingEventId.get());
                 return usageEventRepository.findById(existingEventId.get())
                         .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get()));
             }
@@ -135,7 +135,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             idempotencyService.markKeyProcessedForPartUsage(idempotencyKey, event.getId());
         }
 
-        log.info("Issued part quantity for workorder");
+        log.info("Issued part quantity for workorder {}", workorderId);
         return event;
     }
 
@@ -166,7 +166,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             Optional<UUID> existingEventId = idempotencyService.getExistingPartUsageEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT,
-                        idempotencyKey, existingEventId.get());
+                        existingEventId.get());
                 return usageEventRepository.findById(existingEventId.get())
                         .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get()));
             }
@@ -220,7 +220,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             idempotencyService.markKeyProcessedForPartUsage(idempotencyKey, event.getId());
         }
 
-        log.info("Consumed part quantity for workorder");
+        log.info("Consumed part quantity for workorder {}", workorderId);
         return event;
     }
 
@@ -252,7 +252,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             Optional<UUID> existingEventId = idempotencyService.getExistingPartUsageEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT,
-                        idempotencyKey, existingEventId.get());
+                        existingEventId.get());
                 return usageEventRepository.findById(existingEventId.get())
                         .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get()));
             }
@@ -311,7 +311,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             idempotencyService.markKeyProcessedForPartUsage(idempotencyKey, event.getId());
         }
 
-        log.info("Returned part quantity for workorder");
+        log.info("Returned part quantity for workorder {}", workorderId);
         return event;
     }
 
