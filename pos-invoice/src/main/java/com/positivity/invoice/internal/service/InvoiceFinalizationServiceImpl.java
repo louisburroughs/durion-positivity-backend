@@ -201,7 +201,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         String redactedCode = managerApprovalCode.length() > 4
                 ? managerApprovalCode.substring(0, 4) + "****"
                 : "****";
-        log.info("Invoice reversion: actor={}, invoiceId={}, approvalCode={}", revertedBy, invoiceId, redactedCode);
+        log.info("Invoice reversion: actor(mask)={}, invoiceId(mask)={}, approvalCode={}",
+            maskForLog(revertedBy), maskForLog(invoiceId), redactedCode);
 
         invoice.setStatus(InvoiceStatus.DRAFT);
         invoice.setRevertedAt(Instant.now());
@@ -245,9 +246,24 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             String redactedCode = approvalCode.length() > 4
                     ? approvalCode.substring(0, 4) + "****"
                     : "****";
-            log.info("Manager approval override applied: actor={}, approvalCode={}, invoiceId={}, amount={}",
-                    actor, redactedCode, invoiceId, invoiceTotal);
+            log.info("Manager approval override applied: actor(mask)={}, approvalCode={}, invoiceId(mask)={}, amount={}",
+                    maskForLog(actor), redactedCode, maskForLog(invoiceId), invoiceTotal);
         }
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 
     private void publishFinalizedEvent(UUID invoiceId, UUID workorderId, String finalizedBy,

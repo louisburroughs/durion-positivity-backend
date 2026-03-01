@@ -65,7 +65,7 @@ public class WipServiceImpl implements WipService {
     @Override
     @Transactional(readOnly = true)
     public WorkorderStatusDetail getWipDetail(@NonNull UUID workorderId) {
-        log.debug("Fetching WIP detail: workorderId={}", workorderId);
+                log.debug("Fetching WIP detail: workorderId(mask)={}", maskForLog(workorderId));
         Workorder wo = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
 
@@ -131,4 +131,19 @@ public class WipServiceImpl implements WipService {
                 .lastUpdatedAt(lastUpdatedAt)
                 .build();
     }
+
+        private String maskForLog(Object value) {
+                if (value == null) {
+                        return "null";
+                }
+                String sanitized = value.toString()
+                                .replace('\r', '_')
+                                .replace('\n', '_')
+                                .replace('\t', '_');
+                int length = sanitized.length();
+                if (length <= 4) {
+                        return "****";
+                }
+                return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
+        }
 }
