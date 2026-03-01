@@ -3,6 +3,7 @@ package com.positivity.invoice.service;
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
+import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
@@ -14,10 +15,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link InvoiceFinalizationService} covering Story #13
@@ -68,6 +72,8 @@ class InvoiceFinalizationServiceTest {
     @Test
     void checkEligibility_returnsEligible_whenInvoiceIsDraftAndDataComplete() {
         UUID invoiceId = UUID.randomUUID();
+        UUID workorderId = UUID.randomUUID();
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice(workorderId, BigDecimal.ZERO)));
 
         FinalizationEligibilityResult result = service.checkEligibility(invoiceId);
 
@@ -149,6 +155,7 @@ class InvoiceFinalizationServiceTest {
     @Test
     void finalize_throws_whenEligibilityCheckFails() {
         UUID invoiceId = UUID.randomUUID();
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(finalizedInvoice(UUID.randomUUID())));
         FinalizationRequest request = shopManagerRequest(new BigDecimal("200.00"));
 
         assertThatThrownBy(() -> service.finalize(invoiceId, request))
@@ -215,6 +222,11 @@ class InvoiceFinalizationServiceTest {
     @Test
     void revert_transitionsToReverted_withinAllowedWindow_withManagerApproval() {
         UUID invoiceId = UUID.randomUUID();
+        UUID workorderId = UUID.randomUUID();
+        Invoice invoice = finalizedInvoice(workorderId);
+        invoice.setFinalizedAt(Instant.now().minusSeconds(3600)); // 1h ago — within 24h window
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         InvoiceDetailsResponse response = service.revert(invoiceId, "MGR-APPROVAL-001", "Customer dispute");
 
@@ -287,5 +299,23 @@ class InvoiceFinalizationServiceTest {
         req.setFinalizedBy("manager-001");
         req.setFinalizedAt(Instant.now());
         return req;
+    }
+
+    private Invoice draftInvoice(UUID workorderId, BigDecimal total) {
+        Invoice invoice = new Invoice();
+        invoice.setWorkorderId(workorderId);
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        invoice.setTotal(total);
+        return invoice;
+    }
+
+    private Invoice finalizedInvoice(UUID workorderId) {
+        Invoice invoice = new Invoice();
+        invoice.setWorkorderId(workorderId);
+        invoice.setStatus(InvoiceStatus.FINALIZED);
+        invoice.setTotal(BigDecimal.ZERO);
+        invoice.setFinalizedAt(Instant.now().minusSeconds(3600));
+        invoice.setFinalizedBy("manager-001");
+        return invoice;
     }
 }
