@@ -9,6 +9,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 
+import com.positivity.accounting.internal.payment.GatewayPaymentRequest;
+import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
 import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 
 /**
@@ -32,7 +34,7 @@ public class TestPaymentGatewayConfig {
 
         @Override
         public GatewayPaymentResponse executePayment(GatewayPaymentRequest request) {
-            String transactionId = "test-gateway-" + request.idempotencyKey();
+            String transactionId = "test-gateway-" + request.getIdempotencyKey();
             GatewayPaymentResponse response = new GatewayPaymentResponse(
                     transactionId,
                     GatewayPaymentStatus.SUCCEEDED,

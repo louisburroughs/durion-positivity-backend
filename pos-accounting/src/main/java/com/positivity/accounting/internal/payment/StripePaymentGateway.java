@@ -59,22 +59,22 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             throws PaymentGatewayException {
         try {
             log.debug("Executing Stripe payment. Idempotency Key: {}, Amount: {} {}, Method: {}",
-                    request.idempotencyKey(), request.amount(), request.currency(), request.paymentMethod());
+                    request.getIdempotencyKey(), request.getAmount(), request.getCurrency(), request.getPaymentMethod());
 
             // Convert BigDecimal amount to cents (Stripe requires integer cents)
-            long amountInCents = request.amount().multiply(BigDecimal.valueOf(100)).longValue();
+            long amountInCents = request.getAmount().multiply(BigDecimal.valueOf(100)).longValue();
 
             var chargeParams = new java.util.HashMap<String, Object>();
             chargeParams.put("amount", amountInCents);
-            chargeParams.put("currency", request.currency().toLowerCase());
-            chargeParams.put("source", request.paymentSource());
-            chargeParams.put("description", request.memo());
+            chargeParams.put("currency", request.getCurrency().toLowerCase());
+            chargeParams.put("source", request.getPaymentSource());
+            chargeParams.put("description", request.getMemo());
             chargeParams.put("metadata", buildMetadata(request));
 
             // RequestOptions with idempotency key and Stripe Connect account (if
             // applicable)
             var requestOptions = RequestOptions.builder()
-                    .setIdempotencyKey(request.idempotencyKey())
+                    .setIdempotencyKey(request.getIdempotencyKey())
                     .setStripeAccount(connectAccount.orElse(null))
                     .build();
 
@@ -92,16 +92,16 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
                     charge.toJson());
 
             log.info("Stripe payment succeeded. Charge ID: {}, Amount: {} {}, Status: {}",
-                    charge.getId(), request.amount(), request.currency(), status);
+                    charge.getId(), request.getAmount(), request.getCurrency(), status);
 
             return response;
 
         } catch (com.stripe.exception.IdempotencyException e) {
             // Idempotency conflict: transaction already exists
-            log.warn("Idempotency conflict for key: {}. Retrieving existing transaction.", request.idempotencyKey());
-            return handleIdempotencyConflict(request.idempotencyKey());
+            log.warn("Idempotency conflict for key: {}. Retrieving existing transaction.", request.getIdempotencyKey());
+            return handleIdempotencyConflict(request.getIdempotencyKey());
         } catch (StripeException e) {
-            log.error("Stripe payment failed. Idempotency Key: {}, Error: {}", request.idempotencyKey(),
+            log.error("Stripe payment failed. Idempotency Key: {}, Error: {}", request.getIdempotencyKey(),
                     e.getMessage(), e);
             throw new PaymentGatewayException(
                     "Stripe payment failed: " + e.getMessage(),
@@ -191,11 +191,11 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
      */
     private java.util.Map<String, String> buildMetadata(@NonNull GatewayPaymentRequest request) {
         var metadata = new java.util.HashMap<String, String>();
-        metadata.put("vendor_id", request.vendorId());
-        metadata.put("payment_method", request.paymentMethod().toString());
-        if (request.metadata() != null && request.metadata().length > 0) {
-            for (int i = 0; i < request.metadata().length; i++) {
-                metadata.put("meta_" + i, request.metadata()[i]);
+        metadata.put("vendor_id", request.getVendorId());
+        metadata.put("payment_method", request.getPaymentMethod().toString());
+        if (request.getMetadata() != null && !request.getMetadata().isEmpty()) {
+            for (int i = 0; i < request.getMetadata().size(); i++) {
+                metadata.put("meta_" + i, request.getMetadata().get(i));
             }
         }
         return metadata;

@@ -1,12 +1,12 @@
 package com.positivity.accounting.internal.payment;
 
-import java.math.BigDecimal;
 import java.util.Optional;
 
 import org.jspecify.annotations.NonNull;
 
-import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
+
+import jakarta.validation.Valid;
 
 /**
  * Contract for payment gateway providers.
@@ -28,7 +28,7 @@ public interface PaymentGatewayProvider {
          * @throws PaymentGatewayException if gateway call fails
          */
         @NonNull
-        GatewayPaymentResponse executePayment(@NonNull GatewayPaymentRequest request)
+        GatewayPaymentResponse executePayment(@NonNull @Valid GatewayPaymentRequest request)
                         throws PaymentGatewayException;
 
         /**
@@ -49,31 +49,6 @@ public interface PaymentGatewayProvider {
          */
         @NonNull
         String getProviderName();
-
-        /**
-         * Dto: Gateway payment request.
-         */
-        record GatewayPaymentRequest(
-                        @NonNull String idempotencyKey,
-                        @NonNull BigDecimal amount,
-                        @NonNull String currency,
-                        @NonNull PaymentMethod paymentMethod,
-                        @NonNull String vendorId,
-                        @NonNull String paymentSource,
-                        String memo,
-                        String... metadata) {
-        }
-
-        /**
-         * Dto: Gateway payment response.
-         */
-        record GatewayPaymentResponse(
-                        @NonNull String transactionId,
-                        @NonNull GatewayPaymentStatus status,
-                        String authorizationCode,
-                        String failureReason,
-                        String rawResponse) {
-        }
 
         /**
          * Payment status from gateway perspective.
