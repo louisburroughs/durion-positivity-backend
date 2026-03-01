@@ -64,13 +64,12 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountResponse createGLAccount(@NonNull GLAccountCreateRequest request) {
-        log.info("Creating GL account: code={}, name={}, type={}",
-                request.getAccountCode(), request.getAccountName(), request.getAccountType());
+        log.info("Creating GL account");
 
         // Validate account code uniqueness
         if (glAccountRepository.existsByAccountCode(request.getAccountCode())) {
             String msg = "Account code '" + request.getAccountCode() + "' already exists";
-            log.warn(msg);
+            log.warn("Account code already exists");
             throw new DuplicateAccountCodeException(msg);
         }
 
@@ -97,7 +96,7 @@ public class GLAccountServiceImpl implements GLAccountService {
 
         account = glAccountRepository.save(account);
 
-        log.info("Created GL account: id={}, code={}", account.getGlAccountId(), account.getAccountCode());
+        log.info("Created GL account");
 
         return toResponse(account);
     }
@@ -111,7 +110,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountResponse getGLAccount(@NonNull UUID glAccountId) {
-        log.debug("Retrieving GL account: id={}", glAccountId);
+        log.debug("Retrieving GL account");
 
         GLAccount account = glAccountRepository.findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
@@ -130,7 +129,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountResponse updateGLAccount(@NonNull UUID glAccountId, @NonNull GLAccountUpdateRequest request) {
-        log.info("Updating GL account: id={}", glAccountId);
+        log.info("Updating GL account");
 
         GLAccount account = glAccountRepository.findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
@@ -147,7 +146,7 @@ public class GLAccountServiceImpl implements GLAccountService {
 
         account = glAccountRepository.save(account);
 
-        log.info("Updated GL account: id={}, code={}", account.getGlAccountId(), account.getAccountCode());
+        log.info("Updated GL account");
 
         return toResponse(account);
     }
@@ -175,7 +174,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountResponse activateGLAccount(@NonNull UUID glAccountId, @NonNull LocalDateTime effectiveDate) {
-        log.info("Activating GL account: id={}, effectiveDate={}", glAccountId, effectiveDate);
+        log.info("Activating GL account");
 
         GLAccount account = glAccountRepository.findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
@@ -189,7 +188,7 @@ public class GLAccountServiceImpl implements GLAccountService {
 
         account = glAccountRepository.save(account);
 
-        log.info("Activated GL account: id={}, code={}", account.getGlAccountId(), account.getAccountCode());
+        log.info("Activated GL account");
 
         return toResponse(account);
     }
@@ -206,7 +205,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountResponse deactivateGLAccount(@NonNull UUID glAccountId) {
-        log.info("Deactivating GL account: id={}", glAccountId);
+        log.info("Deactivating GL account");
 
         GLAccount account = glAccountRepository.findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
@@ -215,7 +214,7 @@ public class GLAccountServiceImpl implements GLAccountService {
         BigDecimal balance = journalEntryLineRepository.getAccountBalance(glAccountId);
         if (balance.compareTo(BigDecimal.ZERO) != 0) {
             String msg = "Cannot deactivate account " + account.getAccountCode() + " with non-zero balance: " + balance;
-            log.warn(msg);
+            log.warn("Cannot deactivate account with non-zero balance");
             throw new AccountNotZeroBalanceException(msg);
         }
 
@@ -224,7 +223,7 @@ public class GLAccountServiceImpl implements GLAccountService {
 
         account = glAccountRepository.save(account);
 
-        log.info("Deactivated GL account: id={}, code={}", account.getGlAccountId(), account.getAccountCode());
+        log.info("Deactivated GL account");
 
         return toResponse(account);
     }
@@ -241,7 +240,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountResponse archiveGLAccount(@NonNull UUID glAccountId) {
-        log.info("Archiving GL account: id={}", glAccountId);
+        log.info("Archiving GL account");
 
         GLAccount account = glAccountRepository.findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
@@ -251,7 +250,7 @@ public class GLAccountServiceImpl implements GLAccountService {
         if (!"INACTIVE".equals(status)) {
             String msg = "Cannot archive account " + account.getAccountCode() + " with status " + status +
                     ". Account must be INACTIVE to archive.";
-            log.warn(msg);
+            log.warn("Cannot archive account unless INACTIVE");
             throw new AccountNotInactiveException(msg);
         }
 
@@ -267,7 +266,7 @@ public class GLAccountServiceImpl implements GLAccountService {
 
         account = glAccountRepository.save(account);
 
-        log.info("Archived GL account: id={}, code={}", account.getGlAccountId(), account.getAccountCode());
+        log.info("Archived GL account");
 
         return toResponse(account);
     }
@@ -281,7 +280,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountBalanceResponse getAccountBalance(@NonNull UUID glAccountId) {
-        log.debug("Getting balance for GL account: id={}", glAccountId);
+        log.debug("Getting balance for GL account");
 
         GLAccount account = glAccountRepository.findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
@@ -309,7 +308,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountListResponse listGLAccounts(int page, int size, String sort, String status) {
-        log.debug("Listing GL accounts: page={}, size={}, sort={}, status={}", page, size, sort, status);
+        log.debug("Listing GL accounts");
 
         // Build pageable with sorting
         Sort sortOrder = Sort.by(sort != null ? sort : "accountCode");
@@ -347,7 +346,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public void validateGLAccount(@NonNull GLAccountCreateRequest request) {
-        log.debug("Validating GL account request: code={}", request.getAccountCode());
+        log.debug("Validating GL account request");
 
         if (request.getAccountCode() == null || request.getAccountCode().isBlank()) {
             throw new IllegalArgumentException("Account code is required");
@@ -378,7 +377,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public void validateAccountForPosting(@NonNull UUID glAccountId, @NonNull LocalDateTime transactionDate) {
-        log.debug("Validating GL account for posting: id={}, date={}", glAccountId, transactionDate);
+        log.debug("Validating GL account for posting");
 
         GLAccount account = glAccountRepository.findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
@@ -416,4 +415,5 @@ public class GLAccountServiceImpl implements GLAccountService {
         response.setVersion(account.getVersion());
         return response;
     }
+
 }

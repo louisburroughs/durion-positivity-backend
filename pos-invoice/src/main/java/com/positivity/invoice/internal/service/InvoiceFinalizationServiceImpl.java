@@ -202,7 +202,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                 ? managerApprovalCode.substring(0, 4) + "****"
                 : "****";
         log.info("Invoice reversion: actor(mask)={}, invoiceId(mask)={}, approvalCode={}",
-            maskForLog(revertedBy), maskForLog(invoiceId), redactedCode);
+                maskForLog(revertedBy), maskForLog(invoiceId), redactedCode);
 
         invoice.setStatus(InvoiceStatus.DRAFT);
         invoice.setRevertedAt(Instant.now());
@@ -246,7 +246,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             String redactedCode = approvalCode.length() > 4
                     ? approvalCode.substring(0, 4) + "****"
                     : "****";
-            log.info("Manager approval override applied: actor(mask)={}, approvalCode={}, invoiceId(mask)={}, amount={}",
+            log.info(
+                    "Manager approval override applied: actor(mask)={}, approvalCode={}, invoiceId(mask)={}, amount={}",
                     maskForLog(actor), redactedCode, maskForLog(invoiceId), invoiceTotal);
         }
     }

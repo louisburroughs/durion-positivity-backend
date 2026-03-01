@@ -49,11 +49,11 @@ public class InvoiceFinalizedEventHandler {
     public void onInvoiceFinalized(@NonNull InvoiceFinalizedEvent event) {
         UUID invoiceId = event.invoiceId();
         log.info("GL posting handler invoked: invoiceId(mask)={}, workorderId(mask)={}, amount={}",
-            maskForLog(invoiceId), maskForLog(event.workorderId()), event.grandTotal());
+                maskForLog(invoiceId), maskForLog(event.workorderId()), event.grandTotal());
 
         invoiceRepository.findById(invoiceId).ifPresentOrElse(
                 invoice -> postToGl(invoice, event),
-            () -> log.warn("GL posting skipped — invoice not found: invoiceId(mask)={}", maskForLog(invoiceId)));
+                () -> log.warn("GL posting skipped — invoice not found: invoiceId(mask)={}", maskForLog(invoiceId)));
     }
 
     private void postToGl(@NonNull Invoice invoice, @NonNull InvoiceFinalizedEvent event) {
@@ -72,10 +72,11 @@ public class InvoiceFinalizedEventHandler {
             invoice.setGlEntryId(glEntryId);
             invoiceRepository.save(invoice);
 
-                log.info("GL posting succeeded: invoiceId(mask)={}, glEntryId(mask)={}, amount={}",
+            log.info("GL posting succeeded: invoiceId(mask)={}, glEntryId(mask)={}, amount={}",
                     maskForLog(invoice.getId()), maskForLog(glEntryId), event.grandTotal());
         } catch (Exception e) {
-                log.error("GL posting failed: invoiceId(mask)={}, error={}", maskForLog(invoice.getId()), e.getMessage(), e);
+            log.error("GL posting failed: invoiceId(mask)={}, error={}", maskForLog(invoice.getId()), e.getMessage(),
+                    e);
 
             invoice.setStatus(InvoiceStatus.ERROR);
             invoiceRepository.save(invoice);
