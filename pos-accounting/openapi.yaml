@@ -1155,6 +1155,28 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
+  /v1/accounting/invoices/{invoiceId}/pay:
+    post:
+      tags:
+      - Invoice Payments
+      summary: Apply payment to invoice (legacy)
+      description: Legacy compatibility endpoint. Use payment applications API instead.
+      operationId: applyPaymentLegacy
+      parameters:
+      - name: invoiceId
+        in: path
+        description: Invoice identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "501":
+          description: Legacy endpoint is not implemented
   /v1/accounting/invoice/invoices:
     post:
       tags:
@@ -2046,14 +2068,6 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "200":
-          description: Account drilldown successful
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
         "403":
           description: Forbidden - missing reporting:view:financial-statements
           content:
@@ -2064,6 +2078,14 @@ paths:
                   $ref: "#/components/schemas/AccountDrilldownResponse"
         "400":
           description: Invalid statement line code or date range
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountDrilldownResponse"
+        "200":
+          description: Account drilldown successful
           content:
             application/json:
               schema:
@@ -2098,6 +2120,12 @@ paths:
           format: date
         example: 2024-12-31
       responses:
+        "200":
+          description: Balance sheet generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceSheetReport"
         "403":
           description: Forbidden - missing reporting:view:financial-statements
           content:
@@ -2106,12 +2134,6 @@ paths:
                 $ref: "#/components/schemas/BalanceSheetReport"
         "400":
           description: Invalid date
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
-        "200":
-          description: Balance sheet generated successfully
           content:
             application/json:
               schema:
@@ -2660,12 +2682,6 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Order not found
           content:
@@ -2674,6 +2690,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -3353,8 +3375,6 @@ components:
       type: object
       description: Line item received from vendor
       properties:
-        inventoryItem:
-          type: boolean
         productId:
           type: string
           format: uuid
@@ -4704,10 +4724,6 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
@@ -4720,6 +4736,10 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
