@@ -150,7 +150,7 @@ public class EstimateServiceImpl implements EstimateService {
                                 .status(estimate.getStatus())
                                 .customerId(estimate.getCustomerId())
                                 .vehicleId(estimate.getVehicleId())
-                                .locationId(estimate.getLocationId() != null ? estimate.getLocationId().toString() : null)
+                                .locationId(estimate.getLocationId())
                                 .createdAt(estimate.getCreatedAt())
                                 .expiresAt(estimate.getExpiresAt())
                                 .subtotal(estimate.getSubtotal())

@@ -200,6 +200,13 @@ class EstimateSearchServiceTest {
         assertThat(summary.getEstimateNumber()).isNotNull();
         assertThat(summary.getStatus()).isNotNull();
         assertThat(summary.getCreatedAt()).isNotNull();
+        // AC4: additional required fields
+        assertThat(summary.getCustomerId()).isEqualTo(CUSTOMER_A);
+        assertThat(summary.getVehicleId()).isEqualTo(VEHICLE_B);
+        assertThat(summary.getLocationId()).isEqualTo(LOCATION_C);
+        assertThat(summary.getExpiresAt()).isNotNull();
+        assertThat(summary.getSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(100));
+        assertThat(summary.getTotal()).isEqualByComparingTo(BigDecimal.valueOf(108));
     }
 
     // ------------------------------------------------------------------
