@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.service;
 
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
+import java.util.UUID;
 
 /**
  * Service for loading appointment creation form data.
@@ -26,7 +27,7 @@ public interface AppointmentLoadService {
      *                                                                         not
      *                                                                         eligible
      */
-    AppointmentCreateModel loadCreateModel(String sourceType, String sourceId, String facilityId, String correlationId);
+    AppointmentCreateModel loadCreateModel(String sourceType, String sourceId, UUID facilityId, UUID correlationId);
 
     /**
      * Gets facility timezone information.
@@ -35,5 +36,5 @@ public interface AppointmentLoadService {
      * @param facilityId The facility identifier
      * @return IANA timezone ID (e.g., America/New_York)
      */
-    String getFacilityTimeZoneId(String facilityId);
+    String getFacilityTimeZoneId(UUID facilityId);
 }

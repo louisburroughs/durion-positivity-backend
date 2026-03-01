@@ -147,7 +147,7 @@ class InternalServiceImplementationsTest {
     void conflictDetectionService_returnsExpectedDefaults() {
         ConflictDetectionServiceImpl service = new ConflictDetectionServiceImpl();
 
-        service.detectConflicts(null, "corr-1");
+        service.detectConflicts(null, UUID.randomUUID());
 
         assertTrue(service.isWithinOperatingHours("FAC-1", "start", "end", "UTC"));
         assertTrue(service.checkMechanicAvailability("FAC-1", "start", "end").isEmpty());
@@ -157,11 +157,12 @@ class InternalServiceImplementationsTest {
     @Test
     void appointmentLoadService_returnsCreateModelAndUtcTimeZone() {
         AppointmentLoadServiceImpl service = new AppointmentLoadServiceImpl();
+        UUID facilityId = UUID.randomUUID();
 
-        AppointmentCreateModel model = service.loadCreateModel("ESTIMATE", "SRC-1", "FAC-1", "corr-1");
+        AppointmentCreateModel model = service.loadCreateModel("ESTIMATE", "SRC-1", facilityId, UUID.randomUUID());
 
         assertNotNull(model);
-        assertEquals("UTC", service.getFacilityTimeZoneId("FAC-1"));
+        assertEquals("UTC", service.getFacilityTimeZoneId(facilityId));
     }
 
     @Test

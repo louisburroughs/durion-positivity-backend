@@ -44,7 +44,7 @@ public class ScheduleController {
             @Parameter(description = "Optional single resource filter") @RequestParam(required = false) String resourceId,
             @Parameter(description = "Include HR availability overlay", required = false) @RequestParam(defaultValue = "false") boolean includeAvailabilityOverlay,
             @Parameter(description = "Schedule window range", required = false) @RequestParam(defaultValue = "LOCATION_HOURS") String range,
-            @Parameter(description = "Correlation ID for request tracing") @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+            @Parameter(description = "Correlation ID for request tracing") @RequestHeader(value = "X-Correlation-Id", required = false) UUID correlationId) {
         ScheduleViewRequest request = new ScheduleViewRequest();
         request.setLocationId(locationId);
         request.setDate(date);

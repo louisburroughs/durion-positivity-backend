@@ -39,7 +39,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleCustomerNotFound(
                         CrmCustomerNotFoundException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                                 .body(error("CUSTOMER_NOT_FOUND", exception.getMessage(), correlationId));
         }
@@ -48,7 +48,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleVehicleNotFound(
                         CrmVehicleNotFoundException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                                 .body(error("VEHICLE_NOT_FOUND", exception.getMessage(), correlationId));
         }
@@ -57,7 +57,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleVehicleCustomerMismatch(
                         VehicleCustomerMismatchException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .body(error("VEHICLE_CUSTOMER_MISMATCH", exception.getMessage(), correlationId));
         }
@@ -66,7 +66,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleAppointmentValidation(
                         AppointmentValidationException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                                 .body(error("VALIDATION_ERROR", exception.getMessage(), correlationId));
         }
@@ -75,7 +75,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleAppointmentState(
                         AppointmentStateException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .body(error("INVALID_APPOINTMENT_STATE", exception.getMessage(), correlationId));
         }
@@ -84,7 +84,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleAppointmentNotFound(
                         AppointmentNotFoundException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                                 .body(error("APPOINTMENT_NOT_FOUND", exception.getMessage(), correlationId));
         }
@@ -93,7 +93,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleLocationNotFound(
                         LocationNotFoundException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                                 .body(error("LOCATION_NOT_FOUND", exception.getMessage(), correlationId));
         }
@@ -102,7 +102,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleResourceNotFound(
                         ResourceNotFoundException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                                 .body(error("RESOURCE_NOT_FOUND", exception.getMessage(), correlationId));
         }
@@ -111,7 +111,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
                         MethodArgumentNotValidException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 ErrorResponse response = error("VALIDATION_ERROR", "Request validation failed", correlationId);
                 response.setFieldErrors(exception.getBindingResult().getFieldErrors().stream()
                                 .collect(java.util.stream.Collectors.toMap(
@@ -125,7 +125,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler({ ResourceAccessException.class, RestClientException.class })
         public ResponseEntity<ErrorResponse> handleCrmUnavailable(Exception exception, HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                                 .body(error(CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId));
         }
@@ -134,7 +134,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleCrmUnavailable(
                         CrmUnavailableException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                                 .body(error(CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId));
         }
@@ -143,7 +143,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleHrUnavailable(
                         HrUnavailableException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                                 .body(error(CODE_HR_UNAVAILABLE, "HR service is unavailable", correlationId));
         }
@@ -152,26 +152,35 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleNotImplemented(
                         UnsupportedOperationException exception,
                         HttpServletRequest request) {
-                String correlationId = resolveCorrelationId(request);
+                UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
                                 .body(error("NOT_IMPLEMENTED", exception.getMessage(), correlationId));
         }
 
-        private ErrorResponse error(String code, String message, String correlationId) {
+        private ErrorResponse error(String code, String message, UUID correlationId) {
                 ErrorResponse response = new ErrorResponse();
                 response.setCode(code);
                 response.setMessage(message);
                 response.setStatus(resolveStatus(code));
-                response.setCorrelationId(correlationId);
+                response.setCorrelationId(correlationId.toString());
                 response.setTimestamp(Instant.now(clock));
                 response.setFieldErrors(Map.of());
                 return response;
         }
 
-        private String resolveCorrelationId(HttpServletRequest request) {
-                return Optional.ofNullable(request.getHeader("X-Correlation-Id"))
+        private UUID resolveCorrelationId(HttpServletRequest request) {
+                String rawCorrelationId = Optional.ofNullable(request.getHeader("X-Correlation-Id"))
+                                .map(String::trim)
                                 .filter(header -> !header.isBlank())
-                                .orElse(UUID.randomUUID().toString());
+                                .orElse(null);
+                if (rawCorrelationId == null) {
+                        return UUID.randomUUID();
+                }
+                try {
+                        return UUID.fromString(rawCorrelationId);
+                } catch (IllegalArgumentException ignored) {
+                        return UUID.randomUUID();
+                }
         }
 
         private int resolveStatus(String code) {

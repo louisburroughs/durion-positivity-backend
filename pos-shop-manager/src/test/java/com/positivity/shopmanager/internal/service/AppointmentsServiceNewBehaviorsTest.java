@@ -27,6 +27,7 @@ import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.service.AppointmentLoadService;
+import com.positivity.shopmanager.service.SourceEligibilityService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -64,6 +65,8 @@ class AppointmentsServiceNewBehaviorsTest {
     private ApplicationEventPublisher applicationEventPublisher;
     @Mock
     private ShopRepository shopRepository;
+    @Mock
+    private SourceEligibilityService sourceEligibilityService;
 
     // F5 fix: manual constructor injection so Clock is never null
     private AppointmentsServiceImpl appointmentsService;
@@ -86,6 +89,7 @@ class AppointmentsServiceNewBehaviorsTest {
                 hrAvailabilityClient,
                 applicationEventPublisher,
                 shopRepository,
+                sourceEligibilityService,
                 Clock.fixed(Instant.parse("2025-06-01T10:00:00Z"), ZoneOffset.UTC));
 
         appointmentId = UUID.randomUUID();

@@ -41,7 +41,7 @@ public interface AppointmentsService {
      *                                                                                   detection
      *                                                                                   (409)
      */
-    AppointmentResponse create(@NonNull AppointmentCreateRequest request, String idempotencyKey, String correlationId);
+    AppointmentResponse create(@NonNull AppointmentCreateRequest request, String idempotencyKey, UUID correlationId);
 
     /**
      * Loads the appointment creation form model for a source document.
@@ -53,8 +53,8 @@ public interface AppointmentsService {
      * @param correlationId Optional request correlation ID
      * @return AppointmentCreateModel with facility context and operating hours
      */
-    AppointmentCreateModel loadCreateModel(String sourceType, String sourceId, String facilityId,
-            String correlationId);
+    AppointmentCreateModel loadCreateModel(String sourceType, String sourceId, UUID facilityId,
+            UUID correlationId);
 
     /**
      * Retrieves an appointment by ID.
@@ -65,9 +65,9 @@ public interface AppointmentsService {
      * @param correlationId Optional request correlation ID
      * @return AppointmentResponse with appointment details
      */
-    AppointmentResponse getById(String appointmentId, String correlationId);
+    AppointmentResponse getById(String appointmentId, UUID correlationId);
 
     @NonNull
-    ScheduleViewResponse getScheduleView(@NonNull ScheduleViewRequest request, String correlationId);
+    ScheduleViewResponse getScheduleView(@NonNull ScheduleViewRequest request, UUID correlationId);
 
 }
