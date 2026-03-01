@@ -12,13 +12,6 @@ import org.jspecify.annotations.NonNull;
 
 public interface AppointmentsService {
 
-    AppointmentResponse createAppointment(@NonNull AppointmentCreateRequest request);
-
-    AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId,
-            @NonNull RescheduleAppointmentRequest request);
-
-    AppointmentResponse cancelAppointment(@NonNull UUID appointmentId, @NonNull CancelAppointmentRequest request);
-
     /**
      * Creates an appointment from an Estimate or Work Order.
      * Performs eligibility checks and conflict detection.
@@ -41,7 +34,13 @@ public interface AppointmentsService {
      *                                                                                   detection
      *                                                                                   (409)
      */
-    AppointmentResponse create(@NonNull AppointmentCreateRequest request, String idempotencyKey, UUID correlationId);
+    AppointmentResponse createAppointment(@NonNull AppointmentCreateRequest request, String idempotencyKey,
+            UUID correlationId);
+
+    AppointmentResponse rescheduleAppointment(@NonNull UUID appointmentId,
+            @NonNull RescheduleAppointmentRequest request);
+
+    AppointmentResponse cancelAppointment(@NonNull UUID appointmentId, @NonNull CancelAppointmentRequest request);
 
     /**
      * Loads the appointment creation form model for a source document.

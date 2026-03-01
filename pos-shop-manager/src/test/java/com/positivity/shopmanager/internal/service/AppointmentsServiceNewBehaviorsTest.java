@@ -186,12 +186,12 @@ class AppointmentsServiceNewBehaviorsTest {
         AppointmentCreateRequest request = new AppointmentCreateRequest();
         request.setServiceRequestIds(null);
         assertThrows(AppointmentValidationException.class, () -> {
-            appointmentsService.createAppointment(request);
+            appointmentsService.createAppointment(request, null, null);
         });
 
         request.setServiceRequestIds(List.of());
         assertThrows(AppointmentValidationException.class, () -> {
-            appointmentsService.createAppointment(request);
+            appointmentsService.createAppointment(request, null, null);
         });
     }
 
@@ -201,13 +201,13 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setServiceRequestIds(List.of(UUID.randomUUID()));
         request.setCrmCustomerId(null);
         assertThrows(AppointmentValidationException.class, () -> {
-            appointmentsService.createAppointment(request);
+            appointmentsService.createAppointment(request, null, null);
         });
 
         request.setCrmCustomerId(UUID.randomUUID());
         request.setCrmVehicleId(null);
         assertThrows(AppointmentValidationException.class, () -> {
-            appointmentsService.createAppointment(request);
+            appointmentsService.createAppointment(request, null, null);
         });
     }
 
@@ -235,7 +235,7 @@ class AppointmentsServiceNewBehaviorsTest {
             return apt;
         });
 
-        appointmentsService.createAppointment(request);
+        appointmentsService.createAppointment(request, null, null);
 
         ArgumentCaptor<AppointmentCreatedEvent> captor = ArgumentCaptor.forClass(AppointmentCreatedEvent.class);
         verify(applicationEventPublisher).publishEvent(captor.capture());
@@ -271,7 +271,7 @@ class AppointmentsServiceNewBehaviorsTest {
             return apt;
         });
 
-        appointmentsService.createAppointment(request);
+        appointmentsService.createAppointment(request, null, null);
 
         ArgumentCaptor<Appointment> entityCaptor = ArgumentCaptor.forClass(Appointment.class);
         verify(appointmentRepository).save(entityCaptor.capture());
@@ -304,7 +304,7 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.randomUUID()));
 
-        assertThatThrownBy(() -> appointmentsService.createAppointment(request))
+        assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
                 .isInstanceOf(AppointmentValidationException.class)
                 .hasMessageContaining("slot");
     }
@@ -333,7 +333,7 @@ class AppointmentsServiceNewBehaviorsTest {
             return apt;
         });
 
-        appointmentsService.createAppointment(request);
+        appointmentsService.createAppointment(request, null, null);
 
         ArgumentCaptor<AppointmentCreatedEvent> captor = ArgumentCaptor.forClass(AppointmentCreatedEvent.class);
         verify(applicationEventPublisher).publishEvent(captor.capture());
@@ -356,7 +356,7 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.randomUUID()));
 
-        assertThatThrownBy(() -> appointmentsService.createAppointment(request))
+        assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
                 .isInstanceOf(CrmCustomerNotFoundException.class);
     }
 
@@ -377,7 +377,7 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.randomUUID()));
 
-        assertThatThrownBy(() -> appointmentsService.createAppointment(request))
+        assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
                 .isInstanceOf(CrmVehicleNotFoundException.class);
     }
 }

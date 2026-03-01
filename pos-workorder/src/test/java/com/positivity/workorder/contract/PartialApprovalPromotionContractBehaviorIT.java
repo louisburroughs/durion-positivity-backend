@@ -85,8 +85,9 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
                 assertThat(allItems).hasSize(4);
 
-                List<EstimateItem> approvedItems = estimateItemRepository.findByEstimateIdAndApprovalStatus(
-                                estimateId, ApprovalStatus.APPROVED);
+                List<EstimateItem> approvedItems = estimateItemRepository
+                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                                estimateId, ApprovalStatus.APPROVED);
                 assertThat(approvedItems).hasSize(2);
 
                 // When: Promote estimate to workorder
@@ -155,8 +156,9 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
                 assertThat(allItems).hasSize(3);
 
-                List<EstimateItem> approvedItems = estimateItemRepository.findByEstimateIdAndApprovalStatus(
-                                estimateId, ApprovalStatus.APPROVED);
+                List<EstimateItem> approvedItems = estimateItemRepository
+                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                                estimateId, ApprovalStatus.APPROVED);
                 assertThat(approvedItems).hasSize(3);
 
                 // When: Promote estimate to workorder
@@ -192,8 +194,9 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
                 assertThat(allItems).hasSize(2);
 
-                List<EstimateItem> approvedItems = estimateItemRepository.findByEstimateIdAndApprovalStatus(
-                                estimateId, ApprovalStatus.APPROVED);
+                List<EstimateItem> approvedItems = estimateItemRepository
+                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                                estimateId, ApprovalStatus.APPROVED);
                 assertThat(approvedItems).isEmpty();
 
                 // When: Promote estimate to workorder
@@ -213,8 +216,9 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 // Given: An approved estimate with mixed approval statuses
                 UUID estimateId = seedApprovedEstimateWithMixedApprovalStatuses();
 
-                List<EstimateItem> approvedItems = estimateItemRepository.findByEstimateIdAndApprovalStatus(
-                                estimateId, ApprovalStatus.APPROVED);
+                List<EstimateItem> approvedItems = estimateItemRepository
+                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                                estimateId, ApprovalStatus.APPROVED);
 
                 // When: Promote estimate to workorder
                 String workorderIdStr = givenWithGatewayAuth()
@@ -271,8 +275,9 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 // Given: An approved estimate with mixed approval statuses
                 UUID estimateId = seedApprovedEstimateWithMixedApprovalStatuses();
 
-                List<EstimateItem> approvedItems = estimateItemRepository.findByEstimateIdAndApprovalStatus(
-                                estimateId, ApprovalStatus.APPROVED);
+                List<EstimateItem> approvedItems = estimateItemRepository
+                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                                estimateId, ApprovalStatus.APPROVED);
                 List<UUID> approvedItemIds = approvedItems.stream().map(EstimateItem::getId).toList();
 
                 // When: Promote estimate to workorder

@@ -53,6 +53,15 @@ public class PromotionValidationServiceImpl implements PromotionValidationServic
         @Override
         @Transactional(readOnly = true)
         public void validatePromotionPreconditions(@NonNull UUID estimateId) {
+                validatePromotionPreconditionsInternal(estimateId);
+        }
+
+        /**
+         * Internal validator shared by both public entry points.
+         * No transactional annotation here so callers retain their own transaction
+         * boundary without proxy bypass.
+         */
+        private void validatePromotionPreconditionsInternal(@NonNull UUID estimateId) {
                 log.debug("Validating promotion preconditions for estimate {}", estimateId);
 
                 // 1. Locate Estimate
@@ -91,8 +100,9 @@ public class PromotionValidationServiceImpl implements PromotionValidationServic
                 }
 
                 // 5. Approved Scope Check - must have at least one approved item
-                List<EstimateItem> approvedItems = estimateItemRepository.findByEstimateIdAndApprovalStatus(
-                                estimateId, ApprovalStatus.APPROVED);
+                List<EstimateItem> approvedItems = estimateItemRepository
+                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                                estimateId, ApprovalStatus.APPROVED);
 
                 if (approvedItems.isEmpty()) {
                         log.warn("Estimate {} has no approved items for promotion", estimateId);
@@ -117,7 +127,7 @@ public class PromotionValidationServiceImpl implements PromotionValidationServic
         @NonNull
         public PromotionValidationResult validatePromotionPreconditionsNonThrowing(@NonNull UUID estimateId) {
                 try {
-                        validatePromotionPreconditions(estimateId);
+                        validatePromotionPreconditionsInternal(estimateId);
                         return PromotionValidationResult.success();
                 } catch (PromotionValidationException e) {
                         if (e.getExistingWorkorderId() != null) {

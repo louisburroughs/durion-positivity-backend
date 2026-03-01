@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -370,7 +371,7 @@ class AppointmentsServiceImplTest {
                                 .thenReturn(List.of(AppointmentServiceRequest.builder().appointmentId(appointmentId)
                                                 .serviceEntityId(serviceRequestId).build()));
 
-                AppointmentResponse response = appointmentsService.createAppointment(request);
+                AppointmentResponse response = appointmentsService.createAppointment(request, null, null);
 
                 assertEquals(appointmentId, response.getAppointmentId());
                 assertEquals(AppointmentStatus.SCHEDULED.name(), response.getStatus());
@@ -390,7 +391,7 @@ class AppointmentsServiceImplTest {
                 request.setServiceRequestIds(List.of());
 
                 assertThrows(AppointmentValidationException.class,
-                                () -> appointmentsService.createAppointment(request));
+                                () -> appointmentsService.createAppointment(request, null, null));
         }
 
         @Test
@@ -410,7 +411,88 @@ class AppointmentsServiceImplTest {
                                 .thenReturn(java.util.Map.of("ownerCustomerId", UUID.randomUUID().toString()));
 
                 assertThrows(VehicleCustomerMismatchException.class,
-                                () -> appointmentsService.createAppointment(request));
+                                () -> appointmentsService.createAppointment(request, null, null));
+        }
+
+        @Test
+        void createAppointment_returnsExisting_whenIdempotencyKeyMatchesSameRequest() {
+                UUID locationId = UUID.randomUUID();
+                UUID customerId = UUID.randomUUID();
+                UUID vehicleId = UUID.randomUUID();
+                UUID appointmentId = UUID.randomUUID();
+                UUID serviceRequestId = UUID.randomUUID();
+                String idempotencyKey = "idem-123";
+
+                AppointmentCreateRequest request = new AppointmentCreateRequest();
+                request.setLocationId(locationId);
+                request.setCrmCustomerId(customerId);
+                request.setCrmVehicleId(vehicleId);
+                request.setResourceId("tech-1");
+                request.setStartAt(Instant.parse("2026-03-10T10:00:00Z"));
+                request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
+                request.setWorkorderLinkRef("WO-1");
+                request.setServiceRequestIds(List.of(serviceRequestId));
+
+                Appointment existing = new Appointment();
+                existing.setAppointmentId(appointmentId);
+                existing.setStatus(AppointmentStatus.SCHEDULED);
+                existing.setLocationId(locationId);
+                existing.setResourceId("tech-1");
+                existing.setCrmCustomerId(customerId);
+                existing.setCrmVehicleId(vehicleId);
+                existing.setStartAt(request.getStartAt());
+                existing.setEndAt(request.getEndAt());
+                existing.setWorkorderLinkRef("WO-1");
+                existing.setIdempotencyKey(idempotencyKey);
+
+                when(appointmentRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.of(existing));
+                when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
+                                .thenReturn(List.of(AppointmentServiceRequest.builder().appointmentId(appointmentId)
+                                                .serviceEntityId(serviceRequestId).build()));
+
+                AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, null);
+
+                assertEquals(appointmentId, response.getAppointmentId());
+                verify(appointmentRepository, never()).save(any(Appointment.class));
+        }
+
+        @Test
+        void createAppointment_throwsValidation_whenIdempotencyKeyReusedWithDifferentRequest() {
+                UUID locationId = UUID.randomUUID();
+                UUID customerId = UUID.randomUUID();
+                UUID vehicleId = UUID.randomUUID();
+                UUID appointmentId = UUID.randomUUID();
+                UUID existingServiceRequestId = UUID.randomUUID();
+                String idempotencyKey = "idem-123";
+
+                AppointmentCreateRequest request = new AppointmentCreateRequest();
+                request.setLocationId(locationId);
+                request.setCrmCustomerId(customerId);
+                request.setCrmVehicleId(vehicleId);
+                request.setResourceId("tech-1");
+                request.setStartAt(Instant.parse("2026-03-10T10:30:00Z"));
+                request.setEndAt(Instant.parse("2026-03-10T11:30:00Z"));
+                request.setServiceRequestIds(List.of(UUID.randomUUID()));
+
+                Appointment existing = new Appointment();
+                existing.setAppointmentId(appointmentId);
+                existing.setStatus(AppointmentStatus.SCHEDULED);
+                existing.setLocationId(locationId);
+                existing.setResourceId("tech-1");
+                existing.setCrmCustomerId(customerId);
+                existing.setCrmVehicleId(vehicleId);
+                existing.setStartAt(Instant.parse("2026-03-10T10:00:00Z"));
+                existing.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
+                existing.setIdempotencyKey(idempotencyKey);
+
+                when(appointmentRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.of(existing));
+                when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
+                                .thenReturn(List.of(AppointmentServiceRequest.builder().appointmentId(appointmentId)
+                                                .serviceEntityId(existingServiceRequestId).build()));
+
+                assertThrows(AppointmentValidationException.class,
+                                () -> appointmentsService.createAppointment(request, idempotencyKey, null));
+                verify(appointmentRepository, never()).save(any(Appointment.class));
         }
 
         @Test
