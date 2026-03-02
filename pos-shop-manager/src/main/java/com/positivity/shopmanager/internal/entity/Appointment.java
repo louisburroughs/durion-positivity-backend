@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.CancellationReasonCode;
 
@@ -101,6 +102,30 @@ public class Appointment {
     @Builder.Default
     @Column(name = "is_conflict_override", nullable = false)
     private boolean isConflictOverride = false;
+
+    /**
+     * Source type identifying the workexec entity (ESTIMATE or WORK_ORDER) from
+     * which this appointment was created. Null when booked directly.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_type", length = 32)
+    private AppointmentSourceType sourceType;
+
+    /**
+     * External identifier of the originating estimate or work order.
+     * Immutable once set; populated together with {@link #sourceType}.
+     */
+    @Column(name = "source_id", length = 128)
+    private String sourceId;
+
+    /**
+     * Service-level assignment status. Set to {@code AWAITING_SKILL_FULFILLMENT}
+     * when no mechanics with the required skills are available at creation time.
+     * Skill-fulfillment enforcement is pending a follow-up story; this field
+     * is persisted to support that future implementation.
+     */
+    @Column(name = "assignment_status", length = 64)
+    private String assignmentStatus;
 
     @PrePersist
     public void generateAppointmentId() {

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -36,4 +37,17 @@ public class AppointmentCreateRequest {
     private List<UUID> serviceRequestIds;
 
     private String workorderLinkRef;
+
+    /**
+     * Optional source type indicating which workexec entity originated this
+     * booking. When present, {@code sourceId} must also be provided.
+     * Source eligibility is validated before the appointment is persisted.
+     */
+    private AppointmentSourceType sourceType;
+
+    /**
+     * External identifier of the originating estimate or work order.
+     * Required when {@code sourceType} is set.
+     */
+    private String sourceId;
 }

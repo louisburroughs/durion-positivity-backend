@@ -24,8 +24,11 @@ import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
 import com.positivity.shopmanager.internal.entity.Shop;
 import com.positivity.shopmanager.internal.entity.RescheduleHistory;
 import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
+import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
 import com.positivity.shopmanager.internal.event.AppointmentCancelledEvent;
 import com.positivity.shopmanager.internal.event.AppointmentCreatedEvent;
+import com.positivity.shopmanager.internal.event.AppointmentCreatedFromEstimateEvent;
+import com.positivity.shopmanager.internal.event.AppointmentCreatedFromWorkOrderEvent;
 import com.positivity.shopmanager.internal.event.AppointmentRescheduledEvent;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.enums.AppointmentAction;
@@ -153,6 +156,26 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
         validateCrmRelationship(request.getCrmCustomerId(), request.getCrmVehicleId(), vehicleSnapshot);
 
+        // Source eligibility validation (CAP-249 Story #12)
+        if (request.getSourceType() != null) {
+            if (request.getSourceId() == null || request.getSourceId().isBlank()) {
+                throw new AppointmentValidationException("sourceId is required when sourceType is provided");
+            }
+            String facilityId = request.getLocationId().toString();
+            // Guard against duplicate appointment from same source entity
+            String existingAppointmentId = sourceEligibilityService.getExistingAppointmentId(
+                    request.getSourceType().name(), request.getSourceId(), facilityId);
+            if (existingAppointmentId != null) {
+                throw new AppointmentValidationException(
+                        "An appointment already exists for this source entity. appointmentId=" + existingAppointmentId);
+            }
+            if (request.getSourceType() == AppointmentSourceType.ESTIMATE) {
+                sourceEligibilityService.validateEstimateEligibility(request.getSourceId(), facilityId);
+            } else if (request.getSourceType() == AppointmentSourceType.WORK_ORDER) {
+                sourceEligibilityService.validateWorkOrderEligibility(request.getSourceId(), facilityId);
+            }
+        }
+
         List<Appointment> conflicts = appointmentRepository
                 .findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
                         request.getLocationId(),
@@ -185,6 +208,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .createdBy(actor)
                 .workorderLinkRef(request.getWorkorderLinkRef())
                 .idempotencyKey(normalizedIdempotencyKey)
+                .sourceType(request.getSourceType())
+                .sourceId(request.getSourceId())
                 .build();
 
         Appointment saved = appointmentRepository.save(appointment);
@@ -197,6 +222,31 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 saved.getEndAt(),
                 saved.getCreatedBy(),
                 saved.getWorkorderLinkRef()));
+
+        // Source-specific events (CAP-249 Story #12): notify WorkExec of the
+        // appointment link.
+        if (saved.getSourceType() == AppointmentSourceType.ESTIMATE) {
+            eventPublisher.publishEvent(new AppointmentCreatedFromEstimateEvent(
+                    saved.getAppointmentId(),
+                    saved.getSourceId(),
+                    saved.getCrmCustomerId().toString(),
+                    saved.getCrmVehicleId().toString(),
+                    saved.getStartAt(),
+                    saved.getEndAt(),
+                    saved.getCreatedBy(),
+                    clock.instant()));
+        } else if (saved.getSourceType() == AppointmentSourceType.WORK_ORDER) {
+            eventPublisher.publishEvent(new AppointmentCreatedFromWorkOrderEvent(
+                    saved.getAppointmentId(),
+                    saved.getSourceId(),
+                    saved.getCrmCustomerId().toString(),
+                    saved.getCrmVehicleId().toString(),
+                    saved.getStartAt(),
+                    saved.getEndAt(),
+                    saved.getCreatedBy(),
+                    clock.instant()));
+        }
+
         return toResponse(saved);
     }
 
