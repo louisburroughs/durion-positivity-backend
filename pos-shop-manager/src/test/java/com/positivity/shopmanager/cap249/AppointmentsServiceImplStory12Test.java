@@ -398,8 +398,10 @@ class AppointmentsServiceImplStory12Test {
 
         when(appointmentRepository.findByIdempotencyKey("test-key")).thenReturn(java.util.Optional.of(existing));
         when(appointmentServiceRequestRepository.findByAppointmentId(existing.getAppointmentId()))
-                .thenReturn(List.of(new AppointmentServiceRequest(UUID.randomUUID(), existing.getAppointmentId(),
-                        SERVICE_REQUEST_ID)));
+                .thenReturn(List.of(AppointmentServiceRequest.builder()
+                        .appointmentId(existing.getAppointmentId())
+                        .serviceEntityId(SERVICE_REQUEST_ID)
+                        .build()));
 
         AppointmentCreateRequest request = buildRequest(null, null);
         AppointmentResponse response = appointmentsService.createAppointment(request, "test-key", null);
