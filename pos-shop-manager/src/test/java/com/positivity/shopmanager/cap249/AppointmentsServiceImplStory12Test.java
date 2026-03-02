@@ -265,6 +265,23 @@ class AppointmentsServiceImplStory12Test {
         verify(sourceEligibilityService, never()).validateWorkOrderEligibility(any(), any());
     }
 
+    @Test
+    void createAppointment_withNullSourceTypeAndOrphanSourceId_savesWithNullSourceId() {
+        // Fix r2870236946: sourceId must not be persisted when sourceType is null
+        configureCommonSaveStub();
+
+        AppointmentCreateRequest request = buildRequest(null, null);
+        // Manually set a sourceId on a null-sourceType request to exercise the guard
+        request.setSourceId("orphan-id");
+
+        appointmentsService.createAppointment(request, null, null);
+
+        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getSourceType()).isNull();
+        assertThat(captor.getValue().getSourceId()).isNull();
+    }
+
     // ─── AC4: sourceType without sourceId → validation error ─────────────────
 
     /**
