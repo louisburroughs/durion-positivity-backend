@@ -41,6 +41,8 @@ public class AppointmentsController {
     @Operation(summary = "Create appointment", description = "Create a new appointment")
     @ApiResponse(responseCode = "201", description = "Appointment created successfully.")
     @ApiResponse(responseCode = "400", description = "Validation error — requested slot is unavailable or request fields are invalid.")
+    @ApiResponse(responseCode = "409", description = "Conflict — slot already booked or duplicate source appointment.")
+    @ApiResponse(responseCode = "422", description = "Source not eligible — estimate or work order cannot be scheduled (ineligible status).")
     @ApiResponse(responseCode = "501", description = "Not implemented.")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CREATE", apiVersion = "1")
     @PostMapping("/appointments")

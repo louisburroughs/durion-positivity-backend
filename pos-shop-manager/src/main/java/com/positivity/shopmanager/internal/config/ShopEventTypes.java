@@ -17,11 +17,11 @@ public final class ShopEventTypes {
 
         /**
          * All event type registrations for the shop manager module.
-         * Total: 14 event types.
+         * Total: 16 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
-                                // ShopBayController - 2 events
+                                // ShopBayController - 3 events
                                 EventTypeRegistration.write("SHOP_BAY_CREATE",
                                                 "Create a new bay for a specific shop location").build(),
                                 EventTypeRegistration.write("SHOP_BAY_MANAGE",
@@ -29,7 +29,7 @@ public final class ShopEventTypes {
                                 EventTypeRegistration.write("SHOP_BAY_DELETE",
                                                 "Delete a bay from a specific shop location").build(),
 
-                                // ShopMobileUnitController - 2 events
+                                // ShopMobileUnitController - 3 events
                                 EventTypeRegistration.write("SHOP_MOBILE_UNIT_CREATE",
                                                 "Create a new mobile unit for a specific shop location").build(),
                                 EventTypeRegistration.write("SHOP_MOBILE_UNIT_MANAGE",
@@ -37,7 +37,7 @@ public final class ShopEventTypes {
                                 EventTypeRegistration.write("SHOP_MOBILE_UNIT_DELETE",
                                                 "Delete a mobile unit from a specific shop location").build(),
 
-                                // AppointmentsController - 1 event
+                                // AppointmentsController - 5 events
                                 EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATE",
                                                 "Create an appointment").build(),
                                 EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATED",
@@ -56,6 +56,12 @@ public final class ShopEventTypes {
                                 EventTypeRegistration.write("SHOPMGR_ASSIGNMENT_CREATED",
                                                 "Mechanic and resource assignment created for an appointment").build(),
                                 EventTypeRegistration.fastRead("SHOPMGR_ASSIGNMENT_LIST_FETCHED",
-                                                "List mechanic and resource assignments for an appointment").build());
+                                                "List mechanic and resource assignments for an appointment").build(),
+                                // AppointmentsController source-linked events (CAP-249 Story #12) - 2 events
+                                EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATED_FROM_ESTIMATE",
+                                                "Appointment created from an approved estimate; WorkExec notified")
+                                                .build(),
+                                EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATED_FROM_WORKORDER",
+                                                "Appointment created from a work order; WorkExec notified").build());
         }
 }
