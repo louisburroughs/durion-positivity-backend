@@ -432,10 +432,10 @@ class AppointmentsServiceImplStory12Test {
     @Test
     void createAppointment_withMismatchedIdempotentRequest_throwsValidationException() {
         Appointment existing = Appointment.builder()
-            .idempotencyKey("test-key")
-            .status(AppointmentStatus.SCHEDULED)
-            .startAt(Instant.now())
-            .build();
+                .idempotencyKey("test-key")
+                .status(AppointmentStatus.SCHEDULED)
+                .startAt(Instant.now())
+                .build();
         when(appointmentRepository.findByIdempotencyKey("test-key")).thenReturn(java.util.Optional.of(existing));
 
         AppointmentCreateRequest request = buildRequest(null, null); // Different startAt
