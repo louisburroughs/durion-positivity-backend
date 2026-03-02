@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Data
@@ -23,7 +23,7 @@ public class CreateEstimateResponse {
     private String currencyUomId;
     private UUID taxRegionId;
     private String createdByUserId;
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     public static CreateEstimateResponse fromEntity(Estimate estimate) {
         return CreateEstimateResponse.builder()
