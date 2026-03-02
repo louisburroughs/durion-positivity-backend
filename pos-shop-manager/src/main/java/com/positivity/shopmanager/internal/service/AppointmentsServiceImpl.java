@@ -22,9 +22,15 @@ import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.AppointmentAudit;
 import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
 import com.positivity.shopmanager.internal.entity.Shop;
+import com.positivity.shopmanager.internal.entity.RescheduleHistory;
+import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
+import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
 import com.positivity.shopmanager.internal.event.AppointmentCancelledEvent;
 import com.positivity.shopmanager.internal.event.AppointmentCreatedEvent;
+import com.positivity.shopmanager.internal.event.AppointmentCreatedFromEstimateEvent;
+import com.positivity.shopmanager.internal.event.AppointmentCreatedFromWorkOrderEvent;
 import com.positivity.shopmanager.internal.event.AppointmentRescheduledEvent;
+import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.enums.AppointmentAction;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
@@ -80,6 +86,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private static final String SYSTEM = "system";
     private final AppointmentRepository appointmentRepository;
     private final AppointmentAuditRepository appointmentAuditRepository;
+    private final RescheduleHistoryRepository rescheduleHistoryRepository;
     private final AppointmentServiceRequestRepository appointmentServiceRequestRepository;
     private final ObjectMapper objectMapper;
     private final AppointmentLoadService appointmentLoadService;
@@ -149,6 +156,26 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
         validateCrmRelationship(request.getCrmCustomerId(), request.getCrmVehicleId(), vehicleSnapshot);
 
+        // Source eligibility validation (CAP-249 Story #12)
+        if (request.getSourceType() != null) {
+            if (request.getSourceId() == null || request.getSourceId().isBlank()) {
+                throw new AppointmentValidationException("sourceId is required when sourceType is provided");
+            }
+            String facilityId = request.getLocationId().toString();
+            // Guard against duplicate appointment from same source entity
+            String existingAppointmentId = sourceEligibilityService.getExistingAppointmentId(
+                    request.getSourceType().name(), request.getSourceId(), facilityId);
+            if (existingAppointmentId != null) {
+                throw new AppointmentValidationException(
+                        "An appointment already exists for this source entity. appointmentId=" + existingAppointmentId);
+            }
+            if (request.getSourceType() == AppointmentSourceType.ESTIMATE) {
+                sourceEligibilityService.validateEstimateEligibility(request.getSourceId(), facilityId);
+            } else if (request.getSourceType() == AppointmentSourceType.WORK_ORDER) {
+                sourceEligibilityService.validateWorkOrderEligibility(request.getSourceId(), facilityId);
+            }
+        }
+
         List<Appointment> conflicts = appointmentRepository
                 .findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
                         request.getLocationId(),
@@ -181,6 +208,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .createdBy(actor)
                 .workorderLinkRef(request.getWorkorderLinkRef())
                 .idempotencyKey(normalizedIdempotencyKey)
+                .sourceType(request.getSourceType())
+                .sourceId(request.getSourceType() == null ? null : request.getSourceId())
                 .build();
 
         Appointment saved = appointmentRepository.save(appointment);
@@ -193,6 +222,31 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 saved.getEndAt(),
                 saved.getCreatedBy(),
                 saved.getWorkorderLinkRef()));
+
+        // Source-specific events (CAP-249 Story #12): notify WorkExec of the
+        // appointment link.
+        if (saved.getSourceType() == AppointmentSourceType.ESTIMATE) {
+            eventPublisher.publishEvent(new AppointmentCreatedFromEstimateEvent(
+                    saved.getAppointmentId(),
+                    saved.getSourceId(),
+                    saved.getCrmCustomerId().toString(),
+                    saved.getCrmVehicleId().toString(),
+                    saved.getStartAt(),
+                    saved.getEndAt(),
+                    saved.getCreatedBy(),
+                    clock.instant()));
+        } else if (saved.getSourceType() == AppointmentSourceType.WORK_ORDER) {
+            eventPublisher.publishEvent(new AppointmentCreatedFromWorkOrderEvent(
+                    saved.getAppointmentId(),
+                    saved.getSourceId(),
+                    saved.getCrmCustomerId().toString(),
+                    saved.getCrmVehicleId().toString(),
+                    saved.getStartAt(),
+                    saved.getEndAt(),
+                    saved.getCreatedBy(),
+                    clock.instant()));
+        }
+
         return toResponse(saved);
     }
 
@@ -203,7 +257,9 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * error responses.
      * 
      * @param appointmentId The appointment identifier
-     * @param request       The reschedule request with newStartAt and newEndAt
+     * @param request       The reschedule request containing newStartAt, newEndAt,
+     *                      reason,
+     *                      rescheduleReasonNotes, and notifyCustomer
      * @return AppointmentResponse with updated appointment details
      */
     @Override
@@ -220,9 +276,26 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
 
-        if (appointment.getStatus() != AppointmentStatus.SCHEDULED) {
+        if (appointment.getStatus() != AppointmentStatus.SCHEDULED
+                && appointment.getStatus() != AppointmentStatus.CONFIRMED
+                && appointment.getStatus() != AppointmentStatus.AWAITING_PARTS) {
             throw new AppointmentStateException(
-                    "Appointment must be SCHEDULED to reschedule, current status: " + appointment.getStatus());
+                    "Appointment must be SCHEDULED, CONFIRMED, or AWAITING_PARTS to reschedule, current status: "
+                            + appointment.getStatus());
+        }
+
+        // TODO CAP-249 follow-up: enforce max 2 reschedules using
+        // rescheduleHistoryRepository.countByAppointmentId(appointmentId)
+
+        if (request.getReason() == null) {
+            throw new AppointmentValidationException("reason is required for rescheduling");
+        }
+
+        if (RescheduleReasonCode.OTHER == request.getReason()
+                && (request.getRescheduleReasonNotes() == null
+                        || request.getRescheduleReasonNotes().isBlank())) {
+            throw new AppointmentValidationException(
+                    "rescheduleReasonNotes is required when reason is OTHER");
         }
 
         Instant previousStartAt = appointment.getStartAt();
@@ -233,6 +306,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         Appointment saved = appointmentRepository.save(appointment);
 
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
+        Instant rescheduledAt = Instant.now(clock);
+
         AppointmentAudit audit = AppointmentAudit.builder()
                 .appointmentId(appointmentId)
                 .action(AppointmentAction.RESCHEDULED)
@@ -244,13 +319,39 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .build();
         appointmentAuditRepository.save(audit);
 
+        rescheduleHistoryRepository.save(RescheduleHistory.builder()
+                .appointmentId(appointmentId)
+                .previousStartAt(previousStartAt)
+                .previousEndAt(previousEndAt)
+                .newStartAt(request.getNewStartAt())
+                .newEndAt(request.getNewEndAt())
+                .rescheduleReason(request.getReason())
+                .rescheduleReasonNotes(request.getRescheduleReasonNotes())
+                .rescheduledBy(actorId)
+                .rescheduledAt(rescheduledAt)
+                .conflictOverridden(false)
+                .notifyCustomer(request.isNotifyCustomer())
+                .createdAt(rescheduledAt)
+                .build());
+
+        // Event emission: only when workorderLinkRef is present (appointments without
+        // a workorder link are scheduled independently and have no downstream consumer
+        // expecting a reschedule signal at this time).
         if (saved.getWorkorderLinkRef() != null) {
             eventPublisher.publishEvent(new AppointmentRescheduledEvent(
                     saved.getAppointmentId(),
                     saved.getWorkorderLinkRef(),
                     previousStartAt,
+                    previousEndAt,
                     request.getNewStartAt(),
-                    actorId));
+                    request.getNewEndAt(),
+                    request.getReason(),
+                    actorId,
+                    rescheduledAt,
+                    null, // estimateId: not yet a typed UUID on Appointment entity
+                    null, // workOrderId: not yet a typed UUID on Appointment entity
+                    null // assignmentStatus: resolved via assignment lookup in future story
+            ));
         }
 
         return toResponse(saved);

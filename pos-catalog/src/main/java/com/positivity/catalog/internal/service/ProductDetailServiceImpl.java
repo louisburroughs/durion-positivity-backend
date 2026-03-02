@@ -336,8 +336,8 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             if (value.isInt()) {
                 return value.asInt();
             }
-            if (value.isTextual()) {
-                String raw = value.asText();
+            if (value.isString()) {
+                String raw = value.asString();
                 if (raw != null && !raw.isBlank()) {
                     try {
                         return Integer.parseInt(raw.trim());
@@ -356,7 +356,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             if (value == null || value.isNull()) {
                 continue;
             }
-            String text = value.asText(null);
+            String text = value.asString(null);
             if (text != null && !text.isBlank()) {
                 return text.trim();
             }

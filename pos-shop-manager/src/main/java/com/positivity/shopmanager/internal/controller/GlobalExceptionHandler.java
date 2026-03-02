@@ -10,6 +10,7 @@ import com.positivity.shopmanager.internal.exception.HrUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
+import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
 import java.time.Clock;
 import java.time.Instant;
@@ -69,6 +70,17 @@ public class GlobalExceptionHandler {
                 UUID correlationId = resolveCorrelationId(request);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                                 .body(error("VALIDATION_ERROR", exception.getMessage(), correlationId));
+        }
+
+        @ExceptionHandler(SourceNotEligibleException.class)
+        public ResponseEntity<ErrorResponse> handleSourceNotEligible(
+                        SourceNotEligibleException exception,
+                        HttpServletRequest request) {
+                UUID correlationId = resolveCorrelationId(request);
+                return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                                .body(error(exception.getErrorCode() != null ? exception.getErrorCode()
+                                                : "SOURCE_NOT_ELIGIBLE",
+                                                exception.getMessage(), correlationId));
         }
 
         @ExceptionHandler(AppointmentStateException.class)
@@ -191,6 +203,8 @@ public class GlobalExceptionHandler {
                         case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE" -> HttpStatus.CONFLICT.value();
                         case CODE_CRM_UNAVAILABLE, CODE_HR_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE.value();
                         case "NOT_IMPLEMENTED" -> HttpStatus.NOT_IMPLEMENTED.value();
+                        case "SOURCE_NOT_ELIGIBLE", "ESTIMATE_NOT_ELIGIBLE", "WORKORDER_NOT_ELIGIBLE" ->
+                                HttpStatus.UNPROCESSABLE_CONTENT.value();
                         default -> HttpStatus.BAD_REQUEST.value();
                 };
         }
