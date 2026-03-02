@@ -75,6 +75,9 @@ public class Estimate {
     // Configuration reference for approval method
     private UUID approvalConfigurationId;
 
+    @Column(columnDefinition = "UUID")
+    private UUID appointmentId; // Reference to source appointment (Story #65 CAP:140)
+
     // Notes or reason for decline
     private String declineReason;
 

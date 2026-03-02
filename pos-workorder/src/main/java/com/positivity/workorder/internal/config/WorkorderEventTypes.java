@@ -155,6 +155,13 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** Create draft estimate from appointment */
+        public static final EventTypeRegistration WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT = EventTypeRegistration
+                        .write("WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT",
+                                        "Create draft estimate from appointment")
+                        .apiVersion("1")
+                        .build();
+
         /** Decline an estimate */
         public static final EventTypeRegistration WORKORDER_ESTIMATE_DECLINE = EventTypeRegistration
                         .write("WORKORDER_ESTIMATE_DECLINE",
@@ -421,6 +428,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_ESTIMATE_SEARCH_BY_LOCATION,
                         WORKORDER_ESTIMATE_SEARCH,
                         WORKORDER_ESTIMATE_CREATE,
+                        WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT,
                         WORKORDER_ESTIMATE_DECLINE,
                         WORKORDER_ESTIMATE_REOPEN,
                         WORKORDER_ESTIMATE_APPROVE,
