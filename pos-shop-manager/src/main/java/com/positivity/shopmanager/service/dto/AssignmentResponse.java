@@ -18,5 +18,10 @@ public class AssignmentResponse {
     String resourceType;
     AssignmentStatus status;
     boolean override;
-    Instant createdAt;
+    /** Optional notes for this assignment (max 500 chars). */
+    String assignmentNotes;
+    /** When the assignment was first created/confirmed. */
+    Instant assignedAt;
+    /** When the assignment was last modified. */
+    Instant lastUpdatedAt;
 }
