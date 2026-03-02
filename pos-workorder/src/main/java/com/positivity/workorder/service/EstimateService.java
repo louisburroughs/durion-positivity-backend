@@ -11,6 +11,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
+import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentRequest;
+import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentResponse;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateItemResponse;
 import com.positivity.workorder.internal.dto.EstimateResponse;
@@ -233,5 +235,18 @@ public interface EstimateService {
          * @return count of expired estimates
          */
         int expirePendingApprovals();
+
+        /**
+         * Creates a new DRAFT estimate from an appointment, or returns the existing
+         * estimate if one already exists for the given appointmentId (idempotent).
+         * CAP:140 Story #65.
+         *
+         * @param request the create request including appointmentId, customerId,
+         *                vehicleId, locationId
+         * @return response containing estimateId and status
+         */
+        @NonNull
+        CreateEstimateFromAppointmentResponse createEstimateFromAppointment(
+                        @NonNull CreateEstimateFromAppointmentRequest request);
 
 }

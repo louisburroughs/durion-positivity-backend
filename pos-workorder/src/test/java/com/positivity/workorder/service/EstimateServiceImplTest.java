@@ -21,6 +21,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import com.positivity.workorder.service.BillingRulesClientService;
+import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -40,7 +42,7 @@ import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.EstimateServiceImpl;
 
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class EstimateServiceImplTest {
@@ -68,6 +70,9 @@ class EstimateServiceImplTest {
 
     @Mock
     private TaxClient taxClient;
+
+    @Mock
+    private PeopleLocationClient peopleLocationClient;
 
     @Mock
     private ObjectMapper objectMapper;

@@ -29,6 +29,8 @@ import com.positivity.workorder.internal.client.DocumentClient;
 import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
+import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentRequest;
+import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentResponse;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateItemResponse;
 import com.positivity.workorder.internal.dto.EstimateResponse;
@@ -1271,6 +1273,74 @@ public class EstimateServiceImpl implements EstimateService {
 
                 log.info("Approval expiration completed - success: {}, errors: {}", successCount, errorCount);
                 return successCount;
+        }
+
+        @Override
+        @Transactional
+        @NonNull
+        public CreateEstimateFromAppointmentResponse createEstimateFromAppointment(
+                        @NonNull CreateEstimateFromAppointmentRequest request) {
+                if (request.getAppointmentId() == null) {
+                        throw new IllegalArgumentException("appointmentId is required");
+                }
+                if (request.getCustomerId() == null) {
+                        throw new IllegalArgumentException("customerId is required");
+                }
+
+                log.info("Received createEstimateFromAppointment: appointmentId={}, idempotencyKey={}",
+                                maskForLog(request.getAppointmentId()),
+                                maskForLog(request.getIdempotencyKey()));
+
+                Optional<Estimate> existingEstimate = estimateRepository
+                                .findByAppointmentId(request.getAppointmentId());
+                if (existingEstimate.isPresent()) {
+                        Estimate existing = existingEstimate.get();
+                        log.info("Idempotency hit: returning existing estimateId={} for appointmentId={}",
+                                        maskForLog(existing.getId()),
+                                        maskForLog(request.getAppointmentId()));
+                        return CreateEstimateFromAppointmentResponse.builder()
+                                        .estimateId(existing.getId())
+                                        .status(existing.getStatus() != null ? existing.getStatus().name()
+                                                        : EstimateStatus.DRAFT.name())
+                                        .created(false)
+                                        .build();
+                }
+
+                Estimate estimate = Estimate.builder()
+                                .status(EstimateStatus.DRAFT)
+                                .customerId(request.getCustomerId())
+                                .vehicleId(request.getVehicleId())
+                                .locationId(request.getLocationId())
+                                .appointmentId(request.getAppointmentId())
+                                .build();
+
+                Estimate saved = estimateRepository.save(estimate);
+                UUID estimateId = saved.getId();
+
+                log.info("Estimate created from appointment: estimateId={}, appointmentId={}",
+                                maskForLog(saved.getId()),
+                                maskForLog(request.getAppointmentId()));
+
+                return CreateEstimateFromAppointmentResponse.builder()
+                                .estimateId(estimateId)
+                                .status(EstimateStatus.DRAFT.name())
+                                .created(true)
+                                .build();
+        }
+
+        private String maskForLog(Object value) {
+                if (value == null) {
+                        return "null";
+                }
+                String sanitized = value.toString()
+                                .replace('\r', '_')
+                                .replace('\n', '_')
+                                .replace('\t', '_');
+                int length = sanitized.length();
+                if (length <= 4) {
+                        return "****";
+                }
+                return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
         }
 
         /**
