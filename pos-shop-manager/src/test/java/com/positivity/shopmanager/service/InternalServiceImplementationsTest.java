@@ -1,4 +1,4 @@
-package com.positivity.shopmanager.internal.service;
+package com.positivity.shopmanager.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -18,6 +18,13 @@ import com.positivity.shopmanager.internal.entity.ShopService;
 import com.positivity.shopmanager.internal.entity.Technician;
 import com.positivity.shopmanager.internal.repository.ShopServiceRepository;
 import com.positivity.shopmanager.internal.repository.TechnicianRepository;
+import com.positivity.shopmanager.internal.service.AppointmentLoadServiceImpl;
+import com.positivity.shopmanager.internal.service.BayServiceImpl;
+import com.positivity.shopmanager.internal.service.ConflictDetectionServiceImpl;
+import com.positivity.shopmanager.internal.service.MobileUnitServiceImpl;
+import com.positivity.shopmanager.internal.service.ShopServiceImpl;
+import com.positivity.shopmanager.internal.service.SourceEligibilityServiceImpl;
+
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

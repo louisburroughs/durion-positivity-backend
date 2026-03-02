@@ -1,4 +1,4 @@
-package com.positivity.shopmgmt.cap137;
+package com.positivity.shopmanager.cap137;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.shopmanager.BaseContractIntegrationTest;
 import com.positivity.shopmanager.PosShopManagerApplication;
 import com.positivity.shopmanager.internal.client.CrmCustomerClient;
 import com.positivity.shopmanager.internal.client.CrmVehicleClient;
@@ -14,7 +15,7 @@ import com.positivity.shopmanager.internal.entity.AppointmentAudit;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
-import com.positivity.shopmgmt.BaseContractIntegrationTest;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -165,7 +166,8 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
                 return """
                                 {
                                   "newStartAt": "%s",
-                                  "newEndAt":   "%s"
+                                  "newEndAt":   "%s",
+                                  "reason":     "CUSTOMER_REQUEST"
                                 }
                                 """.formatted(newStartAt, newEndAt);
         }

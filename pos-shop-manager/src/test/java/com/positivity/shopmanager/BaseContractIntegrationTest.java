@@ -1,4 +1,4 @@
-package com.positivity.shopmgmt;
+package com.positivity.shopmanager;
 
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;

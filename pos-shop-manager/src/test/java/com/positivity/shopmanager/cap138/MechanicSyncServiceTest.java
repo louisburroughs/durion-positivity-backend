@@ -1,4 +1,4 @@
-package com.positivity.shopmgmt.cap138;
+package com.positivity.shopmanager.cap138;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

@@ -447,8 +447,18 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * @return AppointmentResponse with appointment details
      */
     @Override
-    public AppointmentResponse getById(String appointmentId, UUID correlationId) {
-        throw new UnsupportedOperationException("not yet implemented");
+    @Transactional(readOnly = true)
+    public AppointmentResponse getById(@NonNull String appointmentId, UUID correlationId) {
+        UUID parsedId;
+        try {
+            parsedId = UUID.fromString(appointmentId);
+        } catch (IllegalArgumentException e) {
+            throw new AppointmentValidationException("Invalid appointment ID format: " + appointmentId);
+        }
+        Appointment appointment = appointmentRepository.findById(parsedId)
+                .orElseThrow(() -> new AppointmentNotFoundException(parsedId));
+        log.debug("Loaded appointment. appointmentId={}, correlationId={}", parsedId, correlationId);
+        return toResponse(appointment);
     }
 
     @Override
