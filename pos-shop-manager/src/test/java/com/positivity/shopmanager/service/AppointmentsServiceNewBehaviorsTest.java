@@ -1,4 +1,4 @@
-package com.positivity.shopmanager.internal.service;
+package com.positivity.shopmanager.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,6 +27,7 @@ import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
+import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
 import com.positivity.shopmanager.service.AppointmentLoadService;
 import com.positivity.shopmanager.service.SourceEligibilityService;
 import java.time.Clock;

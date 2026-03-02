@@ -1,4 +1,4 @@
-package com.positivity.shopmgmt.cap137;
+package com.positivity.shopmanager.cap137;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
