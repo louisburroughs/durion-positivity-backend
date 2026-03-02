@@ -161,15 +161,15 @@ class TimekeepingIngestionServiceTest {
 
         timekeepingIngestionService.recordCorrection(event);
 
-                ArgumentCaptor<TimekeepingEntry> captor = ArgumentCaptor.forClass(TimekeepingEntry.class);
-                verify(timekeepingEntryRepository).save(captor.capture());
+        ArgumentCaptor<TimekeepingEntry> captor = ArgumentCaptor.forClass(TimekeepingEntry.class);
+        verify(timekeepingEntryRepository).save(captor.capture());
 
-                TimekeepingEntry saved = captor.getValue();
-                assertThat(saved.getCorrectionId()).isEqualTo(correctionId);
-                assertThat(saved.getCorrectionReason()).isEqualTo(correctionReason);
-                assertThat(saved.getSourceSessionId()).isEqualTo(correctionId);
-                assertThat(saved.getOriginalSourceSessionId()).isEqualTo(originalSessionId);
-                assertThat(saved.getApprovalStatus()).isEqualTo(ApprovalStatus.PENDING_APPROVAL);
-                assertThat(saved.getTenantId()).isEqualTo(tenantId);
+        TimekeepingEntry saved = captor.getValue();
+        assertThat(saved.getCorrectionId()).isEqualTo(correctionId);
+        assertThat(saved.getCorrectionReason()).isEqualTo(correctionReason);
+        assertThat(saved.getSourceSessionId()).isEqualTo(correctionId);
+        assertThat(saved.getOriginalSourceSessionId()).isEqualTo(originalSessionId);
+        assertThat(saved.getApprovalStatus()).isEqualTo(ApprovalStatus.PENDING_APPROVAL);
+        assertThat(saved.getTenantId()).isEqualTo(tenantId);
     }
 }

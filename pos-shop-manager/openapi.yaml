@@ -107,14 +107,28 @@ paths:
               $ref: "#/components/schemas/RescheduleAppointmentRequest"
         required: true
       responses:
-        "200":
-          description: Appointment rescheduled successfully.
+        "409":
+          description: Appointment state conflict — appointment is not in a reschedulable
+            status.
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AppointmentResponse"
-        "409":
-          description: Appointment state conflict.
+        "400":
+          description: "Validation error — invalid times, missing mandatory fields,\
+            \ or blank notes required for OTHER reason."
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
+        "404":
+          description: Appointment not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
+        "200":
+          description: Appointment rescheduled successfully.
           content:
             '*/*':
               schema:
@@ -181,6 +195,20 @@ paths:
       summary: Create appointment
       description: Create a new appointment
       operationId: createAppointment
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: Idempotency key for safe retries
+        required: false
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: Correlation ID for request tracing
+        required: false
+        schema:
+          type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -194,9 +222,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AppointmentResponse"
+        "422":
+          description: Source not eligible — estimate or work order cannot be scheduled
+            (ineligible status).
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
         "400":
-          description: Validation error — requested slot is unavailable or request
-            fields are invalid.
+          description: "Validation or conflict error — requested slot is unavailable,\
+            \ duplicate source appointment, or request fields are invalid."
           content:
             '*/*':
               schema:
@@ -555,6 +590,7 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
       responses:
         "400":
           description: Invalid input parameters
@@ -601,6 +637,7 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
       responses:
         "501":
           description: Not implemented.
@@ -666,9 +703,26 @@ components:
           format: date-time
         reason:
           type: string
+          enum:
+          - CUSTOMER_REQUEST
+          - SHOP_CAPACITY
+          - EQUIPMENT_ISSUE
+          - MECHANIC_UNAVAILABLE
+          - PARTS_DELAY
+          - WEATHER
+          - EMERGENCY
+          - MANAGER_DISCRETION
+          - OTHER
+        rescheduleReasonNotes:
+          type: string
+          maxLength: 1000
+          minLength: 0
+        notifyCustomer:
+          type: boolean
       required:
       - newEndAt
       - newStartAt
+      - reason
     AppointmentResponse:
       type: object
       properties:
@@ -739,6 +793,13 @@ components:
             type: string
             format: uuid
         workorderLinkRef:
+          type: string
+        sourceType:
+          type: string
+          enum:
+          - ESTIMATE
+          - WORK_ORDER
+        sourceId:
           type: string
       required:
       - crmCustomerId
@@ -840,7 +901,12 @@ components:
           - CANCELLED
         override:
           type: boolean
-        createdAt:
+        assignmentNotes:
+          type: string
+        assignedAt:
+          type: string
+          format: date-time
+        lastUpdatedAt:
           type: string
           format: date-time
     PersonDTO:
