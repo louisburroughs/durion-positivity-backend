@@ -47,9 +47,10 @@ import org.springframework.context.ApplicationEventPublisher;
  * <p>
  * Verifies that {@link AppointmentsServiceImpl#rescheduleAppointment} enforces:
  * <ul>
- * <li>Expanded eligibility: SCHEDULED, CONFIRMED, and AWAITING_PARTS are all
+ * <li>Expanded eligibility: SCHEDULED, CHECKED_IN, and WAITING_FOR_PARTS are
+ * all
  * accepted.</li>
- * <li>Ineligible status rejection: CANCELLED and IN_PROGRESS throw
+ * <li>Ineligible status rejection: CANCELLED and WORK_IN_PROGRESS throw
  * {@link AppointmentStateException}.</li>
  * <li>Mandatory reason: {@code reason=OTHER} requires non-blank
  * {@code rescheduleReasonNotes}.</li>
@@ -137,13 +138,13 @@ class AppointmentsServiceImplStory11Test {
     }
 
     /**
-     * AC: CONFIRMED appointments must also be eligible for reschedule (expanded
+     * AC: CHECKED_IN appointments must also be eligible for reschedule (expanded
      * eligibility).
      */
     @Test
     void reschedule_withConfirmedStatus_succeeds() {
         UUID appointmentId = UUID.randomUUID();
-        Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.CONFIRMED);
+        Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.CHECKED_IN);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.SHOP_CAPACITY, null, false);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
@@ -157,13 +158,13 @@ class AppointmentsServiceImplStory11Test {
     }
 
     /**
-     * AC: AWAITING_PARTS appointments must also be eligible for reschedule
+     * AC: WAITING_FOR_PARTS appointments must also be eligible for reschedule
      * (expanded eligibility).
      */
     @Test
     void reschedule_withAwaitingPartsStatus_succeeds() {
         UUID appointmentId = UUID.randomUUID();
-        Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.AWAITING_PARTS);
+        Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.WAITING_FOR_PARTS);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.PARTS_DELAY, null, false);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
@@ -195,19 +196,20 @@ class AppointmentsServiceImplStory11Test {
     }
 
     /**
-     * AC: IN_PROGRESS appointments must also be rejected (not in the eligible set).
+     * AC: WORK_IN_PROGRESS appointments must also be rejected (not in the eligible
+     * set).
      */
     @Test
     void reschedule_withInProgressStatus_throwsAppointmentStateException() {
         UUID appointmentId = UUID.randomUUID();
-        Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.IN_PROGRESS);
+        Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.WORK_IN_PROGRESS);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, false);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
 
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(appointmentId, request))
                 .isInstanceOf(AppointmentStateException.class)
-                .hasMessageContaining("IN_PROGRESS");
+                .hasMessageContaining("WORK_IN_PROGRESS");
     }
 
     // ─── AC: reason=OTHER requires non-blank notes ────────────────────────────

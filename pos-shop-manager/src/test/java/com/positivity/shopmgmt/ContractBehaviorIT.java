@@ -174,14 +174,14 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 String appointmentId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
                                 .asString();
-                String confirmPayload = "{\"status\":\"CONFIRMED\"}";
+                String confirmPayload = "{\"status\":\"CHECKED_IN\"}";
 
                 mockMvc.perform(patch("/v1/appointments/{id}/status", appointmentId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(confirmPayload)
                                 .header("X-Correlation-Id", "test-cc-002"))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+                                .andExpect(jsonPath("$.status").value("CHECKED_IN"));
         }
 
         // ========== FIELD FORMAT VALIDATION TESTS ==========
@@ -225,7 +225,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 assert sourceType.matches("WORKORDER|ESTIMATE") : "sourceType must be valid enum";
                 assert assignmentType.matches("BAY|MOBILE_UNIT") : "assignmentType must be valid enum";
-                assert status.matches("SCHEDULED|CONFIRMED|IN_PROGRESS|CANCELLED|COMPLETED")
+                assert status.matches(
+                                "SCHEDULED|CHECKED_IN|WORK_IN_PROGRESS|WAITING_FOR_PARTS|QUALITY_CHECK|READY_FOR_PICKUP|COMPLETED|CANCELLED|INVOICED|REOPENED")
                                 : "status must be valid enum";
         }
 

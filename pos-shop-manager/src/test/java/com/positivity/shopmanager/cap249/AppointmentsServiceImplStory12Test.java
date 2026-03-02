@@ -20,6 +20,7 @@ import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
 import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
+import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.event.AppointmentCreatedFromEstimateEvent;
 import com.positivity.shopmanager.internal.event.AppointmentCreatedFromWorkOrderEvent;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
@@ -404,6 +405,7 @@ class AppointmentsServiceImplStory12Test {
         Appointment existing = Appointment.builder()
                 .appointmentId(UUID.randomUUID())
                 .idempotencyKey("test-key")
+                .status(AppointmentStatus.SCHEDULED)
                 .locationId(LOCATION_ID)
                 .resourceId("BAY-01")
                 .crmCustomerId(CUSTOMER_ID)
@@ -429,7 +431,11 @@ class AppointmentsServiceImplStory12Test {
 
     @Test
     void createAppointment_withMismatchedIdempotentRequest_throwsValidationException() {
-        Appointment existing = Appointment.builder().idempotencyKey("test-key").startAt(Instant.now()).build();
+        Appointment existing = Appointment.builder()
+            .idempotencyKey("test-key")
+            .status(AppointmentStatus.SCHEDULED)
+            .startAt(Instant.now())
+            .build();
         when(appointmentRepository.findByIdempotencyKey("test-key")).thenReturn(java.util.Optional.of(existing));
 
         AppointmentCreateRequest request = buildRequest(null, null); // Different startAt
@@ -481,8 +487,6 @@ class AppointmentsServiceImplStory12Test {
     void createAppointment_withNullShopTimezone_doesNotThrow() {
         // Issue #12: verify null safety for timezone resolution
         configureCommonSaveStub();
-        when(sourceEligibilityService.getExistingAppointmentId(any(), any(), any())).thenReturn(null);
-        when(shopRepository.findById(LOCATION_ID)).thenReturn(java.util.Optional.empty());
 
         // This should not throw an exception, even with a missing shop/timezone.
         // The service defaults to UTC internally.
@@ -493,8 +497,6 @@ class AppointmentsServiceImplStory12Test {
     @Test
     void createAppointment_withNullCustomerSnapshot_handlesGracefully() {
         // Issue #12: verify null safety for customer snapshot parsing
-        configureCommonSaveStub();
-        when(sourceEligibilityService.getExistingAppointmentId(any(), any(), any())).thenReturn(null);
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
             Appointment apt = inv.getArgument(0);
             apt.setAppointmentId(SAVED_APPOINTMENT_ID);
@@ -504,6 +506,6 @@ class AppointmentsServiceImplStory12Test {
 
         var response = appointmentsService.createAppointment(buildRequest(null, null), null, null);
 
-        assertThat(response.getCustomerSnapshot()).isNull();
+        assertThat(response.getCustomerSnapshot()).isEmpty();
     }
 }
