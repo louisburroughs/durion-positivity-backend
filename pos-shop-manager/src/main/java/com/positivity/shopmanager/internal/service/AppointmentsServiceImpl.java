@@ -209,7 +209,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .workorderLinkRef(request.getWorkorderLinkRef())
                 .idempotencyKey(normalizedIdempotencyKey)
                 .sourceType(request.getSourceType())
-                .sourceId(request.getSourceId())
+                .sourceId(request.getSourceType() == null ? null : request.getSourceId())
                 .build();
 
         Appointment saved = appointmentRepository.save(appointment);
@@ -286,6 +286,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         // TODO CAP-249 follow-up: enforce max 2 reschedules using
         // rescheduleHistoryRepository.countByAppointmentId(appointmentId)
+
+        if (request.getReason() == null) {
+            throw new AppointmentValidationException("reason is required for rescheduling");
+        }
 
         if (RescheduleReasonCode.OTHER == request.getReason()
                 && (request.getRescheduleReasonNotes() == null

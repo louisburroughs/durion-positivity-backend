@@ -40,8 +40,7 @@ public class AppointmentsController {
 
     @Operation(summary = "Create appointment", description = "Create a new appointment")
     @ApiResponse(responseCode = "201", description = "Appointment created successfully.")
-    @ApiResponse(responseCode = "400", description = "Validation error — requested slot is unavailable or request fields are invalid.")
-    @ApiResponse(responseCode = "409", description = "Conflict — slot already booked or duplicate source appointment.")
+    @ApiResponse(responseCode = "400", description = "Validation or conflict error — requested slot is unavailable, duplicate source appointment, or request fields are invalid.")
     @ApiResponse(responseCode = "422", description = "Source not eligible — estimate or work order cannot be scheduled (ineligible status).")
     @ApiResponse(responseCode = "501", description = "Not implemented.")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CREATE", apiVersion = "1")
@@ -79,7 +78,6 @@ public class AppointmentsController {
     @ApiResponse(responseCode = "400", description = "Validation error — invalid times, missing mandatory fields, or blank notes required for OTHER reason.")
     @ApiResponse(responseCode = "404", description = "Appointment not found.")
     @ApiResponse(responseCode = "409", description = "Appointment state conflict — appointment is not in a reschedulable status.")
-    @ApiResponse(responseCode = "422", description = "Domain policy violation — e.g. reason is OTHER but rescheduleReasonNotes is blank.")
     @PutMapping("/appointments/{appointmentId}/reschedule")
     @PreAuthorize("hasAuthority('appointments:reschedule')")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_RESCHEDULE", apiVersion = "1")

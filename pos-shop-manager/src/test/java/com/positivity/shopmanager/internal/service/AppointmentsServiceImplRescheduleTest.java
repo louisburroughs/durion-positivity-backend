@@ -139,6 +139,22 @@ class AppointmentsServiceImplRescheduleTest {
     }
 
     @Test
+    void rescheduleAppointment_withNullReason_throwsValidationException() {
+        Appointment appointment = new Appointment();
+        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+
+        RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
+        request.setNewStartAt(Instant.now());
+        request.setNewEndAt(Instant.now().plusSeconds(3600));
+        request.setReason(null);
+
+        assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(APPOINTMENT_ID, request))
+                .isInstanceOf(AppointmentValidationException.class)
+                .hasMessageContaining("reason is required for rescheduling");
+    }
+
+    @Test
     void rescheduleAppointment_withNonExistentAppointment_throwsNotFoundException() {
         when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.empty());
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();

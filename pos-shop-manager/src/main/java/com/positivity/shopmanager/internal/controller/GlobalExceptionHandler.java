@@ -203,6 +203,8 @@ public class GlobalExceptionHandler {
                         case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE" -> HttpStatus.CONFLICT.value();
                         case CODE_CRM_UNAVAILABLE, CODE_HR_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE.value();
                         case "NOT_IMPLEMENTED" -> HttpStatus.NOT_IMPLEMENTED.value();
+                        case "SOURCE_NOT_ELIGIBLE", "ESTIMATE_NOT_ELIGIBLE", "WORKORDER_NOT_ELIGIBLE" ->
+                                HttpStatus.UNPROCESSABLE_CONTENT.value();
                         default -> HttpStatus.BAD_REQUEST.value();
                 };
         }
