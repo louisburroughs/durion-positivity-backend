@@ -54,6 +54,8 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.BillingRulesClientService;
 import com.positivity.workorder.service.EstimateService;
 
+import com.positivity.security.common.SecurityContextHelper;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
@@ -214,6 +216,7 @@ public class EstimateServiceImpl implements EstimateService {
                 ApprovalConfiguration config = getApprovalConfiguration(locationId, request.getCustomerId());
 
                 // Build estimate entity
+                String userId = SecurityContextHelper.getCurrentUserIdOrDefault(username);
                 Estimate estimate = Estimate.builder()
                                 .estimateNumber(estimateNumber)
                                 .customerId(request.getCustomerId())
@@ -223,7 +226,8 @@ public class EstimateServiceImpl implements EstimateService {
                                 .taxRegionId(taxRegionId)
                                 .status(EstimateStatus.DRAFT)
                                 .createdByUserId(username)
-                                .createdAt(LocalDateTime.now())
+                                .createdById(userId)
+                                .createdAt(Instant.now())
                                 .approvalConfigurationId(config.getId())
                                 .build();
 

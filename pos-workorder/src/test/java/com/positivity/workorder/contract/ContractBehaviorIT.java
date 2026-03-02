@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +22,7 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Workorder Estimate Backend Contract Behavioral Tests")
@@ -37,10 +39,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-001: Successfully create estimate with valid totals and auto-generated estimateNumber")
         void testCreateEstimate_HappyPath() throws Exception {
                 String payload = createEstimatePayload("CUST-001", "VEH-001", "LOC-001", "500.00", "50.00", "550.00");
-                mockMvc.perform(post("/v1/workorders/estimates")
+                mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
-                                .header("X-Correlation-Id", "test-001"))
+                                .header("X-Correlation-Id", "test-001")))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.id").exists())
                                 .andExpect(jsonPath("$.estimateNumber").exists())
@@ -53,20 +55,20 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-002: Successfully retrieve estimate by ID")
         void testGetEstimate_HappyPath() throws Exception {
                 String payload = createEstimatePayload("CUST-002", "VEH-002", "LOC-002", "750.00", "75.00", "825.00");
-                MvcResult createResult = mockMvc.perform(post("/v1/workorders/estimates")
+                MvcResult createResult = mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
-                                .header("X-Correlation-Id", "test-002"))
+                                .header("X-Correlation-Id", "test-002")))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
                 String estimateId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
                                 .asString();
-                mockMvc.perform(get("/v1/workorders/estimates/{id}", estimateId)
-                                .header("X-Correlation-Id", "test-002"))
+                mockMvc.perform(withAuthMvc(get("/v1/workorders/estimates/{id}", estimateId)
+                                .header("X-Correlation-Id", "test-002")))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(estimateId))
-                                .andExpect(jsonPath("$.customerId").value("CUST-002"));
+                                .andExpect(jsonPath("$.customerId").value(toUuidString("CUST-002")));
         }
 
         // ========== VALIDATION ERROR TESTS ==========
@@ -75,10 +77,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testCreateEstimate_TotalsMismatch() throws Exception {
                 String invalidPayload = createEstimatePayload("CUST-003", "VEH-003", "LOC-003", "100.00", "10.00",
                                 "99.99");
-                mockMvc.perform(post("/v1/workorders/estimates")
+                mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
-                                .header("X-Correlation-Id", "test-ve-001"))
+                                .header("X-Correlation-Id", "test-ve-001")))
                                 .andExpect(status().isConflict())
                                 .andExpect(jsonPath("$.code").value("CONFLICT"));
         }
@@ -88,10 +90,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testCreateEstimate_NegativeSubtotal() throws Exception {
                 String invalidPayload = createEstimatePayload("CUST-004", "VEH-004", "LOC-004", "-100.00", "0.00",
                                 "-100.00");
-                mockMvc.perform(post("/v1/workorders/estimates")
+                mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
-                                .header("X-Correlation-Id", "test-ve-002"))
+                                .header("X-Correlation-Id", "test-ve-002")))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         }
@@ -100,10 +102,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("VE-003: Reject estimate with invalid status")
         void testCreateEstimate_InvalidStatus() throws Exception {
                 String payload = createEstimatePayload("CUST-005", "VEH-005", "LOC-005", "200.00", "20.00", "220.00");
-                MvcResult createResult = mockMvc.perform(post("/v1/workorders/estimates")
+                MvcResult createResult = mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
-                                .header("X-Correlation-Id", "test-ve-003"))
+                                .header("X-Correlation-Id", "test-ve-003")))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
@@ -111,10 +113,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .asString();
                 String invalidStatusPayload = "{\"status\":\"INVALID_STATUS\"}";
 
-                mockMvc.perform(patch("/v1/workorders/estimates/{id}", estimateId)
+                mockMvc.perform(withAuthMvc(patch("/v1/workorders/estimates/{id}", estimateId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidStatusPayload)
-                                .header("X-Correlation-Id", "test-ve-003"))
+                                .header("X-Correlation-Id", "test-ve-003")))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         }
@@ -126,21 +128,21 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 String idempotencyKey = "idem-est-" + System.currentTimeMillis();
                 String payload = createEstimatePayload("CUST-006", "VEH-006", "LOC-006", "350.00", "35.00", "385.00");
 
-                MvcResult result1 = mockMvc.perform(post("/v1/workorders/estimates")
+                MvcResult result1 = mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-id-001")
-                                .header("Idempotency-Key", idempotencyKey))
+                                .header("Idempotency-Key", idempotencyKey)))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
                 String id1 = objectMapper.readTree(result1.getResponse().getContentAsString()).get("id").asString();
 
-                MvcResult result2 = mockMvc.perform(post("/v1/workorders/estimates")
+                MvcResult result2 = mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-id-001")
-                                .header("Idempotency-Key", idempotencyKey))
+                                .header("Idempotency-Key", idempotencyKey)))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
@@ -153,10 +155,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CC-001: State machine validation prevents invalid status transitions")
         void testUpdateEstimate_InvalidStateTransition() throws Exception {
                 String payload = createEstimatePayload("CUST-007", "VEH-007", "LOC-007", "600.00", "60.00", "660.00");
-                MvcResult createResult = mockMvc.perform(post("/v1/workorders/estimates")
+                MvcResult createResult = mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
-                                .header("X-Correlation-Id", "test-cc-001"))
+                                .header("X-Correlation-Id", "test-cc-001")))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
@@ -164,10 +166,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .asString();
                 String invalidTransition = "{\"status\":\"EXPIRED\",\"version\":0}";
 
-                mockMvc.perform(patch("/v1/workorders/estimates/{id}", estimateId)
+                mockMvc.perform(withAuthMvc(patch("/v1/workorders/estimates/{id}", estimateId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidTransition)
-                                .header("X-Correlation-Id", "test-cc-001"))
+                                .header("X-Correlation-Id", "test-cc-001")))
                                 .andExpect(status().isConflict())
                                 .andExpect(jsonPath("$.code").value("CONFLICT"));
         }
@@ -176,10 +178,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CC-002: Declined estimate can be reversed within expiration window")
         void testUpdateEstimate_ReverseDecline() throws Exception {
                 String payload = createEstimatePayload("CUST-008", "VEH-008", "LOC-008", "450.00", "45.00", "495.00");
-                MvcResult createResult = mockMvc.perform(post("/v1/workorders/estimates")
+                MvcResult createResult = mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
-                                .header("X-Correlation-Id", "test-cc-002"))
+                                .header("X-Correlation-Id", "test-cc-002")))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
@@ -187,17 +189,17 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .asString();
 
                 String declinePayload = "{\"status\":\"DECLINED\"}";
-                mockMvc.perform(patch("/v1/workorders/estimates/{id}", estimateId)
+                mockMvc.perform(withAuthMvc(patch("/v1/workorders/estimates/{id}", estimateId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(declinePayload)
-                                .header("X-Correlation-Id", "test-cc-002"))
+                                .header("X-Correlation-Id", "test-cc-002")))
                                 .andExpect(status().isOk());
 
                 String reversePayload = "{\"status\":\"DRAFT\"}";
-                mockMvc.perform(patch("/v1/workorders/estimates/{id}", estimateId)
+                mockMvc.perform(withAuthMvc(patch("/v1/workorders/estimates/{id}", estimateId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(reversePayload)
-                                .header("X-Correlation-Id", "test-cc-002"))
+                                .header("X-Correlation-Id", "test-cc-002")))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.status").value("DRAFT"));
         }
@@ -207,10 +209,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("FF-001: ISO 8601 UTC timestamp format for createdAt")
         void testEstimate_TimestampFormat() throws Exception {
                 String payload = createEstimatePayload("CUST-009", "VEH-009", "LOC-009", "300.00", "30.00", "330.00");
-                MvcResult result = mockMvc.perform(post("/v1/workorders/estimates")
+                MvcResult result = mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
-                                .header("X-Correlation-Id", "test-ff-001"))
+                                .header("X-Correlation-Id", "test-ff-001")))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
@@ -224,10 +226,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("FF-002: Valid estimate status enum values and estimateNumber format")
         void testEstimate_ValidEnumValuesAndFormat() throws Exception {
                 String payload = createEstimatePayload("CUST-010", "VEH-010", "LOC-010", "400.00", "40.00", "440.00");
-                MvcResult result = mockMvc.perform(post("/v1/workorders/estimates")
+                MvcResult result = mockMvc.perform(withAuthMvc(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
-                                .header("X-Correlation-Id", "test-ff-002"))
+                                .header("X-Correlation-Id", "test-ff-002")))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
@@ -241,10 +243,15 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 : "Status must be valid enum value";
         }
 
+        private static String toUuidString(String name) {
+                return UUID.nameUUIDFromBytes(name.getBytes()).toString();
+        }
+
         private String createEstimatePayload(String customerId, String vehicleId, String locationId,
                         String subtotal, String taxAmount, String total) {
                 return String.format(
                                 "{\"customerId\":\"%s\",\"vehicleId\":\"%s\",\"locationId\":\"%s\",\"subtotal\":%s,\"taxAmount\":%s,\"total\":%s}",
-                                customerId, vehicleId, locationId, subtotal, taxAmount, total);
+                                toUuidString(customerId), toUuidString(vehicleId), toUuidString(locationId),
+                                subtotal, taxAmount, total);
         }
 }

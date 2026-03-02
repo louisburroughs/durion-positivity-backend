@@ -11,6 +11,7 @@ import org.jspecify.annotations.NonNull;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -26,7 +27,7 @@ public class EstimateSummaryResponse {
 
         private UUID id;
         private String estimateNumber;
-        private LocalDateTime createdAt;
+        private Instant createdAt;
         private LocalDateTime expiresAt;
         private UUID customerId;
         private UUID vehicleId;

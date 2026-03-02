@@ -11,6 +11,8 @@ import org.springframework.test.context.ActiveProfiles;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.contract.ContractTestConfiguration;
 
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
@@ -25,7 +27,7 @@ public abstract class BaseContractIntegrationTest {
 
     protected static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-    private static final String TEST_AUTHORITIES = String.join(",",
+    protected static final String TEST_AUTHORITIES = String.join(",",
             "workorder:approval_config:view",
             "workorder:approval_config:create",
             "workorder:approval_config:edit",
@@ -79,6 +81,13 @@ public abstract class BaseContractIntegrationTest {
     protected RequestSpecification givenWithGatewayAuth() {
         return RestAssured.given()
                 .contentType(ContentType.JSON)
+                .header("X-User-Id", SYSTEM_USER_ID.toString())
+                .header("X-User", SYSTEM_USER_ID.toString())
+                .header("X-Authorities", TEST_AUTHORITIES);
+    }
+
+    protected MockHttpServletRequestBuilder withAuthMvc(MockHttpServletRequestBuilder req) {
+        return req
                 .header("X-User-Id", SYSTEM_USER_ID.toString())
                 .header("X-User", SYSTEM_USER_ID.toString())
                 .header("X-Authorities", TEST_AUTHORITIES);
