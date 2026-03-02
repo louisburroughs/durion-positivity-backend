@@ -31,14 +31,17 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 /**
  * Controller slice tests for CAP-249 Story #10: Appointment Assignment Show —
  * verifies that {@link AssignmentController#listAssignments} enforces the
- * {@code shopmgmt.assignment.view} authority (AC4, ADR-0011) and returns HTTP 200 for
+ * {@code shopmgmt.assignment.view} authority (AC4, ADR-0011) and returns HTTP
+ * 200 for
  * authorized callers; HTTP 403 for unauthorized callers (ADR-0017).
  *
- * <p>{@code @WithMockUser} pre-populates the security context so that
+ * <p>
+ * {@code @WithMockUser} pre-populates the security context so that
  * {@code @PreAuthorize} expressions are evaluated deterministically without
  * requiring the full gateway filter chain.
  *
- * <p>In this Spring Boot 4 / Spring Security 6.4 slice context, method-security
+ * <p>
+ * In this Spring Boot 4 / Spring Security 6.4 slice context, method-security
  * {@code AccessDeniedException} propagates past the default
  * {@code ExceptionTranslationFilter}. The inner
  * {@link SecurityExceptionControllerAdvice} converts it to HTTP 403 so that
@@ -118,7 +121,8 @@ class AssignmentControllerStory10Test {
     // Issue #10: AC4 — workexec.assignment.create alone does NOT grant read access
 
     /**
-     * Verifies Finding 2 remediation: holding only {@code workexec.assignment.create}
+     * Verifies Finding 2 remediation: holding only
+     * {@code workexec.assignment.create}
      * (a write-verb authority) does not grant access to the GET list endpoint.
      */
     @Test
@@ -133,10 +137,12 @@ class AssignmentControllerStory10Test {
     /**
      * Minimal supplementary configuration for the {@code @WebMvcTest} slice.
      *
-     * <p>Enables method-level security so {@code @PreAuthorize} on
+     * <p>
+     * Enables method-level security so {@code @PreAuthorize} on
      * {@link AssignmentController} is evaluated.
      *
-     * <p>Also registers {@link SecurityExceptionControllerAdvice} to convert
+     * <p>
+     * Also registers {@link SecurityExceptionControllerAdvice} to convert
      * {@link AccessDeniedException} to HTTP 403 within the MockMvc dispatcher,
      * since in Spring Boot 4 / Spring Security 6.4 the
      * {@code ExceptionTranslationFilter} does not handle method-security
