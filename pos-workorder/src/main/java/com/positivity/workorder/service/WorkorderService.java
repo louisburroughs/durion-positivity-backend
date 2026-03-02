@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.jspecify.annotations.NonNull;
+
+import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
@@ -72,5 +75,15 @@ public interface WorkorderService {
          * @param event the EstimateRevisedEvent containing revision details
          */
         void onEstimateRevised(EstimateRevisedEvent event);
+
+        /**
+         * Updates assignment context (locationId, resourceId, mechanicIds) on a workorder
+         * from an AssignmentUpdated event. Uses full-replace semantics.
+         * Only pre-execution states (DRAFT, APPROVED, ASSIGNED) are updatable.
+         * CAP:140 Story #64.
+         *
+         * @param event the assignment updated event from shop management service
+         */
+        void handleAssignmentUpdated(@NonNull AssignmentUpdatedEvent event);
 
 }
