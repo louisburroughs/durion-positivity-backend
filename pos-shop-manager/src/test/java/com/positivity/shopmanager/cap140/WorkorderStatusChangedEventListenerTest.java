@@ -16,7 +16,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * Unit tests for WorkorderStatusChangedEventListener — CAP-140 Story #63.
  *
- * <p>Verifies that the @EventListener method delegates to
+ * <p>
+ * Verifies that the @EventListener method delegates to
  * {@link WorkorderStatusEventService#handleWorkorderStatusChanged(WorkorderStatusChangedEvent)}
  * exactly once with the unmodified event payload (AC8).
  *

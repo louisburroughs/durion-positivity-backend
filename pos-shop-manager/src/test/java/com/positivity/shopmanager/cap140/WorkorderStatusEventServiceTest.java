@@ -31,12 +31,16 @@ import org.mockito.quality.Strictness;
 /**
  * Unit tests for WorkorderStatusEventServiceImpl — CAP-140 Story #63.
  *
- * <p>Verifies event-driven appointment status updates from workexec domain events,
- * covering status mapping, idempotency (duplicate sourceEventId), orphaned workorder
+ * <p>
+ * Verifies event-driven appointment status updates from workexec domain events,
+ * covering status mapping, idempotency (duplicate sourceEventId), orphaned
+ * workorder
  * detection, unknown status handling, and reopenFlag toggling.
  *
- * <p>Strictness is LENIENT so that stubs set up for GREEN behaviour do not produce
- * UnnecessaryStubbingException while the impl throws UnsupportedOperationException.
+ * <p>
+ * Strictness is LENIENT so that stubs set up for GREEN behaviour do not produce
+ * UnnecessaryStubbingException while the impl throws
+ * UnsupportedOperationException.
  *
  * Issue: #63
  */
@@ -79,7 +83,8 @@ class WorkorderStatusEventServiceTest {
     }
 
     // -------------------------------------------------------------------------
-    // AC1 — Known status maps correctly; appointment updated + timeline entry appended
+    // AC1 — Known status maps correctly; appointment updated + timeline entry
+    // appended
     // -------------------------------------------------------------------------
 
     @Test
@@ -101,7 +106,8 @@ class WorkorderStatusEventServiceTest {
         // Act
         service.handleWorkorderStatusChanged(event);
 
-        // Assert — DRAFT maps to SCHEDULED; one timeline entry added with correct fields
+        // Assert — DRAFT maps to SCHEDULED; one timeline entry added with correct
+        // fields
         ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
         verify(appointmentRepository).save(captor.capture());
         Appointment saved = captor.getValue();
@@ -128,7 +134,7 @@ class WorkorderStatusEventServiceTest {
         StatusTimelineEntry existingEntry = StatusTimelineEntry.builder()
                 .status(AppointmentStatus.SCHEDULED)
                 .changeTimestamp(now.minusSeconds(60))
-                .sourceEventId(eventId)   // same event already processed
+                .sourceEventId(eventId) // same event already processed
                 .build();
 
         Appointment appointment = Appointment.builder()
