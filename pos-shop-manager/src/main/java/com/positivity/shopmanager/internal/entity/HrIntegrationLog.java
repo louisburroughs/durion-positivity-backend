@@ -3,12 +3,15 @@ package com.positivity.shopmanager.internal.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,6 +30,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class HrIntegrationLog {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "event_id", columnDefinition = "UUID")
     private UUID eventId;
 

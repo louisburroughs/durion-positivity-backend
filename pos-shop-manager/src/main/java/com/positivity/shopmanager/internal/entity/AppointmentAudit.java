@@ -1,25 +1,28 @@
 package com.positivity.shopmanager.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import java.time.Instant;
+import java.util.UUID;
+
+import org.hibernate.annotations.Immutable;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.shopmanager.internal.enums.AppointmentAction;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import java.time.Instant;
-import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Immutable;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Immutable
@@ -32,6 +35,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class AppointmentAudit {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "audit_id", columnDefinition = "UUID")
     private UUID auditId;
 
@@ -68,10 +73,4 @@ public class AppointmentAudit {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @PrePersist
-    public void generateAuditId() {
-        if (auditId == null) {
-            auditId = UUIDv7Generator.generate();
-        }
-    }
 }
