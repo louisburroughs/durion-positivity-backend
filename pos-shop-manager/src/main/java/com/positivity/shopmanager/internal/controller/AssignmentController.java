@@ -44,7 +44,7 @@ public class AssignmentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('workexec.assignment.create', 'workexec.assignment.read')")
+    @PreAuthorize("hasAnyAuthority('shopmgmt.assignment.view', 'workexec.assignment.read')")
     @EmitEvent(id = "SHOPMGR_ASSIGNMENT_LIST_FETCHED", apiVersion = "1")
     public @NonNull List<AssignmentResponse> listAssignments(@PathVariable UUID appointmentId) {
         return assignmentService.getByAppointmentId(appointmentId);
