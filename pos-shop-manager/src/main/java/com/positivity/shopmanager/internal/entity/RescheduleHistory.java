@@ -1,24 +1,25 @@
 package com.positivity.shopmanager.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import java.time.Instant;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.annotation.Generated;
-import java.time.Instant;
-import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.jspecify.annotations.NonNull;
 
 /**
  * Immutable reschedule history record for an appointment.
@@ -39,7 +40,7 @@ public class RescheduleHistory {
 
     @Id
     @UUIDv7Id
-    @Generated(value = "com.positivity.shared.id.UUIDv7Generator")
+    @GeneratedValue
     @Column(name = "reschedule_id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID rescheduleId;
 
@@ -94,11 +95,4 @@ public class RescheduleHistory {
     @NonNull
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
-
-    @PrePersist
-    public void generateId() {
-        if (rescheduleId == null) {
-            rescheduleId = UUIDv7Generator.generate();
-        }
-    }
 }
