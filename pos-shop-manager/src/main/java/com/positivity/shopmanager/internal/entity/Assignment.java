@@ -57,6 +57,9 @@ public class Assignment {
     @Column(name = "version", nullable = false)
     private int version = 1;
 
+    @Column(name = "notes", length = 500)
+    private String notes;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

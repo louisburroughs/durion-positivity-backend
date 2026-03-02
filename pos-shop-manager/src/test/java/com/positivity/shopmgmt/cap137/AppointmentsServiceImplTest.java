@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shopmanager.internal.client.CrmCustomerClient;
@@ -38,6 +39,7 @@ import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchExce
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
 import com.positivity.shopmanager.service.AppointmentLoadService;
@@ -65,6 +67,9 @@ class AppointmentsServiceImplTest {
 
         @Mock
         private AppointmentAuditRepository appointmentAuditRepository;
+
+        @Mock
+        private RescheduleHistoryRepository rescheduleHistoryRepository;
 
         @Mock
         private AppointmentServiceRequestRepository appointmentServiceRequestRepository;
@@ -97,6 +102,7 @@ class AppointmentsServiceImplTest {
                 appointmentsService = new AppointmentsServiceImpl(
                                 appointmentRepository,
                                 appointmentAuditRepository,
+                                rescheduleHistoryRepository,
                                 appointmentServiceRequestRepository,
                                 new ObjectMapper(),
                                 appointmentLoadService,
@@ -122,6 +128,7 @@ class AppointmentsServiceImplTest {
                 RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
                 request.setNewStartAt(newStart);
                 request.setNewEndAt(newEnd);
+                request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
                 when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
                 when(appointmentRepository.save(any(Appointment.class)))
@@ -154,6 +161,7 @@ class AppointmentsServiceImplTest {
                 RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
                 request.setNewStartAt(Instant.parse("2026-03-11T10:00:00Z"));
                 request.setNewEndAt(Instant.parse("2026-03-11T11:00:00Z"));
+                request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
                 when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
 
@@ -172,6 +180,7 @@ class AppointmentsServiceImplTest {
                 RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
                 request.setNewStartAt(Instant.parse("2026-03-11T10:00:00Z"));
                 request.setNewEndAt(Instant.parse("2026-03-11T11:00:00Z"));
+                request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
                 when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
 
@@ -377,7 +386,7 @@ class AppointmentsServiceImplTest {
                 assertEquals(AppointmentStatus.SCHEDULED.name(), response.getStatus());
                 assertEquals(List.of(serviceRequestId), response.getServiceRequestIds());
                 verify(appointmentRepository).save(any(Appointment.class));
-        verify(appointmentServiceRequestRepository).saveAll(anyIterable());
+                verify(appointmentServiceRequestRepository).saveAll(anyIterable());
         }
 
         @Test
@@ -528,7 +537,8 @@ class AppointmentsServiceImplTest {
                 when(shopRepository.existsById(facilityId)).thenReturn(true);
                 when(sourceEligibilityService.getWorkOrderStatus("wo-1", facilityId.toString())).thenReturn("OPEN");
                 when(appointmentLoadService.getFacilityTimeZoneId(facilityId)).thenReturn("UTC");
-                when(appointmentLoadService.loadCreateModel(eq("WORKORDER"), eq("wo-1"), eq(facilityId), any(UUID.class)))
+                when(appointmentLoadService.loadCreateModel(eq("WORKORDER"), eq("wo-1"), eq(facilityId),
+                                any(UUID.class)))
                                 .thenReturn(expected);
 
                 appointmentsService.loadCreateModel("WORKORDER", "wo-1", facilityId, null);

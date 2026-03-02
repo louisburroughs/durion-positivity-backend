@@ -25,6 +25,7 @@ import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.service.AppointmentLoadService;
 import com.positivity.shopmanager.service.SourceEligibilityService;
@@ -43,6 +44,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
 
 @ExtendWith(MockitoExtension.class)
 class AppointmentsServiceNewBehaviorsTest {
@@ -51,6 +53,8 @@ class AppointmentsServiceNewBehaviorsTest {
     private AppointmentRepository appointmentRepository;
     @Mock
     private AppointmentAuditRepository appointmentAuditRepository;
+    @Mock
+    private RescheduleHistoryRepository rescheduleHistoryRepository;
     @Mock
     private AppointmentServiceRequestRepository appointmentServiceRequestRepository;
     @Mock
@@ -81,6 +85,7 @@ class AppointmentsServiceNewBehaviorsTest {
         appointmentsService = new AppointmentsServiceImpl(
                 appointmentRepository,
                 appointmentAuditRepository,
+                rescheduleHistoryRepository,
                 appointmentServiceRequestRepository,
                 new ObjectMapper(),
                 appointmentLoadService,
@@ -113,6 +118,7 @@ class AppointmentsServiceNewBehaviorsTest {
         Instant newEnd = Instant.now().plus(49, ChronoUnit.HOURS);
         request.setNewStartAt(newStart);
         request.setNewEndAt(newEnd);
+        request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
 

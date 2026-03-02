@@ -40,7 +40,8 @@ public class AppointmentsController {
 
     @Operation(summary = "Create appointment", description = "Create a new appointment")
     @ApiResponse(responseCode = "201", description = "Appointment created successfully.")
-    @ApiResponse(responseCode = "400", description = "Validation error — requested slot is unavailable or request fields are invalid.")
+    @ApiResponse(responseCode = "400", description = "Validation or conflict error — requested slot is unavailable, duplicate source appointment, or request fields are invalid.")
+    @ApiResponse(responseCode = "422", description = "Source not eligible — estimate or work order cannot be scheduled (ineligible status).")
     @ApiResponse(responseCode = "501", description = "Not implemented.")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CREATE", apiVersion = "1")
     @PostMapping("/appointments")
@@ -49,7 +50,8 @@ public class AppointmentsController {
             @Parameter(description = "Appointment creation request body") @Valid @RequestBody AppointmentCreateRequest request,
             @Parameter(description = "Idempotency key for safe retries") @org.springframework.web.bind.annotation.RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Parameter(description = "Correlation ID for request tracing") @org.springframework.web.bind.annotation.RequestHeader(value = "X-Correlation-Id", required = false) UUID correlationId) {
-        log.info("Create appointment requested. X-Correlation-Id={}, Idempotency-Key={}", correlationId, idempotencyKey);
+        log.info("Create appointment requested. X-Correlation-Id={}, Idempotency-Key={}", correlationId,
+                idempotencyKey);
         AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, correlationId);
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{appointmentId}")
@@ -73,7 +75,9 @@ public class AppointmentsController {
 
     @Operation(summary = "Reschedule appointment", description = "Reschedule an existing appointment")
     @ApiResponse(responseCode = "200", description = "Appointment rescheduled successfully.")
-    @ApiResponse(responseCode = "409", description = "Appointment state conflict.")
+    @ApiResponse(responseCode = "400", description = "Validation error — invalid times, missing mandatory fields, or blank notes required for OTHER reason.")
+    @ApiResponse(responseCode = "404", description = "Appointment not found.")
+    @ApiResponse(responseCode = "409", description = "Appointment state conflict — appointment is not in a reschedulable status.")
     @PutMapping("/appointments/{appointmentId}/reschedule")
     @PreAuthorize("hasAuthority('appointments:reschedule')")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_RESCHEDULE", apiVersion = "1")
