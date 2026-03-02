@@ -11,11 +11,14 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.client.RestClient;
 
+import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
+import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
@@ -27,6 +30,7 @@ import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -558,5 +562,75 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         log.info("Created audit event for approval invalidation: workorderId={}, " +
                 "estimateId={}", workorder.getId(), event.getEstimateId());
+    }
+
+    @Override
+    @Transactional
+    public void handleAssignmentUpdated(@NonNull AssignmentUpdatedEvent event) {
+        if (event == null) {
+            throw new IllegalArgumentException("event must not be null");
+        }
+
+        Workorder workorder = workorderRepository.findById(event.getWorkorderId())
+                .orElseThrow(() -> new WorkorderNotFoundException(event.getWorkorderId()));
+
+        WorkorderStatus status = workorder.getStatus();
+        if (status != WorkorderStatus.DRAFT
+                && status != WorkorderStatus.APPROVED
+                && status != WorkorderStatus.ASSIGNED) {
+            log.warn("Skipping assignment context update for workorder {} in non-updatable status {}",
+                    event.getWorkorderId(), status);
+            return;
+        }
+
+        String oldLocationId = workorder.getLocationId() != null ? workorder.getLocationId().toString() : null;
+        String oldResourceId = workorder.getResourceId() != null ? workorder.getResourceId().toString() : null;
+        String oldMechanicIds = workorder.getMechanicIds();
+
+        AssignmentUpdatePayload payload = event.getPayload();
+        workorder.setLocationId(payload.getLocationId());
+        workorder.setResourceId(payload.getResourceId());
+        workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
+        workorderRepository.save(workorder);
+
+        String details = buildAuditDetails(oldLocationId, oldResourceId, oldMechanicIds,
+                payload.getLocationId(), payload.getResourceId(), payload.getMechanicIds());
+
+        AuditEvent auditEvent = AuditEvent.builder()
+                .entityType("Workorder")
+                .entityId(workorder.getId())
+                .eventType("AssignmentContextUpdated")
+                .userId("System:ShopManagementService")
+                .details(details)
+                .eventTimestamp(Instant.now())
+                .build();
+        auditEventRepository.save(auditEvent);
+
+        log.info("Assignment context updated for workorder {}: locationId={}, resourceId={}, mechanicCount={}",
+                workorder.getId(), payload.getLocationId(), payload.getResourceId(),
+                payload.getMechanicIds() != null ? payload.getMechanicIds().size() : 0);
+    }
+
+    private String serializeMechanicIds(List<UUID> mechanicIds) {
+        if (mechanicIds == null || mechanicIds.isEmpty()) {
+            return "[]";
+        }
+        return mechanicIds.stream()
+                .map(uuid -> "\"" + uuid + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+    }
+
+    private String buildAuditDetails(String oldLocationId, String oldResourceId, String oldMechanicIds,
+            UUID newLocationId, UUID newResourceId, List<UUID> newMechanicIds) {
+        String oldLocJson = oldLocationId != null ? "\"" + oldLocationId + "\"" : "null";
+        String oldResJson = oldResourceId != null ? "\"" + oldResourceId + "\"" : "null";
+        String oldMechJson = oldMechanicIds != null ? oldMechanicIds : "[]";
+        String newLocJson = newLocationId != null ? "\"" + newLocationId + "\"" : "null";
+        String newResJson = newResourceId != null ? "\"" + newResourceId + "\"" : "null";
+        String newMechJson = serializeMechanicIds(newMechanicIds);
+        return String.format(
+                "{\"oldLocationId\":%s,\"oldResourceId\":%s,\"oldMechanicIds\":%s,"
+                        + "\"newLocationId\":%s,\"newResourceId\":%s,\"newMechanicIds\":%s}",
+                oldLocJson, oldResJson, oldMechJson, newLocJson, newResJson, newMechJson);
     }
 }

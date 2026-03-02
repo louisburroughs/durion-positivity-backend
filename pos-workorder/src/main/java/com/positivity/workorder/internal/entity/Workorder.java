@@ -85,6 +85,13 @@ public class Workorder {
     @Builder.Default
     private Boolean isReopened = false;
 
+    // Assignment context fields (CAP:140 Story #64)
+    private UUID locationId;
+    private UUID resourceId;
+
+    @Column(columnDefinition = "TEXT")
+    private String mechanicIds; // JSON array of mechanic UUIDs e.g. ["uuid1","uuid2"]
+
     private Instant reopenedAt;
     private UUID reopenedBy;
 
