@@ -38,6 +38,7 @@ import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
+import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -97,6 +98,9 @@ class WorkorderCompletionTest {
     @Mock
     private org.springframework.web.client.RestClient restClient;
 
+    @Mock
+    private ShopmgrOperationalContextClient shopmgrClient;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 
@@ -140,7 +144,7 @@ class WorkorderCompletionTest {
         // dependency
         workOrderService = new WorkorderServiceImpl(workOrderRepository, estimateRepository, estimateItemRepository,
                 workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
-                auditEventRepository, idempotencyService, promotionValidationService);
+                auditEventRepository, idempotencyService, promotionValidationService, shopmgrClient);
     }
 
     @AfterEach

@@ -42,8 +42,10 @@ import static org.mockito.Mockito.when;
  *
  * Validates that handleAssignmentUpdated correctly updates workorder location,
  * resource, and mechanic fields for mutable statuses (AC1/AC3), silently skips
- * locked/in-progress statuses without saving (AC2), throws WorkorderNotFoundException
- * for unknown workorder IDs (AC4), throws IllegalArgumentException for null events
+ * locked/in-progress statuses without saving (AC2), throws
+ * WorkorderNotFoundException
+ * for unknown workorder IDs (AC4), throws IllegalArgumentException for null
+ * events
  * (AC5), and records a correctly-populated AuditEvent on success (AC6).
  *
  * Issue: CAP-140
@@ -85,8 +87,8 @@ class WorkorderAssignmentServiceTest {
     private WorkorderServiceImpl workorderService;
 
     private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID LOCATION_ID   = UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final UUID RESOURCE_ID   = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID RESOURCE_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     private static final UUID MECHANIC_ID_1 = UUID.fromString("00000000-0000-0000-0000-000000000004");
     private static final UUID MECHANIC_ID_2 = UUID.fromString("00000000-0000-0000-0000-000000000005");
 
@@ -114,7 +116,8 @@ class WorkorderAssignmentServiceTest {
 
     /**
      * AC1: A workorder in DRAFT status must have locationId, resourceId, and
-     * mechanicIds updated and persisted when a valid AssignmentUpdatedEvent arrives.
+     * mechanicIds updated and persisted when a valid AssignmentUpdatedEvent
+     * arrives.
      */
     @Test
     void whenHandleAssignmentUpdated_withDraftWorkorder_thenUpdatesFieldsAndSaves() {
@@ -131,10 +134,12 @@ class WorkorderAssignmentServiceTest {
         verify(workorderRepository).save(workorder);
     }
 
-    // Issue CAP-140: AC1 — APPROVED workorder receives full assignment context update
+    // Issue CAP-140: AC1 — APPROVED workorder receives full assignment context
+    // update
 
     /**
-     * AC1: A workorder in APPROVED status must have its assignment fields updated and saved.
+     * AC1: A workorder in APPROVED status must have its assignment fields updated
+     * and saved.
      */
     @Test
     void whenHandleAssignmentUpdated_withApprovedWorkorder_thenUpdatesFieldsAndSaves() {
@@ -148,10 +153,12 @@ class WorkorderAssignmentServiceTest {
         verify(workorderRepository).save(workorder);
     }
 
-    // Issue CAP-140: AC1 — ASSIGNED workorder receives full assignment context update
+    // Issue CAP-140: AC1 — ASSIGNED workorder receives full assignment context
+    // update
 
     /**
-     * AC1: A workorder in ASSIGNED status must have its assignment fields updated and saved.
+     * AC1: A workorder in ASSIGNED status must have its assignment fields updated
+     * and saved.
      */
     @Test
     void whenHandleAssignmentUpdated_withAssignedWorkorder_thenUpdatesFieldsAndSaves() {
@@ -263,8 +270,10 @@ class WorkorderAssignmentServiceTest {
     // Issue CAP-140: AC3 — full replace semantics (prior value is discarded)
 
     /**
-     * AC3: Given a workorder already has locationId A, when event carries locationId B,
-     * then the saved workorder.locationId must be B — the previous value is fully replaced.
+     * AC3: Given a workorder already has locationId A, when event carries
+     * locationId B,
+     * then the saved workorder.locationId must be B — the previous value is fully
+     * replaced.
      */
     @Test
     void whenHandleAssignmentUpdated_withExistingLocationId_thenPreviousValueIsFullyReplaced() {
@@ -304,7 +313,8 @@ class WorkorderAssignmentServiceTest {
     // Issue CAP-140: AC5 — null event is rejected eagerly
 
     /**
-     * AC5: When the event argument is null, an IllegalArgumentException must be thrown
+     * AC5: When the event argument is null, an IllegalArgumentException must be
+     * thrown
      * before any repository interaction.
      */
     @Test
@@ -316,8 +326,10 @@ class WorkorderAssignmentServiceTest {
     // Issue CAP-140: AC6 — audit trail recorded on successful update
 
     /**
-     * AC6: On a successful update of a DRAFT workorder, an AuditEvent must be saved with
-     * entityType="Workorder", eventType="AssignmentContextUpdated", entityId=workorder UUID,
+     * AC6: On a successful update of a DRAFT workorder, an AuditEvent must be saved
+     * with
+     * entityType="Workorder", eventType="AssignmentContextUpdated",
+     * entityId=workorder UUID,
      * userId="System:ShopManagementService", and a non-null details field.
      */
     @Test
@@ -327,11 +339,10 @@ class WorkorderAssignmentServiceTest {
 
         workorderService.handleAssignmentUpdated(validEvent());
 
-        verify(auditEventRepository).save(argThat(ae ->
-                "Workorder".equals(ae.getEntityType())
-                        && "AssignmentContextUpdated".equals(ae.getEventType())
-                        && WORKORDER_ID.equals(ae.getEntityId())
-                        && "System:ShopManagementService".equals(ae.getUserId())
-                        && ae.getDetails() != null));
+        verify(auditEventRepository).save(argThat(ae -> "Workorder".equals(ae.getEntityType())
+                && "AssignmentContextUpdated".equals(ae.getEventType())
+                && WORKORDER_ID.equals(ae.getEntityId())
+                && "System:ShopManagementService".equals(ae.getUserId())
+                && ae.getDetails() != null));
     }
 }

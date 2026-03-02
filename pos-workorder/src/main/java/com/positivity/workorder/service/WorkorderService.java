@@ -8,6 +8,9 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
+import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
+import com.positivity.workorder.internal.dto.OperationalContextResponse;
+import com.positivity.workorder.internal.dto.WorkorderStartResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
@@ -77,7 +80,8 @@ public interface WorkorderService {
         void onEstimateRevised(EstimateRevisedEvent event);
 
         /**
-         * Updates assignment context (locationId, resourceId, mechanicIds) on a workorder
+         * Updates assignment context (locationId, resourceId, mechanicIds) on a
+         * workorder
          * from an AssignmentUpdated event. Uses full-replace semantics.
          * Only pre-execution states (DRAFT, APPROVED, ASSIGNED) are updatable.
          * CAP:140 Story #64.
@@ -85,5 +89,33 @@ public interface WorkorderService {
          * @param event the assignment updated event from shop management service
          */
         void handleAssignmentUpdated(@NonNull AssignmentUpdatedEvent event);
+
+        /**
+         * Returns the operational context for the given workorder, fetched from Shopmgr
+         * (read-only).
+         * Context is locked (read-only, no override possible) once workStartedAt is
+         * set.
+         * CAP:140 Story #59.
+         */
+        @NonNull
+        OperationalContextResponse getOperationalContext(@NonNull UUID workorderId);
+
+        /**
+         * Manager override: replaces the operational context for a workorder.
+         * Not allowed after workStartedAt is set.
+         * CAP:140 Story #59.
+         */
+        @NonNull
+        OperationalContextResponse overrideOperationalContext(@NonNull UUID workorderId,
+                        @NonNull OperationalContextOverrideRequest override);
+
+        /**
+         * Starts work on a workorder: records operationalContextVersion and
+         * workStartedAt.
+         * After this call, the operational context is locked.
+         * CAP:140 Story #59.
+         */
+        @NonNull
+        WorkorderStartResponse startWork(@NonNull UUID workorderId);
 
 }
