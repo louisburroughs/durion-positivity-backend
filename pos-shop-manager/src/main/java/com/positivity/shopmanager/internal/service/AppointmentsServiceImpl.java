@@ -277,10 +277,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
 
         if (appointment.getStatus() != AppointmentStatus.SCHEDULED
-                && appointment.getStatus() != AppointmentStatus.CONFIRMED
-                && appointment.getStatus() != AppointmentStatus.AWAITING_PARTS) {
+                && appointment.getStatus() != AppointmentStatus.CHECKED_IN
+                && appointment.getStatus() != AppointmentStatus.WAITING_FOR_PARTS) {
             throw new AppointmentStateException(
-                    "Appointment must be SCHEDULED, CONFIRMED, or AWAITING_PARTS to reschedule, current status: "
+                    "Appointment must be SCHEDULED, CHECKED_IN, or WAITING_FOR_PARTS to reschedule, current status: "
                             + appointment.getStatus());
         }
 

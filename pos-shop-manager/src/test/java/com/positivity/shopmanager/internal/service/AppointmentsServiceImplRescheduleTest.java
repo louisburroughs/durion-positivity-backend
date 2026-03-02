@@ -118,7 +118,7 @@ class AppointmentsServiceImplRescheduleTest {
 
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(APPOINTMENT_ID, request))
                 .isInstanceOf(AppointmentStateException.class)
-                .hasMessageContaining("must be SCHEDULED, CONFIRMED, or AWAITING_PARTS");
+                .hasMessageContaining("must be SCHEDULED, CHECKED_IN, or WAITING_FOR_PARTS");
     }
 
     @Test
