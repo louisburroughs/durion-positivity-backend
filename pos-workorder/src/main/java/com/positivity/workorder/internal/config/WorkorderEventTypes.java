@@ -41,6 +41,13 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** Override operational context for a workorder */
+        public static final EventTypeRegistration WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE = EventTypeRegistration
+                        .write("WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE",
+                                        "Manager override of operational context before work starts")
+                        .apiVersion("1")
+                        .build();
+
         /** Approve a workorder with customer signature */
         public static final EventTypeRegistration WORKORDER_APPROVE = EventTypeRegistration
                         .approval("WORKORDER_APPROVE",
@@ -410,6 +417,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_CREATE,
                         WORKORDER_DELETE,
                         WORKORDER_START,
+                        WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE,
                         WORKORDER_APPROVE,
                         WORKORDER_COMPLETE,
                         WORKORDER_INVOICE_GENERATE,
