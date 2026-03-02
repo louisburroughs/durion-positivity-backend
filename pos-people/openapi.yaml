@@ -375,18 +375,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "201":
-          description: Role assignment created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserRoleDto"
         "400":
           description: Invalid request
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
+        "201":
+          description: Role assignment created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserRoleDto"
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -505,6 +505,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
+        "201":
+          description: Link created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
         "404":
           description: Person not found
           content:
@@ -513,12 +519,6 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -549,6 +549,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
+        "201":
+          description: Link created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
         "404":
           description: Person not found
           content:
@@ -557,12 +563,6 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -1346,6 +1346,27 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ApprovedTimeExportResponse"
+  /v1/people/me/primary-location:
+    get:
+      tags:
+      - People Availability API
+      summary: Get current user's primary location
+      description: Resolve the authenticated user's primary active location from their
+        staffing assignments.
+      operationId: getCurrentUserPrimaryLocation
+      responses:
+        "200":
+          description: Primary location resolved successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PrimaryLocationResponse"
+        "404":
+          description: No active location assignment found for current user.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PrimaryLocationResponse"
   /v1/people/availability:
     get:
       tags:
@@ -1356,11 +1377,11 @@ paths:
       parameters:
       - name: locationId
         in: query
-        description: Filter by location ID
+        description: Filter by location ID. Defaults to requester location when omitted.
         required: false
         schema:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
       - name: date
         in: query
         description: "Filter by date (ISO format: yyyy-MM-dd)"
@@ -1373,7 +1394,10 @@ paths:
           description: Availability data returned successfully.
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PeopleAvailabilityResponse"
   /v1/people/{personUuid}/access/assignments/{roleCode}:
     delete:
       tags:
@@ -2299,6 +2323,18 @@ components:
       - locationId
       - locationName
       - timeEntryId
+    PrimaryLocationResponse:
+      type: object
+      description: Primary location resolved from the authenticated user's active
+        staffing assignments
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Location identifier of the user's primary active assignment
+          example: 22222222-2222-2222-2222-222222222222
+      required:
+      - locationId
     TimeEntryException:
       type: object
       description: Time entry exception representing a discrepancy or issue with time
@@ -2367,3 +2403,34 @@ components:
       - severity
       - status
       - workDate
+    PeopleAvailabilityResponse:
+      type: object
+      properties:
+        personId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        role:
+          type: string
+        primary:
+          type: boolean
+        assignmentStatus:
+          type: string
+          enum:
+          - ACTIVE
+          - ENDED
+        effectiveFrom:
+          type: string
+          format: date
+        effectiveTo:
+          type: string
+          format: date
+        availableOn:
+          type: string
+          format: date

@@ -26,8 +26,6 @@ tags:
   description: Manage credit memos for AR corrections
 - name: Journal Entries
   description: Manage journal entries including posting and reversal.
-- name: Accounting
-  description: Miscellaneous accounting endpoints for traceability and payments.
 - name: GL Accounts
   description: Manage chart of accounts including lifecycle actions.
 - name: AP Payments
@@ -303,45 +301,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
-  /v1/accounting/glAccounts/{accountId}:
-    get:
-      tags:
-      - Accounting
-      summary: Get GL account (legacy path)
-      description: Retrieve a GL account by identifier.
-      operationId: getGlAccount
-      parameters:
-      - name: accountId
-        in: path
-        description: GL account identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "501":
-          description: Not implemented
-    put:
-      tags:
-      - Accounting
-      summary: Update GL account (legacy path)
-      description: Update a GL account via the legacy endpoint.
-      operationId: manageGlAccount
-      parameters:
-      - name: accountId
-        in: path
-        description: GL account identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema: {}
-      responses:
-        "501":
-          description: Not implemented
   /v1/accounting/gl-accounts/{glAccountId}:
     get:
       tags:
@@ -820,7 +779,7 @@ paths:
   /v1/accounting/payments/{paymentId}/void:
     post:
       tags:
-      - Accounting
+      - Payment Applications
       summary: Void payment
       description: Void a payment before settlement.
       operationId: voidPayment
@@ -837,12 +796,16 @@ paths:
           application/json:
             schema: {}
       responses:
-        "501":
-          description: Not implemented
+        "409":
+          description: Payment already applied; reverse applications first
+        "204":
+          description: Payment voided
+        "404":
+          description: Payment not found
   /v1/accounting/payments/{paymentId}/reverse:
     post:
       tags:
-      - Accounting
+      - Payment Applications
       summary: Reverse payment
       description: Reverse a previously applied payment.
       operationId: reversePayment
@@ -857,10 +820,16 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              $ref: "#/components/schemas/PaymentApplicationReversalRequest"
+        required: true
       responses:
-        "501":
-          description: Not implemented
+        "204":
+          description: Payment applications reversed
+        "409":
+          description: Payment has no applications to reverse
+        "404":
+          description: Payment not found
   /v1/accounting/payments/{paymentId}/applications:
     post:
       tags:
@@ -1155,28 +1124,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
-  /v1/accounting/invoices/{invoiceId}/pay:
-    post:
-      tags:
-      - Invoice Payments
-      summary: Apply payment to invoice (legacy)
-      description: Legacy compatibility endpoint. Use payment applications API instead.
-      operationId: applyPaymentLegacy
-      parameters:
-      - name: invoiceId
-        in: path
-        description: Invoice identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema: {}
-      responses:
-        "501":
-          description: Legacy endpoint is not implemented
   /v1/accounting/invoice/invoices:
     post:
       tags:
@@ -1187,24 +1134,34 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              $ref: "#/components/schemas/RegenerateInvoiceFromWorkorderRequest"
+        required: true
       responses:
-        "501":
-          description: Not implemented
-  /v1/accounting/glAccounts:
-    post:
-      tags:
-      - Accounting
-      summary: Create GL account (legacy path)
-      description: Create a GL account via the legacy endpoint.
-      operationId: createGlAccount
-      requestBody:
-        content:
-          application/json:
-            schema: {}
-      responses:
-        "501":
-          description: Not implemented
+        "404":
+          description: Workorder not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceGenerationResponse"
+        "503":
+          description: Workorder service unavailable
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceGenerationResponse"
+        "409":
+          description: Workorder is not in COMPLETED state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceGenerationResponse"
+        "200":
+          description: Invoice regenerated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceGenerationResponse"
   /v1/accounting/gl-accounts:
     get:
       tags:
@@ -1303,8 +1260,16 @@ paths:
       responses:
         "200":
           description: GL account deactivated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
         "404":
           description: GL account not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
   /v1/accounting/gl-accounts/{glAccountId}/archive:
     post:
       tags:
@@ -1327,8 +1292,16 @@ paths:
       responses:
         "404":
           description: GL account not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
         "200":
           description: GL account archived
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
   /v1/accounting/gl-accounts/{glAccountId}/activate:
     post:
       tags:
@@ -1693,12 +1666,6 @@ paths:
               $ref: "#/components/schemas/RefundRequest"
         required: true
       responses:
-        "201":
-          description: Refund recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "403":
           description: Authorization denied - separate authorization required
           content:
@@ -1714,6 +1681,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Refund recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -1740,12 +1713,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Price override recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid request parameters
           content:
@@ -1756,6 +1723,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Price override recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "422":
           description: Policy validation failed
           content:
@@ -1775,12 +1748,6 @@ paths:
               $ref: "#/components/schemas/CancellationRequest"
         required: true
       responses:
-        "201":
-          description: Cancellation recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid request parameters
           content:
@@ -1796,6 +1763,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Cancellation recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/ap/payments:
     post:
       tags:
@@ -1901,24 +1874,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
-  /v1/accounting/traceability/{journalEntryId}:
-    get:
-      tags:
-      - Accounting
-      summary: Get journal traceability
-      description: Trace a journal entry across related records.
-      operationId: getJournalTraceability
-      parameters:
-      - name: journalEntryId
-        in: path
-        description: Journal entry identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "501":
-          description: Not implemented
   /v1/accounting/reports/financial/income-statement:
     get:
       tags:
@@ -2120,14 +2075,14 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "200":
-          description: Balance sheet generated successfully
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceSheetReport"
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Balance sheet generated successfully
           content:
             application/json:
               schema:
@@ -2257,24 +2212,34 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MappingKeyListResponse"
-  /v1/accounting/payments/{paymentId}/status:
+  /v1/accounting/journal-entries/{journalEntryId}/traceability:
     get:
       tags:
-      - Accounting
-      summary: Get payment status
-      description: Retrieve status for an accounts payable payment.
-      operationId: getPaymentStatus
+      - Journal Entries
+      summary: Get journal traceability
+      description: Trace a journal entry across related records.
+      operationId: getJournalTraceability
       parameters:
-      - name: paymentId
+      - name: journalEntryId
         in: path
-        description: Payment identifier
+        description: Journal entry identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
-        "501":
-          description: Not implemented
+        "404":
+          description: Journal entry not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryTraceabilityResponse"
+        "200":
+          description: Journal traceability returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryTraceabilityResponse"
   /v1/accounting/invoice/{invoiceId}/status:
     get:
       tags:
@@ -2297,14 +2262,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
-        "200":
-          description: Invoice status returned
+        "404":
+          description: Invoice not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
-        "404":
-          description: Invoice not found
+        "200":
+          description: Invoice status returned
           content:
             '*/*':
               schema:
@@ -2325,8 +2290,24 @@ paths:
           type: string
           format: uuid
       responses:
-        "501":
-          description: Not implemented
+        "200":
+          description: Billing rules returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BillingRuleRefResponse"
+        "404":
+          description: Customer not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BillingRuleRefResponse"
+        "503":
+          description: Customer service unavailable
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BillingRuleRefResponse"
   /v1/accounting/gl-accounts/{glAccountId}/balance:
     get:
       tags:
@@ -2345,8 +2326,16 @@ paths:
       responses:
         "404":
           description: GL account not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountBalanceResponse"
         "200":
           description: Balance returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountBalanceResponse"
   /v1/accounting/events/{eventId}:
     get:
       tags:
@@ -2643,12 +2632,6 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range
           content:
@@ -2657,6 +2640,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2721,12 +2710,6 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Invoice not found
           content:
@@ -2735,6 +2718,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2776,12 +2765,6 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Actor not found
           content:
@@ -2790,6 +2773,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -3375,6 +3364,8 @@ components:
       type: object
       description: Line item received from vendor
       properties:
+        inventoryItem:
+          type: boolean
         productId:
           type: string
           format: uuid
@@ -3589,6 +3580,15 @@ components:
       required:
       - categoryName
       - createdBy
+    PaymentApplicationReversalRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 1000
+          minLength: 10
+      required:
+      - reason
     InvoiceApplication:
       type: object
       properties:
@@ -3677,15 +3677,6 @@ components:
           format: date-time
         applicationRequestId:
           type: string
-    PaymentApplicationReversalRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-          maxLength: 1000
-          minLength: 10
-      required:
-      - reason
     GLMappingCreateRequest:
       type: object
       properties:
@@ -3800,6 +3791,61 @@ components:
           type: string
       required:
       - reason
+    RegenerateInvoiceFromWorkorderRequest:
+      type: object
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+      required:
+      - workorderId
+    InvoiceGenerationResponse:
+      type: object
+      description: Response payload returned after invoice generation.
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+          description: Generated invoice identifier.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          description: Invoice status.
+          example: DRAFT
+        workorderId:
+          type: string
+          format: uuid
+          description: Source workorder identifier.
+          example: 550e8400-e29b-41d4-a716-446655440001
+        estimateId:
+          type: string
+          format: uuid
+          description: Source estimate identifier.
+          example: 550e8400-e29b-41d4-a716-446655440002
+        approvalId:
+          type: string
+          format: uuid
+          description: Approval identifier used for generation.
+          example: 550e8400-e29b-41d4-a716-446655440003
+        subtotal:
+          type: number
+          description: Subtotal amount before tax.
+          example: 120.0
+        taxAmount:
+          type: number
+          description: Tax amount.
+          example: 9.6
+        totalAmount:
+          type: number
+          description: Total amount after tax.
+          example: 129.6
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp (UTC).
+          example: 2026-02-27T12:00:00Z
     GLAccountCreateRequest:
       type: object
       properties:
@@ -4587,6 +4633,25 @@ components:
         totalElements:
           type: integer
           format: int64
+    JournalEntryTraceabilityResponse:
+      type: object
+      properties:
+        journalEntryId:
+          type: string
+          format: uuid
+        sourceEventId:
+          type: string
+          format: uuid
+        journalEntry:
+          $ref: "#/components/schemas/JournalEntryResponse"
+        originalJournalEntry:
+          $ref: "#/components/schemas/JournalEntryResponse"
+        reversalJournalEntry:
+          $ref: "#/components/schemas/JournalEntryResponse"
+        relatedJournalEntries:
+          type: array
+          items:
+            $ref: "#/components/schemas/JournalEntryResponse"
     InvoiceStatusResponse:
       type: object
       properties:
@@ -4611,6 +4676,33 @@ components:
         lastUpdated:
           type: string
           format: date-time
+    BillingRuleRefResponse:
+      type: object
+      properties:
+        poRequired:
+          type: boolean
+        taxExempt:
+          type: boolean
+        paymentTerms:
+          type: string
+        creditLimit:
+          type: number
+        creditHold:
+          type: boolean
+        invoiceDeliveryMethod:
+          type: string
+        billingAddressId:
+          type: string
+          format: uuid
+        autoPayEnabled:
+          type: boolean
+        discountPolicyRef:
+          type: string
+        currency:
+          type: string
+        extensions:
+          type: object
+          additionalProperties: {}
     GLAccountListResponse:
       type: object
       properties:
@@ -4630,6 +4722,21 @@ components:
         totalElements:
           type: integer
           format: int64
+    GLAccountBalanceResponse:
+      type: object
+      properties:
+        glAccountId:
+          type: string
+          format: uuid
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        balance:
+          type: number
+        asOfDate:
+          type: string
+          format: date-time
     PagedResponseAccountingEventResponse:
       type: object
       properties:
@@ -4724,6 +4831,10 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         size:
           type: integer
           format: int32
@@ -4736,10 +4847,6 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         numberOfElements:
           type: integer
           format: int32
