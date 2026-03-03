@@ -23,7 +23,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 
+import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
@@ -46,6 +48,12 @@ class EstimateServiceTest {
 
         @Mock
         private TaxClient taxClient;
+
+        @Mock
+        private PeopleLocationClient peopleLocationClient;
+
+        @Mock
+        private ApplicationEventPublisher eventPublisher;
 
         @InjectMocks
         private EstimateServiceImpl estimateService;

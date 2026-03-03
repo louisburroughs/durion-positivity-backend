@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.AssignTechnicianRequest;
 import com.positivity.workorder.internal.dto.ReassignTechnicianRequest;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentMapper;
@@ -39,7 +40,7 @@ public class TechnicianAssignmentController {
 
     private final TechnicianAssignmentService assignmentService;
 
-    private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    private static final String SYSTEM_USERNAME = "system";
 
     /**
      * Assign a technician to a workorder.
@@ -62,10 +63,9 @@ public class TechnicianAssignmentController {
     public ResponseEntity<TechnicianAssignmentResponse> assignTechnician(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Valid @RequestBody AssignTechnicianRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate assignments", example = "tech-assign-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @Parameter(description = "User ID from gateway authentication", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate assignments", example = "tech-assign-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
-        UUID assignedBy = resolveUserId(request.getAssignedByUserId(), userIdHeader);
+        String assignedBy = resolveAssignedByUsername();
 
         try {
             var assignment = assignmentService.assignTechnician(
@@ -116,10 +116,9 @@ public class TechnicianAssignmentController {
     public ResponseEntity<TechnicianAssignmentResponse> reassignTechnician(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Valid @RequestBody ReassignTechnicianRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate reassignments", example = "tech-reassign-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @Parameter(description = "User ID from gateway authentication", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate reassignments", example = "tech-reassign-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
-        UUID reassignedBy = resolveUserId(request.getReassignedByUserId(), userIdHeader);
+        String reassignedBy = resolveAssignedByUsername();
 
         try {
             // Get previous technician ID via service method
@@ -199,20 +198,14 @@ public class TechnicianAssignmentController {
     }
 
     /**
-     * Resolve user ID from request or header, falling back to system user.
+     * Resolve assigned-by username from authentication context.
      */
     @NonNull
-    private UUID resolveUserId(UUID requestUserId, String headerUserId) {
-        if (requestUserId != null) {
-            return requestUserId;
+    private String resolveAssignedByUsername() {
+        var username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USERNAME);
+        if (username.length() >= 2 && username.startsWith("\"") && username.endsWith("\"")) {
+            return username.substring(1, username.length() - 1);
         }
-        if (headerUserId != null && !headerUserId.isBlank()) {
-            try {
-                return UUID.fromString(headerUserId);
-            } catch (IllegalArgumentException e) {
-                log.warn("Invalid X-User-Id header: {}", headerUserId);
-            }
-        }
-        return SYSTEM_USER_ID;
+        return username;
     }
 }

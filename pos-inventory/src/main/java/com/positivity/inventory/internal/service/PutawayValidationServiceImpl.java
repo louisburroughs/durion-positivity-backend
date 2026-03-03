@@ -247,7 +247,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
 
             enforceOverridePermission(PutawayPermissions.OVERRIDE_LOCATION_COMPATIBILITY);
             validateOverrideAuditFields(result, request, "COMPATIBILITY");
-            String actorId = SecurityContextHelper.getCurrentUserIdOrDefault("system");
+            String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
 
             if (log.isInfoEnabled()) {
                 log.info(
@@ -332,7 +332,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
                     request.getQuantity(),
                     request.getOverrideReasonCode(),
                     maskForLog(request.getApprovedBy()),
-                    maskForLog(SecurityContextHelper.getCurrentUserIdOrDefault("system")),
+                    maskForLog(SecurityContextHelper.getCurrentUsernameOrDefault("system")),
                     PutawayPermissions.OVERRIDE_LOCATION_CAPACITY);
             result.addWarning("CAPACITY_OVERRIDDEN",
                     "Location capacity check was overridden");
@@ -365,7 +365,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
             return;
         }
         throw new InsufficientPermissionException(
-                SecurityContextHelper.getCurrentUserIdOrDefault("unknown"),
+                SecurityContextHelper.getCurrentUsernameOrDefault("unknown"),
                 requiredPermission);
     }
 

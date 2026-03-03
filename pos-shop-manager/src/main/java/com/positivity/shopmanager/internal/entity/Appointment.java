@@ -1,6 +1,8 @@
 package com.positivity.shopmanager.internal.entity;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.annotation.CreatedDate;
@@ -14,12 +16,16 @@ import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.CancellationReasonCode;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -128,6 +134,15 @@ public class Appointment {
      */
     @Column(name = "assignment_status", length = 64)
     private String assignmentStatus;
+
+    @Builder.Default
+    @Column(name = "reopen_flag", nullable = false)
+    private boolean reopenFlag = false;
+
+    @Builder.Default
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "appointment_status_timeline", joinColumns = @JoinColumn(name = "appointment_id", referencedColumnName = "appointment_id"))
+    private List<StatusTimelineEntry> statusTimeline = new ArrayList<>();
 
     @PrePersist
     public void generateAppointmentId() {

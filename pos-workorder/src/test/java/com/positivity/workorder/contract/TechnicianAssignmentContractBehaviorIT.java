@@ -119,7 +119,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 TechnicianAssignment assignment = assignments.get(0);
                 assertThat(assignment.getTechnicianId()).isEqualTo(testTechnicianId1);
                 assertThat(assignment.getWorkorderId()).isEqualTo(workorderId);
-                assertThat(assignment.getAssignedBy()).isEqualTo(SYSTEM_USER_ID);
+                assertThat(assignment.getAssignedBy()).isEqualTo(SYSTEM_USER_ID.toString());
                 assertThat(assignment.getCurrent()).isTrue();
                 assertThat(assignment.getUnassignedAt()).isNull();
                 assertThat(assignment.getNotes()).isEqualTo("Assigned to senior tech for brake system work");
@@ -358,7 +358,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 TechnicianAssignment assignment = TechnicianAssignment.builder()
                                 .workorderId(workorderId)
                                 .technicianId(testTechnicianId1)
-                                .assignedBy(SYSTEM_USER_ID)
+                                .assignedBy(SYSTEM_USER_ID.toString())
                                 .assignedAt(now.minusHours(2))
                                 .notes("Initial assignment")
                                 .current(true)
@@ -389,7 +389,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 TechnicianAssignment firstAssignment = TechnicianAssignment.builder()
                                 .workorderId(workorderId)
                                 .technicianId(testTechnicianId1)
-                                .assignedBy(SYSTEM_USER_ID)
+                                .assignedBy(SYSTEM_USER_ID.toString())
                                 .assignedAt(now.minusDays(2))
                                 .unassignedAt(now.minusDays(1))
                                 .reassignmentReason("Technician called out sick")
@@ -404,7 +404,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 TechnicianAssignment currentAssignment = TechnicianAssignment.builder()
                                 .workorderId(workorderId)
                                 .technicianId(testTechnicianId2)
-                                .assignedBy(SYSTEM_USER_ID)
+                                .assignedBy(SYSTEM_USER_ID.toString())
                                 .assignedAt(now.minusDays(1))
                                 .notes("Reassigned to available technician")
                                 .current(true)

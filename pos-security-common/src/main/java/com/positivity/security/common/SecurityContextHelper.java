@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -65,11 +66,15 @@ public final class SecurityContextHelper {
 
     /**
      * Get the current authenticated stable person identifier.
-     *
+     * 
+     * @deprecated Prefer {@link #getCurrentUsername()} for flows requiring a stable
+     *             authenticated identity, and explicitly handle missing/invalid
+     *             user ID cases.
      * @return stable person identifier
      * @throws MissingPersonIdException if no authenticated person identifier is
      *                                  available
      */
+    @Deprecated(since = "2024-06", forRemoval = true)
     public static String getCurrentUserIdOrThrowIllegalStateException() throws MissingPersonIdException {
         return getCurrentUserId()
                 .orElseThrow(() -> new MissingPersonIdException(
@@ -81,10 +86,14 @@ public final class SecurityContextHelper {
      * <p>
      * Resolves from gateway-injected authentication details (`X-User-Id`) when
      * available. Falls back to principal/username for compatibility.
-     *
+     * 
+     * @deprecated Prefer {@link #getCurrentUsername()} for flows requiring a stable
+     *             authenticated identity, and explicitly handle missing/invalid
+     *             user ID cases.
      * @return Optional containing stable user ID/person ID, or empty if
      *         unauthenticated
      */
+    @Deprecated(since = "2024-06", forRemoval = true)
     public static Optional<String> getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -104,12 +113,58 @@ public final class SecurityContextHelper {
 
     /**
      * Get the current authenticated stable person identifier or a default value.
-     *
+     * 
+     * @deprecated Prefer {@link #getCurrentUsernameOrDefault(String)} for flows
+     *             requiring a stable authenticated identity, and explicitly handle
+     *             missing/invalid user ID cases.
      * @param defaultValue value to return if unauthenticated
      * @return stable user ID/person ID or default value
      */
+    @Deprecated(since = "2024-06", forRemoval = true)
     public static String getCurrentUserIdOrDefault(@NonNull String defaultValue) {
         return getCurrentUserId().orElse(defaultValue);
+    }
+
+    /**
+     * Get the current authenticated stable person identifier as UUID.
+     *
+     * @return Optional containing UUID person identifier, or empty when absent or
+     *         not a valid UUID
+     */
+    public static Optional<UUID> getCurrentUserIdAsUuid() {
+        return getCurrentUserId().flatMap(SecurityContextHelper::tryParseUuid);
+    }
+
+    /**
+     * Get the current authenticated stable person identifier as UUID or default
+     * value.
+     *
+     * @param defaultValue value to return if unauthenticated or invalid UUID
+     * @return stable person identifier UUID or default value
+     */
+    public static UUID getCurrentUserIdAsUuidOrDefault(@NonNull UUID defaultValue) {
+        return getCurrentUserIdAsUuid().orElse(defaultValue);
+    }
+
+    /**
+     * Get the current authenticated stable person identifier as UUID.
+     *
+     * @return stable person identifier UUID
+     * @throws MissingPersonIdException if no authenticated person identifier is
+     *                                  available or the value is not a valid UUID
+     */
+    public static UUID getCurrentUserIdAsUuidOrThrowIllegalStateException() throws MissingPersonIdException {
+        return getCurrentUserIdAsUuid()
+                .orElseThrow(() -> new MissingPersonIdException(
+                        "Missing authenticated UUID personId for flow requiring UUID audit identity"));
+    }
+
+    private static Optional<UUID> tryParseUuid(String value) {
+        try {
+            return Optional.of(UUID.fromString(value));
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
     }
 
     /**

@@ -27,6 +27,6 @@ public class JpaAuditingConfig {
 
     @Bean
     public AuditorAware<String> auditorAware() {
-        return () -> Optional.of(SecurityContextHelper.getCurrentUserIdOrDefault("system"));
+        return () -> Optional.of(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
     }
 }

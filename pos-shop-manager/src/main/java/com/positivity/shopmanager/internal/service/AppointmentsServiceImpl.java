@@ -277,10 +277,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
 
         if (appointment.getStatus() != AppointmentStatus.SCHEDULED
-                && appointment.getStatus() != AppointmentStatus.CONFIRMED
-                && appointment.getStatus() != AppointmentStatus.AWAITING_PARTS) {
+                && appointment.getStatus() != AppointmentStatus.CHECKED_IN
+                && appointment.getStatus() != AppointmentStatus.WAITING_FOR_PARTS) {
             throw new AppointmentStateException(
-                    "Appointment must be SCHEDULED, CONFIRMED, or AWAITING_PARTS to reschedule, current status: "
+                    "Appointment must be SCHEDULED, CHECKED_IN, or WAITING_FOR_PARTS to reschedule, current status: "
                             + appointment.getStatus());
         }
 
@@ -447,8 +447,18 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * @return AppointmentResponse with appointment details
      */
     @Override
-    public AppointmentResponse getById(String appointmentId, UUID correlationId) {
-        throw new UnsupportedOperationException("not yet implemented");
+    @Transactional(readOnly = true)
+    public AppointmentResponse getById(@NonNull String appointmentId, UUID correlationId) {
+        UUID parsedId;
+        try {
+            parsedId = UUID.fromString(appointmentId);
+        } catch (IllegalArgumentException e) {
+            throw new AppointmentValidationException("Invalid appointment ID format: " + appointmentId);
+        }
+        Appointment appointment = appointmentRepository.findById(parsedId)
+                .orElseThrow(() -> new AppointmentNotFoundException(parsedId));
+        log.debug("Loaded appointment. appointmentId={}, correlationId={}", parsedId, correlationId);
+        return toResponse(appointment);
     }
 
     @Override

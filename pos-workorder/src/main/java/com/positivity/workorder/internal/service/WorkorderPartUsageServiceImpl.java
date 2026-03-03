@@ -83,7 +83,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull BigDecimal quantity,
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -159,7 +160,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull BigDecimal quantity,
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -245,7 +247,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull BigDecimal quantity,
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {

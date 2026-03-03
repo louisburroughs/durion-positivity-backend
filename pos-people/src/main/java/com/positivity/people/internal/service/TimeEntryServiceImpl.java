@@ -35,7 +35,8 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         List<TimeEntryDecisionResult> results = new ArrayList<>();
         if (timeEntryIds == null || timeEntryIds.isEmpty())
             return results;
-        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String auditActorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
 
         // Convert String IDs to UUIDs for repository query
         List<UUID> uuidIds = timeEntryIds.stream()
@@ -131,7 +132,8 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         List<TimeEntryDecisionResult> results = new ArrayList<>();
         if (timeEntryIds == null || timeEntryIds.isEmpty())
             return results;
-        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String auditActorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
 
         // Convert String IDs to UUIDs for repository query
         List<UUID> uuidIds = timeEntryIds.stream()

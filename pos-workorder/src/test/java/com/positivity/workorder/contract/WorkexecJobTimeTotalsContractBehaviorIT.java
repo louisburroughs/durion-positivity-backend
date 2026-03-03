@@ -136,7 +136,7 @@ class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBe
                                 .endTime(endTimeUtc)
                                 .hoursWorked(hoursWorked)
                                 .notes("contract-test")
-                                .createdBy(UUID.randomUUID())
+                                .createdBy("system")
                                 .createdAt(Instant.now().atOffset(ZoneOffset.UTC).toInstant())
                                 .build();
                 return laborEntryRepository.save(entry);

@@ -49,7 +49,8 @@ public class PurchaseOrderController {
     @ApiResponse(responseCode = "403", description = "User lacks required purchase order create authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<PurchaseOrderResponse> createPurchaseOrder(
             @Valid @RequestBody CreatePurchaseOrderRequest request) {
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         PurchaseOrderResponse response = purchaseOrderService.createPurchaseOrder(request, actorUserId);
         return ResponseEntity.status(201).body(response);
     }
@@ -62,8 +63,7 @@ public class PurchaseOrderController {
     @ApiResponse(responseCode = "403", description = "User lacks required purchase order view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<PurchaseOrderResponse> getPurchaseOrder(
-            @Parameter(description = "Purchase order identifier", required = true)
-            @PathVariable UUID poId) {
+            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId) {
         return ResponseEntity.ok(purchaseOrderService.getPurchaseOrder(poId));
     }
 
@@ -89,8 +89,7 @@ public class PurchaseOrderController {
     @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     @ApiResponse(responseCode = "409", description = "Purchase order is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<PurchaseOrderResponse> approvePurchaseOrder(
-            @Parameter(description = "Purchase order identifier", required = true)
-            @PathVariable UUID poId,
+            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
             @Valid @RequestBody ApprovePurchaseOrderRequest request) {
         // ADR-0018 deviation: actor resolved in controller following existing
         // pos-inventory module convention.
@@ -98,7 +97,8 @@ public class PurchaseOrderController {
         // layer (see ReceivingController).
         // Full service-layer resolution is tracked as a module-wide refactor for a
         // future ADR update.
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         return ResponseEntity.ok(purchaseOrderService.approvePurchaseOrder(poId, request, actorUserId));
     }
 
@@ -112,10 +112,10 @@ public class PurchaseOrderController {
     @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     @ApiResponse(responseCode = "409", description = "Purchase order is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<PurchaseOrderResponse> revisePurchaseOrder(
-            @Parameter(description = "Purchase order identifier", required = true)
-            @PathVariable UUID poId,
+            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
             @Valid @RequestBody RevisePurchaseOrderRequest request) {
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         return ResponseEntity.ok(purchaseOrderService.revisePurchaseOrder(poId, request, actorUserId));
     }
 
@@ -128,9 +128,9 @@ public class PurchaseOrderController {
     @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     @ApiResponse(responseCode = "409", description = "Purchase order is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<PurchaseOrderResponse> cancelPurchaseOrder(
-            @Parameter(description = "Purchase order identifier", required = true)
-            @PathVariable UUID poId) {
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId) {
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         return ResponseEntity.ok(purchaseOrderService.cancelPurchaseOrder(poId, actorUserId));
     }
 
@@ -144,10 +144,10 @@ public class PurchaseOrderController {
     @ApiResponse(responseCode = "404", description = "Purchase order not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     @ApiResponse(responseCode = "409", description = "Purchase order is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<ReceivePurchaseOrderResponse> receivePurchaseOrder(
-            @Parameter(description = "Purchase order identifier", required = true)
-            @PathVariable UUID poId,
+            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
             @Valid @RequestBody ReceivePurchaseOrderRequest request) {
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         return ResponseEntity.ok(purchaseOrderService.receivePurchaseOrder(poId, request, actorUserId));
     }
 }

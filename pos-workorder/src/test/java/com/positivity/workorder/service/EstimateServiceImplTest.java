@@ -21,6 +21,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -68,6 +69,9 @@ class EstimateServiceImplTest {
 
     @Mock
     private TaxClient taxClient;
+
+    @Mock
+    private PeopleLocationClient peopleLocationClient;
 
     @Mock
     private ObjectMapper objectMapper;

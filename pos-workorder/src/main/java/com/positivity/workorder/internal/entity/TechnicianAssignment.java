@@ -61,8 +61,8 @@ public class TechnicianAssignment {
     private LocalDateTime assignedAt;
 
     @NonNull
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID assignedBy;
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String assignedBy;
 
     @Nullable
     @Column
