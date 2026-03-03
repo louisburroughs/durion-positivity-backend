@@ -24,6 +24,8 @@ tags:
   description: Manage posting categories for GL mapping taxonomy
 - name: Credit Memos
   description: Manage credit memos for AR corrections
+- name: GL Mapping API
+  description: Endpoints for creating and resolving GL mappings
 - name: Journal Entries
   description: Manage journal entries including posting and reversal.
 - name: GL Accounts
@@ -32,6 +34,9 @@ tags:
   description: Accounts Payable vendor payment operations
 - name: Financial Reporting
   description: Income Statement and Balance Sheet generation with drilldown
+- name: Vendor Bill API
+  description: "Endpoints for vendor bill creation, matching, retrieval, and exception\
+    \ resolution"
 - name: Default GL Mappings
   description: Manage default GL account mappings for event types without explicit
     posting rules
@@ -459,7 +464,9 @@ paths:
   /v1/accounting/vendor-bills:
     post:
       tags:
-      - vendor-bill-controller
+      - Vendor Bill API
+      summary: Create vendor bill from goods received event
+      description: Creates a vendor bill from an inbound goods-received event payload
       operationId: createBillFromGoodsReceivedEvent
       requestBody:
         content:
@@ -468,8 +475,14 @@ paths:
               $ref: "#/components/schemas/GoodsReceivedEvent"
         required: true
       responses:
-        "200":
-          description: OK
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+        "201":
+          description: Vendor bill created
           content:
             '*/*':
               schema:
@@ -477,15 +490,19 @@ paths:
   /v1/accounting/vendor-bills/{billId}/resolve-exception:
     post:
       tags:
-      - vendor-bill-controller
+      - Vendor Bill API
+      summary: Resolve bill match exception
+      description: "Resolves a matching exception with action ACCEPT, VOID, or CORRECT"
       operationId: resolveMatchException
       parameters:
       - name: billId
         in: path
+        description: Vendor bill identifier
         required: true
         schema:
           type: string
           format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
         content:
           application/json:
@@ -494,7 +511,13 @@ paths:
         required: true
       responses:
         "200":
-          description: OK
+          description: Exception resolved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+        "404":
+          description: Vendor bill not found
           content:
             '*/*':
               schema:
@@ -502,7 +525,10 @@ paths:
   /v1/accounting/vendor-bills/match:
     post:
       tags:
-      - vendor-bill-controller
+      - Vendor Bill API
+      summary: Match vendor invoice
+      description: Performs matching for a received vendor invoice and creates/updates
+        bill state
       operationId: matchVendorInvoice
       requestBody:
         content:
@@ -511,8 +537,14 @@ paths:
               $ref: "#/components/schemas/VendorInvoiceReceivedEvent"
         required: true
       responses:
-        "200":
-          description: OK
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+        "201":
+          description: Invoice matched and bill created/updated
           content:
             '*/*':
               schema:
@@ -520,15 +552,19 @@ paths:
   /v1/accounting/vendor-bills/match-candidates/{candidateId}/select:
     post:
       tags:
-      - vendor-bill-controller
+      - Vendor Bill API
+      summary: Select match candidate
+      description: Selects a candidate and approves corresponding vendor bill flow
       operationId: selectMatchCandidate
       parameters:
       - name: candidateId
         in: path
+        description: Match candidate identifier
         required: true
         schema:
           type: string
           format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440030
       requestBody:
         content:
           application/json:
@@ -537,7 +573,13 @@ paths:
         required: true
       responses:
         "200":
-          description: OK
+          description: Candidate selected
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+        "404":
+          description: Candidate not found
           content:
             '*/*':
               schema:
@@ -908,17 +950,26 @@ paths:
   /v1/accounting/mappings:
     post:
       tags:
-      - gl-mapping-controller
+      - GL Mapping API
+      summary: Create GL mapping
+      description: Creates a new GL mapping for source-system external code resolution
       operationId: createGLMapping
       requestBody:
+        description: GL mapping creation request
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/GLMappingCreateRequest"
         required: true
       responses:
-        "200":
-          description: OK
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLMappingCreateResponse"
+        "201":
+          description: GL mapping created
           content:
             '*/*':
               schema:
@@ -926,17 +977,27 @@ paths:
   /v1/accounting/mappings/resolve:
     post:
       tags:
-      - gl-mapping-controller
+      - GL Mapping API
+      summary: Resolve GL mapping
+      description: Resolves source-system external code to a GL account using effective-date
+        rules
       operationId: resolveGLMapping
       requestBody:
+        description: GL mapping resolve request
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/GLMappingResolveRequest"
         required: true
       responses:
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLMappingResolveResponse"
         "200":
-          description: OK
+          description: GL mapping resolved
           content:
             '*/*':
               schema:
@@ -1666,6 +1727,12 @@ paths:
               $ref: "#/components/schemas/RefundRequest"
         required: true
       responses:
+        "201":
+          description: Refund recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "403":
           description: Authorization denied - separate authorization required
           content:
@@ -1686,12 +1753,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Refund recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/price-override:
     post:
       tags:
@@ -1707,12 +1768,6 @@ paths:
               $ref: "#/components/schemas/PriceOverrideRequest"
         required: true
       responses:
-        "201":
-          description: Price override recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "403":
           description: Authorization denied - insufficient privileges for override
             amount
@@ -1729,6 +1784,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Price override recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "422":
           description: Policy validation failed
           content:
@@ -1818,18 +1879,28 @@ paths:
   /v1/accounting/vendor-bills/{billId}:
     get:
       tags:
-      - vendor-bill-controller
+      - Vendor Bill API
+      summary: Get vendor bill by id
+      description: Retrieves a vendor bill by its unique identifier
       operationId: getBillById
       parameters:
       - name: billId
         in: path
+        description: Vendor bill identifier
         required: true
         schema:
           type: string
           format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         "200":
-          description: OK
+          description: Vendor bill found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+        "404":
+          description: Vendor bill not found
           content:
             '*/*':
               schema:
@@ -1837,39 +1908,51 @@ paths:
   /v1/accounting/vendor-bills/match-candidates/{invoiceEventId}:
     get:
       tags:
-      - vendor-bill-controller
+      - Vendor Bill API
+      summary: List match candidates
+      description: Lists unresolved match candidates for an ambiguous invoice event
       operationId: listMatchCandidates
       parameters:
       - name: invoiceEventId
         in: path
+        description: Invoice event identifier
         required: true
         schema:
           type: string
           format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440020
       responses:
         "200":
-          description: OK
+          description: Match candidates returned
           content:
             '*/*':
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/VendorBillMatchCandidateResponse"
+                $ref: "#/components/schemas/VendorBillMatchCandidateResponse"
   /v1/accounting/vendor-bills/event/{eventId}:
     get:
       tags:
-      - vendor-bill-controller
+      - Vendor Bill API
+      summary: Get vendor bill by origin event id
+      description: Retrieves a vendor bill by origin goods-received event identifier
       operationId: getBillByOriginEventId
       parameters:
       - name: eventId
         in: path
+        description: Origin event identifier
         required: true
         schema:
           type: string
           format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440010
       responses:
         "200":
-          description: OK
+          description: Vendor bill found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+        "404":
+          description: Vendor bill not found
           content:
             '*/*':
               schema:
@@ -1958,16 +2041,16 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "200":
-          description: Journal line drilldown successful
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Journal line drilldown successful
           content:
             application/json:
               schema:
@@ -2632,6 +2715,12 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range
           content:
@@ -2640,12 +2729,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -3477,13 +3560,28 @@ components:
           example: Incorrect invoice amount
     ExceptionResolutionRequest:
       type: object
+      description: Request payload for resolving a vendor bill match exception
       properties:
         resolutionAction:
           type: string
+          description: Resolution action
+          enum:
+          - ACCEPT
+          - VOID
+          - CORRECT
+          example: ACCEPT
         reason:
           type: string
+          description: Reason for chosen resolution
+          example: Invoice variance approved by manager
         operatorId:
           type: string
+          description: Operator identifier performing resolution
+          example: manager-001
+      required:
+      - operatorId
+      - reason
+      - resolutionAction
     InvoiceLineItem:
       type: object
       description: Invoice line item from vendor
@@ -3557,9 +3655,14 @@ components:
       - vendorId
     CandidateSelectionRequest:
       type: object
+      description: Request payload for selecting a match candidate
       properties:
         operatorId:
           type: string
+          description: Operator identifier performing selection
+          example: advisor-001
+      required:
+      - operatorId
     PostingCategoryCreateRequest:
       type: object
       properties:

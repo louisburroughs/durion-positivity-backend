@@ -78,6 +78,8 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("workorder:parts:add"),
             new SimpleGrantedAuthority("workorder:labor:view"),
             new SimpleGrantedAuthority("workorder:labor:add"),
+            new SimpleGrantedAuthority("workorder:start"),
+            new SimpleGrantedAuthority("workorder:operationalContext:override"),
             // Issue CAP-140: Story #59 — operational context override authority
             new SimpleGrantedAuthority("workorder.operationalContext.override"));
 
