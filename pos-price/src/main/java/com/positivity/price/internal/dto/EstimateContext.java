@@ -23,6 +23,9 @@ public class EstimateContext {
     @NotNull
     private UUID customerId;
 
+    @Nullable
+    private UUID vehicleId;
+
     @NotNull
     @Size(min = 1)
     private List<@Valid LineItemContext> lineItems;

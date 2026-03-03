@@ -59,6 +59,9 @@ public class PromotionRedemption {
     @Column(name = "promotion_code", nullable = false)
     private String promotionCode;
 
+    @Column(name = "recorded_by", length = 255)
+    private String recordedBy;
+
     @Column(name = "recorded_over_limit")
     private Boolean recordedOverLimit = false;
 

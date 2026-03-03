@@ -62,18 +62,13 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
      */
     @Override
     protected String defaultAuthorities() {
-        return "Promotion:Manage";
+        return "Promotion:Manage,Promotion:View,Promotion:Apply";
     }
 
     // ========== ADD RULE ==========
 
     /**
      * ERC-001: Valid AddEligibilityRuleRequest produces 201 with rule details.
-     *
-     * <p>
-     * RED: {@code EligibilityEvaluationServiceImpl.addRule()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 201.
-     * </p>
      *
      * Issue: #96
      */
@@ -122,11 +117,6 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
      * ERC-003: GET rules list for an existing promotion produces 200 with a JSON
      * array.
      *
-     * <p>
-     * RED: {@code EligibilityEvaluationServiceImpl.getRules()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 200.
-     * </p>
-     *
      * Issue: #96
      */
     @Test
@@ -144,12 +134,6 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     /**
      * ERC-004: DELETE a valid ruleId URL produces 204 No Content when the rule
      * exists.
-     *
-     * <p>
-     * RED: {@code EligibilityEvaluationServiceImpl.deleteRule()} throws
-     * {@code UnsupportedOperationException} regardless of ruleId → 500;
-     * assertion fails on expected 204.
-     * </p>
      *
      * <p>
      * GREEN note: Lead Coder must fix the H2 {@code ENUM} DDL incompatibility in
@@ -177,11 +161,6 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
      * ERC-005: DELETE a non-existent ruleId produces 404
      * ELIGIBILITY_RULE_NOT_FOUND.
      *
-     * <p>
-     * RED: {@code EligibilityEvaluationServiceImpl.deleteRule()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 404.
-     * </p>
-     *
      * Issue: #96
      */
     @Test
@@ -200,11 +179,6 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     /**
      * ERC-006: POST /evaluate with a valid accountId context produces 200 with
      * isEligible field.
-     *
-     * <p>
-     * RED: {@code EligibilityEvaluationServiceImpl.evaluateEligibility()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 200.
-     * </p>
      *
      * Issue: #96
      */
@@ -228,11 +202,6 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
      * GREEN expectation: service returns {@code MISSING_ACCOUNT_CONTEXT} reason
      * code and
      * {@code isEligible=false} when no accountId is provided.
-     * </p>
-     *
-     * <p>
-     * RED: {@code EligibilityEvaluationServiceImpl.evaluateEligibility()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 200.
      * </p>
      *
      * Issue: #96
@@ -263,11 +232,6 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
      * GREEN expectation: service throws {@code PromotionOfferNotFoundException}
      * which is mapped
      * to 404 by {@code GlobalExceptionHandler}.
-     * </p>
-     *
-     * <p>
-     * RED: {@code EligibilityEvaluationServiceImpl.addRule()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 404.
      * </p>
      *
      * Issue: #96
@@ -347,5 +311,15 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         }
         sb.append("}");
         return sb.toString();
+    }
+
+    @Test
+    @DisplayName("ERC-403: POST /v1/promotions/offers/{promotionId}/rules/evaluate without gateway auth \u2192 403 Forbidden")
+    void evaluateEligibility_withoutAuth_returns403() throws Exception {
+        UUID promotionId = UUID.randomUUID();
+        mockMvc.perform(post("/v1/promotions/offers/{promotionId}/rules/evaluate", promotionId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountId\":null,\"vehicleId\":null}"))
+                .andExpect(status().isForbidden());
     }
 }

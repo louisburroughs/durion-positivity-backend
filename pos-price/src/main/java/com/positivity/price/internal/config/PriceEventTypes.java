@@ -63,6 +63,11 @@ public final class PriceEventTypes {
                                                 .write("PROMOTION_RULE_DELETE",
                                                                 "Remove an eligibility rule from a promotion")
                                                 .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration
+                                                .search("PROMOTION_RULE_EVALUATE",
+                                                                "Evaluate eligibility for promotion")
+                                                .apiVersion("1")
                                                 .build());
         }
 }

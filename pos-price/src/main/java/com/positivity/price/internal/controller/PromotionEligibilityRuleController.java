@@ -49,6 +49,7 @@ public class PromotionEligibilityRuleController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('Promotion:View')")
     public ResponseEntity<List<EligibilityRuleResponse>> getRules(@PathVariable("promotionId") UUID promotionId) {
         List<EligibilityRuleResponse> responses = eligibilityEvaluationService.getRules(promotionId).stream()
                 .map(PromotionEligibilityRuleMapper::toResponse)
@@ -67,6 +68,8 @@ public class PromotionEligibilityRuleController {
     }
 
     @PostMapping("/evaluate")
+    @EmitEvent(id = "PROMOTION_RULE_EVALUATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('Promotion:Apply')")
     public ResponseEntity<EligibilityDecisionResponse> evaluateEligibility(
             @PathVariable("promotionId") UUID promotionId,
             @RequestBody EligibilityContext context) {

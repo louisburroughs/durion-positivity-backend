@@ -21,12 +21,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
+import com.positivity.security.common.SecurityContextHelper;
+import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -148,7 +147,7 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         EligibilityDecision decision = eligibilityEvaluationService.evaluateEligibility(
                 offer.getPromotionOfferId(),
                 ctx.getCustomerId(),
-                null);
+                ctx.getVehicleId());
         if (!decision.isEligible()) {
             throw new PromotionNotApplicableException(
                     "Promotion '" + promoCode + "' is not applicable: " + decision.reasonCode());
@@ -177,8 +176,7 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
                 .appliedAdjustments(List.of(adjustment))
                 .build();
 
-        String userId = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .map(Authentication::getName).orElse("system");
+        String userId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         log.info("Promotion applied: estimateId={}, promotionId={}, promotionCode={}, userId={}, discountAmount={}",
                 ctx.getEstimateId(), offer.getPromotionOfferId(), promoCode, userId, discountAmount);
 

@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Price Restrictions", description = "Price restriction evaluation and override operations")
@@ -22,6 +23,7 @@ public class PriceRestrictionsController {
     @ApiResponse(responseCode = "400", description = "Invalid request body.")
     @ApiResponse(responseCode = "500", description = "Internal server error.")
     @EmitEvent(id = "PRICE_RESTRICTIONS_EVALUATE", apiVersion = "1")
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/restrictions:evaluate")
     public ResponseEntity<Object> evaluateRestrictions(@RequestBody(required = false) Object requestBody) {
         log.info("POST /v1/price/restrictions:evaluate");
@@ -34,6 +36,7 @@ public class PriceRestrictionsController {
     @ApiResponse(responseCode = "403", description = "Insufficient permissions to override restrictions.")
     @ApiResponse(responseCode = "500", description = "Internal server error.")
     @EmitEvent(id = "PRICE_RESTRICTIONS_OVERRIDE", apiVersion = "1")
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/restrictions:override")
     public ResponseEntity<Object> overrideRestrictions(@RequestBody(required = false) Object requestBody) {
         log.info("POST /v1/price/restrictions:override");

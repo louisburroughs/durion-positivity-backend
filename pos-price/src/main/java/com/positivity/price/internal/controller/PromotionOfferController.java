@@ -47,12 +47,14 @@ public class PromotionOfferController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('Promotion:View')")
     public ResponseEntity<PromotionOfferResponse> getOfferById(@PathVariable("id") UUID promotionOfferId) {
         var offer = promotionOfferService.getOfferById(promotionOfferId);
         return ResponseEntity.ok(PromotionOfferMapper.toResponse(offer));
     }
 
     @GetMapping("/by-code/{promoCode}")
+    @PreAuthorize("hasAuthority('Promotion:View')")
     public ResponseEntity<PromotionOfferResponse> getOfferByCode(@PathVariable("promoCode") String promoCode) {
         var offer = promotionOfferService.getOfferByCode(promoCode);
         return ResponseEntity.ok(PromotionOfferMapper.toResponse(offer));
