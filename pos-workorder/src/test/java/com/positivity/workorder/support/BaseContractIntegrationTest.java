@@ -66,7 +66,15 @@ public abstract class BaseContractIntegrationTest {
             "workorder:parts:view",
             "workorder:parts:add",
             "workorder:labor:view",
-            "workorder:labor:add");
+            "workorder:labor:add",
+            // Issue CAP-139 Story #68: work session timekeeping authorities
+            "timekeeping:work_session:create",
+            "timekeeping:work_session:stop",
+            "timekeeping:work_session:break_start",
+            "timekeeping:work_session:break_stop",
+            // Issue CAP-139 Story #66: time entry approval authorities
+            "TimeEntry:Approve",
+            "TimeEntry:Reject");
 
     @LocalServerPort
     private int port;

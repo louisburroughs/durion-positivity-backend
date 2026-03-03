@@ -167,11 +167,6 @@ paths:
           application/json: {}
         required: true
       responses:
-        "400":
-          description: Invalid request - missing or empty toolName
-          content:
-            text/plain:
-              example: '''toolName'' is required'
         "200":
           description: Tool execution succeeded
           content:
@@ -183,6 +178,11 @@ paths:
                 - type: text
                   text: Pong from positivity-ping
                 isError: false
+        "400":
+          description: Invalid request - missing or empty toolName
+          content:
+            text/plain:
+              example: '''toolName'' is required'
         "500":
           description: Tool execution failed
           content:
