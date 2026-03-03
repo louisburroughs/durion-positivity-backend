@@ -54,7 +54,7 @@ class WorkorderStateMachineTest {
     private WorkorderStateMachine stateMachine;
 
     private Workorder testWorkorder;
-    private UUID userId;
+    private String userId;
     private UUID testWorkorderId;
     private UUID testChangeRequestId;
     private UUID testShopId;
@@ -78,7 +78,7 @@ class WorkorderStateMachineTest {
         testShopId = UUID.fromString("550e8400-e29b-41d4-a716-446655440042");
         testVehicleId = UUID.fromString("550e8400-e29b-41d4-a716-446655440043");
         testCustomerId = UUID.fromString("550e8400-e29b-41d4-a716-446655440044");
-        userId = UUID.fromString("550e8400-e29b-41d4-a716-446655440045");
+        userId = "system";
         testWorkorder = Workorder.builder()
                 .id(testWorkorderId)
                 .shopId(testShopId)

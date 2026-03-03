@@ -216,7 +216,8 @@ public class EstimateServiceImpl implements EstimateService {
                 ApprovalConfiguration config = getApprovalConfiguration(locationId, request.getCustomerId());
 
                 // Build estimate entity
-                String userId = SecurityContextHelper.getCurrentUserIdOrDefault(username);
+                String resolvedUsername = SecurityContextHelper.getCurrentUsernameOrDefault(username);
+                String userId = SecurityContextHelper.getCurrentUsernameOrDefault(resolvedUsername);
                 Estimate estimate = Estimate.builder()
                                 .estimateNumber(estimateNumber)
                                 .customerId(request.getCustomerId())
@@ -225,7 +226,7 @@ public class EstimateServiceImpl implements EstimateService {
                                 .currencyUomId(currencyUomId)
                                 .taxRegionId(taxRegionId)
                                 .status(EstimateStatus.DRAFT)
-                                .createdByUserId(username)
+                                .createdByUserId(resolvedUsername)
                                 .createdById(userId)
                                 .createdAt(Instant.now())
                                 .approvalConfigurationId(config.getId())

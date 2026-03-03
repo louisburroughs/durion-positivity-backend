@@ -66,7 +66,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         public TechnicianAssignment assignTechnician(
                         @NonNull UUID workorderId,
                         @NonNull UUID technicianId,
-                        @NonNull UUID assignedBy,
+                        @NonNull String assignedBy,
                         @Nullable String notes) {
 
                 Workorder workorder = workorderRepository.findById(workorderId)
@@ -135,7 +135,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         public TechnicianAssignment reassignTechnician(
                         @NonNull UUID workorderId,
                         @NonNull UUID newTechnicianId,
-                        @NonNull UUID reassignedBy,
+                        @NonNull String reassignedBy,
                         @Nullable String reason,
                         @Nullable String notes) {
 

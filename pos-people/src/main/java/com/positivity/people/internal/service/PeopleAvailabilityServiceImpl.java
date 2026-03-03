@@ -72,7 +72,7 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
 
     @NonNull
     private UUID resolveRequesterLocationId(@NonNull LocalDate targetDate) {
-        String currentUserId = SecurityContextHelper.getCurrentUserId()
+        String currentUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new EntityNotFoundException(
                         "locationId was not provided and authenticated user context is missing"));
 

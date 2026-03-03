@@ -1,8 +1,10 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
+import com.positivity.workorder.internal.dto.StartWorkorderRequest;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
 import com.positivity.workorder.service.WorkorderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,7 +45,7 @@ public class OperationalContextController {
     }
 
     @PostMapping("/{workorderId}/operationalContext/override")
-    @PreAuthorize("hasAuthority('workorder.operationalContext.override')")
+    @PreAuthorize("hasAuthority('workorder:operationalContext:override')")
     @EmitEvent(id = "WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE", apiVersion = "1")
     @Operation(summary = "Manager override of operational context")
     @ApiResponses({
@@ -58,15 +60,41 @@ public class OperationalContextController {
     }
 
     @PostMapping("/{workorderId}/start")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('workorder:start')")
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
     @Operation(summary = "Start work on workorder, locking operational context")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Work started, context locked"),
+            @ApiResponse(responseCode = "400", description = "Cannot start workorder due to pending change requests"),
             @ApiResponse(responseCode = "404", description = "Workorder not found"),
             @ApiResponse(responseCode = "409", description = "Work already started")
     })
-    public ResponseEntity<WorkorderStartResponse> startWork(@PathVariable UUID workorderId) {
-        return ResponseEntity.ok(workorderService.startWork(workorderId));
+    public ResponseEntity<WorkorderStartResponse> startWork(
+            @PathVariable UUID workorderId,
+            @RequestBody(required = false) StartWorkorderRequest request) {
+        try {
+            String requestedUserId = SecurityContextHelper.getCurrentUsername().orElse(null);
+            String reason = request != null ? request.getReason() : null;
+            return ResponseEntity.ok(workorderService.startWork(workorderId, requestedUserId, reason));
+        } catch (IllegalStateException ex) {
+            if (isPendingChangeRequestStartFailure(ex)) {
+                return ResponseEntity.badRequest().body(WorkorderStartResponse.builder()
+                        .workorderId(workorderId)
+                        .message(ex.getMessage())
+                        .build());
+            }
+            throw ex;
+        }
+    }
+
+    private boolean isPendingChangeRequestStartFailure(IllegalStateException ex) {
+        String message = ex.getMessage();
+        if (message == null) {
+            return false;
+        }
+        String normalized = message.toLowerCase();
+        return normalized.contains("cannot be started")
+                && normalized.contains("pending change request")
+                && normalized.contains("awaiting approval");
     }
 }

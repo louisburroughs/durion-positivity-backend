@@ -26,8 +26,8 @@ public class ChangeRequestResponse {
     @Schema(description = "Workorder ID", example = "550e8400-e29b-41d4-a716-446655440001")
     private UUID workorderId;
 
-    @Schema(description = "User ID who requested the change", example = "550e8400-e29b-41d4-a716-446655440002")
-    private UUID requestedByUserId;
+    @Schema(description = "User ID who requested the change", example = "system@positivity.com")
+    private String requestedByUserId;
 
     @Schema(description = "Date and time the change was requested")
     private LocalDateTime requestedAt;
@@ -53,8 +53,8 @@ public class ChangeRequestResponse {
     @Schema(description = "Date and time the change was approved")
     private LocalDateTime approvedAt;
 
-    @Schema(description = "User ID who approved the change")
-    private UUID approvedBy;
+    @Schema(description = "User ID who approved the change", example = "system@positivity.com")
+    private String approvedBy;
 
     @Schema(description = "Date and time the change was declined")
     private LocalDateTime declinedAt;

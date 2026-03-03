@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.AdjustLaborRequest;
 import com.positivity.workorder.internal.dto.StartLaborRequest;
 import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
@@ -49,7 +50,7 @@ public class WorkorderLaborController {
 
     private final WorkorderLaborService laborService;
 
-    private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    private static final String SYSTEM_USERNAME = "system";
 
     /**
      * Start a labor session on a workorder service.
@@ -69,10 +70,9 @@ public class WorkorderLaborController {
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Parameter(description = "ID of the service item", example = "550e8400-e29b-41d4-a716-446655440010") @PathVariable UUID serviceId,
             @Valid @RequestBody StartLaborRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate starts", example = "labor-start-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @Parameter(description = "User ID from gateway authentication", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate starts", example = "labor-start-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
-        UUID userId = resolveUserId(userIdHeader);
+        String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USERNAME);
 
         try {
             // Check if this is an idempotent replay
@@ -83,7 +83,7 @@ public class WorkorderLaborController {
                     serviceId,
                     request.getTechnicianId(),
                     request.getNotes(),
-                    userId,
+                    username,
                     idempotencyKey);
 
             WorkorderLaborEntryResponse response = WorkorderLaborMapper.toResponse(entry);
@@ -183,10 +183,12 @@ public class WorkorderLaborController {
             @Parameter(description = "Optional idempotency key to prevent duplicate adjustments", example = "labor-adjust-550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         try {
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USERNAME);
             var entry = laborService.adjustLaborHours(
                     entryId,
                     request.getHoursWorked(),
                     request.getAdjustmentReason(),
+                    username,
                     idempotencyKey);
 
             WorkorderLaborEntryResponse response = WorkorderLaborEntryResponse.fromEntity(entry);
@@ -205,14 +207,4 @@ public class WorkorderLaborController {
         }
     }
 
-    private UUID resolveUserId(String userIdHeader) {
-        if (userIdHeader != null && !userIdHeader.isBlank()) {
-            try {
-                return UUID.fromString(userIdHeader);
-            } catch (IllegalArgumentException e) {
-                log.warn("Invalid X-User-Id header: {}", userIdHeader);
-            }
-        }
-        return SYSTEM_USER_ID;
-    }
 }

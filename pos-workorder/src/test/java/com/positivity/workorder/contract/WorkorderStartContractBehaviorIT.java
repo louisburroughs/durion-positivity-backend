@@ -90,7 +90,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // When: Start the workorder
                 Map<String, Object> startRequest = Map.of(
-                                "userId", SYSTEM_USER_ID.toString(),
+                                "userId", SYSTEM_USER_ID,
                                 "reason", "Customer arrived and dropped off vehicle");
 
                 givenWithGatewayAuth()
@@ -124,7 +124,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 assertThat(startTransition.getFromStatus()).isEqualTo(WorkorderStatus.APPROVED);
                 assertThat(startTransition.getToStatus()).isEqualTo(WorkorderStatus.WORK_IN_PROGRESS);
-                assertThat(startTransition.getTransitionedBy()).isEqualTo(SYSTEM_USER_ID.toString());
+                assertThat(startTransition.getTransitionedBy()).isEqualTo(SYSTEM_USER_ID);
                 assertThat(startTransition.getReason()).isEqualTo("Customer arrived and dropped off vehicle");
                 assertThat(startTransition.getTransitionedAt()).isNotNull();
         }
@@ -145,7 +145,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // When: Attempt to start the workorder
                 Map<String, Object> startRequest = Map.of(
-                                "userId", SYSTEM_USER_ID.toString(),
+                                "userId", SYSTEM_USER_ID,
                                 "reason", "Attempting to start workorder");
 
                 givenWithGatewayAuth()
@@ -171,7 +171,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Start the workorder
                 Map<String, Object> startRequest = Map.of(
-                                "userId", SYSTEM_USER_ID.toString(),
+                                "userId", SYSTEM_USER_ID,
                                 "reason", "Starting work");
 
                 givenWithGatewayAuth()

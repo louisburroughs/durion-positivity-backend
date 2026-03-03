@@ -121,7 +121,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         entity.setStatusEffectiveAt(Instant.now());
         Person saved = personRepository.save(entity);
 
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         try {
             applyAssignmentPolicy(saved, request, actorId);
         } catch (Exception exception) {

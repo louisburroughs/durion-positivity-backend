@@ -9,15 +9,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.client.RestClient;
 
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
@@ -30,6 +31,7 @@ import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
+import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -45,13 +47,14 @@ import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.PromotionValidationService;
 import com.positivity.workorder.service.WorkorderService;
-import com.positivity.security.common.SecurityContextHelper;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Service
 @Slf4j
 public class WorkorderServiceImpl implements WorkorderService {
+    private static final String SYSTEM_ACTOR = "system";
+
     private final WorkorderRepository workorderRepository;
     private final EstimateRepository estimateRepository;
     private final EstimateItemRepository estimateItemRepository;
@@ -381,8 +384,8 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     @Transactional
-    public void startWorkorder(UUID workorderId, UUID userId, String reason) {
-        stateMachine.startWorkorder(workorderId, userId, reason);
+    public void startWorkorder(UUID workorderId, String actorId, String reason) {
+        stateMachine.startWorkorder(workorderId, actorId, reason);
     }
 
     @Override
@@ -407,7 +410,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         // Transition to APPROVED status
         workorder.setStatus(WorkorderStatus.APPROVED);
         workorder.setApprovedAt(Instant.now());
-        workorder.setApprovedBy(customerId);
+        workorder.setApprovalId(customerId);
         workorder.setSignatureData(signatureData);
         workorder.setSignatureMimeType(signatureMimeType);
         workorder.setSignerName(signerName);
@@ -419,8 +422,8 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     @Transactional
-    public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, UUID userId, String reason) {
-        stateMachine.transitionWorkorder(workorderId, toStatus, userId, reason);
+    public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, String actorId, String reason) {
+        stateMachine.transitionWorkorder(workorderId, toStatus, actorId, reason);
     }
 
     @Override
@@ -455,9 +458,9 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     @Transactional
-    public WorkCompletedEvent completeWorkorder(UUID workorderId, UUID userId, String completionNotes) {
+    public WorkCompletedEvent completeWorkorder(UUID workorderId, String actorId, String completionNotes) {
         // Perform the completion logic
-        stateMachine.completeWorkorder(workorderId, userId, completionNotes);
+        stateMachine.completeWorkorder(workorderId, actorId, completionNotes);
 
         // Retrieve the updated work order
         Workorder workorder = workorderRepository.findById(workorderId)
@@ -494,8 +497,9 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     @Transactional
-    public WorkorderService.ReopenResult reopenCompletedWorkorder(UUID workorderId, UUID userId, String reopenReason) {
-        Workorder reopened = stateMachine.reopenCompletedWorkorder(workorderId, userId, reopenReason);
+    public WorkorderService.ReopenResult reopenCompletedWorkorder(UUID workorderId, String actorId,
+            String reopenReason) {
+        Workorder reopened = stateMachine.reopenCompletedWorkorder(workorderId, actorId, reopenReason);
         return new WorkorderService.ReopenResult(
                 reopened.getId(),
                 reopened.getStatus().name(),
@@ -568,7 +572,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private void createApprovalInvalidationAudit(Workorder workorder,
             WorkorderStatus oldStatus,
             EstimateRevisedEvent event) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         AuditEvent audit = AuditEvent.builder()
                 .entityType("Workorder")
                 .entityId(workorder.getId())
@@ -679,6 +683,11 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     public WorkorderStartResponse startWork(@NonNull UUID workorderId) {
+        return startWork(workorderId, null, null);
+    }
+
+    @Override
+    public WorkorderStartResponse startWork(@NonNull UUID workorderId, String requestedUserId, String reason) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
@@ -686,17 +695,37 @@ public class WorkorderServiceImpl implements WorkorderService {
             throw new IllegalStateException("Work has already started for workorder: " + workorderId);
         }
 
+        WorkorderStatus previousStatus = workorder.getStatus();
+        String actorUserId = requestedUserId != null ? requestedUserId : resolveCurrentActorUserId();
+        String transitionReason = reason != null && !reason.isBlank() ? reason : "Work started";
+
+        stateMachine.startWorkorder(workorderId, actorUserId, transitionReason);
+
         String version = UUID.randomUUID().toString();
         Instant startedAt = Instant.now();
         workorder.setOperationalContextVersion(version);
         workorder.setWorkStartedAt(startedAt);
         Workorder saved = workorderRepository.save(workorder);
 
+        Instant transitionedAt = stateMachine.getTransitionHistory(workorderId).stream()
+                .filter(transition -> transition.getToStatus() == WorkorderStatus.WORK_IN_PROGRESS)
+                .map(WorkorderStateTransition::getTransitionedAt)
+                .findFirst()
+                .orElse(startedAt);
+
         return WorkorderStartResponse.builder()
                 .workorderId(saved.getId())
                 .operationalContextVersion(saved.getOperationalContextVersion())
                 .workStartedAt(saved.getWorkStartedAt())
+                .previousStatus(previousStatus.name())
+                .currentStatus(WorkorderStatus.WORK_IN_PROGRESS.name())
+                .transitionedAt(transitionedAt)
+                .message("Workorder started successfully")
                 .build();
+    }
+
+    private String resolveCurrentActorUserId() {
+        return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
     }
 
     private String serializeMechanicIds(List<UUID> mechanicIds) {

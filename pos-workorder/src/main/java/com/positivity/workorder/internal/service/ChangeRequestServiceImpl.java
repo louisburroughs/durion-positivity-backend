@@ -1,24 +1,5 @@
 package com.positivity.workorder.internal.service;
 
-import tools.jackson.databind.ObjectMapper;
-import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
-import com.positivity.workorder.internal.entity.*;
-import com.positivity.workorder.internal.entity.ChangeRequest.ChangeRequestStatus;
-import com.positivity.workorder.internal.enums.WorkorderItemStatus;
-import com.positivity.workorder.internal.enums.WorkorderStatus;
-import com.positivity.workorder.internal.repository.*;
-import com.positivity.workorder.service.ChangeRequestService;
-import com.positivity.workorder.service.IdempotencyService;
-import com.positivity.security.common.SecurityContextHelper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
-import org.springframework.web.client.RestClient;
-
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,6 +7,34 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.zip.CRC32;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.web.client.RestClient;
+
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
+import com.positivity.workorder.internal.entity.ApprovalRecord;
+import com.positivity.workorder.internal.entity.ChangeRequest;
+import com.positivity.workorder.internal.entity.ChangeRequest.ChangeRequestStatus;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderPart;
+import com.positivity.workorder.internal.enums.WorkorderItemStatus;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.ApprovalRecordRepository;
+import com.positivity.workorder.internal.repository.ChangeRequestRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.service.ChangeRequestService;
+import com.positivity.workorder.service.IdempotencyService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
@@ -75,11 +84,11 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         if (Boolean.TRUE.equals(dto.getIsEmergencyException())) {
             validateEmergencyDocumentation(dto);
         }
-
+        String requestorUserId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         // Create change request
         ChangeRequest changeRequest = ChangeRequest.builder()
                 .workorderId(dto.getWorkorderId())
-                .requestedByUserId(dto.getRequestedByUserId())
+                .requestedByUserId(requestorUserId)
                 .description(dto.getDescription())
                 .isEmergencyException(Boolean.TRUE.equals(dto.getIsEmergencyException()))
                 .exceptionReason(dto.getExceptionReason())
@@ -199,7 +208,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     @Override
     @Transactional
     public ChangeRequest approveChangeRequest(UUID changeRequestId, UUID approvedBy, String approvalNote) {
-        String resolvedActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String resolvedActorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
+                () -> new IllegalStateException("Authenticated user context is required for approving change request"));
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -215,7 +225,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         changeRequest.setStatus(ChangeRequestStatus.APPROVED);
         changeRequest.setApprovedAt(LocalDateTime.now());
-        changeRequest.setApprovedBy(approvedBy);
+        changeRequest.setApprovedBy(resolvedActorId);
         changeRequest.setApprovalNote(approvalNote);
 
         changeRequest = changeRequestRepository.save(changeRequest);
@@ -234,7 +244,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         // Move associated items from PENDING_APPROVAL to OPEN/READY_TO_EXECUTE
         updateItemsStatus(changeRequest.getId(), WorkorderItemStatus.READY_TO_EXECUTE);
 
-        log.info("Approved change request {} by user {}", changeRequestId, approvedBy);
+        log.info("Approved change request {} by user {}", changeRequestId, resolvedActorId);
         return changeRequest;
     }
 
@@ -244,7 +254,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     @Override
     @Transactional
     public ChangeRequest declineChangeRequest(UUID changeRequestId, String approvalNote) {
-        String resolvedActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String resolvedActorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
+                () -> new IllegalStateException("Authenticated user context is required for declining change request"));
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -288,8 +299,9 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     @Transactional
-    public ChangeRequest applyEmergencyOverride(UUID changeRequestId, UUID managerId, String exceptionReason) {
-        String resolvedActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+    public ChangeRequest applyEmergencyOverride(UUID changeRequestId, String exceptionReason) {
+        String managerActorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
+                () -> new IllegalStateException("Authenticated user context is required for emergency override"));
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -305,7 +317,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         changeRequest.setStatus(ChangeRequestStatus.APPROVED_WITH_EXCEPTION);
         changeRequest.setApprovedAt(LocalDateTime.now());
-        changeRequest.setApprovedBy(managerId);
+        changeRequest.setApprovedBy(managerActorId);
         changeRequest.setIsEmergencyException(true);
         changeRequest.setExceptionReason(exceptionReason);
 
@@ -317,7 +329,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED_WITH_EXCEPTION)
                 .resolvedAt(LocalDateTime.now())
-                .resolvedBy(resolvedActorId)
+                .resolvedBy(managerActorId)
                 .exceptionReason(exceptionReason)
                 .build();
         approvalRecordRepository.save(approvalRecord);
@@ -325,7 +337,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         // Move associated items from PENDING_APPROVAL to READY_TO_EXECUTE
         updateItemsStatus(changeRequest.getId(), WorkorderItemStatus.READY_TO_EXECUTE);
 
-        log.info("Applied emergency override to change request {} by manager {}", changeRequestId, managerId);
+        log.info("Applied emergency override to change request {} by manager {}", changeRequestId, managerActorId);
         return changeRequest;
     }
 

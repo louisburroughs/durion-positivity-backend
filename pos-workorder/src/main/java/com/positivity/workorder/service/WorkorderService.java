@@ -48,12 +48,12 @@ public interface WorkorderService {
 
         void deleteWorkorder(UUID id);
 
-        void startWorkorder(UUID workorderId, UUID userId, String reason);
+        void startWorkorder(UUID workorderId, String actorId, String reason);
 
         Workorder approveWorkorder(UUID workorderId, UUID customerId, String signatureData,
                         String signatureMimeType, String signerName, String notes);
 
-        void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, UUID userId, String reason);
+        void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, String actorId, String reason);
 
         List<com.positivity.workorder.internal.entity.WorkorderStateTransition> getTransitionHistory(
                         UUID workorderId);
@@ -66,9 +66,9 @@ public interface WorkorderService {
 
         Instant getCompletedAt(UUID workorderId);
 
-        WorkCompletedEvent completeWorkorder(UUID workorderId, UUID userId, String completionNotes);
+        WorkCompletedEvent completeWorkorder(UUID workorderId, String actorId, String completionNotes);
 
-        ReopenResult reopenCompletedWorkorder(UUID workorderId, UUID userId, String reopenReason);
+        ReopenResult reopenCompletedWorkorder(UUID workorderId, String actorId, String reopenReason);
 
         /**
          * Listen for EstimateRevisedEvent and invalidate Workorder approval if needed.
@@ -117,5 +117,8 @@ public interface WorkorderService {
          */
         @NonNull
         WorkorderStartResponse startWork(@NonNull UUID workorderId);
+
+        @NonNull
+        WorkorderStartResponse startWork(@NonNull UUID workorderId, String requestedUserId, String reason);
 
 }

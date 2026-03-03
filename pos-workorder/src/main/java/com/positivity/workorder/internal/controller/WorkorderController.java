@@ -38,7 +38,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderController {
-    private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    private static final String SYSTEM_USER_ID = "system";
 
     private final WorkorderService workorderService;
     private final WorkorderInvoiceService workorderInvoiceService;
@@ -245,7 +245,7 @@ public class WorkorderController {
         try {
             WorkorderService.ReopenResult reopened = workorderService.reopenCompletedWorkorder(
                     workorderId,
-                    resolveCurrentActorUserId(),
+                    SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER_ID),
                     request.getReopenReason());
 
             ReopenWorkorderResponse response = ReopenWorkorderResponse.builder()
@@ -268,13 +268,8 @@ public class WorkorderController {
         }
     }
 
-    private UUID resolveCurrentActorUserId() {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_USER_ID.toString());
-        try {
-            return UUID.fromString(actorId);
-        } catch (IllegalArgumentException ex) {
-            log.warn("Current actor id '{}' is not a UUID; using system fallback", actorId);
-            return SYSTEM_USER_ID;
-        }
+    private String resolveCurrentActorUserId() {
+        return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER_ID);
     }
+
 }
