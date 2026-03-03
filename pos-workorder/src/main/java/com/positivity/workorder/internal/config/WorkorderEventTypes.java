@@ -408,6 +408,16 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // Work session events (CAP-139 Story #68)
+        public static final EventTypeRegistration WORKORDER_WORK_SESSION_START =
+                        EventTypeRegistration.write("WORKORDER_WORK_SESSION_START", "Start a work session").apiVersion("1").build();
+        public static final EventTypeRegistration WORKORDER_WORK_SESSION_STOP =
+                        EventTypeRegistration.write("WORKORDER_WORK_SESSION_STOP", "Stop a work session").apiVersion("1").build();
+        public static final EventTypeRegistration WORKORDER_WORK_SESSION_BREAK_START =
+                        EventTypeRegistration.write("WORKORDER_WORK_SESSION_BREAK_START", "Start a break segment").apiVersion("1").build();
+        public static final EventTypeRegistration WORKORDER_WORK_SESSION_BREAK_STOP =
+                        EventTypeRegistration.write("WORKORDER_WORK_SESSION_BREAK_STOP", "Stop a break segment").apiVersion("1").build();
+
         // ==================== ALL EVENT TYPES ====================
 
         /** All event types for registration at startup */
@@ -475,5 +485,10 @@ public final class WorkorderEventTypes {
                         WORKORDER_APPROVAL_CONFIG_DELETE,
                         // WIP dashboard events (CAP-248 Story #14)
                         WORKORDER_WIP_LIST,
-                        WORKORDER_WIP_VIEW);
+                        WORKORDER_WIP_VIEW,
+                        // Work session events (CAP-139 Story #68)
+                        WORKORDER_WORK_SESSION_START,
+                        WORKORDER_WORK_SESSION_STOP,
+                        WORKORDER_WORK_SESSION_BREAK_START,
+                        WORKORDER_WORK_SESSION_BREAK_STOP);
 }
