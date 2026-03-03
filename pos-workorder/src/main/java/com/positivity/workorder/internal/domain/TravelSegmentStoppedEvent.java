@@ -4,4 +4,5 @@ import java.time.Instant;
 import java.util.UUID;
 
 /** Domain event published when a travel segment is stopped. */
-public record TravelSegmentStoppedEvent(UUID travelSegmentId, UUID technicianId, Instant endAt, int durationMinutes) {}
+public record TravelSegmentStoppedEvent(UUID travelSegmentId, UUID technicianId, Instant endAt, int durationMinutes) {
+}

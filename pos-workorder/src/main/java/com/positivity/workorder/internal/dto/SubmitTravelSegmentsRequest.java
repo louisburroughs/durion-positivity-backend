@@ -14,7 +14,8 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class SubmitTravelSegmentsRequest {
     @NotNull
-    // reserved: future audit scope query filter; currently not consumed by submitTravelSegments
+    // reserved: future audit scope query filter; currently not consumed by
+    // submitTravelSegments
     private LocalDate workDate;
     private String notes;
 }

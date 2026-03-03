@@ -28,7 +28,8 @@ import java.util.UUID;
 
 /**
  * Service implementation for mobile travel segment capture (Story #67).
- * Enforces: conflict detection, on-behalf validation, status lifecycle, and bufferedMinutes approval-only policy.
+ * Enforces: conflict detection, on-behalf validation, status lifecycle, and
+ * bufferedMinutes approval-only policy.
  */
 @Service
 @RequiredArgsConstructor
@@ -72,7 +73,8 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
 
     @Override
     @Transactional
-    public @NonNull TravelSegment stopTravelSegment(@NonNull UUID travelSegmentId, @NonNull StopTravelSegmentRequest request) {
+    public @NonNull TravelSegment stopTravelSegment(@NonNull UUID travelSegmentId,
+            @NonNull StopTravelSegmentRequest request) {
         TravelSegment segment = travelSegmentRepository.findById(travelSegmentId)
                 .orElseThrow(() -> new TravelSegmentNotFoundException(travelSegmentId));
         if (segment.getStatus() != TravelSegmentStatus.IN_PROGRESS) {
@@ -96,7 +98,8 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
 
     @Override
     @Transactional
-    public @NonNull TravelSegment submitTravelSegments(@NonNull UUID mobileWorkAssignmentId, @NonNull UUID technicianId) {
+    public @NonNull TravelSegment submitTravelSegments(@NonNull UUID mobileWorkAssignmentId,
+            @NonNull UUID technicianId) {
         List<TravelSegment> inProgress = travelSegmentRepository
                 .findByMobileWorkAssignmentIdAndStatus(mobileWorkAssignmentId, TravelSegmentStatus.IN_PROGRESS);
         List<TravelSegment> completed = travelSegmentRepository
