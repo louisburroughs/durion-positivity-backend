@@ -55,6 +55,11 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         // 1. Check overlap
         List<WorkSession> active = workSessionRepository.findByMechanicIdAndStatus(
                 request.getMechanicId(), WorkSessionStatus.IN_PROGRESS);
+        String actorId = SecurityContextHelper.getCurrentUsername().orElse("system");
+        boolean overrideUsed = false;
+        String overrideReason = null;
+        String overriddenByUserId = null;
+        Instant overrideAt = null;
         if (!active.isEmpty()) {
             boolean hasPermission = SecurityContextHelper.hasAuthority("timekeeping:overlap_override");
             boolean hasReason = request.getOverlapOverrideReason() != null
@@ -62,13 +67,11 @@ public class WorkSessionServiceImpl implements WorkSessionService {
             if (!allowOverlappingSessions || !hasPermission || !hasReason) {
                 throw new WorkSessionOverlapException(request.getMechanicId());
             }
+            overrideUsed = true;
+            overrideReason = request.getOverlapOverrideReason();
+            overriddenByUserId = actorId;
+            overrideAt = Instant.now();
         }
-
-        // 2. Resolve actor from security context
-        String actorId = SecurityContextHelper.getCurrentUsername().orElse("system");
-
-        boolean overrideUsed = request.getOverlapOverrideReason() != null
-                && !request.getOverlapOverrideReason().isBlank();
 
         // 3. Build and save session
         WorkSession session = WorkSession.builder()
@@ -82,9 +85,9 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 .locked(false)
                 .totalDurationSeconds(0)
                 .overlapOverrideUsed(overrideUsed)
-                .overrideReason(request.getOverlapOverrideReason())
-                .overriddenByUserId(overrideUsed ? actorId : null)
-                .overrideAt(overrideUsed ? Instant.now() : null)
+                .overrideReason(overrideReason)
+                .overriddenByUserId(overriddenByUserId)
+                .overrideAt(overrideAt)
                 .build();
 
         session = workSessionRepository.save(session);

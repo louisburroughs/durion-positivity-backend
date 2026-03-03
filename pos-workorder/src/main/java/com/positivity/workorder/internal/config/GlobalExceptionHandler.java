@@ -102,13 +102,14 @@ public class GlobalExceptionHandler {
                 .map(fe -> Map.of("field", fe.getField(),
                         "message", fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid value"))
                 .toList();
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("code", "VALIDATION_FAILED");
-        body.put("message", "Request validation failed");
+        ResponseEntity<Map<String, Object>> baseResponse = buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_FAILED",
+                "Request validation failed",
+                request);
+        Map<String, Object> body = new LinkedHashMap<>(baseResponse.getBody());
         body.put("fieldErrors", fieldErrors);
-        body.put("timestamp", Instant.now().toString());
-        body.put("path", request.getRequestURI());
-        return ResponseEntity.badRequest().body(body);
+        return new ResponseEntity<>(body, baseResponse.getHeaders(), baseResponse.getStatusCode());
     }
 
     private ResponseEntity<Map<String, Object>> buildErrorResponse(
