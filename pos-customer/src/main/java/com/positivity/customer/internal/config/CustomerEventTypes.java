@@ -94,10 +94,10 @@ public final class CustomerEventTypes {
                                 EventTypeRegistration.write("PROMOTION_REDEMPTION_RECORD",
                                                 "Record a promotion redemption for a customer")
                                                 .apiVersion("1")
-                                                                .build(),
-                                                EventTypeRegistration.search("PROMOTION_REDEMPTION_LIST",
-                                                                "List redemptions by customer ID")
-                                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration.search("PROMOTION_REDEMPTION_LIST",
+                                                "List redemptions by customer ID")
+                                                .apiVersion("1")
                                                 .build());
         }
 }

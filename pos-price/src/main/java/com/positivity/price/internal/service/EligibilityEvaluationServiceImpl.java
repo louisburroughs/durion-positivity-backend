@@ -26,7 +26,10 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Implementation of promotion eligibility rule management and evaluation service. */
+/**
+ * Implementation of promotion eligibility rule management and evaluation
+ * service.
+ */
 @Service
 public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationService {
 
@@ -61,7 +64,7 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
         rule.setOperator(request.getOperator());
         rule.setValue(request.getValue());
         rule.setRuleCombination(
-            request.getRuleCombination() != null ? request.getRuleCombination() : RuleCombination.AND);
+                request.getRuleCombination() != null ? request.getRuleCombination() : RuleCombination.AND);
         rule.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
         return promotionEligibilityRuleRepository.save(rule);
     }

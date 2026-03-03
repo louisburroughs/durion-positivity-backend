@@ -133,7 +133,7 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         var ctx = request.getEstimateContext();
 
         PromotionOffer offer = promotionOfferRepository.findByPromoCode(promoCode)
-            .orElseThrow(() -> new PromotionCodeNotFoundException(promoCode));
+                .orElseThrow(() -> new PromotionCodeNotFoundException(promoCode));
 
         if (offer.getStatus() != PromotionStatus.ACTIVE) {
             throw new PromotionNotApplicableException("Promotion '" + promoCode + "' is not active");
@@ -142,45 +142,45 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         LocalDate today = LocalDate.now();
         if (today.isBefore(offer.getStartDate()) || today.isAfter(offer.getEndDate())) {
             throw new PromotionNotApplicableException(
-                "Promotion '" + promoCode + "' is outside its valid date range");
+                    "Promotion '" + promoCode + "' is outside its valid date range");
         }
 
         EligibilityDecision decision = eligibilityEvaluationService.evaluateEligibility(
-            offer.getPromotionOfferId(),
-            ctx.getCustomerId(),
-            null);
+                offer.getPromotionOfferId(),
+                ctx.getCustomerId(),
+                null);
         if (!decision.isEligible()) {
             throw new PromotionNotApplicableException(
-                "Promotion '" + promoCode + "' is not applicable: " + decision.reasonCode());
+                    "Promotion '" + promoCode + "' is not applicable: " + decision.reasonCode());
         }
 
         BigDecimal subtotal = ctx.getSubtotal();
         BigDecimal discountAmount = switch (offer.getDiscountType()) {
             case PERCENT_LABOR, PERCENT_PARTS -> subtotal.multiply(offer.getDiscountValue())
-                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
-                .negate();
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                    .negate();
             case FIXED_INVOICE -> offer.getDiscountValue().negate();
         };
 
         PricingAdjustment adjustment = PricingAdjustment.builder()
-            .type("PROMOTION")
-            .sourceId(offer.getPromotionOfferId())
-            .label(offer.getName() != null ? offer.getName() : offer.getDescription())
-            .amount(discountAmount)
-            .build();
+                .type("PROMOTION")
+                .sourceId(offer.getPromotionOfferId())
+                .label(offer.getName() != null ? offer.getName() : offer.getDescription())
+                .amount(discountAmount)
+                .build();
 
         BigDecimal total = subtotal.add(discountAmount);
 
         ApplyPromotionResponse response = ApplyPromotionResponse.builder()
-            .subtotal(subtotal)
-            .total(total)
-            .appliedAdjustments(List.of(adjustment))
-            .build();
+                .subtotal(subtotal)
+                .total(total)
+                .appliedAdjustments(List.of(adjustment))
+                .build();
 
         String userId = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-            .map(Authentication::getName).orElse("system");
+                .map(Authentication::getName).orElse("system");
         log.info("Promotion applied: estimateId={}, promotionId={}, promotionCode={}, userId={}, discountAmount={}",
-            ctx.getEstimateId(), offer.getPromotionOfferId(), promoCode, userId, discountAmount);
+                ctx.getEstimateId(), offer.getPromotionOfferId(), promoCode, userId, discountAmount);
 
         return response;
     }

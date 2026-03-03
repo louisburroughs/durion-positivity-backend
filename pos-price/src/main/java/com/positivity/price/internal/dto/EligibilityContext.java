@@ -3,7 +3,9 @@ package com.positivity.price.internal.dto;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** API request payload for promotion eligibility evaluation context. Issue: #96 */
+/**
+ * API request payload for promotion eligibility evaluation context. Issue: #96
+ */
 public class EligibilityContext {
 
     @Nullable

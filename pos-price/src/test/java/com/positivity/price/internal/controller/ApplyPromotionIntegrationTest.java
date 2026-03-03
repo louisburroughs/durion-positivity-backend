@@ -25,13 +25,20 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Integration tests for the apply-promotion endpoint (POST /v1/promotions/offers/apply).
+ * Integration tests for the apply-promotion endpoint (POST
+ * /v1/promotions/offers/apply).
  *
- * <p>Covers the full behavioral contract of {@code PromotionOfferServiceImpl.applyPromotion}:
- * success with PERCENT_LABOR and FIXED_INVOICE discount types, PROMO_NOT_FOUND for an
- * unknown promo code, and PROMO_NOT_APPLICABLE for inactive and date-expired promotions.
- * No eligibility rules are seeded; the service treats an empty rule set as unconditionally
- * eligible.</p>
+ * <p>
+ * Covers the full behavioral contract of
+ * {@code PromotionOfferServiceImpl.applyPromotion}:
+ * success with PERCENT_LABOR and FIXED_INVOICE discount types, PROMO_NOT_FOUND
+ * for an
+ * unknown promo code, and PROMO_NOT_APPLICABLE for inactive and date-expired
+ * promotions.
+ * No eligibility rules are seeded; the service treats an empty rule set as
+ * unconditionally
+ * eligible.
+ * </p>
  *
  * Issue: #95
  */
@@ -48,7 +55,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
     private PromotionEligibilityRuleRepository ruleRepository;
 
     /**
-     * Override to supply the {@code Promotion:Apply} authority required by the apply endpoint.
+     * Override to supply the {@code Promotion:Apply} authority required by the
+     * apply endpoint.
      *
      * @return the authority string forwarded via {@code X-Authorities} header
      */
@@ -66,7 +74,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
     // ========== APT-001 ==========
 
     /**
-     * Happy path: ACTIVE PERCENT_LABOR 20% promotion applied against a $500 estimate.
+     * Happy path: ACTIVE PERCENT_LABOR 20% promotion applied against a $500
+     * estimate.
      * Adjustment must be PROMOTION type, amount must be negative, and total must be
      * less than the submitted subtotal.
      *
@@ -79,8 +88,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
                 LocalDate.now().minusDays(1), LocalDate.now().plusDays(30));
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(applyRequest("SUMMER20", "500.00"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(applyRequest("SUMMER20", "500.00"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.appliedAdjustments[0].type").value("PROMOTION"))
                 .andExpect(jsonPath("$.appliedAdjustments[0].amount").value(-100.00))
@@ -99,8 +108,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
     @DisplayName("APT-002: Non-existent promoCode → 400 PROMO_NOT_FOUND")
     void givenNonExistentPromoCode_whenApply_thenReturns400WithPromoNotFound() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(applyRequest("DOESNOTEXIST", "500.00"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(applyRequest("DOESNOTEXIST", "500.00"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PROMO_NOT_FOUND"));
     }
@@ -127,8 +136,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         promotionOfferRepository.save(offer);
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(applyRequest("INACTIVE01", "500.00"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(applyRequest("INACTIVE01", "500.00"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PROMO_NOT_APPLICABLE"));
     }
@@ -136,7 +145,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
     // ========== APT-004 ==========
 
     /**
-     * ACTIVE promotion whose {@code endDate} is in the past → 400 PROMO_NOT_APPLICABLE.
+     * ACTIVE promotion whose {@code endDate} is in the past → 400
+     * PROMO_NOT_APPLICABLE.
      * Confirms the date-window guard fires even when status is ACTIVE.
      *
      * Issue: #95
@@ -148,8 +158,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
                 LocalDate.now().minusDays(30), LocalDate.now().minusDays(1));
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(applyRequest("EXPIRED99", "500.00"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(applyRequest("EXPIRED99", "500.00"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PROMO_NOT_APPLICABLE"));
     }
@@ -157,12 +167,13 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
     // ========== APT-005 ==========
 
     /**
-     * ACTIVE FIXED_INVOICE promotion with discountValue=50: total must equal subtotal − 50.
+     * ACTIVE FIXED_INVOICE promotion with discountValue=50: total must equal
+     * subtotal − 50.
      * Verifies the flat-amount discount branch in the service.
      *
      * @see com.positivity.price.internal.service.PromotionOfferServiceImpl#applyPromotion
      *
-     * Issue: #95
+     *      Issue: #95
      */
     @Test
     @DisplayName("APT-005: FIXED_INVOICE promotion → 200 with correct flat discount applied")
@@ -171,8 +182,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
                 LocalDate.now().minusDays(1), LocalDate.now().plusDays(30));
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(applyRequest("FIXED50", "500.00"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(applyRequest("FIXED50", "500.00"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(450.00));
     }
@@ -181,7 +192,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
 
     /**
      * ACTIVE promotion with an ACCOUNT_FLEET_SIZE >= 1000 rule: the stub account
-     * data provider returns no fleet context, so evaluation returns MISSING_ACCOUNT_CONTEXT
+     * data provider returns no fleet context, so evaluation returns
+     * MISSING_ACCOUNT_CONTEXT
      * (ineligible) → 400 PROMO_NOT_APPLICABLE.
      *
      * Issue: #95
@@ -201,8 +213,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         ruleRepository.save(rule);
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(applyRequest("FLEETONLY", "500.00"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(applyRequest("FLEETONLY", "500.00"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PROMO_NOT_APPLICABLE"));
     }
@@ -219,23 +231,24 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
     @DisplayName("APT-007: Missing Promotion:Apply authority → 403 Forbidden")
     void givenNoPromotionApplyAuthority_whenApply_thenReturns403() throws Exception {
         mockMvc.perform(post("/v1/promotions/offers/apply")
-                        .header("X-User", "test-user")
-                        .header("X-Authorities", "Promotion:Manage")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(applyRequest("ANY", "100.00")))
+                .header("X-User", "test-user")
+                .header("X-Authorities", "Promotion:Manage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(applyRequest("ANY", "100.00")))
                 .andExpect(status().isForbidden());
     }
 
     // ========== HELPERS ==========
 
     /**
-     * Seeds an ACTIVE {@link PromotionOffer} directly via repository to bypass POST validation.
+     * Seeds an ACTIVE {@link PromotionOffer} directly via repository to bypass POST
+     * validation.
      *
-     * @param promoCode    the promotion code
-     * @param discountType the discount strategy
+     * @param promoCode     the promotion code
+     * @param discountType  the discount strategy
      * @param discountValue the discount magnitude
-     * @param startDate    inclusive validity start
-     * @param endDate      inclusive validity end
+     * @param startDate     inclusive validity start
+     * @param endDate       inclusive validity end
      * @return the persisted entity
      */
     private PromotionOffer seedActiveOffer(

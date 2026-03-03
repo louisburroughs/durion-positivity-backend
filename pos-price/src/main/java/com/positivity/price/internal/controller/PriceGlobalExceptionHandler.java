@@ -8,4 +8,5 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * Issue: #50
  */
 @RestControllerAdvice
-public class PriceGlobalExceptionHandler {}
+public class PriceGlobalExceptionHandler {
+}

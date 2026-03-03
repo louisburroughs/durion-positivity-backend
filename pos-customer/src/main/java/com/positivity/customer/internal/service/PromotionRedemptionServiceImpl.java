@@ -49,9 +49,11 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
         redemption.setRecordedOverLimit(
                 request.getRecordedOverLimit() != null ? request.getRecordedOverLimit() : false);
         redemption.setStatus(Boolean.TRUE.equals(request.getRecordedOverLimit())
-                ? RedemptionStatus.RECORDED_OVER_LIMIT : RedemptionStatus.RECORDED);
+                ? RedemptionStatus.RECORDED_OVER_LIMIT
+                : RedemptionStatus.RECORDED);
         redemption.setRedemptionTimestamp(request.getRedemptionTimestamp() != null
-                ? request.getRedemptionTimestamp() : LocalDateTime.now());
+                ? request.getRedemptionTimestamp()
+                : LocalDateTime.now());
 
         PromotionRedemption saved;
         try {

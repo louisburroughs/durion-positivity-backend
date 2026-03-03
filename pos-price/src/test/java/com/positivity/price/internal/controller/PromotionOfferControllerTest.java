@@ -21,11 +21,17 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Contract behavior tests for {@link PromotionOfferController} lifecycle operations.
+ * Contract behavior tests for {@link PromotionOfferController} lifecycle
+ * operations.
  *
- * <p>Validates creation, retrieval, activation, and deactivation of promotion offers.
- * Tests are intentionally RED in the scaffold phase—{@code PromotionOfferServiceImpl}
- * throws {@code UnsupportedOperationException} for all methods until GREEN implementation.</p>
+ * <p>
+ * Validates creation, retrieval, activation, and deactivation of promotion
+ * offers.
+ * Tests are intentionally RED in the scaffold
+ * phase—{@code PromotionOfferServiceImpl}
+ * throws {@code UnsupportedOperationException} for all methods until GREEN
+ * implementation.
+ * </p>
  *
  * Issue: #97
  */
@@ -35,12 +41,14 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
-        @Autowired
-        private PromotionOfferRepository promotionOfferRepository;
+    @Autowired
+    private PromotionOfferRepository promotionOfferRepository;
 
     /**
-     * Grant {@code Promotion:Manage} so that {@code @PreAuthorize} checks on POST and PATCH
-     * endpoints pass through to the service layer, producing behaviour-driven failures
+     * Grant {@code Promotion:Manage} so that {@code @PreAuthorize} checks on POST
+     * and PATCH
+     * endpoints pass through to the service layer, producing behaviour-driven
+     * failures
      * rather than auth-layer 403s.
      *
      * @return the authority string forwarded via {@code X-Authorities} header
@@ -55,7 +63,10 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     /**
      * AC-1: Valid request produces 201 with DRAFT status and matching promoCode.
      *
-     * <p>RED: service stub throws UnsupportedOperationException → 500, assertion fails on status.</p>
+     * <p>
+     * RED: service stub throws UnsupportedOperationException → 500, assertion fails
+     * on status.
+     * </p>
      *
      * Issue: #97
      */
@@ -63,8 +74,8 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     @DisplayName("POC-001: POST /v1/promotions/offers with valid request → 201 DRAFT")
     void givenValidRequest_whenCreateOffer_thenReturns201WithDraftStatus() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validOfferPayload("SPRING25"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validOfferPayload("SPRING25"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
                 .andExpect(jsonPath("$.promoCode").value("SPRING25"))
@@ -74,7 +85,10 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     /**
      * AC-2: Duplicate promoCode produces 409 DUPLICATE_PROMO_CODE.
      *
-     * <p>RED: first POST stub throws UnsupportedOperationException → 500 ≠ 201, test fails immediately.</p>
+     * <p>
+     * RED: first POST stub throws UnsupportedOperationException → 500 ≠ 201, test
+     * fails immediately.
+     * </p>
      *
      * Issue: #97
      */
@@ -83,40 +97,47 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     void givenDuplicatePromoCode_whenCreateOffer_thenReturns409() throws Exception {
         // First creation must succeed; second with same code must conflict.
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validOfferPayload("DUP-CODE"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validOfferPayload("DUP-CODE"))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validOfferPayload("DUP-CODE"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validOfferPayload("DUP-CODE"))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DUPLICATE_PROMO_CODE"));
     }
 
-        /**
-         * AC-3: startDate after endDate produces 422 PROMOTION_OFFER_INVALID_STATE.
+    /**
+     * AC-3: startDate after endDate produces 422 PROMOTION_OFFER_INVALID_STATE.
      *
-     * <p>RED: cross-field date constraint is a service-layer check not present in stub;
-     * stub throws UnsupportedOperationException → 500 ≠ 400.</p>
+     * <p>
+     * RED: cross-field date constraint is a service-layer check not present in
+     * stub;
+     * stub throws UnsupportedOperationException → 500 ≠ 400.
+     * </p>
      *
      * Issue: #97
      */
     @Test
-        @DisplayName("POC-003: POST /v1/promotions/offers with startDate after endDate → 422 PROMOTION_OFFER_INVALID_STATE")
-        void givenStartDateAfterEndDate_whenCreateOffer_thenReturns422() throws Exception {
+    @DisplayName("POC-003: POST /v1/promotions/offers with startDate after endDate → 422 PROMOTION_OFFER_INVALID_STATE")
+    void givenStartDateAfterEndDate_whenCreateOffer_thenReturns422() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(offerPayloadWithDates("BADDATES", "2026-12-31", "2026-01-01"))))
-                                .andExpect(status().is(422))
-                                .andExpect(jsonPath("$.code").value("PROMOTION_OFFER_INVALID_STATE"));
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(offerPayloadWithDates("BADDATES", "2026-12-31", "2026-01-01"))))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("PROMOTION_OFFER_INVALID_STATE"));
     }
 
     /**
      * AC-4: Missing required fields produce 400 VALIDATION_FAILED.
      *
-     * <p>DTO-level {@code @NotBlank}/{@code @NotNull} annotations fire before the service,
-     * so this assertion may already pass in RED phase via {@code GlobalExceptionHandler}.</p>
+     * <p>
+     * DTO-level {@code @NotBlank}/{@code @NotNull} annotations fire before the
+     * service,
+     * so this assertion may already pass in RED phase via
+     * {@code GlobalExceptionHandler}.
+     * </p>
      *
      * Issue: #97
      */
@@ -124,8 +145,8 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     @DisplayName("POC-004: POST /v1/promotions/offers with missing required fields → 400 VALIDATION_FAILED")
     void givenMissingRequiredFields_whenCreateOffer_thenReturns400() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
@@ -135,8 +156,11 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     /**
      * AC-5: GET by existing id produces 200 with promoCode.
      *
-     * <p>RED: service stub throws UnsupportedOperationException → 500 ≠ 200.
-     * GREEN note: seed a PromotionOffer via the create endpoint first, then retrieve its id.</p>
+     * <p>
+     * RED: service stub throws UnsupportedOperationException → 500 ≠ 200.
+     * GREEN note: seed a PromotionOffer via the create endpoint first, then
+     * retrieve its id.
+     * </p>
      *
      * Issue: #97
      */
@@ -145,8 +169,8 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     void givenExistingId_whenGetOfferById_thenReturns200WithPromoCode() throws Exception {
         // Seed offer via create, then retrieve by returned id.
         var createResult = mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validOfferPayload("GET-BY-ID-" + uniqueSuffix()))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validOfferPayload("GET-BY-ID-" + uniqueSuffix()))))
                 .andExpect(status().isCreated())
                 .andReturn();
 
@@ -164,7 +188,9 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     /**
      * AC-6: GET by non-existent id produces 404 PROMOTION_OFFER_NOT_FOUND.
      *
-     * <p>RED: service stub throws UnsupportedOperationException → 500 ≠ 404.</p>
+     * <p>
+     * RED: service stub throws UnsupportedOperationException → 500 ≠ 404.
+     * </p>
      *
      * Issue: #97
      */
@@ -181,8 +207,10 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     /**
      * AC-7: GET by existing promoCode produces 200.
      *
-     * <p>RED: service stub throws UnsupportedOperationException → 500 ≠ 200.
-     * GREEN note: seed offer first, then retrieve by promoCode.</p>
+     * <p>
+     * RED: service stub throws UnsupportedOperationException → 500 ≠ 200.
+     * GREEN note: seed offer first, then retrieve by promoCode.
+     * </p>
      *
      * Issue: #97
      */
@@ -192,8 +220,8 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
         String promoCode = "BYCODE-" + uniqueSuffix();
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validOfferPayload(promoCode))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validOfferPayload(promoCode))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(withGatewayAuth(get("/v1/promotions/offers/by-code/{promoCode}", promoCode)))
@@ -204,7 +232,9 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     /**
      * AC-8: GET by non-existent promoCode produces 404 PROMOTION_OFFER_NOT_FOUND.
      *
-     * <p>RED: service stub throws UnsupportedOperationException → 500 ≠ 404.</p>
+     * <p>
+     * RED: service stub throws UnsupportedOperationException → 500 ≠ 404.
+     * </p>
      *
      * Issue: #97
      */
@@ -221,8 +251,10 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     /**
      * AC-9: Activate a DRAFT offer → 200 ACTIVE.
      *
-     * <p>RED: service stub throws UnsupportedOperationException → 500 ≠ 200.
-     * GREEN note: seed a DRAFT offer, then PATCH activate it.</p>
+     * <p>
+     * RED: service stub throws UnsupportedOperationException → 500 ≠ 200.
+     * GREEN note: seed a DRAFT offer, then PATCH activate it.
+     * </p>
      *
      * Issue: #97
      */
@@ -232,8 +264,8 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
         String promoCode = "ACTIVATE-" + uniqueSuffix();
 
         var createResult = mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validOfferPayload(promoCode))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validOfferPayload(promoCode))))
                 .andExpect(status().isCreated())
                 .andReturn();
 
@@ -247,36 +279,38 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
 
-        /**
-         * AC-9b: Activate an INACTIVE offer → 200 ACTIVE.
-         *
-         * Issue: #97
-         */
-        @Test
-        @DisplayName("POC-012: PATCH /v1/promotions/offers/{id}/activate on INACTIVE offer → 200 ACTIVE")
-        void givenInactiveOffer_whenActivate_thenReturns200WithActiveStatus() throws Exception {
-                PromotionOffer inactiveOffer = new PromotionOffer();
-                inactiveOffer.setPromoCode("INACTIVE-" + uniqueSuffix());
-                inactiveOffer.setName("Inactive Promotion");
-                inactiveOffer.setDiscountType(DiscountType.PERCENT_LABOR);
-                inactiveOffer.setDiscountValue(BigDecimal.valueOf(7.50));
-                inactiveOffer.setStartDate(LocalDate.of(2026, 5, 1));
-                inactiveOffer.setEndDate(LocalDate.of(2026, 5, 31));
-                inactiveOffer.setStatus(PromotionStatus.INACTIVE);
+    /**
+     * AC-9b: Activate an INACTIVE offer → 200 ACTIVE.
+     *
+     * Issue: #97
+     */
+    @Test
+    @DisplayName("POC-012: PATCH /v1/promotions/offers/{id}/activate on INACTIVE offer → 200 ACTIVE")
+    void givenInactiveOffer_whenActivate_thenReturns200WithActiveStatus() throws Exception {
+        PromotionOffer inactiveOffer = new PromotionOffer();
+        inactiveOffer.setPromoCode("INACTIVE-" + uniqueSuffix());
+        inactiveOffer.setName("Inactive Promotion");
+        inactiveOffer.setDiscountType(DiscountType.PERCENT_LABOR);
+        inactiveOffer.setDiscountValue(BigDecimal.valueOf(7.50));
+        inactiveOffer.setStartDate(LocalDate.of(2026, 5, 1));
+        inactiveOffer.setEndDate(LocalDate.of(2026, 5, 31));
+        inactiveOffer.setStatus(PromotionStatus.INACTIVE);
 
-                PromotionOffer savedInactiveOffer = promotionOfferRepository.save(inactiveOffer);
-                UUID inactiveOfferId = savedInactiveOffer.getPromotionOfferId();
+        PromotionOffer savedInactiveOffer = promotionOfferRepository.save(inactiveOffer);
+        UUID inactiveOfferId = savedInactiveOffer.getPromotionOfferId();
 
-                mockMvc.perform(withGatewayAuth(patch("/v1/promotions/offers/{id}/activate", inactiveOfferId)))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.status").value("ACTIVE"));
-        }
+        mockMvc.perform(withGatewayAuth(patch("/v1/promotions/offers/{id}/activate", inactiveOfferId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
 
     /**
      * AC-10: Deactivate an ACTIVE offer → 200 INACTIVE.
      *
-     * <p>RED: service stub throws UnsupportedOperationException → 500 ≠ 200.
-     * GREEN note: seed a DRAFT offer, activate it, then deactivate.</p>
+     * <p>
+     * RED: service stub throws UnsupportedOperationException → 500 ≠ 200.
+     * GREEN note: seed a DRAFT offer, activate it, then deactivate.
+     * </p>
      *
      * Issue: #97
      */
@@ -286,8 +320,8 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
         String promoCode = "DEACTIVATE-" + uniqueSuffix();
 
         var createResult = mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validOfferPayload(promoCode))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validOfferPayload(promoCode))))
                 .andExpect(status().isCreated())
                 .andReturn();
 
@@ -307,26 +341,29 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     /**
      * AC-11: Activate an EXPIRED offer → 422 PROMOTION_OFFER_INVALID_STATE.
      *
-     * <p>RED: service stub throws UnsupportedOperationException → 500 ≠ 422.
+     * <p>
+     * RED: service stub throws UnsupportedOperationException → 500 ≠ 422.
      * GREEN note: requires a promotion offer seeded directly with EXPIRED status.
-     * Cannot create an EXPIRED offer via the public API; seed via repository in GREEN phase.</p>
+     * Cannot create an EXPIRED offer via the public API; seed via repository in
+     * GREEN phase.
+     * </p>
      *
      * Issue: #97
      */
     @Test
     @DisplayName("POC-011: PATCH /v1/promotions/offers/{id}/activate on EXPIRED offer → 422 PROMOTION_OFFER_INVALID_STATE")
     void givenExpiredOffer_whenActivate_thenReturns422InvalidState() throws Exception {
-                PromotionOffer expiredOffer = new PromotionOffer();
-                expiredOffer.setPromoCode("EXPIRED-" + uniqueSuffix());
-                expiredOffer.setName("Expired Promotion");
-                expiredOffer.setDiscountType(DiscountType.PERCENT_LABOR);
-                expiredOffer.setDiscountValue(BigDecimal.valueOf(5.00));
-                expiredOffer.setStartDate(LocalDate.of(2026, 1, 1));
-                expiredOffer.setEndDate(LocalDate.of(2026, 1, 31));
-                expiredOffer.setStatus(PromotionStatus.EXPIRED);
+        PromotionOffer expiredOffer = new PromotionOffer();
+        expiredOffer.setPromoCode("EXPIRED-" + uniqueSuffix());
+        expiredOffer.setName("Expired Promotion");
+        expiredOffer.setDiscountType(DiscountType.PERCENT_LABOR);
+        expiredOffer.setDiscountValue(BigDecimal.valueOf(5.00));
+        expiredOffer.setStartDate(LocalDate.of(2026, 1, 1));
+        expiredOffer.setEndDate(LocalDate.of(2026, 1, 31));
+        expiredOffer.setStatus(PromotionStatus.EXPIRED);
 
-                PromotionOffer savedExpiredOffer = promotionOfferRepository.save(expiredOffer);
-                UUID expiredOfferId = savedExpiredOffer.getPromotionOfferId();
+        PromotionOffer savedExpiredOffer = promotionOfferRepository.save(expiredOffer);
+        UUID expiredOfferId = savedExpiredOffer.getPromotionOfferId();
 
         mockMvc.perform(withGatewayAuth(patch("/v1/promotions/offers/{id}/activate", expiredOfferId)))
                 .andExpect(status().is(422))

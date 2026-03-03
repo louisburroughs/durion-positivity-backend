@@ -93,8 +93,8 @@ class PromotionOfferServiceImplTest {
         ApplyPromotionRequest request = new ApplyPromotionRequest("NOTFOUND", null, Collections.emptySet());
 
         assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-            .isInstanceOf(PromotionCodeNotFoundException.class)
-            .hasMessage("Promotion code 'NOTFOUND' not found.");
+                .isInstanceOf(PromotionCodeNotFoundException.class)
+                .hasMessage("Promotion code 'NOTFOUND' not found.");
     }
 
     @Test
@@ -105,8 +105,8 @@ class PromotionOfferServiceImplTest {
         ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", null, Collections.emptySet());
 
         assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-            .isInstanceOf(PromotionNotApplicableException.class)
-            .hasMessage("Promotion 'TESTCODE' is not active.");
+                .isInstanceOf(PromotionNotApplicableException.class)
+                .hasMessage("Promotion 'TESTCODE' is not active.");
     }
 
     @Test
@@ -117,10 +117,10 @@ class PromotionOfferServiceImplTest {
         ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", null, Collections.emptySet());
 
         assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-            .isInstanceOf(PromotionNotApplicableException.class)
-            .hasMessage("Promotion 'TESTCODE' is outside its valid date range.");
+                .isInstanceOf(PromotionNotApplicableException.class)
+                .hasMessage("Promotion 'TESTCODE' is outside its valid date range.");
     }
-    
+
     @Test
     @DisplayName("applyPromotion: Throws PromotionNotApplicableException for future start date")
     void applyPromotion_throwsNotApplicable_forFutureStartDate() {
@@ -129,20 +129,21 @@ class PromotionOfferServiceImplTest {
         ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", null, Collections.emptySet());
 
         assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-            .isInstanceOf(PromotionNotApplicableException.class)
-            .hasMessage("Promotion 'TESTCODE' is outside its valid date range.");
+                .isInstanceOf(PromotionNotApplicableException.class)
+                .hasMessage("Promotion 'TESTCODE' is outside its valid date range.");
     }
 
     @Test
     @DisplayName("applyPromotion: Throws PromotionNotApplicableException when not eligible")
     void applyPromotion_throwsNotApplicable_whenNotEligible() {
         when(promotionOfferRepository.findByPromoCodeIgnoreCase("TESTCODE")).thenReturn(Optional.of(testPromo));
-        when(eligibilityEvaluationService.evaluate(any(), any())).thenReturn(EligibilityDecision.notEligible("NOT_ELIGIBLE"));
+        when(eligibilityEvaluationService.evaluate(any(), any()))
+                .thenReturn(EligibilityDecision.notEligible("NOT_ELIGIBLE"));
         ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", null, Collections.emptySet());
 
         assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-            .isInstanceOf(PromotionNotApplicableException.class)
-            .hasMessage("Promotion 'TESTCODE' is not applicable: NOT_ELIGIBLE");
+                .isInstanceOf(PromotionNotApplicableException.class)
+                .hasMessage("Promotion 'TESTCODE' is not applicable: NOT_ELIGIBLE");
     }
 
     @Test
@@ -151,7 +152,7 @@ class PromotionOfferServiceImplTest {
         ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", null, Set.of("OTHERPROMO"));
 
         assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-            .isInstanceOf(PromotionMultipleNotAllowedException.class)
-            .hasMessage("Another promotion has already been applied; multiple promotions are not allowed.");
+                .isInstanceOf(PromotionMultipleNotAllowedException.class)
+                .hasMessage("Another promotion has already been applied; multiple promotions are not allowed.");
     }
 }

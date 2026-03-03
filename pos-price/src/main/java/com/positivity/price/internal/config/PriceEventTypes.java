@@ -44,7 +44,8 @@ public final class PriceEventTypes {
                                 EventTypeRegistration.approval("PROMOTION_OFFER_ACTIVATE", "Activate a promotion offer")
                                                 .apiVersion("1")
                                                 .build(),
-                                EventTypeRegistration.write("PROMOTION_OFFER_DEACTIVATE", "Deactivate a promotion offer")
+                                EventTypeRegistration
+                                                .write("PROMOTION_OFFER_DEACTIVATE", "Deactivate a promotion offer")
                                                 .apiVersion("1")
                                                 .build(),
                                 EventTypeRegistration.write("PROMOTION_OFFER_APPLY",
@@ -53,10 +54,14 @@ public final class PriceEventTypes {
                                                 .build(),
 
                                 // PromotionEligibilityRuleController - 2 events
-                                EventTypeRegistration.write("PROMOTION_RULE_CREATE", "Add an eligibility rule to a promotion")
+                                EventTypeRegistration
+                                                .write("PROMOTION_RULE_CREATE",
+                                                                "Add an eligibility rule to a promotion")
                                                 .apiVersion("1")
                                                 .build(),
-                                EventTypeRegistration.write("PROMOTION_RULE_DELETE", "Remove an eligibility rule from a promotion")
+                                EventTypeRegistration
+                                                .write("PROMOTION_RULE_DELETE",
+                                                                "Remove an eligibility rule from a promotion")
                                                 .apiVersion("1")
                                                 .build());
         }

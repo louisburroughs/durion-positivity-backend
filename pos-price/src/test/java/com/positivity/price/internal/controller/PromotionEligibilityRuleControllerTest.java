@@ -25,11 +25,17 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Contract behavior tests for {@link PromotionEligibilityRuleController} lifecycle operations.
+ * Contract behavior tests for {@link PromotionEligibilityRuleController}
+ * lifecycle operations.
  *
- * <p>Validates adding, retrieving, deleting, and evaluating promotion eligibility rules.
- * Tests are intentionally RED in the scaffold phase—{@code EligibilityEvaluationServiceImpl}
- * throws {@code UnsupportedOperationException} for all methods until GREEN implementation.</p>
+ * <p>
+ * Validates adding, retrieving, deleting, and evaluating promotion eligibility
+ * rules.
+ * Tests are intentionally RED in the scaffold
+ * phase—{@code EligibilityEvaluationServiceImpl}
+ * throws {@code UnsupportedOperationException} for all methods until GREEN
+ * implementation.
+ * </p>
  *
  * Issue: #96
  */
@@ -46,8 +52,10 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     private PromotionEligibilityRuleRepository promotionEligibilityRuleRepository;
 
     /**
-     * Grant {@code Promotion:Manage} so that {@code @PreAuthorize} checks on POST and DELETE
-     * endpoints pass through to the service layer, producing behaviour-driven failures
+     * Grant {@code Promotion:Manage} so that {@code @PreAuthorize} checks on POST
+     * and DELETE
+     * endpoints pass through to the service layer, producing behaviour-driven
+     * failures
      * rather than auth-layer 403s.
      *
      * @return the authority string forwarded via {@code X-Authorities} header
@@ -62,8 +70,10 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     /**
      * ERC-001: Valid AddEligibilityRuleRequest produces 201 with rule details.
      *
-     * <p>RED: {@code EligibilityEvaluationServiceImpl.addRule()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 201.</p>
+     * <p>
+     * RED: {@code EligibilityEvaluationServiceImpl.addRule()} throws
+     * {@code UnsupportedOperationException} → 500; assertion fails on expected 201.
+     * </p>
      *
      * Issue: #96
      */
@@ -73,8 +83,8 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         UUID promotionId = seedPromotion();
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules", promotionId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRulePayload())))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRulePayload())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.ruleId").exists())
                 .andExpect(jsonPath("$.conditionType").value("ACCOUNT_ID_LIST"))
@@ -85,8 +95,12 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     /**
      * ERC-002: POST with missing required fields produces 400 VALIDATION_FAILED.
      *
-     * <p>DTO-level {@code @NotNull}/{@code @NotBlank} annotations fire before the service layer
-     * via {@code GlobalExceptionHandler}, so this assertion may already pass in RED phase.</p>
+     * <p>
+     * DTO-level {@code @NotNull}/{@code @NotBlank} annotations fire before the
+     * service layer
+     * via {@code GlobalExceptionHandler}, so this assertion may already pass in RED
+     * phase.
+     * </p>
      *
      * Issue: #96
      */
@@ -96,8 +110,8 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         UUID promotionId = seedPromotion();
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules", promotionId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
@@ -105,10 +119,13 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     // ========== GET RULES ==========
 
     /**
-     * ERC-003: GET rules list for an existing promotion produces 200 with a JSON array.
+     * ERC-003: GET rules list for an existing promotion produces 200 with a JSON
+     * array.
      *
-     * <p>RED: {@code EligibilityEvaluationServiceImpl.getRules()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 200.</p>
+     * <p>
+     * RED: {@code EligibilityEvaluationServiceImpl.getRules()} throws
+     * {@code UnsupportedOperationException} → 500; assertion fails on expected 200.
+     * </p>
      *
      * Issue: #96
      */
@@ -125,16 +142,23 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     // ========== DELETE RULE ==========
 
     /**
-     * ERC-004: DELETE a valid ruleId URL produces 204 No Content when the rule exists.
+     * ERC-004: DELETE a valid ruleId URL produces 204 No Content when the rule
+     * exists.
      *
-     * <p>RED: {@code EligibilityEvaluationServiceImpl.deleteRule()} throws
+     * <p>
+     * RED: {@code EligibilityEvaluationServiceImpl.deleteRule()} throws
      * {@code UnsupportedOperationException} regardless of ruleId → 500;
-     * assertion fails on expected 204.</p>
+     * assertion fails on expected 204.
+     * </p>
      *
-     * <p>GREEN note: Lead Coder must fix the H2 {@code ENUM} DDL incompatibility in
-     * {@code PromotionEligibilityRule} (add {@code columnDefinition = "VARCHAR(50)"}
+     * <p>
+     * GREEN note: Lead Coder must fix the H2 {@code ENUM} DDL incompatibility in
+     * {@code PromotionEligibilityRule} (add
+     * {@code columnDefinition = "VARCHAR(50)"}
      * to {@code conditionType} and {@code operator} fields) so that rules can be
-     * seeded directly via {@code PromotionEligibilityRuleRepository} in GREEN phase.</p>
+     * seeded directly via {@code PromotionEligibilityRuleRepository} in GREEN
+     * phase.
+     * </p>
      *
      * Issue: #96
      */
@@ -150,10 +174,13 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     }
 
     /**
-     * ERC-005: DELETE a non-existent ruleId produces 404 ELIGIBILITY_RULE_NOT_FOUND.
+     * ERC-005: DELETE a non-existent ruleId produces 404
+     * ELIGIBILITY_RULE_NOT_FOUND.
      *
-     * <p>RED: {@code EligibilityEvaluationServiceImpl.deleteRule()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 404.</p>
+     * <p>
+     * RED: {@code EligibilityEvaluationServiceImpl.deleteRule()} throws
+     * {@code UnsupportedOperationException} → 500; assertion fails on expected 404.
+     * </p>
      *
      * Issue: #96
      */
@@ -171,10 +198,13 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     // ========== EVALUATE ==========
 
     /**
-     * ERC-006: POST /evaluate with a valid accountId context produces 200 with isEligible field.
+     * ERC-006: POST /evaluate with a valid accountId context produces 200 with
+     * isEligible field.
      *
-     * <p>RED: {@code EligibilityEvaluationServiceImpl.evaluateEligibility()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 200.</p>
+     * <p>
+     * RED: {@code EligibilityEvaluationServiceImpl.evaluateEligibility()} throws
+     * {@code UnsupportedOperationException} → 500; assertion fails on expected 200.
+     * </p>
      *
      * Issue: #96
      */
@@ -184,20 +214,26 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         UUID promotionId = seedPromotion();
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules/evaluate", promotionId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(evaluatePayload(UUID.randomUUID(), null))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(evaluatePayload(UUID.randomUUID(), null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reasonCode").exists());
     }
 
     /**
-     * ERC-007: POST /evaluate with no accountId produces 200 with {@code isEligible=false}.
+     * ERC-007: POST /evaluate with no accountId produces 200 with
+     * {@code isEligible=false}.
      *
-     * <p>GREEN expectation: service returns {@code MISSING_ACCOUNT_CONTEXT} reason code and
-     * {@code isEligible=false} when no accountId is provided.</p>
+     * <p>
+     * GREEN expectation: service returns {@code MISSING_ACCOUNT_CONTEXT} reason
+     * code and
+     * {@code isEligible=false} when no accountId is provided.
+     * </p>
      *
-     * <p>RED: {@code EligibilityEvaluationServiceImpl.evaluateEligibility()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 200.</p>
+     * <p>
+     * RED: {@code EligibilityEvaluationServiceImpl.evaluateEligibility()} throws
+     * {@code UnsupportedOperationException} → 500; assertion fails on expected 200.
+     * </p>
      *
      * Issue: #96
      */
@@ -206,16 +242,16 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     void givenMissingAccountId_whenEvaluate_thenReturnsIneligible() throws Exception {
         UUID promotionId = seedPromotion();
         seedRule(
-            promotionId,
-            ConditionType.ACCOUNT_FLEET_SIZE,
-            RuleOperator.GREATER_THAN_OR_EQUAL_TO,
-            "100");
+                promotionId,
+                ConditionType.ACCOUNT_FLEET_SIZE,
+                RuleOperator.GREATER_THAN_OR_EQUAL_TO,
+                "100");
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules/evaluate", promotionId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")))
                 .andExpect(status().isOk())
-            .andExpect(jsonPath("$.isEligible").value(false));
+                .andExpect(jsonPath("$.isEligible").value(false));
     }
 
     // ========== NON-EXISTENT PROMOTION ==========
@@ -223,11 +259,16 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     /**
      * ERC-008: POST rules to a non-existent promotionId produces 404.
      *
-     * <p>GREEN expectation: service throws {@code PromotionOfferNotFoundException} which is mapped
-     * to 404 by {@code GlobalExceptionHandler}.</p>
+     * <p>
+     * GREEN expectation: service throws {@code PromotionOfferNotFoundException}
+     * which is mapped
+     * to 404 by {@code GlobalExceptionHandler}.
+     * </p>
      *
-     * <p>RED: {@code EligibilityEvaluationServiceImpl.addRule()} throws
-     * {@code UnsupportedOperationException} → 500; assertion fails on expected 404.</p>
+     * <p>
+     * RED: {@code EligibilityEvaluationServiceImpl.addRule()} throws
+     * {@code UnsupportedOperationException} → 500; assertion fails on expected 404.
+     * </p>
      *
      * Issue: #96
      */
@@ -235,15 +276,16 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     @DisplayName("ERC-008: POST /v1/promotions/offers/{promotionId}/rules with non-existent promotionId → 404")
     void givenNonExistentPromotion_whenAddRule_thenReturns404() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules", UUID.randomUUID())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRulePayload())))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRulePayload())))
                 .andExpect(status().isNotFound());
     }
 
     // ========== HELPERS ==========
 
     /**
-     * Seeds a minimal DRAFT {@link PromotionOffer} directly into the repository and returns its ID.
+     * Seeds a minimal DRAFT {@link PromotionOffer} directly into the repository and
+     * returns its ID.
      *
      * @return the UUID of the persisted promotion offer
      */
@@ -268,7 +310,6 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         return promotionEligibilityRuleRepository.save(rule).getRuleId();
     }
 
-
     /**
      * Builds a valid {@code AddEligibilityRuleRequest} JSON payload.
      *
@@ -285,10 +326,11 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     }
 
     /**
-     * Builds an {@code EligibilityContext} JSON payload with optional accountId and vehicleId.
+     * Builds an {@code EligibilityContext} JSON payload with optional accountId and
+     * vehicleId.
      *
-     * @param accountId  optional account UUID; omitted from JSON if null
-     * @param vehicleId  optional vehicle UUID; omitted from JSON if null
+     * @param accountId optional account UUID; omitted from JSON if null
+     * @param vehicleId optional vehicle UUID; omitted from JSON if null
      * @return JSON string representing the evaluation context
      */
     private String evaluatePayload(UUID accountId, UUID vehicleId) {
@@ -299,7 +341,8 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
             first = false;
         }
         if (vehicleId != null) {
-            if (!first) sb.append(", ");
+            if (!first)
+                sb.append(", ");
             sb.append("\"vehicleId\": \"").append(vehicleId).append("\"");
         }
         sb.append("}");

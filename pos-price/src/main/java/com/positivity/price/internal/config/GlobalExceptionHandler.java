@@ -108,47 +108,47 @@ public class GlobalExceptionHandler {
                 request);
     }
 
-            @ExceptionHandler(PromotionCodeNotFoundException.class)
-            public ResponseEntity<Map<String, Object>> handlePromotionCodeNotFound(
-                PromotionCodeNotFoundException ex,
-                HttpServletRequest request) {
-            log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
-            return buildErrorResponse(
+    @ExceptionHandler(PromotionCodeNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handlePromotionCodeNotFound(
+            PromotionCodeNotFoundException ex,
+            HttpServletRequest request) {
+        log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
+        return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,
                 "PROMO_NOT_FOUND",
                 ex.getMessage(),
                 null,
                 request);
-            }
+    }
 
-            @ExceptionHandler(PromotionNotApplicableException.class)
-            public ResponseEntity<Map<String, Object>> handlePromotionNotApplicable(
-                PromotionNotApplicableException ex,
-                HttpServletRequest request) {
-            log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
-            return buildErrorResponse(
+    @ExceptionHandler(PromotionNotApplicableException.class)
+    public ResponseEntity<Map<String, Object>> handlePromotionNotApplicable(
+            PromotionNotApplicableException ex,
+            HttpServletRequest request) {
+        log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
+        return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,
                 "PROMO_NOT_APPLICABLE",
                 ex.getMessage(),
                 null,
                 request);
-            }
+    }
 
-            @ExceptionHandler(PromotionMultipleNotAllowedException.class)
-            public ResponseEntity<Map<String, Object>> handlePromotionMultipleNotAllowed(
-                PromotionMultipleNotAllowedException ex,
-                HttpServletRequest request) {
-            log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
-            return buildErrorResponse(
+    @ExceptionHandler(PromotionMultipleNotAllowedException.class)
+    public ResponseEntity<Map<String, Object>> handlePromotionMultipleNotAllowed(
+            PromotionMultipleNotAllowedException ex,
+            HttpServletRequest request) {
+        log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
+        return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,
                 "PROMO_MULTIPLE_NOT_ALLOWED",
                 ex.getMessage(),
                 null,
                 request);
-            }
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-        public ResponseEntity<Map<String, Object>> handleValidationError(
+    public ResponseEntity<Map<String, Object>> handleValidationError(
             MethodArgumentNotValidException exception,
             HttpServletRequest request) {
         List<Map<String, String>> fieldErrors = exception.getBindingResult().getFieldErrors().stream()
@@ -159,8 +159,8 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "VALIDATION_FAILED",
                 "Validation failed",
-            fieldErrors,
-            request);
+                fieldErrors,
+                request);
     }
 
     private Map<String, String> toFieldError(FieldError fieldError) {

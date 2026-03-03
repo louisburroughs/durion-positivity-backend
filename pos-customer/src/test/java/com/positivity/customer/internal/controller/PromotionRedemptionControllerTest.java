@@ -24,7 +24,8 @@ import com.positivity.customer.internal.entity.PromotionRedemption;
 import com.positivity.customer.internal.repository.PromotionRedemptionRepository;
 
 /**
- * Integration tests for POST /v1/promotions/redemptions and GET /v1/promotions/redemptions/by-customer/{customerId}.
+ * Integration tests for POST /v1/promotions/redemptions and GET
+ * /v1/promotions/redemptions/by-customer/{customerId}.
  */
 @AutoConfigureMockMvc
 @Import(TestSecurityConfig.class)
@@ -47,7 +48,7 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
      */
     @Override
     protected String defaultAuthorities() {
-                return "Promotion:RecordRedemption,Promotion:ViewRedemption";
+        return "Promotion:RecordRedemption,Promotion:ViewRedemption";
     }
 
     // -------------------------------------------------------------------------
@@ -55,8 +56,10 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
     // -------------------------------------------------------------------------
 
     /**
-     * PRC-001: {@code POST /v1/promotions/redemptions} with a valid {@link RecordRedemptionRequest}
-     * returns 201 with {@code promotionId}, {@code customerId}, {@code workorderId},
+     * PRC-001: {@code POST /v1/promotions/redemptions} with a valid
+     * {@link RecordRedemptionRequest}
+     * returns 201 with {@code promotionId}, {@code customerId},
+     * {@code workorderId},
      * and {@code recordedOverLimit=false} present in the response body.
      *
      * Issue: #94
@@ -65,12 +68,12 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
     @DisplayName("PRC-001: POST valid redemption request → 201 with response body fields")
     void givenValidRequest_whenRecordRedemption_thenReturns201() throws Exception {
         UUID promotionId = UUID.randomUUID();
-        UUID customerId  = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
         UUID workorderId = UUID.randomUUID();
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/redemptions")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRedemptionPayload(promotionId, customerId, workorderId, false))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRedemptionPayload(promotionId, customerId, workorderId, false))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.promotionId").value(promotionId.toString()))
                 .andExpect(jsonPath("$.customerId").value(customerId.toString()))
@@ -93,7 +96,7 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
     @DisplayName("PRC-002: POST same promotionId+workorderId when record exists → 409 DUPLICATE_REDEMPTION")
     void givenDuplicateRedemption_whenRecordAgain_thenReturns409() throws Exception {
         UUID promotionId = UUID.randomUUID();
-        UUID customerId  = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
         UUID workorderId = UUID.randomUUID();
 
         // Seed an existing redemption directly through the repository
@@ -101,8 +104,8 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
                 buildRedemptionEntity(promotionId, customerId, workorderId, false));
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/redemptions")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRedemptionPayload(promotionId, customerId, workorderId, false))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRedemptionPayload(promotionId, customerId, workorderId, false))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DUPLICATE_REDEMPTION"));
     }
@@ -114,7 +117,8 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
     /**
      * PRC-003: {@code POST /v1/promotions/redemptions} with the required
      * {@code promotionId} field absent returns 400, enforced by the
-     * {@code @NotNull} constraint on {@link RecordRedemptionRequest#getPromotionId()}.
+     * {@code @NotNull} constraint on
+     * {@link RecordRedemptionRequest#getPromotionId()}.
      *
      * Issue: #94
      */
@@ -132,8 +136,8 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
                 """.formatted(UUID.randomUUID(), UUID.randomUUID());
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/redemptions")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(missingPromoIdPayload)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(missingPromoIdPayload)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -151,7 +155,7 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
     @Test
     @DisplayName("PRC-004: GET by customerId with existing redemption → 200 non-empty list")
     void givenCustomerWithRedemptions_whenGetByCustomer_thenReturns200WithList() throws Exception {
-        UUID customerId  = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
         UUID promotionId = UUID.randomUUID();
         UUID workorderId = UUID.randomUUID();
 
@@ -179,12 +183,12 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
     @DisplayName("PRC-005: POST with recordedOverLimit=true → 201 with flag propagated")
     void givenRecordedOverLimit_whenRecordRedemption_thenReturns201WithFlag() throws Exception {
         UUID promotionId = UUID.randomUUID();
-        UUID customerId  = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
         UUID workorderId = UUID.randomUUID();
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/redemptions")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRedemptionPayload(promotionId, customerId, workorderId, true))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRedemptionPayload(promotionId, customerId, workorderId, true))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.recordedOverLimit").value(true));
     }
@@ -218,7 +222,8 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
     }
 
     /**
-     * Builds a minimal {@link PromotionRedemption} entity for direct repository seeding.
+     * Builds a minimal {@link PromotionRedemption} entity for direct repository
+     * seeding.
      * Avoids going through the service layer, allowing tests to pre-populate state
      * independently of the stub.
      *
