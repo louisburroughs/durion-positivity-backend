@@ -60,6 +60,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
                 .toLocationId(request.getToLocationId())
                 .workOrderId(request.getWorkOrderId())
                 .actedForPersonId(request.getActedForPersonId())
+                .actedByUserId(request.getActedForPersonId() != null ? actor : null)
                 .onBehalfReasonCode(request.getOnBehalfReasonCode())
                 .startAt(Instant.now())
                 .status(TravelSegmentStatus.IN_PROGRESS)
@@ -84,6 +85,9 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
         Instant endAt = Instant.now();
         int minutes = (int) Duration.between(segment.getStartAt(), endAt).toMinutes();
         segment.setEndAt(endAt);
+        if (request.getToLocationId() != null) {
+            segment.setToLocationId(request.getToLocationId());
+        }
         // rawMinutes = durationMinutes on stop; bufferedMinutes is set at approval only
         segment.setDurationMinutes(minutes);
         segment.setRawMinutes(minutes);
