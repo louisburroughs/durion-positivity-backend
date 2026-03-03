@@ -6,4 +6,5 @@ import java.util.UUID;
 /**
  * Domain event published when a work session is stopped.
  */
-public record WorkSessionStoppedEvent(UUID workSessionId, UUID mechanicId, Instant endAt, int totalDurationSeconds) {}
+public record WorkSessionStoppedEvent(UUID workSessionId, UUID mechanicId, Instant endAt, int totalDurationSeconds) {
+}

@@ -1,7 +1,8 @@
 package com.positivity.workorder.internal.exception;
 
 /**
- * Thrown when a work-session operation is invalid for the current session state.
+ * Thrown when a work-session operation is invalid for the current session
+ * state.
  */
 public class WorkSessionStateException extends RuntimeException {
 

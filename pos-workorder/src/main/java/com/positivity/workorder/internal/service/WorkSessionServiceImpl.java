@@ -34,7 +34,9 @@ import java.util.UUID;
 /**
  * Full implementation of {@link WorkSessionService}.
  *
- * <p>Issue: CAP-139 Story #68</p>
+ * <p>
+ * Issue: CAP-139 Story #68
+ * </p>
  */
 @Service
 @RequiredArgsConstructor
@@ -55,7 +57,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 request.getMechanicId(), WorkSessionStatus.IN_PROGRESS);
         if (!active.isEmpty()) {
             boolean hasPermission = SecurityContextHelper.hasAuthority("timekeeping:overlap_override");
-            boolean hasReason = request.getOverlapOverrideReason() != null && !request.getOverlapOverrideReason().isBlank();
+            boolean hasReason = request.getOverlapOverrideReason() != null
+                    && !request.getOverlapOverrideReason().isBlank();
             if (!allowOverlappingSessions || !hasPermission || !hasReason) {
                 throw new WorkSessionOverlapException(request.getMechanicId());
             }
@@ -86,7 +89,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
         session = workSessionRepository.save(session);
 
-        // 4. Publish event; downstream @TransactionalEventListener(AFTER_COMMIT) receivers process after commit.
+        // 4. Publish event; downstream @TransactionalEventListener(AFTER_COMMIT)
+        // receivers process after commit.
         eventPublisher.publishEvent(new WorkSessionStartedEvent(
                 session.getWorkSessionId(), session.getMechanicId(), session.getStartAt()));
 
@@ -95,7 +99,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     @Override
     public @NonNull WorkSessionResponse stopSession(@NonNull UUID workSessionId,
-                                                     @NonNull StopWorkSessionRequest request) {
+            @NonNull StopWorkSessionRequest request) {
         WorkSession session = workSessionRepository.findById(workSessionId)
                 .orElseThrow(() -> new WorkSessionNotFoundException(workSessionId));
 
@@ -130,7 +134,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     @Override
     public @NonNull BreakSegmentResponse addBreakSegment(@NonNull UUID workSessionId,
-                                                          @NonNull AddBreakSegmentRequest request) {
+            @NonNull AddBreakSegmentRequest request) {
         WorkSession session = workSessionRepository.findById(workSessionId)
                 .orElseThrow(() -> new WorkSessionNotFoundException(workSessionId));
 
@@ -145,7 +149,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         breakSegmentRepository.findFirstByWorkSessionIdAndBreakEndAtIsNull(workSessionId)
                 .ifPresent(existing -> {
                     throw new WorkSessionStateException(
-                        "A break segment is already open for this work session. Stop it before starting another.");
+                            "A break segment is already open for this work session. Stop it before starting another.");
                 });
 
         BreakSegment seg = BreakSegment.builder()
@@ -162,7 +166,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     @Override
     public @NonNull BreakSegmentResponse stopBreakSegment(@NonNull UUID workSessionId,
-                                                           @NonNull UUID breakSegmentId) {
+            @NonNull UUID breakSegmentId) {
         WorkSession session = workSessionRepository.findById(workSessionId)
                 .orElseThrow(() -> new WorkSessionNotFoundException(workSessionId));
 
