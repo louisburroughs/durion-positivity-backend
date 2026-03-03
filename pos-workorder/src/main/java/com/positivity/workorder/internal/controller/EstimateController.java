@@ -35,6 +35,7 @@ import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
+import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.service.EstimateService;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderService;
@@ -126,15 +127,35 @@ public class EstimateController {
     @PostMapping()
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:create')")
-    public ResponseEntity<EstimateResponse> createEstimate(
-            @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody CreateEstimateRequest request) {
+    public ResponseEntity<Object> createEstimate(
+            @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody CreateEstimateRequest request,
+            @Parameter(description = "Optional idempotency key for safe retries", example = "estimate-create-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         try {
             log.info("Received create estimate request for customerId={}, vehicleId={}",
                     request.getCustomerId(), request.getVehicleId());
 
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                var existingEstimateId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+                if (existingEstimateId.isPresent()) {
+                    return estimateService.getEstimateById(existingEstimateId.get())
+                            .<ResponseEntity<Object>>map(
+                                    existing -> ResponseEntity.status(HttpStatus.CREATED).body(existing))
+                            .orElseGet(() -> ResponseEntity.status(HttpStatus.CONFLICT)
+                                    .body(Map.of("code", "CONFLICT")));
+                }
+            }
+
             String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateResponse response = estimateService.createEstimate(request, username);
+
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                try {
+                    idempotencyService.registerKey(idempotencyKey, response.getId());
+                } catch (DataIntegrityViolationException ignored) {
+                    log.debug("Idempotency key {} already registered", idempotencyKey);
+                }
+            }
 
             log.info("Estimate created successfully: id={}, number={}",
                     response.getId(), response.getEstimateNumber());
@@ -143,15 +164,50 @@ public class EstimateController {
 
         } catch (IllegalArgumentException e) {
             log.warn("Validation error creating estimate: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR"));
+
+        } catch (IllegalStateException e) {
+            log.warn("Conflict creating estimate: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "CONFLICT"));
 
         } catch (DataIntegrityViolationException e) {
             log.warn("Conflict creating estimate: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "CONFLICT"));
 
         } catch (Exception e) {
             log.error("Unexpected error creating estimate", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @PatchMapping("/{estimateId}")
+    @EmitEvent(id = "WORKORDER_ESTIMATE_PATCH", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:edit')")
+    public ResponseEntity<Object> patchEstimateStatus(
+            @PathVariable UUID estimateId,
+            @RequestBody Map<String, Object> patchRequest) {
+        Object rawStatus = patchRequest.get("status");
+        if (!(rawStatus instanceof String statusValue) || statusValue.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR"));
+        }
+
+        final EstimateStatus targetStatus;
+        try {
+            targetStatus = EstimateStatus.valueOf(statusValue);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR"));
+        }
+
+        try {
+            return switch (targetStatus) {
+                case DECLINED -> ResponseEntity.ok(estimateService.declineEstimate(estimateId, null));
+                case DRAFT -> ResponseEntity.ok(estimateService.reopenEstimate(estimateId));
+                default -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "CONFLICT"));
+            };
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR"));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "CONFLICT"));
         }
     }
 

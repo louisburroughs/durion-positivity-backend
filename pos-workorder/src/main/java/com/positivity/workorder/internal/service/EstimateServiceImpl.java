@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.time.Year;
 import java.util.HashMap;
 import java.util.List;
@@ -197,6 +198,22 @@ public class EstimateServiceImpl implements EstimateService {
                         throw new IllegalArgumentException("vehicleId is required");
                 }
 
+                if (request.getSubtotal() != null && request.getSubtotal().compareTo(BigDecimal.ZERO) < 0) {
+                        throw new IllegalArgumentException("subtotal must be non-negative");
+                }
+                if (request.getTaxAmount() != null && request.getTaxAmount().compareTo(BigDecimal.ZERO) < 0) {
+                        throw new IllegalArgumentException("taxAmount must be non-negative");
+                }
+                if (request.getTotal() != null && request.getTotal().compareTo(BigDecimal.ZERO) < 0) {
+                        throw new IllegalArgumentException("total must be non-negative");
+                }
+                if (request.getSubtotal() != null && request.getTaxAmount() != null && request.getTotal() != null) {
+                        BigDecimal calculatedTotal = request.getSubtotal().add(request.getTaxAmount());
+                        if (calculatedTotal.compareTo(request.getTotal()) != 0) {
+                                throw new IllegalStateException("subtotal + taxAmount must equal total");
+                        }
+                }
+
                 // Apply defaults
                 UUID locationId = request.getLocationId() != null
                                 ? request.getLocationId()
@@ -228,7 +245,9 @@ public class EstimateServiceImpl implements EstimateService {
                                 .status(EstimateStatus.DRAFT)
                                 .createdByUserId(resolvedUsername)
                                 .createdById(userId)
-                                .createdAt(Instant.now())
+                                .subtotal(request.getSubtotal())
+                                .taxAmount(request.getTaxAmount())
+                                .total(request.getTotal())
                                 .approvalConfigurationId(config.getId())
                                 .build();
 
@@ -244,7 +263,7 @@ public class EstimateServiceImpl implements EstimateService {
                                 .vehicleId(saved.getVehicleId())
                                 .locationId(saved.getLocationId())
                                 .createdBy(username)
-                                .timestamp(Instant.now())
+                                .timestamp(Instant.now().truncatedTo(ChronoUnit.MILLIS))
                                 .build());
 
                 return EstimateResponse.fromEntity(saved);

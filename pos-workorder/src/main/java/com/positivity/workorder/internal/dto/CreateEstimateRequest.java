@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.dto;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -31,4 +32,13 @@ public class CreateEstimateRequest {
 
     @Schema(description = "Optional tax region identifier; defaults when omitted", example = "550e8400-e29b-41d4-a716-446655440004")
     private UUID taxRegionId; // Optional - will use default if not provided
+
+    @Schema(description = "Optional subtotal amount before tax", example = "500.00")
+    private BigDecimal subtotal;
+
+    @Schema(description = "Optional tax amount", example = "50.00")
+    private BigDecimal taxAmount;
+
+    @Schema(description = "Optional total amount including tax", example = "550.00")
+    private BigDecimal total;
 }

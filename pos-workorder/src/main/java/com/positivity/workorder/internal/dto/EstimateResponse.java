@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.dto;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import com.positivity.workorder.internal.entity.Estimate;
@@ -115,7 +116,7 @@ public class EstimateResponse {
                 .taxRegionId(entity.getTaxRegionId())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)
                 .createdByUserId(entity.getCreatedByUserId())
-                .createdAt(entity.getCreatedAt())
+                .createdAt(entity.getCreatedAt() != null ? entity.getCreatedAt().truncatedTo(ChronoUnit.MILLIS) : null)
                 .subtotal(entity.getSubtotal())
                 .taxAmount(entity.getTaxAmount())
                 .total(entity.getTotal())

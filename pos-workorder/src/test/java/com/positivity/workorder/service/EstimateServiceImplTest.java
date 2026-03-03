@@ -150,7 +150,10 @@ class EstimateServiceImplTest {
         UUID customerId = UUID.randomUUID();
         UUID vehicleId = UUID.randomUUID();
         String username = "testuser";
-        CreateEstimateRequest request = new CreateEstimateRequest(customerId, vehicleId, null, null, null);
+        CreateEstimateRequest request = CreateEstimateRequest.builder()
+                .customerId(customerId)
+                .vehicleId(vehicleId)
+                .build();
         ApprovalConfiguration config = ApprovalConfiguration.builder().id(UUID.randomUUID()).build();
         when(approvalConfigurationRepository.findApplicableConfigurations(any(), any())).thenReturn(List.of(config));
         when(estimateRepository.save(any(Estimate.class))).thenAnswer(i -> i.getArgument(0));
@@ -164,7 +167,9 @@ class EstimateServiceImplTest {
 
     @Test
     void createEstimate_missingCustomerId_throwsException() {
-        CreateEstimateRequest request = new CreateEstimateRequest(null, UUID.randomUUID(), null, null, null);
+        CreateEstimateRequest request = CreateEstimateRequest.builder()
+                .vehicleId(UUID.randomUUID())
+                .build();
         String username = "testuser";
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
@@ -175,7 +180,9 @@ class EstimateServiceImplTest {
 
     @Test
     void createEstimate_missingVehicleId_throwsException() {
-        CreateEstimateRequest request = new CreateEstimateRequest(UUID.randomUUID(), null, null, null, null);
+        CreateEstimateRequest request = CreateEstimateRequest.builder()
+                .customerId(UUID.randomUUID())
+                .build();
         String username = "testuser";
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(

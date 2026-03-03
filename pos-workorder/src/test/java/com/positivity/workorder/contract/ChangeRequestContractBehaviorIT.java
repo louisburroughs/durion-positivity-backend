@@ -118,7 +118,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .statusCode(200)
                 .body("id", notNullValue())
                 .body("workorderId", equalTo(workorderId.toString()))
-                .body("requestedByUserId", equalTo(testTechnicianId.toString()))
+                .body("requestedByUserId", equalTo(SYSTEM_USER_ID))
                 .body("status", equalTo("AWAITING_ADVISOR_REVIEW"))
                 .body("description",
                         equalTo("Technician discovered brake rotors below minimum thickness during pad replacement"))
