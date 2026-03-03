@@ -17,7 +17,7 @@ public final class PriceEventTypes {
 
         /**
          * All event type registrations for the price module.
-         * Total: 9 event types.
+         * Total: 10 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -37,7 +37,7 @@ public final class PriceEventTypes {
                                                 "Calculate contextual quote pricing for product, location, and customer tier")
                                                 .build(),
 
-                                // PromotionOfferController - 3 events
+                                // PromotionOfferController - 4 events
                                 EventTypeRegistration.write("PROMOTION_OFFER_CREATE", "Create a promotion offer")
                                                 .apiVersion("1")
                                                 .build(),
@@ -45,6 +45,10 @@ public final class PriceEventTypes {
                                                 .apiVersion("1")
                                                 .build(),
                                 EventTypeRegistration.write("PROMOTION_OFFER_DEACTIVATE", "Deactivate a promotion offer")
+                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration.write("PROMOTION_OFFER_APPLY",
+                                                "Apply a promotion offer to an estimate pricing context")
                                                 .apiVersion("1")
                                                 .build(),
 

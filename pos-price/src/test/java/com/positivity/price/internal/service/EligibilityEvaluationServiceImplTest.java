@@ -226,7 +226,7 @@ class EligibilityEvaluationServiceImplTest {
     @Test
     void givenFleetSizeRule_andMissingAccountContext_whenEvaluate_thenMissingContext() {
         UUID promotionId = UUID.randomUUID();
-        PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.GREATER_THAN, "10");
+        PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.GREATER_THAN_OR_EQUAL_TO, "10");
 
         when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
 
