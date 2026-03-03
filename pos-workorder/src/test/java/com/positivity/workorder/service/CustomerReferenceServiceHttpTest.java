@@ -1,4 +1,4 @@
-package com.positivity.workorder.internal.service;
+package com.positivity.workorder.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -13,26 +13,27 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
+import com.positivity.workorder.internal.service.CustomerReferenceService;
 import com.sun.net.httpserver.HttpServer;
 
-class VehicleReferenceServiceHttpTest {
+class CustomerReferenceServiceHttpTest {
 
     @Test
-    void resolve_parsesVehicleInfoAndVin_fromDataEnvelope() throws Exception {
-        UUID vehicleId = UUID.randomUUID();
+    void resolve_parsesNameAndPhone_fromDataEnvelope() throws Exception {
+        UUID customerId = UUID.randomUUID();
         String payload = """
-                {"data":{"vehicleDescription":"2022 Honda Civic EX","vin":"1HGBH41JXMN109186"}}
+                {"data":{"customerName":"Jane Doe","phoneNumber":"+1-555-0100"}}
                 """;
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/vehicles/" + vehicleId, 200, payload, callCount);
+        HttpServer server = startServer("/v1/customers/" + customerId, 200, payload, callCount);
         try {
             String baseUrl = "http://localhost:" + server.getAddress().getPort();
-            VehicleReferenceService service = new VehicleReferenceService(RestClient.builder(), baseUrl);
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), baseUrl);
 
-            VehicleReferenceService.VehicleReference ref = service.resolve(vehicleId);
+            CustomerReferenceService.CustomerContact contact = service.resolve(customerId);
 
-            assertThat(ref.vehicleInfo()).isEqualTo("2022 Honda Civic EX");
-            assertThat(ref.vin()).isEqualTo("1HGBH41JXMN109186");
+            assertThat(contact.name()).isEqualTo("Jane Doe");
+            assertThat(contact.phoneNumber()).isEqualTo("+1-555-0100");
             assertThat(callCount.get()).isEqualTo(1);
         } finally {
             server.stop(0);
@@ -41,17 +42,17 @@ class VehicleReferenceServiceHttpTest {
 
     @Test
     void resolve_returnsFallback_whenRemoteReturns404() throws Exception {
-        UUID vehicleId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/vehicles/" + vehicleId, 404, "{}", callCount);
+        HttpServer server = startServer("/v1/customers/" + customerId, 404, "{}", callCount);
         try {
             String baseUrl = "http://localhost:" + server.getAddress().getPort();
-            VehicleReferenceService service = new VehicleReferenceService(RestClient.builder(), baseUrl);
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), baseUrl);
 
-            VehicleReferenceService.VehicleReference ref = service.resolve(vehicleId);
+            CustomerReferenceService.CustomerContact contact = service.resolve(customerId);
 
-            assertThat(ref.vehicleInfo()).isEqualTo("vehicle-" + vehicleId);
-            assertThat(ref.vin()).isNull();
+            assertThat(contact.name()).isEqualTo("customer-" + customerId);
+            assertThat(contact.phoneNumber()).isNull();
             assertThat(callCount.get()).isEqualTo(1);
         } finally {
             server.stop(0);
@@ -60,18 +61,18 @@ class VehicleReferenceServiceHttpTest {
 
     @Test
     void resolveAll_deDuplicatesRequests_forRepeatedIds() throws Exception {
-        UUID vehicleId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/vehicles/" + vehicleId, 200,
-                "{\"vehicleInfo\":\"2021 Ford F-150\",\"vehicleVin\":\"VIN-123\"}", callCount);
+        HttpServer server = startServer("/v1/customers/" + customerId, 200,
+                "{\"customerName\":\"Repeated Customer\",\"phone\":\"+1-555-2222\"}", callCount);
         try {
             String baseUrl = "http://localhost:" + server.getAddress().getPort();
-            VehicleReferenceService service = new VehicleReferenceService(RestClient.builder(), baseUrl);
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), baseUrl);
 
-            var resolved = service.resolveAll(List.of(vehicleId, vehicleId));
+            var resolved = service.resolveAll(List.of(customerId, customerId));
 
             assertThat(resolved).hasSize(1);
-            assertThat(resolved.get(vehicleId).vehicleInfo()).isEqualTo("2021 Ford F-150");
+            assertThat(resolved.get(customerId).name()).isEqualTo("Repeated Customer");
             assertThat(callCount.get()).isEqualTo(1);
         } finally {
             server.stop(0);

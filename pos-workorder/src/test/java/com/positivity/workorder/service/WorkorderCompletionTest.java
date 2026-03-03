@@ -107,7 +107,7 @@ class WorkorderCompletionTest {
     private WorkorderServiceImpl workOrderService;
 
     private Workorder testWorkorder;
-    private UUID userId;
+    private String userId;
     private UUID testWorkorderId;
     private UUID testShopId;
     private UUID testVehicleId;
@@ -131,7 +131,7 @@ class WorkorderCompletionTest {
         testShopId = UUID.fromString("550e8400-e29b-41d4-a716-446655440031");
         testVehicleId = UUID.fromString("550e8400-e29b-41d4-a716-446655440032");
         testCustomerId = UUID.fromString("550e8400-e29b-41d4-a716-446655440033");
-        userId = UUID.fromString("550e8400-e29b-41d4-a716-446655440034");
+        userId = "system";
         testWorkorder = Workorder.builder()
                 .id(testWorkorderId)
                 .shopId(testShopId)

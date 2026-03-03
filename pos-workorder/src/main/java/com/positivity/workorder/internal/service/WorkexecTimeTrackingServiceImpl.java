@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkexecJobTimeTotalResponse;
 import com.positivity.workorder.internal.dto.WorkexecLaborPerformedRequest;
 import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
@@ -42,7 +43,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingService {
 
-        private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+        private static final String SYSTEM_USER_ID = "system";
         private static final UUID UNSPECIFIED_WORKORDER_ITEM_ID = UUID
                         .fromString("00000000-0000-0000-0000-000000000001");
 
@@ -254,7 +255,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                 .startTime(LocalDateTime.now(ZoneOffset.UTC))
                                 .hoursWorked(BigDecimal.ZERO)
                                 .notes(request.getLaborCode())
-                                .createdBy(mechanicId)
+                                .createdBy(SecurityContextHelper.getCurrentUsername().orElse(SYSTEM_USER_ID))
                                 .createdAt(Instant.now())
                                 .build();
 

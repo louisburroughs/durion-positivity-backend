@@ -1,17 +1,14 @@
 package com.positivity.workorder.support;
 
-import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.contract.ContractTestConfiguration;
-
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
@@ -25,7 +22,7 @@ import io.restassured.specification.RequestSpecification;
 @Import({ TestSecurityConfig.class, ContractTestConfiguration.class })
 public abstract class BaseContractIntegrationTest {
 
-    protected static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    protected static final String SYSTEM_USER_ID = "system";
 
     protected static final String TEST_AUTHORITIES = String.join(",",
             "workorder:approval_config:view",
@@ -81,15 +78,15 @@ public abstract class BaseContractIntegrationTest {
     protected RequestSpecification givenWithGatewayAuth() {
         return RestAssured.given()
                 .contentType(ContentType.JSON)
-                .header("X-User-Id", SYSTEM_USER_ID.toString())
-                .header("X-User", SYSTEM_USER_ID.toString())
+                .header("X-User-Id", SYSTEM_USER_ID)
+                .header("X-User", SYSTEM_USER_ID)
                 .header("X-Authorities", TEST_AUTHORITIES);
     }
 
     protected MockHttpServletRequestBuilder withAuthMvc(MockHttpServletRequestBuilder req) {
         return req
-                .header("X-User-Id", SYSTEM_USER_ID.toString())
-                .header("X-User", SYSTEM_USER_ID.toString())
+                .header("X-User-Id", SYSTEM_USER_ID)
+                .header("X-User", SYSTEM_USER_ID)
                 .header("X-Authorities", TEST_AUTHORITIES);
     }
 }

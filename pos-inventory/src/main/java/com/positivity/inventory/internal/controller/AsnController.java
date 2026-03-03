@@ -49,7 +49,8 @@ public class AsnController {
         // layer (see ReceivingController).
         // Full service-layer resolution is tracked as a module-wide refactor for a
         // future ADR update.
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         AsnResponse response = asnService.createAsn(request, actorUserId);
         return ResponseEntity.status(201).body(response);
     }
@@ -62,8 +63,7 @@ public class AsnController {
     @ApiResponse(responseCode = "403", description = "User lacks required ASN view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     @ApiResponse(responseCode = "404", description = "ASN not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<AsnResponse> getAsn(
-            @Parameter(description = "ASN identifier", required = true)
-            @PathVariable UUID asnId) {
+            @Parameter(description = "ASN identifier", required = true) @PathVariable UUID asnId) {
         return ResponseEntity.ok(asnService.getAsn(asnId));
     }
 
@@ -77,18 +77,15 @@ public class AsnController {
     @ApiResponse(responseCode = "404", description = "Referenced source document not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     @ApiResponse(responseCode = "409", description = "Goods receipt conflict", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<GoodsReceiptResponse> createGoodsReceipt(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    required = true,
-                    description = "Goods receipt creation payload",
-                    content = @Content(schema = @Schema(implementation = CreateGoodsReceiptRequest.class)))
-            @Valid @RequestBody CreateGoodsReceiptRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "Goods receipt creation payload", content = @Content(schema = @Schema(implementation = CreateGoodsReceiptRequest.class))) @Valid @RequestBody CreateGoodsReceiptRequest request) {
         // ADR-0018 deviation: actor resolved in controller following existing
         // pos-inventory module convention.
         // The module pattern extracts actorId in controllers and passes to service
         // layer (see ReceivingController).
         // Full service-layer resolution is tracked as a module-wide refactor for a
         // future ADR update.
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         GoodsReceiptResponse response = asnService.createGoodsReceipt(request, actorUserId);
         return ResponseEntity.status(201).body(response);
     }
@@ -101,8 +98,7 @@ public class AsnController {
     @ApiResponse(responseCode = "403", description = "User lacks required goods receipt view authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     @ApiResponse(responseCode = "404", description = "Goods receipt not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
     public ResponseEntity<GoodsReceiptResponse> getGoodsReceipt(
-            @Parameter(description = "Goods receipt identifier", required = true)
-            @PathVariable UUID receiptId) {
+            @Parameter(description = "Goods receipt identifier", required = true) @PathVariable UUID receiptId) {
         return ResponseEntity.ok(asnService.getGoodsReceipt(receiptId));
     }
 }

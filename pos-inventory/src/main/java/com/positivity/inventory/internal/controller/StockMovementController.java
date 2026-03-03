@@ -51,7 +51,8 @@ public class StockMovementController {
     @ApiResponse(responseCode = "422", description = "Insufficient stock")
     public ResponseEntity<Void> recordMovement(
             @Valid @RequestBody RecordMovementRequest request) {
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         log.info("POST /v1/inventory/stock-movements movementType={} productSku={} actor={}",
                 request.getMovementType(), request.getProductSku(), actorUserId);
         stockMovementService.recordMovement(request, actorUserId);
@@ -69,7 +70,8 @@ public class StockMovementController {
     })
     public ResponseEntity<AdjustmentRequestResponse> createAdjustmentRequest(
             @Valid @RequestBody CreateAdjustmentRequestDto request) {
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         log.info("POST /v1/inventory/adjustments productSku={} actor={}", request.getProductSku(), actorUserId);
 
         AdjustmentRequestResponse response = stockMovementService.createAdjustmentRequest(request, actorUserId);
@@ -91,7 +93,8 @@ public class StockMovementController {
     })
     public ResponseEntity<Void> approveAdjustmentRequest(
             @PathVariable UUID adjustmentRequestId) {
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         log.info("POST /v1/inventory/adjustments/{}/approve actor={}", adjustmentRequestId, actorUserId);
         stockMovementService.approveAdjustmentRequest(adjustmentRequestId, actorUserId);
         return ResponseEntity.ok().build();

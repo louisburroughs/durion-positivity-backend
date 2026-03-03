@@ -53,7 +53,7 @@ public final class TechnicianAssignmentMapper {
             UUID previousTechnicianId,
             @NonNull WorkorderStatus workorderStatus,
             @NonNull String reason,
-            @NonNull UUID reassignedBy) {
+            @NonNull String reassignedBy) {
         return TechnicianAssignmentResponse.builder()
                 .workorderId(newAssignment.getWorkorderId().toString())
                 .technicianId(newAssignment.getTechnicianId().toString())
@@ -63,7 +63,7 @@ public final class TechnicianAssignmentMapper {
                 .status(workorderStatus.name())
                 .reassignmentReason(reason)
                 .reassignedAt(newAssignment.getAssignedAt())
-                .reassignedBy(reassignedBy.toString())
+                .reassignedBy(reassignedBy)
                 .message("Technician reassigned successfully")
                 .build();
     }

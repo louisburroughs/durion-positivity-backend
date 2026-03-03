@@ -1,25 +1,7 @@
 package com.positivity.workorder.internal.service;
 
-import com.positivity.workorder.internal.entity.*;
-import com.positivity.workorder.internal.enums.WorkorderItemStatus;
-import com.positivity.workorder.internal.enums.WorkorderStatus;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
-import com.positivity.workorder.internal.repository.WorkorderPartRepository;
-import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
-import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
-import com.positivity.workorder.service.ChangeRequestService;
-import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
-import com.positivity.workorder.internal.repository.ChangeRequestRepository;
-import com.positivity.workorder.internal.repository.AuditEventRepository;
-import com.positivity.security.common.SecurityContextHelper;
-import tools.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,6 +9,30 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.workorder.internal.entity.AuditEvent;
+import com.positivity.workorder.internal.entity.ChangeRequest;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderPart;
+import com.positivity.workorder.internal.entity.WorkorderSnapshot;
+import com.positivity.workorder.internal.entity.WorkorderStateTransition;
+import com.positivity.workorder.internal.enums.WorkorderItemStatus;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.workorder.internal.repository.ChangeRequestRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
+import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
+import com.positivity.workorder.service.ChangeRequestService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
@@ -57,7 +63,6 @@ public class WorkorderStateMachine {
 
     private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
     private static final String STATUS_FIELD = "status";
-    private static final String SYSTEM_ACTOR = "system";
 
     public record CompletionPreconditions(
             UUID workorderId,
@@ -72,7 +77,7 @@ public class WorkorderStateMachine {
             boolean hasBillableItems) {
     }
 
-    public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, UUID userId, String reason) {
+    public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, String actorId, String reason) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
@@ -92,9 +97,9 @@ public class WorkorderStateMachine {
         workorder.setStatus(toStatus);
         workorderRepository.save(workorder);
 
-        recordTransition(workorderId, fromStatus, toStatus, userId, reason);
+        recordTransition(workorderId, fromStatus, toStatus, actorId, reason);
 
-        log.info("Workorder {} transitioned from {} to {} by user {}", workorderId, fromStatus, toStatus, userId);
+        log.info("Workorder {} transitioned from {} to {} by user {}", workorderId, fromStatus, toStatus, actorId);
     }
 
     private void validateCompletionRequirements(UUID workorderId) {
@@ -189,7 +194,7 @@ public class WorkorderStateMachine {
     }
 
     @Transactional
-    public void startWorkorder(UUID workorderId, UUID userId, String reason) {
+    public void startWorkorder(UUID workorderId, String actorId, String reason) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
@@ -209,13 +214,13 @@ public class WorkorderStateMachine {
                             workorderId, pendingApprovalRequests.size()));
         }
 
-        captureSnapshot(workorder, userId, "WORK_START", reason);
+        captureSnapshot(workorder, actorId, "WORK_START", reason);
 
-        transitionWorkorder(workorderId, WorkorderStatus.WORK_IN_PROGRESS, userId, reason);
+        transitionWorkorder(workorderId, WorkorderStatus.WORK_IN_PROGRESS, actorId, reason);
     }
 
     @Transactional
-    public void completeWorkorder(UUID workorderId, UUID userId, String completionNotes) {
+    public void completeWorkorder(UUID workorderId, String actorId, String completionNotes) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
@@ -239,12 +244,12 @@ public class WorkorderStateMachine {
         }
 
         // Finalize immutable billable scope snapshot before completion transition
-        captureBillableScopeSnapshot(workorder, userId, completionNotes);
+        captureBillableScopeSnapshot(workorder, actorId, completionNotes);
 
         // Set completion fields
         Instant completedAt = Instant.now();
         workorder.setCompletedAt(completedAt);
-        workorder.setCompletedBy(userId);
+        workorder.setCompletedBy(actorId);
         workorder.setCompletionNotes(completionNotes);
         workorder.setIsReopened(false);
         workorder.setReopenedAt(null);
@@ -253,17 +258,17 @@ public class WorkorderStateMachine {
         workorderRepository.save(workorder);
 
         // Transition to COMPLETED state
-        transitionWorkorder(workorderId, WorkorderStatus.COMPLETED, userId, "Work Order Completed");
+        transitionWorkorder(workorderId, WorkorderStatus.COMPLETED, actorId, "Work Order Completed");
 
         // Create audit event
-        createAuditEvent(workorderId, "StateTransition",
+        createAuditEvent(workorderId, actorId, "StateTransition",
                 String.format("{\"fromState\":\"%s\",\"toState\":\"COMPLETED\"}", currentStatus));
 
-        log.info("Workorder {} completed successfully by user {} at {}", workorderId, userId, completedAt);
+        log.info("Workorder {} completed successfully by user {} at {}", workorderId, actorId, completedAt);
     }
 
     @Transactional
-    public Workorder reopenCompletedWorkorder(UUID workorderId, UUID userId, String reopenReason) {
+    public Workorder reopenCompletedWorkorder(UUID workorderId, String actorId, String reopenReason) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
@@ -276,12 +281,12 @@ public class WorkorderStateMachine {
                     String.format("Workorder %s is not in COMPLETED status and cannot be reopened", workorderId));
         }
 
-        captureSnapshot(workorder, userId, "BILLABLE_SCOPE_SUPERSEDED", reopenReason);
+        captureSnapshot(workorder, actorId, "BILLABLE_SCOPE_SUPERSEDED", reopenReason);
 
         Instant reopenedAt = Instant.now();
         workorder.setIsReopened(true);
         workorder.setReopenedAt(reopenedAt);
-        workorder.setReopenedBy(userId);
+        workorder.setReopenedBy(actorId);
         workorder.setReopenReason(reopenReason);
 
         Workorder saved = workorderRepository.save(workorder);
@@ -298,13 +303,13 @@ public class WorkorderStateMachine {
             throw new IllegalStateException("Failed to serialize workorder reopen audit details", e);
         }
 
-        createAuditEvent(workorderId, "WORKORDER_REOPENED", auditDetailsJson);
+        createAuditEvent(workorderId, actorId, "WORKORDER_REOPENED", auditDetailsJson);
 
-        log.info("Workorder {} reopened by user {} at {}", workorderId, userId, reopenedAt);
+        log.info("Workorder {} reopened by user {} at {}", workorderId, actorId, reopenedAt);
         return saved;
     }
 
-    public void captureBillableScopeSnapshot(Workorder workorder, UUID userId, String completionNotes) {
+    public void captureBillableScopeSnapshot(Workorder workorder, String actorId, String completionNotes) {
         boolean invoiceReady = !Boolean.TRUE.equals(workorder.getIsReopened())
                 && (workorder.getStatus() == WorkorderStatus.COMPLETED
                         || COMPLETION_ELIGIBLE_STATUSES.contains(workorder.getStatus()));
@@ -364,19 +369,18 @@ public class WorkorderStateMachine {
         payload.put("completionNotes", completionNotes);
         payload.put("capturedAt", Instant.now());
 
-        captureStructuredSnapshot(workorder, userId, "BILLABLE_SCOPE_FINALIZED", payload,
+        captureStructuredSnapshot(workorder, actorId, "BILLABLE_SCOPE_FINALIZED", payload,
                 "Final billable scope snapshot before completion");
     }
 
     public void captureStructuredSnapshot(
             Workorder workorder,
-            UUID userId,
+            String actorId,
             String snapshotType,
             Map<String, Object> snapshotPayload,
             String reason) {
         try {
             String snapshotData = objectMapper.writeValueAsString(snapshotPayload);
-            String actorId = resolveActorId(userId);
 
             WorkorderSnapshot snapshot = WorkorderSnapshot.builder()
                     .workorderId(workorder.getId())
@@ -396,7 +400,7 @@ public class WorkorderStateMachine {
         }
     }
 
-    public void captureSnapshot(Workorder workorder, UUID userId, String snapshotType, String reason) {
+    public void captureSnapshot(Workorder workorder, String actorId, String snapshotType, String reason) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("workorderId", workorder.getId());
         payload.put("estimateId", workorder.getEstimateId());
@@ -404,12 +408,11 @@ public class WorkorderStateMachine {
         payload.put(STATUS_FIELD, workorder.getStatus());
         payload.put("capturedAt", Instant.now());
         payload.put("reason", reason);
-        captureStructuredSnapshot(workorder, userId, snapshotType, payload, reason);
+        captureStructuredSnapshot(workorder, actorId, snapshotType, payload, reason);
     }
 
     private void recordTransition(UUID workorderId, WorkorderStatus fromStatus, WorkorderStatus toStatus,
-            UUID userId, String reason) {
-        String actorId = resolveActorId(userId);
+            String actorId, String reason) {
         WorkorderStateTransition transition = WorkorderStateTransition.builder()
                 .workorderId(workorderId)
                 .fromStatus(fromStatus)
@@ -485,8 +488,7 @@ public class WorkorderStateMachine {
         return snapshotRepository.findByWorkorderIdOrderByCapturedAtDesc(workorderId);
     }
 
-    private void createAuditEvent(UUID workorderId, String eventType, String details) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+    private void createAuditEvent(UUID workorderId, String actorId, String eventType, String details) {
         AuditEvent auditEvent = AuditEvent.builder()
                 .entityType("Workorder")
                 .entityId(workorderId)
@@ -504,8 +506,4 @@ public class WorkorderStateMachine {
         return auditEventRepository.findByEntityTypeAndEntityIdOrderByEventTimestampDesc("Workorder", workorderId);
     }
 
-    private String resolveActorId(UUID fallbackUserId) {
-        String fallback = fallbackUserId != null ? fallbackUserId.toString() : SYSTEM_ACTOR;
-        return SecurityContextHelper.getCurrentUserIdOrDefault(fallback);
-    }
 }

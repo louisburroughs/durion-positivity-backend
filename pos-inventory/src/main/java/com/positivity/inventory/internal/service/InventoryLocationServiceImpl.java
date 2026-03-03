@@ -21,12 +21,12 @@ import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 @Service
 public class InventoryLocationServiceImpl implements InventoryLocationService {
 
     private static final String DEACTIVATED_STATUS = "Inactive";
     private static final String LOCATION_TRANSFER_REASON = "LOCATION_DEACTIVATION_TRANSFER";
-    private static final String SYSTEM_ACTOR = "system";
 
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final StorageLocationValidationClient storageLocationValidationClient;
@@ -131,7 +131,8 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
             UUID sourceLocationId,
             UUID destinationLocationId,
             List<InventoryLedgerEntryRepository.LocationOnHand> onHandRows) {
-        String actorUserId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         Instant timestamp = Instant.now(clock);
 
         List<InventoryLedgerEntry> transferEntries = new ArrayList<>(onHandRows.size() * 2);
@@ -145,7 +146,8 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
 
             String stockItemId = row.getStockItemId();
             int destinationOnHand = safeQuantity(
-                    inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(stockItemId, destinationLocationId));
+                    inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(stockItemId,
+                            destinationLocationId));
 
             transferEntries.add(InventoryLedgerEntry.builder()
                     .stockItemId(stockItemId)

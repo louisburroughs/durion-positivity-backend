@@ -284,7 +284,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
                                 .isReopened(isReopened)
                                 .completedAt(status == WorkorderStatus.COMPLETED ? Instant.now().minusSeconds(120)
                                                 : null)
-                                .completedBy(status == WorkorderStatus.COMPLETED ? SYSTEM_USER_ID : null)
+                                .completedBy(status == WorkorderStatus.COMPLETED ? "system" : null)
                                 .build();
 
                 Workorder saved = workorderRepository.save(workorder);

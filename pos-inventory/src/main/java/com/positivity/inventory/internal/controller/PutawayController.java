@@ -32,58 +32,37 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create')")
 public class PutawayController {
 
-    private final PutawayGenerationService putawayGenerationService;
+        private final PutawayGenerationService putawayGenerationService;
 
-    @PostMapping("/generate")
-    @EmitEvent(id = "INVENTORY_PUTAWAY_TASK_GENERATE", apiVersion = "1")
-    @Operation(
-            summary = "Generate putaway tasks",
-            description = "Generates putaway tasks for received inventory lines.")
-    @ApiResponse(
-            responseCode = "201",
-            description = "Putaway tasks generated",
-            content = @Content(
-                    mediaType = "application/json",
-                    array = @ArraySchema(schema = @Schema(implementation = PutawayTaskResponse.class))))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
-    public ResponseEntity<List<PutawayTaskResponse>> generateTasks(
-            @Valid @RequestBody GeneratePutawayTasksRequest request) {
-        List<PutawayTaskResponse> response = putawayGenerationService.generateTasksForReceipt(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
+        @PostMapping("/generate")
+        @EmitEvent(id = "INVENTORY_PUTAWAY_TASK_GENERATE", apiVersion = "1")
+        @Operation(summary = "Generate putaway tasks", description = "Generates putaway tasks for received inventory lines.")
+        @ApiResponse(responseCode = "201", description = "Putaway tasks generated", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PutawayTaskResponse.class))))
+        @ApiResponse(responseCode = "400", description = "Validation failure")
+        public ResponseEntity<List<PutawayTaskResponse>> generateTasks(
+                        @Valid @RequestBody GeneratePutawayTasksRequest request) {
+                List<PutawayTaskResponse> response = putawayGenerationService.generateTasksForReceipt(request);
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
 
-    @GetMapping
-    @Operation(
-            summary = "List available putaway tasks",
-            description = "Returns all currently available putaway tasks.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Available putaway tasks returned",
-            content = @Content(
-                    mediaType = "application/json",
-                    array = @ArraySchema(schema = @Schema(implementation = PutawayTaskResponse.class))))
-    public ResponseEntity<List<PutawayTaskResponse>> getAvailableTasks() {
-        return ResponseEntity.ok(putawayGenerationService.getAvailableTasks());
-    }
+        @GetMapping
+        @Operation(summary = "List available putaway tasks", description = "Returns all currently available putaway tasks.")
+        @ApiResponse(responseCode = "200", description = "Available putaway tasks returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PutawayTaskResponse.class))))
+        public ResponseEntity<List<PutawayTaskResponse>> getAvailableTasks() {
+                return ResponseEntity.ok(putawayGenerationService.getAvailableTasks());
+        }
 
-    @PostMapping("/{taskId}/claim")
-    @EmitEvent(id = "INVENTORY_PUTAWAY_TASK_CLAIM", apiVersion = "1")
-    @Operation(
-            summary = "Claim a putaway task",
-            description = "Claims an available putaway task for the current actor.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Putaway task claimed",
-            content = @Content(
-                    mediaType = "application/json",
-                    schema = @Schema(implementation = PutawayTaskResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Putaway task not found")
-    public ResponseEntity<PutawayTaskResponse> claimTask(
-            @Parameter(description = "Putaway task identifier", required = true)
-            @PathVariable String taskId) {
-        String actor = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        @PostMapping("/{taskId}/claim")
+        @EmitEvent(id = "INVENTORY_PUTAWAY_TASK_CLAIM", apiVersion = "1")
+        @Operation(summary = "Claim a putaway task", description = "Claims an available putaway task for the current actor.")
+        @ApiResponse(responseCode = "200", description = "Putaway task claimed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PutawayTaskResponse.class)))
+        @ApiResponse(responseCode = "404", description = "Putaway task not found")
+        public ResponseEntity<PutawayTaskResponse> claimTask(
+                        @Parameter(description = "Putaway task identifier", required = true) @PathVariable String taskId) {
+                String actor = SecurityContextHelper.getCurrentUsername()
+                                .orElseThrow(() -> new IllegalStateException("No current user"));
 
-        PutawayTaskResponse response = putawayGenerationService.claimTask(taskId, actor);
-        return ResponseEntity.ok(response);
-    }
+                PutawayTaskResponse response = putawayGenerationService.claimTask(taskId, actor);
+                return ResponseEntity.ok(response);
+        }
 }

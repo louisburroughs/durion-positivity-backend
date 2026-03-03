@@ -355,7 +355,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
         }
 
         private String resolveActorId() {
-                return SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+                return SecurityContextHelper.getCurrentUsernameOrDefault("system");
         }
 
 }
