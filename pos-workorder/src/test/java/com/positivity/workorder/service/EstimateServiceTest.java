@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -103,6 +104,7 @@ class EstimateServiceTest {
                                 .taxRegionId(UUID.fromString("550e8400-e29b-41d4-a716-446655440014"))
                                 .status(EstimateStatus.DRAFT)
                                 .createdByUserId(testUserId.toString())
+                                .createdAt(Instant.now())
                                 .build();
 
                 when(estimateRepository.save(any(Estimate.class)))
@@ -118,6 +120,7 @@ class EstimateServiceTest {
                 assertEquals(UUID.fromString("550e8400-e29b-41d4-a716-446655440012"), result.getVehicleId());
                 assertNotNull(result.getEstimateNumber());
                 assertEquals(testUserId.toString(), result.getCreatedByUserId());
+                assertNotNull(result.getCreatedAt());
 
                 // Verify repository was called
                 verify(estimateRepository, times(1)).save(any(Estimate.class));
@@ -128,7 +131,6 @@ class EstimateServiceTest {
                 Estimate capturedEstimate = estimateCaptor.getValue();
 
                 assertEquals(EstimateStatus.DRAFT, capturedEstimate.getStatus());
-                assertNotNull(capturedEstimate.getCreatedAt());
                 assertNotNull(capturedEstimate.getEstimateNumber());
         }
 

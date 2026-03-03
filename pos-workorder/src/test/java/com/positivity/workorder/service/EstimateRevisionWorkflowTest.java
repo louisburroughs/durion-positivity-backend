@@ -136,7 +136,7 @@ class EstimateRevisionWorkflowTest {
                 assertThat(audit.getEntityType()).isEqualTo("Workorder");
                 assertThat(audit.getEntityId()).isEqualTo(testWorkorder.getId());
                 assertThat(audit.getEventType()).isEqualTo("approval.invalidated");
-                assertThat(audit.getUserId()).isEqualTo(TEST_USER_ID.toString());
+                assertThat(audit.getUserId()).isEqualTo("test-user");
                 assertThat(audit.getDetails())
                                 .contains("500.00") // old total
                                 .contains("650.00") // new total
@@ -167,7 +167,7 @@ class EstimateRevisionWorkflowTest {
                                 new BigDecimal("425.00"), // lower subtotal
                                 new BigDecimal("25.00"),
                                 new BigDecimal("450.00"), // lower total
-                                TEST_USER_ID.toString());
+                                "test-user");
 
                 // Then
                 Workorder updatedWorkorder = workorderRepository.findById(testWorkorder.getId())

@@ -22,7 +22,7 @@ import io.restassured.specification.RequestSpecification;
 @Import({ TestSecurityConfig.class, ContractTestConfiguration.class })
 public abstract class BaseContractIntegrationTest {
 
-    protected static final String SYSTEM_USER_ID = "system";
+    protected static final String SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
 
     protected static final String TEST_AUTHORITIES = String.join(",",
             "workorder:approval_config:view",
@@ -56,6 +56,7 @@ public abstract class BaseContractIntegrationTest {
             "workorder:workorder:delete",
             "workorder:workorder:approve",
             "workorder:workorder:start",
+            "workorder:start",
             "workorder:workorder:complete",
             "workorder:workorder:generate_invoice",
             "workorder:workorder:reopen_completed",

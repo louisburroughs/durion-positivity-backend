@@ -116,7 +116,9 @@ public class Estimate {
      * Check if estimate can be transitioned to declined state.
      */
     public boolean canDecline() {
-        return status == EstimateStatus.PENDING_APPROVAL || status == EstimateStatus.APPROVED;
+        return status == EstimateStatus.DRAFT
+                || status == EstimateStatus.PENDING_APPROVAL
+                || status == EstimateStatus.APPROVED;
     }
 
     /**
@@ -127,6 +129,6 @@ public class Estimate {
             return false;
         }
         LocalDateTime expiryDate = declinedAt.plusDays(configuredExpiryDays);
-        return LocalDateTime.now().isBefore(expiryDate);
+        return !LocalDateTime.now().isAfter(expiryDate);
     }
 }
