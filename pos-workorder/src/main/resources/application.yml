@@ -73,3 +73,10 @@ pos:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-vehicle:8088}
   tax:
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
+
+workorder:
+  kafka:
+    enabled: ${WORKORDER_KAFKA_ENABLED:false}
+    events-topic: ${WORKORDER_KAFKA_EVENTS_TOPIC:workorder.events.v1}
+    commands-topic: ${WORKORDER_KAFKA_COMMANDS_TOPIC:workorder.commands.v1}
+    consumer-group: ${WORKORDER_KAFKA_CONSUMER_GROUP:${spring.application.name}-commands}

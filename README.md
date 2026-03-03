@@ -121,6 +121,30 @@ durion-positivity-backend/
     ./mvnw test
     ```
 
+### Local Kafka For `pos-workorder`
+
+Start a single-node local Kafka stack (broker + Kafka UI + topic init):
+
+```bash
+./scripts/workorder-kafka-local.sh up
+```
+
+Run `pos-workorder` against local Kafka:
+
+```bash
+./mvnw -pl pos-workorder spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=local-kafka --server.port=8090"
+```
+
+Useful endpoints:
+- Kafka bootstrap server: `localhost:9092`
+- Kafka UI: `http://localhost:8098`
+
+Stop and clean up Kafka local stack:
+
+```bash
+./scripts/workorder-kafka-local.sh down
+```
+
 For detailed agent commands and local stack setup, refer to [AGENTS.md](AGENTS.md).
 
 ## Known Issues & Migration Notes

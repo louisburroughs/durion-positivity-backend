@@ -1,0 +1,33 @@
+spring:
+  config:
+    activate:
+      on-profile: local-kafka
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    client-id: ${KAFKA_CLIENT_ID:${spring.application.name}-local}
+    producer:
+      acks: all
+      retries: 3
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:${spring.application.name}-local}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    properties:
+      security.protocol: PLAINTEXT
+      connections.max.idle.ms: 540000
+
+management:
+  health:
+    kafka:
+      enabled: true
+
+eureka:
+  client:
+    enabled: false
+
+workorder:
+  kafka:
+    enabled: true
