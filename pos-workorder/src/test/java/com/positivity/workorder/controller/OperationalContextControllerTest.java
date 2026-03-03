@@ -155,7 +155,8 @@ class OperationalContextControllerTest {
                                 .operationalContextVersion("v1")
                                 .workStartedAt(Instant.now())
                                 .build();
-                when(workorderService.startWork(eq(WORKORDER_ID), isNull(), isNull())).thenReturn(startResponse);
+                when(workorderService.startWork(eq(WORKORDER_ID), eq("workorder-test-user"), isNull()))
+                                .thenReturn(startResponse);
 
                 mockMvc.perform(post(START_URL, WORKORDER_ID))
                                 .andExpect(status().isOk())
@@ -171,7 +172,7 @@ class OperationalContextControllerTest {
         @DisplayName("AC6: POST start returns 409 when work already started")
         void whenStartWork_withWorkAlreadyStarted_thenReturns409() throws Exception {
                 // Issue CAP-140: AC6 — conflict on duplicate start
-                when(workorderService.startWork(eq(WORKORDER_ID), isNull(), isNull()))
+                when(workorderService.startWork(eq(WORKORDER_ID), eq("workorder-test-user"), isNull()))
                                 .thenThrow(new IllegalStateException("Work already started on this workorder"));
 
                 mockMvc.perform(post(START_URL, WORKORDER_ID))

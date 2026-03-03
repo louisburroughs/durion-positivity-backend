@@ -6,6 +6,11 @@ import com.positivity.accounting.internal.dto.GLMappingResolveRequest;
 import com.positivity.accounting.internal.dto.GLMappingResolveResponse;
 import com.positivity.accounting.service.GLMappingService;
 import com.positivity.events.EmitEvent;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/v1/accounting/mappings")
 @RequiredArgsConstructor
+@Tag(name = "GL Mapping API", description = "Endpoints for creating and resolving GL mappings")
 public class GLMappingController {
 
     private final GLMappingService glMappingService;
@@ -35,8 +41,11 @@ public class GLMappingController {
     @PostMapping
     @PreAuthorize("hasAuthority('accounting:gl-mapping:create')")
     @EmitEvent(id = "ACCOUNTING_GL_MAPPING_CREATE", apiVersion = "1")
+    @Operation(summary = "Create GL mapping", description = "Creates a new GL mapping for source-system external code resolution")
+    @ApiResponse(responseCode = "201", description = "GL mapping created", content = @Content(schema = @Schema(implementation = GLMappingCreateResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request payload")
     public ResponseEntity<GLMappingCreateResponse> createGLMapping(
-            @Valid @RequestBody GLMappingCreateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "GL mapping creation request", required = true, content = @Content(schema = @Schema(implementation = GLMappingCreateRequest.class))) @Valid @RequestBody GLMappingCreateRequest request) {
         log.info("Create GL mapping request: sourceSystem={}, externalCode={}",
                 request.getSourceSystem(), request.getExternalCode());
 
@@ -54,8 +63,11 @@ public class GLMappingController {
     @PostMapping("/resolve")
     @PreAuthorize("hasAuthority('accounting:gl-mapping:resolve')")
     @EmitEvent(id = "ACCOUNTING_GL_MAPPING_RESOLVE", apiVersion = "1")
+    @Operation(summary = "Resolve GL mapping", description = "Resolves source-system external code to a GL account using effective-date rules")
+    @ApiResponse(responseCode = "200", description = "GL mapping resolved", content = @Content(schema = @Schema(implementation = GLMappingResolveResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request payload")
     public ResponseEntity<GLMappingResolveResponse> resolveGLMapping(
-            @Valid @RequestBody GLMappingResolveRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "GL mapping resolve request", required = true, content = @Content(schema = @Schema(implementation = GLMappingResolveRequest.class))) @Valid @RequestBody GLMappingResolveRequest request) {
         log.info("Resolve GL mapping request: sourceSystem={}, externalCode={}, transactionDate={}",
                 request.getSourceSystem(), request.getExternalCode(), request.getTransactionDate());
 
