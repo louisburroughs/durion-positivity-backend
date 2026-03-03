@@ -1,6 +1,8 @@
 package com.positivity.workorder.internal.config;
 
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
+import com.positivity.workorder.internal.exception.TimeEntryStateException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
@@ -65,6 +67,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleTravelSegmentConflict(
             TravelSegmentConflictException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.CONFLICT, "TRAVEL_SEGMENT_CONFLICT", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(TimeEntryNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleTimeEntryNotFound(
+            TimeEntryNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, "TIME_ENTRY_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(TimeEntryStateException.class)
+    public ResponseEntity<Map<String, Object>> handleTimeEntryState(
+            TimeEntryStateException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, "TIME_ENTRY_INVALID_STATE", ex.getMessage(), request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
