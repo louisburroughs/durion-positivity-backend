@@ -1,5 +1,7 @@
 package com.positivity.price.service;
 
+import com.positivity.price.internal.dto.ApplyPromotionRequest;
+import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
 import com.positivity.price.internal.entity.PromotionOffer;
 import java.util.UUID;
@@ -27,4 +29,8 @@ public interface PromotionOfferService {
     /** Transition offer to INACTIVE. Issue: #97 */
     @NonNull
     PromotionOffer deactivateOffer(@NonNull UUID promotionOfferId);
+
+    /** Apply a promotion code during estimate pricing. Issue: #95 */
+    @NonNull
+    ApplyPromotionResponse applyPromotion(@NonNull ApplyPromotionRequest request);
 }

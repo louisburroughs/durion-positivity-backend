@@ -3,6 +3,9 @@ package com.positivity.price.internal.config;
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
 import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
 import com.positivity.price.internal.exception.ProductNotFoundException;
+import com.positivity.price.internal.exception.PromotionCodeNotFoundException;
+import com.positivity.price.internal.exception.PromotionMultipleNotAllowedException;
+import com.positivity.price.internal.exception.PromotionNotApplicableException;
 import com.positivity.price.internal.exception.PromotionOfferNotFoundException;
 import com.positivity.price.internal.exception.PromotionOfferStateException;
 import com.positivity.price.internal.exception.SnapshotNotFoundException;
@@ -32,68 +35,120 @@ public class GlobalExceptionHandler {
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
 
     @ExceptionHandler(PromotionOfferNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handlePromotionOfferNotFound(PromotionOfferNotFoundException exception) {
+    public ResponseEntity<Map<String, Object>> handlePromotionOfferNotFound(
+            PromotionOfferNotFoundException exception,
+            HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.NOT_FOUND,
                 "PROMOTION_OFFER_NOT_FOUND",
                 exception.getMessage(),
-                null);
+                null,
+                request);
     }
 
     @ExceptionHandler(DuplicatePromoCodeException.class)
-    public ResponseEntity<Map<String, Object>> handleDuplicatePromoCode(DuplicatePromoCodeException exception) {
+    public ResponseEntity<Map<String, Object>> handleDuplicatePromoCode(
+            DuplicatePromoCodeException exception,
+            HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.CONFLICT,
                 "DUPLICATE_PROMO_CODE",
                 exception.getMessage(),
-                null);
+                null,
+                request);
     }
 
     @ExceptionHandler(PromotionOfferStateException.class)
-    public ResponseEntity<Map<String, Object>> handlePromotionOfferState(PromotionOfferStateException exception) {
+    public ResponseEntity<Map<String, Object>> handlePromotionOfferState(
+            PromotionOfferStateException exception,
+            HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 "PROMOTION_OFFER_INVALID_STATE",
                 exception.getMessage(),
-                null);
+                null,
+                request);
     }
 
     @ExceptionHandler(ProductNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleProductNotFound(ProductNotFoundException exception) {
+    public ResponseEntity<Map<String, Object>> handleProductNotFound(
+            ProductNotFoundException exception,
+            HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.NOT_FOUND,
                 "PRODUCT_NOT_FOUND",
                 exception.getMessage(),
-                null);
+                null,
+                request);
     }
 
     @ExceptionHandler(SnapshotNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleSnapshotNotFound(SnapshotNotFoundException exception) {
+    public ResponseEntity<Map<String, Object>> handleSnapshotNotFound(
+            SnapshotNotFoundException exception,
+            HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.NOT_FOUND,
                 "SNAPSHOT_NOT_FOUND",
                 exception.getMessage(),
-                null);
+                null,
+                request);
     }
 
     @ExceptionHandler(EligibilityRuleNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleEligibilityRuleNotFound(
             EligibilityRuleNotFoundException ex,
             HttpServletRequest request) {
-        String correlationId = UUID.randomUUID().toString();
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("code", "ELIGIBILITY_RULE_NOT_FOUND");
-        body.put("message", ex.getMessage());
-        body.put("status", 404);
-        body.put("timestamp", Instant.now().toString());
-        body.put("correlationId", correlationId);
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .header("X-Correlation-Id", correlationId)
-                .body(body);
+        return buildErrorResponse(
+                HttpStatus.NOT_FOUND,
+                "ELIGIBILITY_RULE_NOT_FOUND",
+                ex.getMessage(),
+                null,
+                request);
     }
 
+            @ExceptionHandler(PromotionCodeNotFoundException.class)
+            public ResponseEntity<Map<String, Object>> handlePromotionCodeNotFound(
+                PromotionCodeNotFoundException ex,
+                HttpServletRequest request) {
+            log.warn("Promotion error [{}]: {}", ex.getClass().getSimpleName(), ex.getMessage());
+            return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "PROMO_NOT_FOUND",
+                ex.getMessage(),
+                null,
+                request);
+            }
+
+            @ExceptionHandler(PromotionNotApplicableException.class)
+            public ResponseEntity<Map<String, Object>> handlePromotionNotApplicable(
+                PromotionNotApplicableException ex,
+                HttpServletRequest request) {
+            log.warn("Promotion error [{}]: {}", ex.getClass().getSimpleName(), ex.getMessage());
+            return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "PROMO_NOT_APPLICABLE",
+                ex.getMessage(),
+                null,
+                request);
+            }
+
+            @ExceptionHandler(PromotionMultipleNotAllowedException.class)
+            public ResponseEntity<Map<String, Object>> handlePromotionMultipleNotAllowed(
+                PromotionMultipleNotAllowedException ex,
+                HttpServletRequest request) {
+            log.warn("Promotion error [{}]: {}", ex.getClass().getSimpleName(), ex.getMessage());
+            return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "PROMO_MULTIPLE_NOT_ALLOWED",
+                ex.getMessage(),
+                null,
+                request);
+            }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidationError(MethodArgumentNotValidException exception) {
+        public ResponseEntity<Map<String, Object>> handleValidationError(
+            MethodArgumentNotValidException exception,
+            HttpServletRequest request) {
         List<Map<String, String>> fieldErrors = exception.getBindingResult().getFieldErrors().stream()
                 .map(this::toFieldError)
                 .toList();
@@ -102,7 +157,8 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "VALIDATION_FAILED",
                 "Validation failed",
-                fieldErrors);
+            fieldErrors,
+            request);
     }
 
     private Map<String, String> toFieldError(FieldError fieldError) {
@@ -115,11 +171,15 @@ public class GlobalExceptionHandler {
             HttpStatus status,
             String code,
             String message,
-            List<Map<String, String>> fieldErrors) {
-        String correlationId = UUID.randomUUID().toString();
+            List<Map<String, String>> fieldErrors,
+            HttpServletRequest request) {
+        String existingCorrelationId = (request != null) ? request.getHeader(CORRELATION_HEADER) : null;
+        String correlationId = (existingCorrelationId != null && !existingCorrelationId.isBlank())
+                ? existingCorrelationId
+                : UUID.randomUUID().toString();
         log.debug("Returning {} for code {} correlationId={}", status.value(), code, correlationId);
 
-        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", code);
         body.put("message", message);
         body.put("status", status.value());

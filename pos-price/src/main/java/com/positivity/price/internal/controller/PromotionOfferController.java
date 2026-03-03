@@ -1,10 +1,13 @@
 package com.positivity.price.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.price.internal.dto.ApplyPromotionRequest;
+import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
 import com.positivity.price.internal.dto.PromotionOfferMapper;
 import com.positivity.price.internal.dto.PromotionOfferResponse;
 import com.positivity.price.service.PromotionOfferService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -69,5 +72,14 @@ public class PromotionOfferController {
     public ResponseEntity<PromotionOfferResponse> deactivateOffer(@PathVariable("id") UUID promotionOfferId) {
         var offer = promotionOfferService.deactivateOffer(promotionOfferId);
         return ResponseEntity.ok(PromotionOfferMapper.toResponse(offer));
+    }
+
+    @PostMapping("/apply")
+    @EmitEvent(id = "PROMOTION_OFFER_APPLY", apiVersion = "1")
+    @PreAuthorize("hasAuthority('Promotion:Apply')")
+    @Operation(summary = "Apply promotion offer during estimate pricing")
+    public ResponseEntity<ApplyPromotionResponse> applyPromotion(
+            @RequestBody @Valid ApplyPromotionRequest request) {
+        return ResponseEntity.ok(promotionOfferService.applyPromotion(request));
     }
 }
