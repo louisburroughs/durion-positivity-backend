@@ -1,6 +1,8 @@
 package com.positivity.workorder.internal.config;
 
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
+import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionLockedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
@@ -53,7 +55,26 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, "BREAK_SEGMENT_NOT_FOUND", ex.getMessage(), request);
     }
 
-    @ExceptionHandler({WorkSessionOverlapException.class, WorkSessionStateException.class, WorkSessionLockedException.class})
+    @ExceptionHandler(TravelSegmentNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleTravelSegmentNotFound(
+            TravelSegmentNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, "TRAVEL_SEGMENT_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(TravelSegmentConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleTravelSegmentConflict(
+            TravelSegmentConflictException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, "TRAVEL_SEGMENT_CONFLICT", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(
+            IllegalArgumentException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "INVALID_ARGUMENT", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler({ WorkSessionOverlapException.class, WorkSessionStateException.class,
+            WorkSessionLockedException.class })
     public ResponseEntity<Map<String, Object>> handleWorkSessionConflict(
             RuntimeException ex,
             HttpServletRequest request) {
@@ -65,7 +86,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request) {
         List<Map<String, String>> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
                 .map(fe -> Map.of("field", fe.getField(),
-                                  "message", fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid value"))
+                        "message", fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid value"))
                 .toList();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", "VALIDATION_FAILED");

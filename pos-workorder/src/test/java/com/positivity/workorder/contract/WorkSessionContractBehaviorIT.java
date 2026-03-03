@@ -26,17 +26,25 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.http.ContentType;
 
 /**
- * Contract behavior integration tests for WorkSession Start/Stop (CAP-139 Story #68).
+ * Contract behavior integration tests for WorkSession Start/Stop (CAP-139 Story
+ * #68).
  *
- * <p>Verifies REST contract for work session lifecycle — start, stop, break management —
- * including overlap prevention, lock guards, and structured error responses.</p>
+ * <p>
+ * Verifies REST contract for work session lifecycle — start, stop, break
+ * management —
+ * including overlap prevention, lock guards, and structured error responses.
+ * </p>
  *
- * <p>Endpoint contract under test:</p>
+ * <p>
+ * Endpoint contract under test:
+ * </p>
  * <ul>
- *   <li>POST /v1/workorders/workSessions/start → 201</li>
- *   <li>POST /v1/workorders/workSessions/{workSessionId}/stop → 200</li>
- *   <li>POST /v1/workorders/workSessions/{workSessionId}/breaks → 201</li>
- *   <li>POST /v1/workorders/workSessions/{workSessionId}/breaks/{breakSegmentId}/stop → 200</li>
+ * <li>POST /v1/workorders/workSessions/start → 201</li>
+ * <li>POST /v1/workorders/workSessions/{workSessionId}/stop → 200</li>
+ * <li>POST /v1/workorders/workSessions/{workSessionId}/breaks → 201</li>
+ * <li>POST
+ * /v1/workorders/workSessions/{workSessionId}/breaks/{breakSegmentId}/stop →
+ * 200</li>
  * </ul>
  *
  * Issue: CAP-139 Story #68
@@ -59,18 +67,17 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
 
     // ── Fixtures ─────────────────────────────────────────────────────────────
 
-    private static final UUID MECHANIC_ID   = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
+    private static final UUID MECHANIC_ID = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
     private static final UUID WORK_ORDER_ID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
-    private static final UUID TASK_ID       = UUID.fromString("cccccccc-0000-0000-0000-000000000003");
-    private static final UUID LOCATION_ID   = UUID.fromString("dddddddd-0000-0000-0000-000000000004");
+    private static final UUID TASK_ID = UUID.fromString("cccccccc-0000-0000-0000-000000000003");
+    private static final UUID LOCATION_ID = UUID.fromString("dddddddd-0000-0000-0000-000000000004");
 
     private Map<String, Object> validStartBody() {
         return Map.of(
-                "mechanicId",     MECHANIC_ID.toString(),
-                "workOrderId",    WORK_ORDER_ID.toString(),
+                "mechanicId", MECHANIC_ID.toString(),
+                "workOrderId", WORK_ORDER_ID.toString(),
                 "workOrderTaskId", TASK_ID.toString(),
-                "locationId",     LOCATION_ID.toString()
-        );
+                "locationId", LOCATION_ID.toString());
     }
 
     // ── WSC-001: Start session happy path ─────────────────────────────────────
@@ -87,8 +94,8 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
                 .then()
                 .log().ifValidationFails()
                 .statusCode(201)
-                .body("status",        equalTo("IN_PROGRESS"))
-                .body("startAt",       notNullValue())
+                .body("status", equalTo("IN_PROGRESS"))
+                .body("startAt", notNullValue())
                 .body("workSessionId", notNullValue());
     }
 
@@ -101,8 +108,8 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
         Map<String, Object> incompleteBody = Map.of(
                 "mechanicId", MECHANIC_ID.toString(),
                 "workOrderTaskId", TASK_ID.toString(),
-                "locationId",     LOCATION_ID.toString()
-                // workOrderId intentionally absent
+                "locationId", LOCATION_ID.toString()
+        // workOrderId intentionally absent
         );
 
         givenWithGatewayAuth()
@@ -171,7 +178,7 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
                 .log().ifValidationFails()
                 .statusCode(200)
                 .body("status", equalTo("COMPLETED"))
-                .body("endAt",  notNullValue());
+                .body("endAt", notNullValue());
     }
 
     // ── WSC-005: Stop non-existent session returns 404 ────────────────────────

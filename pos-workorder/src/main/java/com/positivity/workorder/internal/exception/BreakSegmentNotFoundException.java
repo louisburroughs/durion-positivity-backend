@@ -3,7 +3,8 @@ package com.positivity.workorder.internal.exception;
 import java.util.UUID;
 
 /**
- * Exception thrown when a break segment is not found or does not belong to the expected work session.
+ * Exception thrown when a break segment is not found or does not belong to the
+ * expected work session.
  */
 public class BreakSegmentNotFoundException extends RuntimeException {
     public BreakSegmentNotFoundException(UUID breakSegmentId) {

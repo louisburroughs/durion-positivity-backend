@@ -56,8 +56,7 @@ public class WorkSessionController {
     @EmitEvent(id = "WORKORDER_WORK_SESSION_STOP", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
     public ResponseEntity<WorkSessionResponse> stopWorkSession(
-            @Parameter(description = "ID of the work session to stop", example = "550e8400-e29b-41d4-a716-446655440000")
-            @PathVariable UUID workSessionId,
+            @Parameter(description = "ID of the work session to stop", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workSessionId,
             @Valid @RequestBody StopWorkSessionRequest request) {
         WorkSessionResponse response = workSessionService.stopSession(workSessionId, request);
         return ResponseEntity.ok(response);
@@ -71,8 +70,7 @@ public class WorkSessionController {
     @EmitEvent(id = "WORKORDER_WORK_SESSION_BREAK_START", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
     public ResponseEntity<BreakSegmentResponse> addBreakSegment(
-            @Parameter(description = "ID of the work session", example = "550e8400-e29b-41d4-a716-446655440000")
-            @PathVariable UUID workSessionId,
+            @Parameter(description = "ID of the work session", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workSessionId,
             @Valid @RequestBody AddBreakSegmentRequest request) {
         BreakSegmentResponse response = workSessionService.addBreakSegment(workSessionId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -86,10 +84,8 @@ public class WorkSessionController {
     @EmitEvent(id = "WORKORDER_WORK_SESSION_BREAK_STOP", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
     public ResponseEntity<BreakSegmentResponse> stopBreakSegment(
-            @Parameter(description = "ID of the work session", example = "550e8400-e29b-41d4-a716-446655440000")
-            @PathVariable UUID workSessionId,
-            @Parameter(description = "ID of the break segment to stop", example = "550e8400-e29b-41d4-a716-446655440001")
-            @PathVariable UUID breakSegmentId) {
+            @Parameter(description = "ID of the work session", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workSessionId,
+            @Parameter(description = "ID of the break segment to stop", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID breakSegmentId) {
         BreakSegmentResponse response = workSessionService.stopBreakSegment(workSessionId, breakSegmentId);
         return ResponseEntity.ok(response);
     }

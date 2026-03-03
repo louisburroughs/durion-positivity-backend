@@ -48,19 +48,25 @@ import com.positivity.workorder.internal.repository.WorkSessionRepository;
 import com.positivity.workorder.internal.service.WorkSessionServiceImpl;
 
 /**
- * Unit tests for {@link WorkSessionServiceImpl}. Covers overlap policy, session state transitions,
+ * Unit tests for {@link WorkSessionServiceImpl}. Covers overlap policy, session
+ * state transitions,
  * break management, and net duration computation.
  *
- * <p>Acceptance criteria coverage:</p>
+ * <p>
+ * Acceptance criteria coverage:
+ * </p>
  * <ul>
- *   <li>AC1: Start session creates IN_PROGRESS session with UTC startAt</li>
- *   <li>AC2: Duplicate start for same mechanic is rejected (overlap conflict)</li>
- *   <li>AC3: Overlap allowed when all three conditions met (flag + permission + reason)</li>
- *   <li>AC4: Stop session records COMPLETED with UTC endAt and positive duration</li>
- *   <li>AC5: Stop when no active session is rejected</li>
- *   <li>AC6: Break segment created with breakStartAt</li>
- *   <li>AC7: Break segment closed with breakEndAt</li>
- *   <li>AC8: Net duration deducts break time from total</li>
+ * <li>AC1: Start session creates IN_PROGRESS session with UTC startAt</li>
+ * <li>AC2: Duplicate start for same mechanic is rejected (overlap
+ * conflict)</li>
+ * <li>AC3: Overlap allowed when all three conditions met (flag + permission +
+ * reason)</li>
+ * <li>AC4: Stop session records COMPLETED with UTC endAt and positive
+ * duration</li>
+ * <li>AC5: Stop when no active session is rejected</li>
+ * <li>AC6: Break segment created with breakStartAt</li>
+ * <li>AC7: Break segment closed with breakEndAt</li>
+ * <li>AC8: Net duration deducts break time from total</li>
  * </ul>
  *
  * Issue: CAP-139 Story #68
@@ -83,12 +89,12 @@ class WorkSessionServiceImplTest {
 
     // ── Fixtures ──────────────────────────────────────────────────────────────
 
-    private static final UUID MECHANIC_ID    = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
-    private static final UUID WORK_ORDER_ID  = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
-    private static final UUID TASK_ID        = UUID.fromString("cccccccc-0000-0000-0000-000000000003");
-    private static final UUID LOCATION_ID    = UUID.fromString("dddddddd-0000-0000-0000-000000000004");
-    private static final UUID SESSION_ID     = UUID.fromString("eeeeeeee-0000-0000-0000-000000000005");
-    private static final UUID BREAK_ID       = UUID.fromString("ffffffff-0000-0000-0000-000000000006");
+    private static final UUID MECHANIC_ID = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
+    private static final UUID WORK_ORDER_ID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
+    private static final UUID TASK_ID = UUID.fromString("cccccccc-0000-0000-0000-000000000003");
+    private static final UUID LOCATION_ID = UUID.fromString("dddddddd-0000-0000-0000-000000000004");
+    private static final UUID SESSION_ID = UUID.fromString("eeeeeeee-0000-0000-0000-000000000005");
+    private static final UUID BREAK_ID = UUID.fromString("ffffffff-0000-0000-0000-000000000006");
     private static final UUID SYSTEM_USER_ID = UUID.fromString("11111111-0000-0000-0000-000000000000");
 
     @BeforeEach
@@ -170,7 +176,8 @@ class WorkSessionServiceImplTest {
         Authentication auth = mock(Authentication.class);
         SecurityContext secCtx = mock(SecurityContext.class);
         when(secCtx.getAuthentication()).thenReturn(auth);
-        when(auth.getAuthorities()).thenAnswer(inv -> List.of(new SimpleGrantedAuthority("timekeeping:overlap_override")));
+        when(auth.getAuthorities())
+                .thenAnswer(inv -> List.of(new SimpleGrantedAuthority("timekeeping:overlap_override")));
         when(auth.isAuthenticated()).thenReturn(true);
         when(auth.getPrincipal()).thenReturn(SYSTEM_USER_ID.toString());
         when(auth.getName()).thenReturn(SYSTEM_USER_ID.toString());
@@ -228,12 +235,14 @@ class WorkSessionServiceImplTest {
     @Test
     @DisplayName("AC3c: startSession rejects overlap when flag is false even if permission and reason present")
     void startSession_overlap_throwsWhenFlagFalseEvenWithPermissionAndReason() {
-        // Issue CAP-139 Story #68: all 3 conditions must be met; flag=false alone blocks override
+        // Issue CAP-139 Story #68: all 3 conditions must be met; flag=false alone
+        // blocks override
         ReflectionTestUtils.setField(workSessionService, "allowOverlappingSessions", false);
         Authentication auth = mock(Authentication.class);
         SecurityContext secCtx = mock(SecurityContext.class);
         when(secCtx.getAuthentication()).thenReturn(auth);
-        when(auth.getAuthorities()).thenAnswer(inv -> List.of(new SimpleGrantedAuthority("timekeeping:overlap_override")));
+        when(auth.getAuthorities())
+                .thenAnswer(inv -> List.of(new SimpleGrantedAuthority("timekeeping:overlap_override")));
         when(auth.getName()).thenReturn(SYSTEM_USER_ID.toString());
         SecurityContextHolder.setContext(secCtx);
 
@@ -405,7 +414,7 @@ class WorkSessionServiceImplTest {
         WorkSession session = inProgressSession(startAt);
 
         Instant breakStart = now.minus(30, ChronoUnit.MINUTES);
-        Instant breakEnd   = now.minus(20, ChronoUnit.MINUTES); // 10-min break
+        Instant breakEnd = now.minus(20, ChronoUnit.MINUTES); // 10-min break
         BreakSegment closedBreak = BreakSegment.builder()
                 .breakSegmentId(BREAK_ID)
                 .workSession(session)
@@ -420,7 +429,8 @@ class WorkSessionServiceImplTest {
 
         WorkSessionResponse response = workSessionService.stopSession(SESSION_ID, new StopWorkSessionRequest());
 
-        // Total = 60 min − 10 min break = 50 min = 3000 s (allow 5 s clock skew tolerance)
+        // Total = 60 min − 10 min break = 50 min = 3000 s (allow 5 s clock skew
+        // tolerance)
         assertThat(response.getTotalDurationSeconds()).isBetween(2995, 3005);
     }
 }
