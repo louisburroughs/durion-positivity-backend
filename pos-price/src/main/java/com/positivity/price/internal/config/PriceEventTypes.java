@@ -17,7 +17,7 @@ public final class PriceEventTypes {
 
         /**
          * All event type registrations for the price module.
-         * Total: 7 event types.
+         * Total: 9 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -45,6 +45,14 @@ public final class PriceEventTypes {
                                                 .apiVersion("1")
                                                 .build(),
                                 EventTypeRegistration.write("PROMOTION_OFFER_DEACTIVATE", "Deactivate a promotion offer")
+                                                .apiVersion("1")
+                                                .build(),
+
+                                // PromotionEligibilityRuleController - 2 events
+                                EventTypeRegistration.write("PROMOTION_RULE_CREATE", "Add an eligibility rule to a promotion")
+                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration.write("PROMOTION_RULE_DELETE", "Remove an eligibility rule from a promotion")
                                                 .apiVersion("1")
                                                 .build());
         }

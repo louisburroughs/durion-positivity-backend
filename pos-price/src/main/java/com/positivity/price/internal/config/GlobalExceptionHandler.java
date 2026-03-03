@@ -1,11 +1,13 @@
 package com.positivity.price.internal.config;
 
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
+import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
 import com.positivity.price.internal.exception.ProductNotFoundException;
 import com.positivity.price.internal.exception.PromotionOfferNotFoundException;
 import com.positivity.price.internal.exception.PromotionOfferStateException;
 import com.positivity.price.internal.exception.SnapshotNotFoundException;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -16,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -71,6 +74,22 @@ public class GlobalExceptionHandler {
                 "SNAPSHOT_NOT_FOUND",
                 exception.getMessage(),
                 null);
+    }
+
+    @ExceptionHandler(EligibilityRuleNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleEligibilityRuleNotFound(
+            EligibilityRuleNotFoundException ex,
+            HttpServletRequest request) {
+        String correlationId = UUID.randomUUID().toString();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", "ELIGIBILITY_RULE_NOT_FOUND");
+        body.put("message", ex.getMessage());
+        body.put("status", 404);
+        body.put("timestamp", Instant.now().toString());
+        body.put("correlationId", correlationId);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header("X-Correlation-Id", correlationId)
+                .body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
