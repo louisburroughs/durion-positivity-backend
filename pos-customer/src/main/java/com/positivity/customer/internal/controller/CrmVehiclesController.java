@@ -115,8 +115,7 @@ public class CrmVehiclesController {
                         @Parameter(description = "Source customer ID", required = true) @PathVariable UUID customerId,
                         @Parameter(description = "Vehicle ID to transfer", required = true) @PathVariable UUID vehicleId,
                         @Parameter(description = "Transfer request with target customer", required = true) @RequestBody VehicleTransferRequest body) {
-                log.info("Transferring vehicle {} from customer {} to customer {}", vehicleId, customerId,
-                                body.getTargetCustomerId());
+                
                 VehicleResponse response = crmVehicleService.transferVehicle(customerId, vehicleId, body);
                 return ResponseEntity.ok(response);
         }

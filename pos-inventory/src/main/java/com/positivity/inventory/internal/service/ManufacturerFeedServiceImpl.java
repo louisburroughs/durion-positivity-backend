@@ -43,7 +43,7 @@ public class ManufacturerFeedServiceImpl implements ManufacturerFeedService {
     @Transactional
     public void processFeed(@NonNull Collection<ManufacturerFeedItemDto> feedItems) {
         // Issue #46: Stub ingestion path with normalization + unmapped queue routing.
-        log.info("Processing manufacturer feed with {} items", feedItems.size());
+        log.info("Processing manufacturer feed with *** items");
         Instant receivedAt = Instant.now(clock);
 
         for (ManufacturerFeedItemDto item : feedItems) {
