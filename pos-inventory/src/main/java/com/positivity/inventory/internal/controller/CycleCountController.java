@@ -64,7 +64,7 @@ public class CycleCountController {
         })
         public ResponseEntity<CountResponse> submitCount(
                         @Valid @RequestBody SubmitCountRequest request) {
-                log.info("POST /api/inventory/cycle-count/submit - taskId: {}", request.getTaskId());
+              
 
                 CountResponse response = cycleCountService.submitCount(request);
                 return ResponseEntity.ok(response);
@@ -106,7 +106,7 @@ public class CycleCountController {
         })
         public ResponseEntity<CycleCountTaskResponse> getTask(
                         @Parameter(description = "Task ID") @PathVariable UUID taskId) {
-                log.info("GET /api/inventory/cycle-count/task/{}", taskId);
+                
 
                 CycleCountTaskResponse task = cycleCountService.getTask(taskId);
                 return ResponseEntity.ok(task);

@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class GlobalExceptionHandler {
 
+    private static final String PROMOTION_ERROR = "Promotion error [{}]: {}";
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
 
     @ExceptionHandler(PromotionOfferNotFoundException.class)
@@ -98,6 +99,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleEligibilityRuleNotFound(
             EligibilityRuleNotFoundException ex,
             HttpServletRequest request) {
+        log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
         return buildErrorResponse(
                 HttpStatus.NOT_FOUND,
                 "ELIGIBILITY_RULE_NOT_FOUND",
@@ -110,7 +112,7 @@ public class GlobalExceptionHandler {
             public ResponseEntity<Map<String, Object>> handlePromotionCodeNotFound(
                 PromotionCodeNotFoundException ex,
                 HttpServletRequest request) {
-            log.warn("Promotion error [{}]: {}", ex.getClass().getSimpleName(), ex.getMessage());
+            log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
             return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,
                 "PROMO_NOT_FOUND",
@@ -123,7 +125,7 @@ public class GlobalExceptionHandler {
             public ResponseEntity<Map<String, Object>> handlePromotionNotApplicable(
                 PromotionNotApplicableException ex,
                 HttpServletRequest request) {
-            log.warn("Promotion error [{}]: {}", ex.getClass().getSimpleName(), ex.getMessage());
+            log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
             return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,
                 "PROMO_NOT_APPLICABLE",
@@ -136,7 +138,7 @@ public class GlobalExceptionHandler {
             public ResponseEntity<Map<String, Object>> handlePromotionMultipleNotAllowed(
                 PromotionMultipleNotAllowedException ex,
                 HttpServletRequest request) {
-            log.warn("Promotion error [{}]: {}", ex.getClass().getSimpleName(), ex.getMessage());
+            log.warn(PROMOTION_ERROR, ex.getClass().getSimpleName(), ex.getMessage());
             return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,
                 "PROMO_MULTIPLE_NOT_ALLOWED",

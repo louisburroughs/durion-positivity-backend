@@ -45,6 +45,10 @@ import java.util.UUID;
  */
 @Service
 public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustmentService {
+    private static final String ADJUSTMENT_EVENT_NOT_FOUND = "Adjustment event not found: ";
+    private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT = "Idempotency key {} already processed, returning existing adjustment event {}";
+    private static final String MISSING_AUTHENTICATED_USERNAME = "Missing authenticated username";
+
     private static final Logger log = LoggerFactory.getLogger(WorkorderPartAdjustmentServiceImpl.class);
 
     private final WorkorderPartRepository workorderPartRepository;
@@ -94,18 +98,18 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @Nullable String idempotencyKey,
             @Nullable String notes) {
         String actorId = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
+                .orElseThrow(() -> new IllegalStateException(MISSING_AUTHENTICATED_USERNAME));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning existing adjustment event {}",
+                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
                         idempotencyKey, existingEventId.get());
                 return adjustmentEventRepository.findById(existingEventId.get())
                         .map(this::toResponse)
                         .orElseThrow(() -> new IllegalStateException(
-                                "Adjustment event not found: " + existingEventId.get()));
+                                ADJUSTMENT_EVENT_NOT_FOUND + existingEventId.get()));
             }
         }
 
@@ -146,7 +150,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 .build();
 
         substitutePart = workorderPartRepository.save(substitutePart);
-        log.info("Created substitute part {} for original part {}", substitutePart.getId(), originalPartId);
+        log.info("Created substitute part *** for original part ***");
 
         // Create SUBSTITUTION adjustment event
         WorkorderPartAdjustmentEvent event = WorkorderPartAdjustmentEvent.builder()
@@ -168,7 +172,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
         }
 
-        log.info("Substituted part {} with {} on workorder {}", originalPartId, substitutePart.getId(), workorderId);
+        log.info("Substituted part *** with *** on workorder ***");
         return toResponse(event);
     }
 
@@ -202,18 +206,18 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @Nullable String idempotencyKey,
             @Nullable String notes) {
         String actorId = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
+                .orElseThrow(() -> new IllegalStateException(MISSING_AUTHENTICATED_USERNAME));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning existing adjustment event {}",
+                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
                         idempotencyKey, existingEventId.get());
                 return adjustmentEventRepository.findById(existingEventId.get())
                         .map(this::toResponse)
                         .orElseThrow(() -> new IllegalStateException(
-                                "Adjustment event not found: " + existingEventId.get()));
+                                ADJUSTMENT_EVENT_NOT_FOUND + existingEventId.get()));
             }
         }
 
@@ -265,7 +269,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
         }
 
-        log.info("Returned {} of part {} on workorder {}", quantity, partId, workorderId);
+        log.info("Returned *** of part *** on workorder ***");
         return toResponse(event);
     }
 
@@ -294,18 +298,18 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @Nullable String idempotencyKey,
             @Nullable String notes) {
         String actorId = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
+                .orElseThrow(() -> new IllegalStateException(MISSING_AUTHENTICATED_USERNAME));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning existing adjustment event {}",
+                log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
                         idempotencyKey, existingEventId.get());
                 return adjustmentEventRepository.findById(existingEventId.get())
                         .map(this::toResponse)
                         .orElseThrow(() -> new IllegalStateException(
-                                "Adjustment event not found: " + existingEventId.get()));
+                                ADJUSTMENT_EVENT_NOT_FOUND + existingEventId.get()));
             }
         }
 
@@ -355,8 +359,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
         }
 
-        log.info("Corrected quantity of part {} from {} to {} on workorder {}",
-                partId, oldQuantity, newQuantity, workorderId);
+        log.info("Corrected quantity of part *** from *** to *** on workorder ***");
         return toResponse(event);
     }
 
