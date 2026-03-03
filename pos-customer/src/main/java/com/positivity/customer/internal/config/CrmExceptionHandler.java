@@ -20,11 +20,13 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * Global exception handler for CRM (pos-customer) REST controllers.
  *
- * <p>Handled exceptions:
+ * <p>
+ * Handled exceptions:
  * <ul>
- *   <li>{@link DuplicateRedemptionException} - 409 Conflict</li>
- *   <li>{@link MethodArgumentNotValidException} - 400 Bad Request (validation)</li>
- *   <li>{@link AccessDeniedException} - 403 Forbidden</li>
+ * <li>{@link DuplicateRedemptionException} - 409 Conflict</li>
+ * <li>{@link MethodArgumentNotValidException} - 400 Bad Request
+ * (validation)</li>
+ * <li>{@link AccessDeniedException} - 403 Forbidden</li>
  * </ul>
  */
 @ControllerAdvice

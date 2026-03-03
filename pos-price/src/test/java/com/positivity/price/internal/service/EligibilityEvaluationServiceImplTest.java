@@ -129,9 +129,11 @@ class EligibilityEvaluationServiceImplTest {
     }
 
     /**
-     * EE-005: OR combination — first rule fails (account not in list), second rule passes (vehicle tag matches).
+     * EE-005: OR combination — first rule fails (account not in list), second rule
+     * passes (vehicle tag matches).
      *
-     * <p>Issue: #96
+     * <p>
+     * Issue: #96
      */
     @Test
     void givenOrCombinationRules_andFirstFailsSecondPasses_whenEvaluate_thenEligible() {
@@ -226,7 +228,8 @@ class EligibilityEvaluationServiceImplTest {
     @Test
     void givenFleetSizeRule_andMissingAccountContext_whenEvaluate_thenMissingContext() {
         UUID promotionId = UUID.randomUUID();
-        PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.GREATER_THAN_OR_EQUAL_TO, "10");
+        PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.GREATER_THAN_OR_EQUAL_TO,
+                "10");
 
         when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
 

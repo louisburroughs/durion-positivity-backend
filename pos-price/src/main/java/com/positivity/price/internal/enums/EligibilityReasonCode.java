@@ -10,6 +10,8 @@ public enum EligibilityReasonCode {
     MISSING_ACCOUNT_CONTEXT,
     /** Context extension; maps to internal service error. */
     MISSING_VEHICLE_CONTEXT,
-    /** Fail-safe code used when an unexpected exception occurs during evaluation. */
+    /**
+     * Fail-safe code used when an unexpected exception occurs during evaluation.
+     */
     EVALUATION_ERROR
 }

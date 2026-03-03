@@ -25,7 +25,7 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "promotion_redemption", uniqueConstraints = @UniqueConstraint(name = "uq_promotion_workorder", columnNames = {
-    "promotion_id", "workorder_id" }))
+        "promotion_id", "workorder_id" }))
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter

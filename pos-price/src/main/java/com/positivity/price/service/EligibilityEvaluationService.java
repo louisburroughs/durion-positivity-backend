@@ -21,7 +21,10 @@ public interface EligibilityEvaluationService {
     /** Delete an eligibility rule by ID. Issue: #96 */
     void deleteRule(@NonNull UUID ruleId);
 
-    /** Evaluate promotion eligibility for a given account and vehicle context. Issue: #96 */
+    /**
+     * Evaluate promotion eligibility for a given account and vehicle context.
+     * Issue: #96
+     */
     @NonNull
     EligibilityDecision evaluateEligibility(
             @NonNull UUID promotionId, @Nullable UUID accountId, @Nullable UUID vehicleId);
