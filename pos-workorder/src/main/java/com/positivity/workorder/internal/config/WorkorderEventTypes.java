@@ -408,6 +408,44 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // Work session events (CAP-139 Story #68)
+        public static final EventTypeRegistration WORKORDER_WORK_SESSION_START = EventTypeRegistration
+                        .write("WORKORDER_WORK_SESSION_START", "Start a work session").apiVersion("1").build();
+        public static final EventTypeRegistration WORKORDER_WORK_SESSION_STOP = EventTypeRegistration
+                        .write("WORKORDER_WORK_SESSION_STOP", "Stop a work session").apiVersion("1").build();
+        public static final EventTypeRegistration WORKORDER_WORK_SESSION_BREAK_START = EventTypeRegistration
+                        .write("WORKORDER_WORK_SESSION_BREAK_START", "Start a break segment").apiVersion("1").build();
+        public static final EventTypeRegistration WORKORDER_WORK_SESSION_BREAK_STOP = EventTypeRegistration
+                        .write("WORKORDER_WORK_SESSION_BREAK_STOP", "Stop a break segment").apiVersion("1").build();
+
+        // ==================== TRAVEL SEGMENT EVENTS (Story #67) ====================
+        public static final EventTypeRegistration WORKORDER_TRAVEL_SEGMENT_START = EventTypeRegistration
+                        .write("WORKORDER_TRAVEL_SEGMENT_START", "Start a mobile travel segment")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_TRAVEL_SEGMENT_STOP = EventTypeRegistration
+                        .write("WORKORDER_TRAVEL_SEGMENT_STOP", "Stop a mobile travel segment")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_TRAVEL_SEGMENT_SUBMIT = EventTypeRegistration
+                        .write("WORKORDER_TRAVEL_SEGMENT_SUBMIT", "Submit travel segments for a mobile work assignment")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT = EventTypeRegistration
+                        .write("WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT",
+                                        "Create post-approval adjustment for a travel segment")
+                        .apiVersion("1").build();
+
+        // ==================== TIME ENTRY EVENTS (Story #66) ====================
+
+        public static final EventTypeRegistration WORKORDER_TIME_ENTRY_APPROVED = EventTypeRegistration
+                        .approval("WORKORDER_TIME_ENTRY_APPROVED", "Approve a submitted time entry")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_TIME_ENTRY_REJECTED = EventTypeRegistration
+                        .approval("WORKORDER_TIME_ENTRY_REJECTED", "Reject a submitted time entry")
+                        .apiVersion("1").build();
+
         // ==================== ALL EVENT TYPES ====================
 
         /** All event types for registration at startup */
@@ -475,5 +513,18 @@ public final class WorkorderEventTypes {
                         WORKORDER_APPROVAL_CONFIG_DELETE,
                         // WIP dashboard events (CAP-248 Story #14)
                         WORKORDER_WIP_LIST,
-                        WORKORDER_WIP_VIEW);
+                        WORKORDER_WIP_VIEW,
+                        // Work session events (CAP-139 Story #68)
+                        WORKORDER_WORK_SESSION_START,
+                        WORKORDER_WORK_SESSION_STOP,
+                        WORKORDER_WORK_SESSION_BREAK_START,
+                        WORKORDER_WORK_SESSION_BREAK_STOP,
+                        // Travel segment events (Story #67)
+                        WORKORDER_TRAVEL_SEGMENT_START,
+                        WORKORDER_TRAVEL_SEGMENT_STOP,
+                        WORKORDER_TRAVEL_SEGMENT_SUBMIT,
+                        WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT,
+                        // Time entry events (Story #66)
+                        WORKORDER_TIME_ENTRY_APPROVED,
+                        WORKORDER_TIME_ENTRY_REJECTED);
 }
