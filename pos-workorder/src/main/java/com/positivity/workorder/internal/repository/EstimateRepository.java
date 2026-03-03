@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -15,6 +16,8 @@ import com.positivity.workorder.internal.enums.EstimateStatus;
 @Repository
 public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
     List<Estimate> findByCustomerId(UUID customerId);
+
+    Optional<Estimate> findByAppointmentId(UUID appointmentId);
 
     // Issue #15 (CAP-248): Paginated retrieval methods required for estimate search
     // endpoint.

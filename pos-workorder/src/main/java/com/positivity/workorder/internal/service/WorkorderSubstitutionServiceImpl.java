@@ -66,7 +66,8 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
+                () -> new IllegalStateException("Authenticated user context is required for part substitution"));
 
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);

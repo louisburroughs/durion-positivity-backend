@@ -9,8 +9,6 @@ import com.positivity.workorder.internal.dto.CompletionPreconditionsResponse;
 import com.positivity.workorder.internal.dto.CreateWorkorderRequest;
 import com.positivity.workorder.internal.dto.ReopenWorkorderRequest;
 import com.positivity.workorder.internal.dto.ReopenWorkorderResponse;
-import com.positivity.workorder.internal.dto.StartWorkorderRequest;
-import com.positivity.workorder.internal.dto.StartWorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
@@ -31,7 +29,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,7 +38,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderController {
-    private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    private static final String SYSTEM_USER_ID = "system";
 
     private final WorkorderService workorderService;
     private final WorkorderInvoiceService workorderInvoiceService;
@@ -98,39 +95,6 @@ public class WorkorderController {
             @Parameter(description = "ID of the work order to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         workorderService.deleteWorkorder(workorderId);
         return ResponseEntity.noContent().build();
-    }
-
-    @Operation(summary = "Start a work order", description = "Start work on a work order, transitioning it to WORK_IN_PROGRESS status.")
-    @ApiResponse(responseCode = "200", description = "Work order started successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid state transition or pending change requests.")
-    @ApiResponse(responseCode = "404", description = "Work order not found.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Start workorder request", required = true, content = @Content(schema = @Schema(implementation = StartWorkorderRequest.class), examples = @ExampleObject(name = "startWorkorder", value = "{\"reason\":\"Technician started work\"}")))
-    @PostMapping("/{workorderId}/start")
-    @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
-    @PreAuthorize("hasAuthority('workorder:workorder:start')")
-    public ResponseEntity<StartWorkorderResponse> startWorkorder(
-            @Parameter(description = "ID of the work order to start", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
-            @RequestBody StartWorkorderRequest request) {
-        try {
-            String previousStatus = workorderService.getCurrentWorkorderStatus(workorderId);
-            workorderService.startWorkorder(workorderId, resolveCurrentActorUserId(), request.getReason());
-
-            StartWorkorderResponse response = StartWorkorderResponse.builder()
-                    .workorderId(workorderId)
-                    .previousStatus(previousStatus)
-                    .currentStatus("WORK_IN_PROGRESS")
-                    .transitionedAt(Instant.now())
-                    .message("Work order started successfully")
-                    .build();
-
-            return ResponseEntity.ok(response);
-        } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(
-                    StartWorkorderResponse.builder()
-                            .workorderId(workorderId)
-                            .message(e.getMessage())
-                            .build());
-        }
     }
 
     @Operation(summary = "Get transition history", description = "Retrieve the state transition history for a work order.")
@@ -281,7 +245,7 @@ public class WorkorderController {
         try {
             WorkorderService.ReopenResult reopened = workorderService.reopenCompletedWorkorder(
                     workorderId,
-                    resolveCurrentActorUserId(),
+                    SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER_ID),
                     request.getReopenReason());
 
             ReopenWorkorderResponse response = ReopenWorkorderResponse.builder()
@@ -304,13 +268,8 @@ public class WorkorderController {
         }
     }
 
-    private UUID resolveCurrentActorUserId() {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_USER_ID.toString());
-        try {
-            return UUID.fromString(actorId);
-        } catch (IllegalArgumentException ex) {
-            log.warn("Current actor id '{}' is not a UUID; using system fallback", actorId);
-            return SYSTEM_USER_ID;
-        }
+    private String resolveCurrentActorUserId() {
+        return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER_ID);
     }
+
 }

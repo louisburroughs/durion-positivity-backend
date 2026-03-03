@@ -28,7 +28,7 @@ public class WorkCompletedEvent {
     public static class WorkCompletedPayload {
         private UUID workorderId;
         private Instant completedAt;
-        private UUID completedBy;
+        private String completedBy;
         private Map<String, Object> finalBillableScope;
     }
 }

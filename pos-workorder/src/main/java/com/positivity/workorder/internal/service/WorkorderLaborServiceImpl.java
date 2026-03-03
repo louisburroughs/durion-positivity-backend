@@ -75,7 +75,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
             @NonNull UUID serviceId,
             @NonNull UUID technicianId,
             @Nullable String notes,
-            @NonNull UUID createdBy,
+            @NonNull String createdBy,
             @Nullable String idempotencyKey) {
 
         // Check idempotency first
@@ -205,6 +205,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
             @NonNull UUID entryId,
             @NonNull BigDecimal hours,
             @NonNull String reason,
+            @NonNull String adjustedBy,
             @Nullable String idempotencyKey) {
 
         // Check idempotency first

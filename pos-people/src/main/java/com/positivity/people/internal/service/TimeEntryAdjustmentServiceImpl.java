@@ -98,7 +98,8 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
     @Transactional
     public boolean approveAdjustment(java.util.UUID adjustmentId, String approverUserId, Set<String> permissions,
             String correlationId) {
-        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String auditActorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("No current user"));
         Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt = adjustmentRepository
                 .findById(adjustmentId);
         if (opt.isEmpty()) {

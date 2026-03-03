@@ -10,7 +10,6 @@ import java.util.UUID;
 @Builder
 public class CreateChangeRequestDTO {
     private UUID workorderId;
-    private UUID requestedByUserId;
     private String description;
     private Boolean isEmergencyException;
     private String exceptionReason;

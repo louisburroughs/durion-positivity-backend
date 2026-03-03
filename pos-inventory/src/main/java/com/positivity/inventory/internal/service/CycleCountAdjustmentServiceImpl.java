@@ -104,7 +104,8 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                         @NonNull UUID adjustmentId,
                         @NonNull ApproveAdjustmentRequest request,
                         @Nullable String correlationId) {
-                String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+                String actorUserId = SecurityContextHelper.getCurrentUsername()
+                                .orElseThrow(() -> new IllegalStateException("No current user"));
                 String actorUsername = SecurityContextHelper.getCurrentUsernameOrDefault("system");
                 log.info("Approving adjustment {} by authenticated actor {}", adjustmentId, actorUsername);
 

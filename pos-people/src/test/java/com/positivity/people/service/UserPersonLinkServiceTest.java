@@ -77,7 +77,7 @@ class UserPersonLinkServiceTest {
         });
 
         try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUserIdOrDefault("system"))
+            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                     .thenReturn("tester");
 
             UserPersonLinkResponse response = service.linkUserToPerson(request);

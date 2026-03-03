@@ -38,6 +38,7 @@ import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
+import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -97,13 +98,16 @@ class WorkorderCompletionTest {
     @Mock
     private org.springframework.web.client.RestClient restClient;
 
+    @Mock
+    private ShopmgrOperationalContextClient shopmgrClient;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 
     private WorkorderServiceImpl workOrderService;
 
     private Workorder testWorkorder;
-    private UUID userId;
+    private String userId;
     private UUID testWorkorderId;
     private UUID testShopId;
     private UUID testVehicleId;
@@ -127,7 +131,7 @@ class WorkorderCompletionTest {
         testShopId = UUID.fromString("550e8400-e29b-41d4-a716-446655440031");
         testVehicleId = UUID.fromString("550e8400-e29b-41d4-a716-446655440032");
         testCustomerId = UUID.fromString("550e8400-e29b-41d4-a716-446655440033");
-        userId = UUID.fromString("550e8400-e29b-41d4-a716-446655440034");
+        userId = "system";
         testWorkorder = Workorder.builder()
                 .id(testWorkorderId)
                 .shopId(testShopId)
@@ -140,7 +144,7 @@ class WorkorderCompletionTest {
         // dependency
         workOrderService = new WorkorderServiceImpl(workOrderRepository, estimateRepository, estimateItemRepository,
                 workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
-                auditEventRepository, idempotencyService, promotionValidationService);
+                auditEventRepository, idempotencyService, promotionValidationService, shopmgrClient);
     }
 
     @AfterEach

@@ -65,7 +65,7 @@ public class Workorder {
 
     // Approval-related fields
     private Instant approvedAt;
-    private UUID approvedBy;
+    // private String approvedBy;
 
     // Customer signature capture for approval
     @Column(length = 100000)
@@ -76,7 +76,7 @@ public class Workorder {
 
     // Completion-related fields
     private Instant completedAt;
-    private UUID completedBy;
+    private String completedBy;
 
     @Column(columnDefinition = "TEXT")
     private String completionNotes;
@@ -85,8 +85,19 @@ public class Workorder {
     @Builder.Default
     private Boolean isReopened = false;
 
+    // Assignment context fields (CAP:140 Story #64)
+    private UUID locationId;
+    private UUID resourceId;
+
+    @Column(columnDefinition = "TEXT")
+    private String mechanicIds; // JSON array of mechanic UUIDs e.g. ["uuid1","uuid2"]
+
+    // Operational context fields (CAP:140 Story #59)
+    private String operationalContextVersion;
+    private Instant workStartedAt;
+
     private Instant reopenedAt;
-    private UUID reopenedBy;
+    private String reopenedBy;
 
     @Column(columnDefinition = "TEXT")
     private String reopenReason;

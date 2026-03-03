@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -50,7 +51,7 @@ public class EstimateResponse {
     private String createdByUserId;
 
     @Schema(description = "Date and time the estimate was created")
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Schema(description = "Subtotal amount before tax", example = "150.00")
     private BigDecimal subtotal;

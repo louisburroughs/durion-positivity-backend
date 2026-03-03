@@ -69,9 +69,9 @@ public class WorkorderLaborEntryResponse {
     @JsonProperty("active")
     private boolean active;
 
-    @Schema(description = "User who created this entry", example = "550e8400-e29b-41d4-a716-446655440002")
+    @Schema(description = "User who created this entry", example = "system@syte.com")
     @JsonProperty("createdBy")
-    private UUID createdBy;
+    private String createdBy;
 
     @Schema(description = "Creation timestamp", example = "2024-01-27T14:30:00Z")
     @JsonProperty("createdAt")

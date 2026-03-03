@@ -93,7 +93,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -200,7 +201,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -291,7 +293,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        String actorId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {

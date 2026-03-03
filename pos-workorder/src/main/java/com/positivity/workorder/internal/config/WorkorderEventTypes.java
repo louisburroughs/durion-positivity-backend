@@ -41,6 +41,13 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** Override operational context for a workorder */
+        public static final EventTypeRegistration WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE = EventTypeRegistration
+                        .write("WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE",
+                                        "Manager override of operational context before work starts")
+                        .apiVersion("1")
+                        .build();
+
         /** Approve a workorder with customer signature */
         public static final EventTypeRegistration WORKORDER_APPROVE = EventTypeRegistration
                         .approval("WORKORDER_APPROVE",
@@ -152,6 +159,13 @@ public final class WorkorderEventTypes {
         public static final EventTypeRegistration WORKORDER_ESTIMATE_CREATE = EventTypeRegistration
                         .write("WORKORDER_ESTIMATE_CREATE",
                                         "Create a new draft estimate")
+                        .apiVersion("1")
+                        .build();
+
+        /** Create draft estimate from appointment */
+        public static final EventTypeRegistration WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT = EventTypeRegistration
+                        .write("WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT",
+                                        "Create draft estimate from appointment")
                         .apiVersion("1")
                         .build();
 
@@ -403,6 +417,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_CREATE,
                         WORKORDER_DELETE,
                         WORKORDER_START,
+                        WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE,
                         WORKORDER_APPROVE,
                         WORKORDER_COMPLETE,
                         WORKORDER_INVOICE_GENERATE,
@@ -421,6 +436,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_ESTIMATE_SEARCH_BY_LOCATION,
                         WORKORDER_ESTIMATE_SEARCH,
                         WORKORDER_ESTIMATE_CREATE,
+                        WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT,
                         WORKORDER_ESTIMATE_DECLINE,
                         WORKORDER_ESTIMATE_REOPEN,
                         WORKORDER_ESTIMATE_APPROVE,

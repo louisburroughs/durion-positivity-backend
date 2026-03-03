@@ -43,7 +43,7 @@ public interface ChangeRequestService {
      * Apply emergency override to approve a change request with exception.
      * Restricted to users with Manager role or equivalent permission.
      */
-    ChangeRequest applyEmergencyOverride(UUID changeRequestId, UUID managerId, String exceptionReason);
+    ChangeRequest applyEmergencyOverride(UUID changeRequestId, String exceptionReason);
 
     /**
      * Record customer denial acknowledgment for emergency/safety items

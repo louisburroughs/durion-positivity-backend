@@ -92,8 +92,8 @@ public class WorkorderLaborEntry {
 
     // Audit fields
     @NonNull
-    @Column(nullable = false, updatable = false, columnDefinition = "UUID")
-    private UUID createdBy;
+    @Column(nullable = false, updatable = false, columnDefinition = "TEXT")
+    private String createdBy;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
