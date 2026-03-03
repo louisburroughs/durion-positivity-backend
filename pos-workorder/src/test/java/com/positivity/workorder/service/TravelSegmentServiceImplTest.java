@@ -15,11 +15,15 @@ import com.positivity.workorder.internal.service.TravelSegmentServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.Instant;
 import java.util.List;
@@ -52,6 +56,21 @@ class TravelSegmentServiceImplTest {
 
     @InjectMocks
     private TravelSegmentServiceImpl serviceImpl;
+
+    @BeforeEach
+    void setUpSecurityContext() {
+        Authentication auth = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext context = org.mockito.Mockito.mock(SecurityContext.class);
+        when(context.getAuthentication()).thenReturn(auth);
+        when(auth.isAuthenticated()).thenReturn(true);
+        when(auth.getPrincipal()).thenReturn(TECHNICIAN_ID.toString());
+        SecurityContextHolder.setContext(context);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     private StartTravelSegmentRequest validStartRequest() {
         return StartTravelSegmentRequest.builder()
@@ -186,13 +205,11 @@ class TravelSegmentServiceImplTest {
                 .createdBy("system")
                 .build();
 
-        when(travelSegmentRepository.findByMobileWorkAssignmentIdAndStatus(
-                MOBILE_WORK_ASSIGNMENT_ID, TravelSegmentStatus.IN_PROGRESS)).thenReturn(List.of(seg1));
-        when(travelSegmentRepository.findByMobileWorkAssignmentIdAndStatus(
-                MOBILE_WORK_ASSIGNMENT_ID, TravelSegmentStatus.COMPLETED)).thenReturn(List.of(seg2));
+        when(travelSegmentRepository.findByMobileWorkAssignmentIdAndTechnicianId(
+                MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID)).thenReturn(List.of(seg1, seg2));
         when(travelSegmentRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID);
+        serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID);
 
         assertThat(seg1.getStatus()).isEqualTo(TravelSegmentStatus.SUBMITTED);
         assertThat(seg2.getStatus()).isEqualTo(TravelSegmentStatus.SUBMITTED);
@@ -202,12 +219,10 @@ class TravelSegmentServiceImplTest {
     @Test
     @DisplayName("AC6-empty: submitTravelSegments throws not found when no segments exist")
     void submitSegments_emptyListThrowsNotFound() {
-        when(travelSegmentRepository.findByMobileWorkAssignmentIdAndStatus(
-                MOBILE_WORK_ASSIGNMENT_ID, TravelSegmentStatus.IN_PROGRESS)).thenReturn(List.of());
-        when(travelSegmentRepository.findByMobileWorkAssignmentIdAndStatus(
-                MOBILE_WORK_ASSIGNMENT_ID, TravelSegmentStatus.COMPLETED)).thenReturn(List.of());
+        when(travelSegmentRepository.findByMobileWorkAssignmentIdAndTechnicianId(
+                MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID))
+        assertThatThrownBy(() -> serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID))
                 .isInstanceOf(TravelSegmentNotFoundException.class);
     }
 
