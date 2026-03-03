@@ -7,6 +7,7 @@ import com.positivity.price.service.PriceQuoteService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,6 +37,7 @@ public class PriceQuoteController {
      */
     @PostMapping
     @EmitEvent(id = "PRICE_QUOTE_CALCULATE", apiVersion = "1")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PriceQuoteResponse> calculatePriceQuote(@Valid @RequestBody PriceQuoteRequest request) {
         return ResponseEntity.ok(priceQuoteService.calculatePrice(request));
     }

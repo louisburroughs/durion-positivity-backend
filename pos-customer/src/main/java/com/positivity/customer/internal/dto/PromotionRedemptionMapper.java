@@ -18,6 +18,7 @@ public final class PromotionRedemptionMapper {
                 redemption.getDiscountAmount(),
                 redemption.getDiscountType(),
                 redemption.getPromotionCode(),
+                redemption.getRecordedBy(),
                 redemption.getRecordedOverLimit(),
                 redemption.getStatus(),
                 redemption.getRedemptionTimestamp(),

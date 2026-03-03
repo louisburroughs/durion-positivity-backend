@@ -25,6 +25,7 @@ public class PromotionRedemptionResponse {
     private BigDecimal discountAmount;
     private String discountType;
     private String promotionCode;
+    private String recordedBy;
     private Boolean recordedOverLimit;
     private RedemptionStatus status;
     private LocalDateTime redemptionTimestamp;

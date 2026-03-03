@@ -19,6 +19,7 @@ import com.positivity.customer.internal.dto.RecordRedemptionRequest;
 import com.positivity.customer.internal.exception.DuplicateRedemptionException;
 import com.positivity.customer.internal.repository.PromotionCounterRepository;
 import com.positivity.customer.internal.repository.PromotionRedemptionRepository;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.customer.service.PromotionRedemptionService;
 
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,7 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
         redemption.setDiscountAmount(request.getDiscountAmount());
         redemption.setDiscountType(request.getDiscountType());
         redemption.setPromotionCode(request.getPromotionCode());
+        redemption.setRecordedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
         redemption.setRecordedOverLimit(
                 request.getRecordedOverLimit() != null ? request.getRecordedOverLimit() : false);
         redemption.setStatus(Boolean.TRUE.equals(request.getRecordedOverLimit())

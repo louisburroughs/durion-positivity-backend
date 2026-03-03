@@ -4,6 +4,7 @@ import com.positivity.price.internal.dto.PricingSnapshotResponse;
 import com.positivity.price.service.PricingSnapshotService;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +32,7 @@ public class PricingSnapshotController {
      * @return persisted snapshot
      */
     @GetMapping("/{snapshotId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PricingSnapshotResponse> getSnapshot(@PathVariable UUID snapshotId) {
         return ResponseEntity.ok(pricingSnapshotService.getSnapshot(snapshotId));
     }
