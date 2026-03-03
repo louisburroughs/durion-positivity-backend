@@ -53,7 +53,8 @@ public class TravelSegmentController {
     public ResponseEntity<TravelSegmentResponse> stopTravelSegment(
             @PathVariable UUID travelSegmentId,
             @Valid @RequestBody StopTravelSegmentRequest request) {
-        return ResponseEntity.ok(TravelSegmentMapper.toResponse(travelSegmentService.stopTravelSegment(travelSegmentId, request)));
+        return ResponseEntity
+                .ok(TravelSegmentMapper.toResponse(travelSegmentService.stopTravelSegment(travelSegmentId, request)));
     }
 
     @PostMapping("/submit/{mobileWorkAssignmentId}")
@@ -84,6 +85,7 @@ public class TravelSegmentController {
             @PathVariable UUID travelSegmentId,
             @Valid @RequestBody CreateTravelSegmentAdjustmentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(TravelSegmentMapper.toAdjustmentResponse(travelSegmentService.createAdjustment(travelSegmentId, request)));
+                .body(TravelSegmentMapper
+                        .toAdjustmentResponse(travelSegmentService.createAdjustment(travelSegmentId, request)));
     }
 }

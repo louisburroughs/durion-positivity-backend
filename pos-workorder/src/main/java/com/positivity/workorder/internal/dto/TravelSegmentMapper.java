@@ -5,7 +5,8 @@ import com.positivity.workorder.internal.entity.TravelSegmentAdjustment;
 
 public final class TravelSegmentMapper {
 
-    private TravelSegmentMapper() {}
+    private TravelSegmentMapper() {
+    }
 
     public static TravelSegmentResponse toResponse(TravelSegment segment) {
         return TravelSegmentResponse.builder()

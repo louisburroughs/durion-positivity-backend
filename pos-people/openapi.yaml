@@ -375,18 +375,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Person or role not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "201":
           description: Role assignment created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserRoleDto"
+        "404":
+          description: Person or role not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:

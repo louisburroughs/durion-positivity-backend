@@ -35,9 +35,12 @@ class TimeEntryServiceImplTest {
     private static final UUID WORK_ORDER_ID = UUID.randomUUID();
     private static final UUID PERSON_ID = UUID.randomUUID();
 
-    @Mock private TimeEntryRepository timeEntryRepository;
-    @Mock private ApplicationEventPublisher eventPublisher;
-    @InjectMocks private TimeEntryServiceImpl timeEntryService;
+    @Mock
+    private TimeEntryRepository timeEntryRepository;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+    @InjectMocks
+    private TimeEntryServiceImpl timeEntryService;
 
     private TimeEntry submittedEntry() {
         return TimeEntry.builder()
@@ -52,7 +55,8 @@ class TimeEntryServiceImplTest {
         return e;
     }
 
-    @Test @DisplayName("AC1: approveEntry SUBMITTED returns APPROVED with decision fields set")
+    @Test
+    @DisplayName("AC1: approveEntry SUBMITTED returns APPROVED with decision fields set")
     void approveEntry_succeeds() {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
         when(timeEntryRepository.save(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -63,14 +67,16 @@ class TimeEntryServiceImplTest {
         verify(eventPublisher).publishEvent(any(TimeEntryApprovedEvent.class));
     }
 
-    @Test @DisplayName("AC4: approveEntry non-existent ID throws TimeEntryNotFoundException")
+    @Test
+    @DisplayName("AC4: approveEntry non-existent ID throws TimeEntryNotFoundException")
     void approveEntry_notFound_throws() {
         when(timeEntryRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
         assertThatThrownBy(() -> timeEntryService.approveTimeEntry(UUID.randomUUID()))
                 .isInstanceOf(TimeEntryNotFoundException.class);
     }
 
-    @Test @DisplayName("AC3: approveEntry already-APPROVED throws TimeEntryStateException")
+    @Test
+    @DisplayName("AC3: approveEntry already-APPROVED throws TimeEntryStateException")
     void approveEntry_alreadyApproved_throws() {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(approvedEntry()));
         assertThatThrownBy(() -> timeEntryService.approveTimeEntry(TIME_ENTRY_ID))
@@ -78,7 +84,8 @@ class TimeEntryServiceImplTest {
                 .hasMessageContaining("not in SUBMITTED state");
     }
 
-    @Test @DisplayName("AC2: rejectEntry SUBMITTED returns REJECTED with reason set")
+    @Test
+    @DisplayName("AC2: rejectEntry SUBMITTED returns REJECTED with reason set")
     void rejectEntry_succeeds() {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
         when(timeEntryRepository.save(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -90,7 +97,8 @@ class TimeEntryServiceImplTest {
         verify(eventPublisher).publishEvent(any(TimeEntryRejectedEvent.class));
     }
 
-    @Test @DisplayName("AC4 (reject): rejectEntry non-existent ID throws TimeEntryNotFoundException")
+    @Test
+    @DisplayName("AC4 (reject): rejectEntry non-existent ID throws TimeEntryNotFoundException")
     void rejectEntry_notFound_throws() {
         when(timeEntryRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
         assertThatThrownBy(() -> timeEntryService.rejectTimeEntry(UUID.randomUUID(),
@@ -98,7 +106,8 @@ class TimeEntryServiceImplTest {
                 .isInstanceOf(TimeEntryNotFoundException.class);
     }
 
-    @Test @DisplayName("AC3 (reject): rejectEntry already-REJECTED throws TimeEntryStateException")
+    @Test
+    @DisplayName("AC3 (reject): rejectEntry already-REJECTED throws TimeEntryStateException")
     void rejectEntry_alreadyRejected_throws() {
         TimeEntry rejectedEntry = submittedEntry();
         rejectedEntry.setStatus(TimeEntryStatus.REJECTED);
@@ -109,7 +118,8 @@ class TimeEntryServiceImplTest {
                 .hasMessageContaining("not in SUBMITTED state");
     }
 
-    @Test @DisplayName("AC2 (additional): rejectEntry valid reason returns REJECTED entry")
+    @Test
+    @DisplayName("AC2 (additional): rejectEntry valid reason returns REJECTED entry")
     void rejectEntry_withValidReason_setsApprovalFields() {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
         when(timeEntryRepository.save(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));

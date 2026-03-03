@@ -1,7 +1,8 @@
 package com.positivity.workorder.internal.enums;
 
 /**
- * Reason codes for on-behalf travel segment entries (e.g. manager entering on behalf of technician).
+ * Reason codes for on-behalf travel segment entries (e.g. manager entering on
+ * behalf of technician).
  */
 public enum OnBehalfReasonCode {
     TECHNICIAN_UNAVAILABLE,

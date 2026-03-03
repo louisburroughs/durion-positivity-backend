@@ -1,7 +1,8 @@
 package com.positivity.workorder.internal.enums;
 
 /**
- * Classifies the direction/purpose of a single travel leg for a mobile work assignment.
+ * Classifies the direction/purpose of a single travel leg for a mobile work
+ * assignment.
  */
 public enum TravelSegmentType {
     DEPART_SHOP,

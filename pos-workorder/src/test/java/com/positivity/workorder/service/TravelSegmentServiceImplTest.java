@@ -122,7 +122,8 @@ class TravelSegmentServiceImplTest {
     void stopSegment_notFoundThrows() {
         when(travelSegmentRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> serviceImpl.stopTravelSegment(UUID.randomUUID(), StopTravelSegmentRequest.builder().build()))
+        assertThatThrownBy(
+                () -> serviceImpl.stopTravelSegment(UUID.randomUUID(), StopTravelSegmentRequest.builder().build()))
                 .isInstanceOf(TravelSegmentNotFoundException.class);
     }
 
@@ -252,4 +253,3 @@ class TravelSegmentServiceImplTest {
                 .hasMessageContaining("Adjustments can only be created for approved segments");
     }
 }
-

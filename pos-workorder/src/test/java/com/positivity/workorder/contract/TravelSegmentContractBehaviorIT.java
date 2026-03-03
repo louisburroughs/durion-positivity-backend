@@ -31,12 +31,17 @@ import static org.hamcrest.Matchers.notNullValue;
  * </p>
  * <ul>
  * <li>POST /v1/workorders/travelSegments/start → 201</li>
- * <li>POST /v1/workorders/travelSegments/start → 400 (missing required fields)</li>
+ * <li>POST /v1/workorders/travelSegments/start → 400 (missing required
+ * fields)</li>
  * <li>POST /v1/workorders/travelSegments/{id}/stop → 404 (non-existent id)</li>
- * <li>POST /v1/workorders/travelSegments/submit/{mobileWorkAssignmentId} → 404 (no segments)</li>
- * <li>POST /v1/workorders/travelSegments/{id}/adjustments → 404 (non-existent id)</li>
- * <li>POST /v1/workorders/travelSegments/start → 409 (TRAVEL_SEGMENT_CONFLICT, already active)</li>
- * <li>POST /v1/workorders/travelSegments/{id}/adjustments → 409 (TRAVEL_SEGMENT_CONFLICT, non-APPROVED)</li>
+ * <li>POST /v1/workorders/travelSegments/submit/{mobileWorkAssignmentId} → 404
+ * (no segments)</li>
+ * <li>POST /v1/workorders/travelSegments/{id}/adjustments → 404 (non-existent
+ * id)</li>
+ * <li>POST /v1/workorders/travelSegments/start → 409 (TRAVEL_SEGMENT_CONFLICT,
+ * already active)</li>
+ * <li>POST /v1/workorders/travelSegments/{id}/adjustments → 409
+ * (TRAVEL_SEGMENT_CONFLICT, non-APPROVED)</li>
  * </ul>
  *
  * Issue: CAP-139 Story #67
@@ -48,7 +53,7 @@ class TravelSegmentContractBehaviorIT extends BaseContractIntegrationTest {
     // ── Fixtures ─────────────────────────────────────────────────────────────
 
     private static final UUID MOBILE_WORK_ASSIGNMENT_ID = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
-    private static final UUID TECHNICIAN_ID             = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
+    private static final UUID TECHNICIAN_ID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
 
     private Map<String, Object> validStartBody() {
         return Map.of(
@@ -102,7 +107,8 @@ class TravelSegmentContractBehaviorIT extends BaseContractIntegrationTest {
     // ── TSC-003: Stop non-existent segment → 404 (GREEN phase) ──────────────
 
     /**
-     * TSC-003 — POST /{id}/stop with a non-existent travelSegmentId returns HTTP 404
+     * TSC-003 — POST /{id}/stop with a non-existent travelSegmentId returns HTTP
+     * 404
      * because the service raises a not-found domain exception.
      */
     @Test
@@ -131,7 +137,8 @@ class TravelSegmentContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("TSC-004: POST /submit/{id} with no segments returns 404")
     void TSC004_submitTravelSegments_noSegments_returns404() {
         // Issue CAP-139 Story #67: AC6 — submit raises not-found when no segments exist
-        // N-01 fix: use a random UUID to ensure no segments exist regardless of test execution order
+        // N-01 fix: use a random UUID to ensure no segments exist regardless of test
+        // execution order
         UUID freshAssignmentId = UUID.randomUUID();
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -158,8 +165,7 @@ class TravelSegmentContractBehaviorIT extends BaseContractIntegrationTest {
         Map<String, Object> body = Map.of(
                 "mobileWorkAssignmentId", freshAssignmentId.toString(),
                 "technicianId", UUID.randomUUID().toString(),
-                "segmentType", "DEPART_SHOP"
-        );
+                "segmentType", "DEPART_SHOP");
 
         // Step 1: first start succeeds
         givenWithGatewayAuth()
@@ -190,8 +196,7 @@ class TravelSegmentContractBehaviorIT extends BaseContractIntegrationTest {
         Map<String, Object> startBody = Map.of(
                 "mobileWorkAssignmentId", freshAssignmentId.toString(),
                 "technicianId", UUID.randomUUID().toString(),
-                "segmentType", "DEPART_SHOP"
-        );
+                "segmentType", "DEPART_SHOP");
 
         // Step 1: start segment and extract travelSegmentId
         String travelSegmentId = givenWithGatewayAuth()

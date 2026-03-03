@@ -20,7 +20,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Service implementation for approving and rejecting submitted time entries (Story #66).
+ * Service implementation for approving and rejecting submitted time entries
+ * (Story #66).
  * Actor fields are sourced from SecurityContext per ADR-0018.
  */
 @Service
@@ -63,7 +64,8 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         entry.setDecisionAtUtc(Instant.now());
         entry = timeEntryRepository.save(entry);
         eventPublisher.publishEvent(new TimeEntryRejectedEvent(
-                entry.getTimeEntryId(), entry.getWorkOrderId(), actor, entry.getDecisionAtUtc(), entry.getRejectionReason()));
+                entry.getTimeEntryId(), entry.getWorkOrderId(), actor, entry.getDecisionAtUtc(),
+                entry.getRejectionReason()));
         return entry;
     }
 }

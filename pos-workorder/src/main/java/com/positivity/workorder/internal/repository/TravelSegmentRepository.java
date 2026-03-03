@@ -10,7 +10,10 @@ import java.util.UUID;
 
 public interface TravelSegmentRepository extends JpaRepository<TravelSegment, UUID> {
     List<TravelSegment> findByMobileWorkAssignmentIdAndStatus(UUID mobileWorkAssignmentId, TravelSegmentStatus status);
+
     List<TravelSegment> findByMobileWorkAssignmentIdAndTechnicianId(UUID mobileWorkAssignmentId, UUID technicianId);
+
     Optional<TravelSegment> findByTravelSegmentIdAndTechnicianId(UUID travelSegmentId, UUID technicianId);
+
     long countByMobileWorkAssignmentIdAndStatus(UUID mobileWorkAssignmentId, TravelSegmentStatus status);
 }

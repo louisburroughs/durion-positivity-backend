@@ -24,21 +24,29 @@ import io.restassured.http.ContentType;
  * (CAP-139 Story #66).
  *
  * <p>
- * Verifies REST contract wiring for time entry approval and rejection endpoints.
+ * Verifies REST contract wiring for time entry approval and rejection
+ * endpoints.
  * GREEN phase: Unknown UUID requests return 404. Bean Validation (400) tests
- * unchanged. TEC-005 seeds a SUBMITTED entry and asserts 200 with APPROVED status.
+ * unchanged. TEC-005 seeds a SUBMITTED entry and asserts 200 with APPROVED
+ * status.
  * </p>
  *
- * <p>Endpoints under test:</p>
+ * <p>
+ * Endpoints under test:
+ * </p>
  * <ul>
- * <li>POST /v1/workorders/timeEntries/{id}/approve → 404 (unknown id) or 200 (seeded)</li>
- * <li>POST /v1/workorders/timeEntries/{id}/reject  → 404 (unknown id) or 400 (validation)</li>
+ * <li>POST /v1/workorders/timeEntries/{id}/approve → 404 (unknown id) or 200
+ * (seeded)</li>
+ * <li>POST /v1/workorders/timeEntries/{id}/reject → 404 (unknown id) or 400
+ * (validation)</li>
  * </ul>
  *
- * <p>Required authorities:</p>
+ * <p>
+ * Required authorities:
+ * </p>
  * <ul>
  * <li>{@code TimeEntry:Approve} — guard on approve endpoint</li>
- * <li>{@code TimeEntry:Reject}  — guard on reject endpoint</li>
+ * <li>{@code TimeEntry:Reject} — guard on reject endpoint</li>
  * </ul>
  *
  * Issue: CAP-139 Story #66
@@ -57,7 +65,9 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /** Generates a fresh random UUID path segment to avoid cross-test collisions. */
+    /**
+     * Generates a fresh random UUID path segment to avoid cross-test collisions.
+     */
     private static String randomEntryPath(String suffix) {
         return "/v1/workorders/timeEntries/" + UUID.randomUUID() + suffix;
     }
@@ -70,7 +80,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
 
     /**
      * TEC-001 — POST approve with an unknown {@code timeEntryId} returns HTTP 404.
-     * GREEN phase: {@link com.positivity.workorder.internal.service.TimeEntryServiceImpl}
+     * GREEN phase:
+     * {@link com.positivity.workorder.internal.service.TimeEntryServiceImpl}
      * throws {@code TimeEntryNotFoundException} when the entity is not found.
      */
     @Test
@@ -90,7 +101,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
 
     /**
      * TEC-002 — POST reject with a valid body but unknown {@code timeEntryId}
-     * returns HTTP 404. GREEN phase service throws {@code TimeEntryNotFoundException}.
+     * returns HTTP 404. GREEN phase service throws
+     * {@code TimeEntryNotFoundException}.
      */
     @Test
     @DisplayName("TEC-002 GREEN: POST /reject with unknown timeEntryId returns 404")
@@ -116,7 +128,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("TEC-003 GREEN: POST /reject with empty body returns 400 (missing rejectionReason)")
     void TEC003_rejectTimeEntry_emptyBody_returns400() {
-        // Issue CAP-139 Story #66: AC5 — @NotBlank on rejectionReason enforced at controller
+        // Issue CAP-139 Story #66: AC5 — @NotBlank on rejectionReason enforced at
+        // controller
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(Map.of())
@@ -130,7 +143,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
     // ── TEC-004: Reject with blank reason → 400 ───────────────────────────────
 
     /**
-     * TEC-004 — POST reject with an explicit empty string for {@code rejectionReason}
+     * TEC-004 — POST reject with an explicit empty string for
+     * {@code rejectionReason}
      * returns HTTP 400. {@code @NotBlank} treats blank strings as invalid.
      */
     @Test

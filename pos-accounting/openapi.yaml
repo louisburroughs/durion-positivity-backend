@@ -1727,12 +1727,6 @@ paths:
               $ref: "#/components/schemas/RefundRequest"
         required: true
       responses:
-        "201":
-          description: Refund recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "403":
           description: Authorization denied - separate authorization required
           content:
@@ -1753,6 +1747,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Refund recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/price-override:
     post:
       tags:
@@ -1983,6 +1983,12 @@ paths:
           format: date
         example: 2024-12-31
       responses:
+        "200":
+          description: Income statement generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeStatementReport"
         "403":
           description: Forbidden - missing reporting:view:financial-statements
           content:
@@ -1991,12 +1997,6 @@ paths:
                 $ref: "#/components/schemas/IncomeStatementReport"
         "400":
           description: Invalid date range
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
-        "200":
-          description: Income statement generated successfully
           content:
             application/json:
               schema:
@@ -2715,12 +2715,6 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range
           content:
@@ -2729,6 +2723,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
