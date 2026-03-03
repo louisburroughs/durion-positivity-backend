@@ -1,7 +1,6 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.CreateTravelSegmentAdjustmentRequest;
 import com.positivity.workorder.internal.dto.StartTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.StopTravelSegmentRequest;
@@ -24,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Travel Segment API", description = "Endpoints for capturing mobile travel segments")
@@ -62,18 +62,11 @@ public class TravelSegmentController {
     @PreAuthorize("hasAuthority('workorder:labor:add')")
     @Operation(summary = "Submit travel segments for a mobile work assignment")
     @ApiResponse(responseCode = "200")
-    public ResponseEntity<TravelSegmentResponse> submitTravelSegments(
+    public ResponseEntity<List<TravelSegmentResponse>> submitTravelSegments(
             @PathVariable UUID mobileWorkAssignmentId,
             @Valid @RequestBody SubmitTravelSegmentsRequest request) {
-        String username = SecurityContextHelper.getCurrentUsernameOrDefault("system");
-        UUID technicianId;
-        try {
-            technicianId = UUID.fromString(username);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Current principal is not a valid UUID", e);
-        }
-        return ResponseEntity.ok(TravelSegmentMapper.toResponse(
-                travelSegmentService.submitTravelSegments(mobileWorkAssignmentId, technicianId)));
+        return ResponseEntity.ok(TravelSegmentMapper.toResponses(
+                travelSegmentService.submitTravelSegments(mobileWorkAssignmentId)));
     }
 
     @PostMapping("/{travelSegmentId}/adjustments")

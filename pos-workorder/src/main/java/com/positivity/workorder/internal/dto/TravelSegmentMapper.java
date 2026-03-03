@@ -3,6 +3,8 @@ package com.positivity.workorder.internal.dto;
 import com.positivity.workorder.internal.entity.TravelSegment;
 import com.positivity.workorder.internal.entity.TravelSegmentAdjustment;
 
+import java.util.List;
+
 public final class TravelSegmentMapper {
 
     private TravelSegmentMapper() {
@@ -32,6 +34,12 @@ public final class TravelSegmentMapper {
                 .createdAt(segment.getCreatedAt())
                 .updatedAt(segment.getUpdatedAt())
                 .build();
+    }
+
+    public static List<TravelSegmentResponse> toResponses(List<TravelSegment> segments) {
+        return segments.stream()
+                .map(TravelSegmentMapper::toResponse)
+                .toList();
     }
 
     public static TravelSegmentAdjustmentResponse toAdjustmentResponse(TravelSegmentAdjustment adjustment) {

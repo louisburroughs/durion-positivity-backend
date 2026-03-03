@@ -98,21 +98,27 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
 
     @Override
     @Transactional
-    public @NonNull TravelSegment submitTravelSegments(@NonNull UUID mobileWorkAssignmentId,
-            @NonNull UUID technicianId) {
-        List<TravelSegment> inProgress = travelSegmentRepository
-                .findByMobileWorkAssignmentIdAndStatus(mobileWorkAssignmentId, TravelSegmentStatus.IN_PROGRESS);
-        List<TravelSegment> completed = travelSegmentRepository
-                .findByMobileWorkAssignmentIdAndStatus(mobileWorkAssignmentId, TravelSegmentStatus.COMPLETED);
-        List<TravelSegment> all = new ArrayList<>();
-        all.addAll(inProgress);
-        all.addAll(completed);
+    public @NonNull List<TravelSegment> submitTravelSegments(@NonNull UUID mobileWorkAssignmentId) {
+        String username = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        UUID technicianId;
+        try {
+            technicianId = UUID.fromString(username);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid technician id in security context username: " + username);
+        }
+
+        List<TravelSegment> all = new ArrayList<>(travelSegmentRepository
+                .findByMobileWorkAssignmentIdAndTechnicianId(mobileWorkAssignmentId, technicianId)
+                .stream()
+                .filter(s -> s.getStatus() == TravelSegmentStatus.IN_PROGRESS
+                        || s.getStatus() == TravelSegmentStatus.COMPLETED)
+                .toList());
         if (all.isEmpty()) {
             throw new TravelSegmentNotFoundException(mobileWorkAssignmentId);
         }
         all.forEach(s -> s.setStatus(TravelSegmentStatus.SUBMITTED));
         travelSegmentRepository.saveAll(all);
-        return all.get(0);
+        return all;
     }
 
     @Override

@@ -122,7 +122,9 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
                 .statusCode(400)
                 .body("code", equalTo("VALIDATION_FAILED"))
                 .body("fieldErrors", not(empty()))
-                .body("fieldErrors[0].field", notNullValue());
+                .body("fieldErrors[0].field", notNullValue())
+                .body("status", equalTo(400))
+                .body("correlationId", notNullValue());
     }
 
     // ── WSC-003: Overlap without override returns 409 ─────────────────────────
@@ -260,5 +262,45 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
                 .then()
                 .log().ifValidationFails()
                 .statusCode(409);
+    }
+
+    // ── WSC-008: Stop break segment happy path ────────────────────────────────
+
+    @Test
+    @DisplayName("WSC-008: POST /{workSessionId}/breaks/{breakSegmentId}/stop returns 200 with non-null breakEndAt")
+    void WSC008_stopBreakSegment_happyPath_returns200() {
+        // Issue CAP-139 Story #68: AC7 — stop break segment happy path
+
+        // Step 1: Start a work session to get a workSessionId
+        String workSessionId = givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(validStartBody())
+                .when()
+                .post("/v1/workorders/workSessions/start")
+                .then()
+                .statusCode(201)
+                .extract()
+                .path("workSessionId");
+
+        // Step 2: Start a break to get a breakSegmentId
+        String breakSegmentId = givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("breakType", "MEAL"))
+                .when()
+                .post("/v1/workorders/workSessions/{workSessionId}/breaks", workSessionId)
+                .then()
+                .statusCode(201)
+                .extract()
+                .path("breakSegmentId");
+
+        // Step 3: Stop the break — assert 200 and non-null breakEndAt
+        givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/workSessions/{workSessionId}/breaks/{breakSegmentId}/stop",
+                        workSessionId, breakSegmentId)
+                .then()
+                .log().ifValidationFails()
+                .statusCode(200)
+                .body("breakEndAt", notNullValue());
     }
 }
