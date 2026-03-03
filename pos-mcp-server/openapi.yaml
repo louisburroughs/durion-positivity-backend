@@ -9,6 +9,151 @@ tags:
 - name: MCP Chat API
   description: Model Context Protocol (MCP) chatbot endpoint for invoking MCP tools
 paths:
+  /v1/prompts/{id}:
+    get:
+      tags:
+      - system-prompt-controller
+      operationId: get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SystemPromptResponse"
+    put:
+      tags:
+      - system-prompt-controller
+      operationId: update
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SystemPromptRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SystemPromptResponse"
+    delete:
+      tags:
+      - system-prompt-controller
+      operationId: delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+  /v1/llm-apis/{id}:
+    get:
+      tags:
+      - llm-api-config-controller
+      operationId: get_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LlmApiConfigResponse"
+    put:
+      tags:
+      - llm-api-config-controller
+      operationId: update_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LlmApiConfigRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LlmApiConfigResponse"
+    delete:
+      tags:
+      - llm-api-config-controller
+      operationId: delete_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+  /v1/prompts:
+    get:
+      tags:
+      - system-prompt-controller
+      operationId: list
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SystemPromptResponse"
+    post:
+      tags:
+      - system-prompt-controller
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SystemPromptRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SystemPromptResponse"
   /v1/mcp/chat:
     post:
       tags:
@@ -22,6 +167,11 @@ paths:
           application/json: {}
         required: true
       responses:
+        "400":
+          description: Invalid request - missing or empty toolName
+          content:
+            text/plain:
+              example: '''toolName'' is required'
         "200":
           description: Tool execution succeeded
           content:
@@ -38,9 +188,106 @@ paths:
           content:
             text/plain:
               example: "Failed to execute MCP tool: Tool not found"
-        "400":
-          description: Invalid request - missing or empty toolName
+  /v1/llm-apis:
+    get:
+      tags:
+      - llm-api-config-controller
+      operationId: list_1
+      responses:
+        "200":
+          description: OK
           content:
-            text/plain:
-              example: '''toolName'' is required'
-components: {}
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LlmApiConfigResponse"
+    post:
+      tags:
+      - llm-api-config-controller
+      operationId: create_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LlmApiConfigRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LlmApiConfigResponse"
+components:
+  schemas:
+    SystemPromptRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        content:
+          type: string
+      required:
+      - content
+      - name
+    SystemPromptResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LlmApiConfigRequest:
+      type: object
+      properties:
+        apiId:
+          type: string
+        model:
+          type: string
+        baseUrl:
+          type: string
+        apiKey:
+          type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+      - apiId
+      - apiKey
+      - baseUrl
+      - model
+    LlmApiConfigResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        apiId:
+          type: string
+        model:
+          type: string
+        baseUrl:
+          type: string
+        apiKey:
+          type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

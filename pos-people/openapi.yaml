@@ -369,24 +369,24 @@ paths:
               $ref: "#/components/schemas/PersonRoleAssignmentRequest"
         required: true
       responses:
-        "201":
-          description: Role assignment created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserRoleDto"
-        "404":
-          description: Person or role not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "400":
           description: Invalid request
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Person or role not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "201":
+          description: Role assignment created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserRoleDto"
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -505,6 +505,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
+        "200":
+          description: Link already exists and is returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
         "404":
           description: Person not found
           content:
@@ -513,12 +519,6 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "200":
-          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -549,6 +549,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
+        "200":
+          description: Link already exists and is returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPersonLinkResponse"
         "404":
           description: Person not found
           content:
@@ -557,12 +563,6 @@ paths:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
         "409":
           description: User already linked to different person
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserPersonLinkResponse"
-        "200":
-          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -1713,24 +1713,6 @@ components:
           format: date-time
       required:
       - roleCode
-    UserRoleDto:
-      type: object
-      properties:
-        userId:
-          type: string
-        roleCode:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
-        active:
-          type: boolean
     ProblemDetail:
       type: object
       properties:
@@ -1750,6 +1732,24 @@ components:
         properties:
           type: object
           additionalProperties: {}
+    UserRoleDto:
+      type: object
+      properties:
+        userId:
+          type: string
+        roleCode:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        active:
+          type: boolean
     BreakDto:
       type: object
       properties:

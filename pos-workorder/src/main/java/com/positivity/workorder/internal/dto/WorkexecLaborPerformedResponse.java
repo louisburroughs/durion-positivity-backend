@@ -23,23 +23,30 @@ public class WorkexecLaborPerformedResponse {
     private UUID laborPerformedId;
 
     @JsonProperty("workorderId")
+    @Schema(description = "Workorder identifier", example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID workorderId;
 
     @JsonProperty("technicianId")
+    @Schema(description = "Technician identifier", example = "550e8400-e29b-41d4-a716-446655440120")
     private UUID technicianId;
 
     @JsonProperty("performedAt")
+    @Schema(description = "Timestamp when labor was performed")
     private Instant performedAt;
 
     @JsonProperty("quantity")
+    @Schema(description = "Labor quantity", example = "1.5")
     private BigDecimal quantity;
 
     @JsonProperty("unit")
+    @Schema(description = "Labor quantity unit", example = "HOURS")
     private String unit;
 
     @JsonProperty("sourceSystem")
+    @Schema(description = "Source system identifier", example = "workexec")
     private String sourceSystem;
 
     @JsonProperty("sourceReferenceId")
+    @Schema(description = "Source reference identifier", example = "EXT-REF-12345")
     private String sourceReferenceId;
 }

@@ -17,5 +17,6 @@ import java.util.List;
 public class WorkexecTimerStopResponse {
 
     @JsonProperty("stopped")
+    @Schema(description = "Stopped timer entries")
     private List<WorkexecTimerEntryResponse> stopped;
 }

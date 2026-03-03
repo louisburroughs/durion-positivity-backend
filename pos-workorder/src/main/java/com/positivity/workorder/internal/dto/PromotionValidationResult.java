@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -15,29 +16,34 @@ import java.util.UUID;
  */
 @Value
 @Builder
+@Schema(description = "Result of promotion precondition validation")
 public class PromotionValidationResult {
 
     /**
      * Whether all validation checks passed.
      */
+    @Schema(description = "Indicates whether promotion validation succeeded", example = "true")
     boolean valid;
 
     /**
      * Error message if validation failed.
      */
     @Nullable
+    @Schema(description = "Validation failure message when valid=false", example = "Estimate has unresolved required approvals")
     String errorMessage;
 
     /**
      * Structured error code if validation failed.
      */
     @Nullable
+    @Schema(description = "Machine-readable validation error code", example = "APPROVAL_REQUIRED")
     String errorCode;
 
     /**
      * If promotion was already performed, reference to existing workorder.
      */
     @Nullable
+    @Schema(description = "Existing workorder identifier when promotion already occurred", example = "550e8400-e29b-41d4-a716-446655440000")
     UUID existingWorkorderId;
 
     /**

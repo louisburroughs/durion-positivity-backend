@@ -1,5 +1,8 @@
 package com.positivity.mcp.internal.config;
 
+import io.modelcontextprotocol.client.McpClient;
+import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.transport.HttpServletSseServerTransportProvider;
@@ -11,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
-@EnableConfigurationProperties({McpServerProperties.class, LlmApiProperties.class})
+@EnableConfigurationProperties({ McpServerProperties.class, LlmApiProperties.class })
 public class McpServerConfiguration {
 
     @Bean
@@ -44,7 +47,17 @@ public class McpServerConfiguration {
     }
 
     @Bean
-    public WebClient discoveryWebClient(WebClient.Builder builder) {
-        return builder.build();
+    public WebClient discoveryWebClient() {
+        return WebClient.builder().build();
+    }
+
+    @Bean(destroyMethod = "close")
+    public McpSyncClient mcpSyncClient(@NonNull McpServerProperties properties) {
+        var transport = HttpClientSseClientTransport.builder(properties.baseUrl())
+                .sseEndpoint(properties.sseEndpoint())
+                .build();
+
+        return McpClient.sync(transport)
+                .build();
     }
 }
