@@ -12,8 +12,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Schema(description = "Optional request payload used when starting a workorder")
 public class StartWorkorderRequest {
     @Schema(description = "Deprecated. Actor identity is resolved from authenticated security context.", deprecated = true)
     private UUID userId;
+
+    @Schema(description = "Optional reason associated with start transition", example = "Vehicle pulled into service bay")
     private String reason;
 }

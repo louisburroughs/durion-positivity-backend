@@ -29,6 +29,13 @@ import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
 import com.positivity.workorder.service.WorkexecTimeTrackingService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +44,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/v1/workexec")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Workexec Time Tracking API", description = "Endpoints for timer operations, labor entry creation, and job time totals")
 public class WorkexecTimeTrackingController {
 
     private static final String ERROR_CODE_KEY = "code";
@@ -49,12 +57,15 @@ public class WorkexecTimeTrackingController {
 
     @GetMapping("/job-time-totals")
     @PreAuthorize("hasAuthority('workorder:labor:view')")
+    @Operation(summary = "Get job time totals", description = "Retrieve aggregated tracked hours for a date range, timezone, and optional location/technicians")
+    @ApiResponse(responseCode = "200", description = "Job time totals returned successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     public ResponseEntity<Object> getJobTimeTotals(
-            @RequestParam("startDate") LocalDate startDate,
-            @RequestParam("endDate") LocalDate endDate,
-            @RequestParam("timezone") String timezone,
-            @RequestParam(value = "locationId", required = false) UUID locationId,
-            @RequestParam(value = "technicianIds", required = false) List<UUID> technicianIds) {
+            @Parameter(description = "Start date (inclusive)", example = "2026-03-01") @RequestParam("startDate") LocalDate startDate,
+            @Parameter(description = "End date (inclusive)", example = "2026-03-02") @RequestParam("endDate") LocalDate endDate,
+            @Parameter(description = "IANA timezone", example = "America/New_York") @RequestParam("timezone") String timezone,
+            @Parameter(description = "Optional location filter", example = "550e8400-e29b-41d4-a716-446655440010") @RequestParam(value = "locationId", required = false) UUID locationId,
+            @Parameter(description = "Optional technician filters", example = "[\"550e8400-e29b-41d4-a716-446655440120\"]") @RequestParam(value = "technicianIds", required = false) List<UUID> technicianIds) {
 
         ZoneId zoneId;
         try {
@@ -80,10 +91,17 @@ public class WorkexecTimeTrackingController {
     @PostMapping("/labor-performed")
     @EmitEvent(id = "WORKEXEC_LABOR_PERFORMED_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @Operation(summary = "Create labor performed entry", description = "Create a labor-performed record with idempotency support")
+    @ApiResponse(responseCode = "201", description = "Labor entry created successfully", content = @Content(schema = @Schema(implementation = WorkexecLaborPerformedResponse.class)))
+    @ApiResponse(responseCode = "200", description = "Idempotent replay returned existing labor entry", content = @Content(schema = @Schema(implementation = WorkexecLaborPerformedResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(responseCode = "404", description = "Related resource not found")
+    @ApiResponse(responseCode = "409", description = "Conflict while recording labor")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Labor-performed payload", required = true, content = @Content(schema = @Schema(implementation = WorkexecLaborPerformedRequest.class), examples = @ExampleObject(value = "{\"workorderId\":\"550e8400-e29b-41d4-a716-446655440001\"}")))
     public ResponseEntity<Object> createLaborPerformed(
             @Valid @RequestBody WorkexecLaborPerformedRequest request,
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+            @Parameter(description = "Idempotency key for safe retries", example = "workexec-labor-550e8400-e29b-41d4-a716-446655440001") @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Parameter(description = "Optional correlation id", example = "corr-12345") @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
 
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             return badRequest(ERROR_INVALID_REQUEST, "Idempotency-Key header is required");
@@ -115,8 +133,11 @@ public class WorkexecTimeTrackingController {
 
     @GetMapping("/time-entries/timer/active")
     @PreAuthorize("hasAuthority('workorder:labor:view')")
+    @Operation(summary = "Get active timers", description = "Retrieve active timer entries for the authenticated mechanic")
+    @ApiResponse(responseCode = "200", description = "Active timers returned successfully", content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Missing or invalid X-User-Id header")
     public ResponseEntity<Object> getActiveTimerEntries(
-            @RequestHeader(value = USER_ID_HEADER, required = false) String userIdHeader) {
+            @Parameter(description = "Mechanic user id", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = USER_ID_HEADER, required = false) String userIdHeader) {
 
         UUID mechanicId = parseRequiredUuidHeader(userIdHeader, USER_ID_HEADER);
         if (mechanicId == null) {
@@ -130,9 +151,16 @@ public class WorkexecTimeTrackingController {
     @PostMapping("/time-entries/timer/start")
     @EmitEvent(id = "WORKEXEC_TIMER_START", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @Operation(summary = "Start timer", description = "Start a workexec timer entry for the authenticated mechanic")
+    @ApiResponse(responseCode = "201", description = "Timer started successfully", content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
+    @ApiResponse(responseCode = "200", description = "Idempotent replay returned existing timer", content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Missing or invalid X-User-Id header")
+    @ApiResponse(responseCode = "404", description = "Referenced resource not found")
+    @ApiResponse(responseCode = "409", description = "Conflict while starting timer")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Timer start payload", required = true, content = @Content(schema = @Schema(implementation = WorkexecTimerStartRequest.class)))
     public ResponseEntity<Object> startTimer(
-            @RequestHeader(value = USER_ID_HEADER, required = false) String userIdHeader,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "Mechanic user id", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = USER_ID_HEADER, required = false) String userIdHeader,
+            @Parameter(description = "Optional idempotency key", example = "timer-start-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody WorkexecTimerStartRequest request) {
 
         UUID mechanicId = parseRequiredUuidHeader(userIdHeader, USER_ID_HEADER);
@@ -159,8 +187,12 @@ public class WorkexecTimeTrackingController {
     @PostMapping("/time-entries/timer/stop")
     @EmitEvent(id = "WORKEXEC_TIMER_STOP", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @Operation(summary = "Stop timers", description = "Stop active timer entries for the authenticated mechanic")
+    @ApiResponse(responseCode = "200", description = "Timers stopped successfully", content = @Content(schema = @Schema(implementation = WorkexecTimerStopResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Missing or invalid X-User-Id header")
+    @ApiResponse(responseCode = "409", description = "Conflict while stopping timers")
     public ResponseEntity<Object> stopTimers(
-            @RequestHeader(value = USER_ID_HEADER, required = false) String userIdHeader) {
+            @Parameter(description = "Mechanic user id", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = USER_ID_HEADER, required = false) String userIdHeader) {
 
         UUID mechanicId = parseRequiredUuidHeader(userIdHeader, USER_ID_HEADER);
         if (mechanicId == null) {

@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.dto;
 
 import java.util.UUID;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,14 +13,22 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Schema(description = "Request payload for creating an estimate")
 public class CreateEstimateRequest {
     @NotNull(message = "customerId is required")
+    @Schema(description = "Customer identifier", example = "550e8400-e29b-41d4-a716-446655440001")
     private UUID customerId;
 
     @NotNull(message = "vehicleId is required")
+    @Schema(description = "Vehicle identifier", example = "550e8400-e29b-41d4-a716-446655440002")
     private UUID vehicleId;
 
+    @Schema(description = "Optional location identifier; defaults from session when omitted", example = "550e8400-e29b-41d4-a716-446655440003")
     private UUID locationId; // Optional - will use default from session if not provided
+
+    @Schema(description = "Optional currency code; defaults when omitted", example = "USD")
     private String currencyUomId; // Optional - will use default if not provided
+
+    @Schema(description = "Optional tax region identifier; defaults when omitted", example = "550e8400-e29b-41d4-a716-446655440004")
     private UUID taxRegionId; // Optional - will use default if not provided
 }

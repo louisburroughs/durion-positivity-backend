@@ -12,8 +12,11 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Request payload to complete a workorder")
 public class CompleteWorkorderRequest {
     @Schema(description = "Deprecated. Actor identity is resolved from authenticated security context.", deprecated = true)
     private UUID userId;
+
+    @Schema(description = "Optional completion notes recorded for closeout", example = "Completed and verified")
     private String completionNotes;
 }

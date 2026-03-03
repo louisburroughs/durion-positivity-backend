@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.dto;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,15 +21,19 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Schema(description = "Request payload to consume authorized part quantity on a workorder")
 public class ConsumePartRequest {
 
     @NotNull(message = "Workorder part ID is required")
+    @Schema(description = "Workorder part identifier", example = "550e8400-e29b-41d4-a716-446655440500")
     private UUID workorderPartId;
 
     @NotNull(message = "Quantity is required")
     @DecimalMin(value = "0.0001", inclusive = true, message = "Quantity must be positive")
+    @Schema(description = "Quantity to consume", example = "1")
     private BigDecimal quantity;
 
     @Nullable
+    @Schema(description = "Optional usage notes", example = "Installed on front axle")
     private String notes;
 }

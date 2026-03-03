@@ -2,6 +2,9 @@ package com.positivity.workorder.internal.dto;
 
 import com.positivity.shared.enums.InvoiceDeliveryMethod;
 import com.positivity.shared.enums.InvoiceGroupingStrategy;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -12,25 +15,53 @@ import java.util.UUID;
  * DTO for billing rules responses.
  * CAP:092 - Preferences & Billing Rules
  */
+@Schema(description = "Billing rules payload associated to a party")
 public class BillingRulesDTO {
     @Nullable
+    @Schema(description = "Billing rule identifier", example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID id;
+
+    @NotBlank(message = "partyId is required")
     @NonNull
+    @Schema(description = "Party identifier", example = "CUST-12345")
     private String partyId;
+
+    @Schema(description = "Whether purchase order number is required", example = "true")
     private boolean purchaseOrderRequired;
+
+    @NotBlank(message = "paymentTermsCode is required")
     @NonNull
+    @Schema(description = "Payment terms code", example = "NET30")
     private String paymentTermsCode;
+
+    @NotNull(message = "invoiceDeliveryMethod is required")
     @NonNull
+    @Schema(description = "Invoice delivery method", example = "EMAIL")
     private InvoiceDeliveryMethod invoiceDeliveryMethod;
+
+    @NotNull(message = "invoiceGroupingStrategy is required")
     @NonNull
+    @Schema(description = "Invoice grouping strategy", example = "BY_WORKORDER")
     private InvoiceGroupingStrategy invoiceGroupingStrategy;
+
+    @NotNull(message = "version is required")
     @NonNull
+    @Schema(description = "Optimistic lock version", example = "1")
     private Integer version;
+
+    @NotNull(message = "createdAt is required")
     @NonNull
+    @Schema(description = "Creation timestamp", example = "2026-03-02T10:15:30Z")
     private Instant createdAt;
+
+    @NotNull(message = "updatedAt is required")
     @NonNull
+    @Schema(description = "Last update timestamp", example = "2026-03-02T11:00:00Z")
     private Instant updatedAt;
+
+    @NotBlank(message = "updatedBy is required")
     @NonNull
+    @Schema(description = "Actor identifier that last updated billing rules", example = "advisor@shop.local")
     private String updatedBy;
 
     // Constructors

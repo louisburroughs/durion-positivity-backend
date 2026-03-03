@@ -19,11 +19,14 @@ public class WorkexecTimerStartRequest {
 
     @NotNull
     @JsonProperty("workorderId")
+    @Schema(description = "Workorder identifier", example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID workorderId;
 
     @JsonProperty("workorderItemId")
+    @Schema(description = "Optional workorder line item identifier", example = "550e8400-e29b-41d4-a716-446655440010")
     private UUID workorderItemId;
 
     @JsonProperty("laborCode")
+    @Schema(description = "Optional labor code associated with timer", example = "DIAG")
     private String laborCode;
 }
