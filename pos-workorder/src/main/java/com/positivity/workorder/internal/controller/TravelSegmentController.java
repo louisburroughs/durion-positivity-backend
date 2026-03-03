@@ -70,7 +70,7 @@ public class TravelSegmentController {
         try {
             technicianId = UUID.fromString(username);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            throw new IllegalArgumentException("Current principal is not a valid UUID", e);
         }
         return ResponseEntity.ok(TravelSegmentMapper.toResponse(
                 travelSegmentService.submitTravelSegments(mobileWorkAssignmentId, technicianId)));
