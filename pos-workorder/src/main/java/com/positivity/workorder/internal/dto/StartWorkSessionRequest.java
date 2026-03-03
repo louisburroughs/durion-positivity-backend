@@ -43,6 +43,6 @@ public class StartWorkSessionRequest {
     private String overlapOverrideReason;
 
     @Nullable
-    @Schema(description = "Client-provided idempotency key to prevent duplicate session starts")
+    @Schema(description = "Optional client-provided key that may be used for idempotency by clients or future implementations (no server-side guarantees in the current API)")
     private String idempotencyKey;
 }
