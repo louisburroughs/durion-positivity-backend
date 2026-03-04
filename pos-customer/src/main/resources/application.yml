@@ -14,6 +14,13 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: pos-customer-workorder-events
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 server:
   port: 0
@@ -56,5 +63,9 @@ springdoc:
     path: /swagger-ui.html
 
 pos:
+  customer:
+    kafka:
+      workorder-events-topic: workorder-events
+      enabled: false
   people:
     base-url: ${POS_PEOPLE_BASE_URL:http://localhost:8084}
