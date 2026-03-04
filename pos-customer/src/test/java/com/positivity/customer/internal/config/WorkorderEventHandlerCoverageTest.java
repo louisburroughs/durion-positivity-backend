@@ -2,7 +2,6 @@ package com.positivity.customer.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -176,7 +175,8 @@ class WorkorderEventHandlerCoverageTest {
      * A message that cannot be deserialized triggers the
      * {@link tools.jackson.core.JacksonException} catch path, saving a
      * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED} log with a generated
-     * {@code eventId} prefixed with {@code "SCHEMA-"}.
+     * UUID {@code eventId} and a {@code failureReason} prefixed with
+     * {@code "SCHEMA validation failed: "}.
      */
     @Test
     void handleWorkorderEvent_malformedJson_savesSchemaValidationFailedLogWithGeneratedId() {
@@ -187,7 +187,9 @@ class WorkorderEventHandlerCoverageTest {
         ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
         verify(processingLogRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
-        assertThat(captor.getValue().getEventId()).startsWith("SCHEMA-");
+        assertThat(captor.getValue().getEventId())
+                .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+        assertThat(captor.getValue().getFailureReason()).startsWith("SCHEMA validation failed: ");
         assertThat(captor.getValue().getEventType()).isEqualTo("UNKNOWN");
     }
 
