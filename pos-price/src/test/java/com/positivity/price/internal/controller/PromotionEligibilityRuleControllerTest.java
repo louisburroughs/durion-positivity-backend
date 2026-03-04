@@ -31,10 +31,6 @@ import org.springframework.test.web.servlet.MockMvc;
  * <p>
  * Validates adding, retrieving, deleting, and evaluating promotion eligibility
  * rules.
- * Tests are intentionally RED in the scaffold
- * phase—{@code EligibilityEvaluationServiceImpl}
- * throws {@code UnsupportedOperationException} for all methods until GREEN
- * implementation.
  * </p>
  *
  * Issue: #96
@@ -134,15 +130,6 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     /**
      * ERC-004: DELETE a valid ruleId URL produces 204 No Content when the rule
      * exists.
-     *
-     * <p>
-     * GREEN note: Lead Coder must fix the H2 {@code ENUM} DDL incompatibility in
-     * {@code PromotionEligibilityRule} (add
-     * {@code columnDefinition = "VARCHAR(50)"}
-     * to {@code conditionType} and {@code operator} fields) so that rules can be
-     * seeded directly via {@code PromotionEligibilityRuleRepository} in GREEN
-     * phase.
-     * </p>
      *
      * Issue: #96
      */

@@ -6,6 +6,7 @@ public enum EligibilityReasonCode {
     ACCOUNT_NOT_IN_LIST,
     ACCOUNT_IN_EXCLUSION_LIST,
     VEHICLE_TAG_NOT_PRESENT,
+    VEHICLE_TAG_EXCLUDED,
     FLEET_SIZE_TOO_SMALL,
     MISSING_ACCOUNT_CONTEXT,
     /** Context extension; maps to internal service error. */

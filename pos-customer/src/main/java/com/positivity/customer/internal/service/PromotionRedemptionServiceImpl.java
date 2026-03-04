@@ -64,15 +64,23 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
             throw new DuplicateRedemptionException(request.getPromotionId(), request.getWorkorderId());
         }
 
-        PromotionCounter counter = promotionCounterRepository.findByPromotionId(request.getPromotionId())
-                .orElseGet(() -> {
-                    PromotionCounter createdCounter = new PromotionCounter();
-                    createdCounter.setPromotionId(request.getPromotionId());
-                    createdCounter.setTotalUsageCount(0);
-                    return createdCounter;
-                });
-        counter.setTotalUsageCount(counter.getTotalUsageCount() + 1);
-        promotionCounterRepository.save(counter);
+        boolean counterSaved = false;
+        while (!counterSaved) {
+            PromotionCounter counter = promotionCounterRepository.findByPromotionId(request.getPromotionId())
+                    .orElseGet(() -> {
+                        PromotionCounter createdCounter = new PromotionCounter();
+                        createdCounter.setPromotionId(request.getPromotionId());
+                        createdCounter.setTotalUsageCount(0);
+                        return createdCounter;
+                    });
+            counter.setTotalUsageCount(counter.getTotalUsageCount() + 1);
+            try {
+                promotionCounterRepository.save(counter);
+                counterSaved = true;
+            } catch (DataIntegrityViolationException ex) {
+                // Concurrent insert of the same promotion counter; re-fetch and retry.
+            }
+        }
 
         return PromotionRedemptionMapper.toResponse(saved);
     }

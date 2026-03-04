@@ -13,15 +13,13 @@ import com.positivity.price.internal.exception.PromotionNotApplicableException;
 import com.positivity.price.internal.exception.PromotionOfferNotFoundException;
 import com.positivity.price.internal.exception.PromotionOfferStateException;
 import com.positivity.price.internal.repository.PromotionOfferRepository;
-import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.price.service.EligibilityDecision;
 import com.positivity.price.service.EligibilityEvaluationService;
 import com.positivity.price.service.PromotionOfferService;
+import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.List;
-import com.positivity.security.common.SecurityContextHelper;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -99,6 +97,9 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         PromotionOffer offer = getOfferById(promotionOfferId);
         if (offer.getStatus() == PromotionStatus.EXPIRED) {
             throw new PromotionOfferStateException("Cannot activate an expired promotion");
+        }
+        if (offer.getEndDate() != null && offer.getEndDate().isBefore(LocalDate.now())) {
+            throw new PromotionOfferStateException("Cannot activate a promotion whose end date has already passed");
         }
 
         offer.setStatus(PromotionStatus.ACTIVE);

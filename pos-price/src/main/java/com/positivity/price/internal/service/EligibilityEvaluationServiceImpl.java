@@ -78,10 +78,13 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
 
     @Override
     @Transactional
-    public void deleteRule(@NonNull UUID ruleId) {
-        promotionEligibilityRuleRepository
+    public void deleteRule(@NonNull UUID promotionId, @NonNull UUID ruleId) {
+        PromotionEligibilityRule rule = promotionEligibilityRuleRepository
                 .findById(ruleId)
                 .orElseThrow(() -> new EligibilityRuleNotFoundException(ruleId));
+        if (!promotionId.equals(rule.getPromotionId())) {
+            throw new EligibilityRuleNotFoundException(ruleId);
+        }
         promotionEligibilityRuleRepository.deleteById(ruleId);
     }
 
@@ -148,11 +151,22 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
                 if (operator == RuleOperator.NOT_IN && inList) {
                     return new EligibilityDecision(false, EligibilityReasonCode.ACCOUNT_IN_EXCLUSION_LIST);
                 }
+                if (operator != RuleOperator.IN && operator != RuleOperator.NOT_IN) {
+                    return new EligibilityDecision(false, EligibilityReasonCode.EVALUATION_ERROR);
+                }
             } else {
-                int threshold = Integer.parseInt(value.trim());
+                int threshold;
+                try {
+                    threshold = Integer.parseInt(value.trim());
+                } catch (NumberFormatException ex) {
+                    return new EligibilityDecision(false, EligibilityReasonCode.EVALUATION_ERROR);
+                }
                 if (operator == RuleOperator.GREATER_THAN_OR_EQUAL_TO
                         && accountContext.get().fleetSize() < threshold) {
                     return new EligibilityDecision(false, EligibilityReasonCode.FLEET_SIZE_TOO_SMALL);
+                }
+                if (operator != RuleOperator.GREATER_THAN_OR_EQUAL_TO) {
+                    return new EligibilityDecision(false, EligibilityReasonCode.EVALUATION_ERROR);
                 }
             }
         } else if (conditionType == ConditionType.VEHICLE_TAG) {
@@ -169,7 +183,7 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
                 return new EligibilityDecision(false, EligibilityReasonCode.VEHICLE_TAG_NOT_PRESENT);
             }
             if (operator == RuleOperator.NOT_IN && tagPresent) {
-                return new EligibilityDecision(false, EligibilityReasonCode.VEHICLE_TAG_NOT_PRESENT);
+                return new EligibilityDecision(false, EligibilityReasonCode.VEHICLE_TAG_EXCLUDED);
             }
         }
 

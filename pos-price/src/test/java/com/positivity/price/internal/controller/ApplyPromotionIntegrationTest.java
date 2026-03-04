@@ -294,47 +294,32 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         }
 
         /**
-         * Produces a valid {@code ApplyPromotionRequest} JSON body.
+         * Produces a valid {@code ApplyPromotionRequest} JSON body without a vehicle.
          *
          * @param promotionCode the promotion code to apply
          * @param subtotal      the estimate subtotal as a numeric string
          * @return JSON string suitable for the request body
          */
         private String applyRequest(String promotionCode, String subtotal) {
-                return String.format("""
-                                {
-                                  "promotionCode": "%s",
-                                  "estimateContext": {
-                                    "estimateId": "%s",
-                                    "customerId": "%s",
-                                    "lineItems": [{"sku": "P001", "quantity": 1, "unitPrice": 100.00}],
-                                    "subtotal": %s
-                                  }
-                                }
-                                """, promotionCode, UUID.randomUUID(), UUID.randomUUID(), subtotal);
+                return applyRequestWithVehicle(promotionCode, subtotal, null);
         }
 
         /**
-         * Produces a valid {@code ApplyPromotionRequest} JSON body with a vehicleId
-         * included in {@code estimateContext}.
+         * Produces a valid {@code ApplyPromotionRequest} JSON body. When
+         * {@code vehicleId} is non-null, a {@code vehicleId} field is included in
+         * {@code estimateContext}; otherwise the field is omitted.
          *
          * @param promotionCode the promotion code to apply
          * @param subtotal      the estimate subtotal as a numeric string
-         * @param vehicleId     the vehicle UUID to embed in the estimate context
+         * @param vehicleId     optional vehicle UUID; {@code null} omits the field
          * @return JSON string suitable for the request body
          */
         private String applyRequestWithVehicle(String promotionCode, String subtotal, UUID vehicleId) {
-                return String.format("""
-                                {
-                                  "promotionCode": "%s",
-                                  "estimateContext": {
-                                    "estimateId": "%s",
-                                    "customerId": "%s",
-                                    "vehicleId": "%s",
-                                    "lineItems": [{"sku": "P001", "quantity": 1, "unitPrice": 100.00}],
-                                    "subtotal": %s
-                                  }
-                                }
-                                """, promotionCode, UUID.randomUUID(), UUID.randomUUID(), vehicleId, subtotal);
+                String vehicleField = vehicleId != null
+                                ? String.format("    \"vehicleId\": \"%s\",%n", vehicleId)
+                                : "";
+                return String.format(
+                                "{\"promotionCode\":\"%s\",\"estimateContext\":{\"estimateId\":\"%s\",\"customerId\":\"%s\",%s\"lineItems\":[{\"sku\":\"P001\",\"quantity\":1,\"unitPrice\":100.00}],\"subtotal\":%s}}",
+                                promotionCode, UUID.randomUUID(), UUID.randomUUID(), vehicleField, subtotal);
         }
 }
