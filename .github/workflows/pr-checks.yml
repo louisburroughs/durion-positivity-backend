@@ -67,7 +67,7 @@ jobs:
           IFS=',' read -ra MODULES <<< "${{ needs.detect-changes.outputs.modules }}"
           for module in "${MODULES[@]}"; do
             echo "Building module: $module"
-            ./mvnw clean install -pl "$module" -am -B
+            ./mvnw clean install -pl "$module" -am -B -DskipTests -DskipITs
           done
       
       - name: Test changed modules

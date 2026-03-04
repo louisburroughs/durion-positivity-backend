@@ -162,7 +162,7 @@ jobs:
           name: maven-artifacts
       
       - name: Build service JAR
-        run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -B
+        run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -B
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -261,7 +261,7 @@ jobs:
           cache: maven
       
       - name: Build all modules
-        run: ./mvnw clean package -DskipTests -B
+        run: ./mvnw clean package -DskipTests -DskipITs -B
       
       - name: Start services with Docker Compose
         run: docker-compose up -d
