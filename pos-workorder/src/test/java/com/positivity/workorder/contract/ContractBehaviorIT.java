@@ -252,10 +252,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 // crmPartyId and crmVehicleId are required fields (CAP-094 Story #93)
                 return String.format(
                                 "{\"customerId\":\"%s\",\"vehicleId\":\"%s\",\"locationId\":\"%s\","
-                                + "\"subtotal\":%s,\"taxAmount\":%s,\"total\":%s,"
-                                + "\"crmPartyId\":\"01952f4e-0000-7000-8000-000000000001\","
-                                + "\"crmVehicleId\":\"01952f4e-0000-7000-8000-000000000002\","
-                                + "\"crmContactIds\":[]}",
+                                                + "\"subtotal\":%s,\"taxAmount\":%s,\"total\":%s,"
+                                                + "\"crmPartyId\":\"01952f4e-0000-7000-8000-000000000001\","
+                                                + "\"crmVehicleId\":\"01952f4e-0000-7000-8000-000000000002\","
+                                                + "\"crmContactIds\":[]}",
                                 toUuidString(customerId), toUuidString(vehicleId), toUuidString(locationId),
                                 subtotal, taxAmount, total);
         }

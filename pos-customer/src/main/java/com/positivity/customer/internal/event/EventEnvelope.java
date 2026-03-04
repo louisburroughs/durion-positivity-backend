@@ -10,10 +10,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Inbound event envelope carrying a workorder-originated event to the CRM system.
+ * Inbound event envelope carrying a workorder-originated event to the CRM
+ * system.
  *
- * <p>The {@code eventType} field discriminates which event-specific payload
- * is contained in the {@code payload} map.</p>
+ * <p>
+ * The {@code eventType} field discriminates which event-specific payload
+ * is contained in the {@code payload} map.
+ * </p>
  */
 @Data
 @Builder
@@ -25,7 +28,10 @@ public class EventEnvelope {
     /** Unique identifier for this event instance (used for idempotency checks). */
     private String eventId;
 
-    /** The type of event: VehicleUpdated, ContactPreferenceUpdated, or PartyNoteAdded. */
+    /**
+     * The type of event: VehicleUpdated, ContactPreferenceUpdated, or
+     * PartyNoteAdded.
+     */
     private String eventType;
 
     /** Schema version of the payload, e.g. "1.0". */

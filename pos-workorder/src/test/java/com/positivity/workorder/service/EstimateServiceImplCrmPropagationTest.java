@@ -39,16 +39,22 @@ import com.positivity.workorder.service.BillingRulesClientService;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Unit tests for {@link EstimateServiceImpl} — CRM reference ID mapping path (Story #93 CAP-094).
+ * Unit tests for {@link EstimateServiceImpl} — CRM reference ID mapping path
+ * (Story #93 CAP-094).
  *
- * <p>Covers the null-safety branch added in Story #93:
+ * <p>
+ * Covers the null-safety branch added in Story #93:
  * {@code request.getCrmContactIds() != null ? new ArrayList<>(...) : new ArrayList<>()}
  *
- * <p>Verifies that:
+ * <p>
+ * Verifies that:
  * <ul>
- *   <li>When {@code crmContactIds} is {@code null}, the saved estimate receives an empty list.</li>
- *   <li>When {@code crmContactIds} is provided, the saved estimate receives a defensive copy.</li>
- *   <li>CRM string fields ({@code crmPartyId}, {@code crmVehicleId}) are mapped directly.</li>
+ * <li>When {@code crmContactIds} is {@code null}, the saved estimate receives
+ * an empty list.</li>
+ * <li>When {@code crmContactIds} is provided, the saved estimate receives a
+ * defensive copy.</li>
+ * <li>CRM string fields ({@code crmPartyId}, {@code crmVehicleId}) are mapped
+ * directly.</li>
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)

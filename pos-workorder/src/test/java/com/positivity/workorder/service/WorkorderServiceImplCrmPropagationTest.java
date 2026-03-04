@@ -37,12 +37,16 @@ import com.positivity.workorder.service.PromotionValidationService;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 
 /**
- * Unit tests for {@link WorkorderServiceImpl} — CRM reference ID propagation path (Story #93 CAP-094).
+ * Unit tests for {@link WorkorderServiceImpl} — CRM reference ID propagation
+ * path (Story #93 CAP-094).
  *
- * <p>Covers the two null-safety branches added in Story #93:
+ * <p>
+ * Covers the two null-safety branches added in Story #93:
  * <ol>
- *   <li>When {@code estimateId == null}: workorder is created with empty CRM fields (no estimate to propagate from).</li>
- *   <li>When {@code estimateId} is provided: CRM IDs are propagated from the estimate to the workorder.</li>
+ * <li>When {@code estimateId == null}: workorder is created with empty CRM
+ * fields (no estimate to propagate from).</li>
+ * <li>When {@code estimateId} is provided: CRM IDs are propagated from the
+ * estimate to the workorder.</li>
  * </ol>
  */
 @ExtendWith(MockitoExtension.class)
@@ -94,7 +98,8 @@ class WorkorderServiceImplCrmPropagationTest {
 
     @BeforeEach
     void stubCustomerRequirements() {
-        // Stub the RestClient fluent chain used by checkCustomerRequirements to return true
+        // Stub the RestClient fluent chain used by checkCustomerRequirements to return
+        // true
         when(restClient.get().uri(anyString()).retrieve().body(Boolean.class)).thenReturn(true);
 
         // Default workorderRepository.save() behaviour: return the Workorder passed in

@@ -11,8 +11,10 @@ import com.positivity.customer.internal.entity.ProcessingLog;
 /**
  * Spring Data JPA repository for {@link ProcessingLog} entities.
  *
- * <p>Provides the idempotency-check query used by the workorder event handler
- * to detect duplicate event delivery.</p>
+ * <p>
+ * Provides the idempotency-check query used by the workorder event handler
+ * to detect duplicate event delivery.
+ * </p>
  */
 @Repository
 public interface ProcessingLogRepository extends JpaRepository<ProcessingLog, UUID> {

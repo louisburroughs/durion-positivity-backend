@@ -27,14 +27,20 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Kafka event handler consuming workorder-originated updates from the CRM topic.
+ * Kafka event handler consuming workorder-originated updates from the CRM
+ * topic.
  *
- * <p>Processes {@code VehicleUpdated}, {@code ContactPreferenceUpdated}, and
- * {@code PartyNoteAdded} events with idempotency and atomicity guarantees.</p>
+ * <p>
+ * Processes {@code VehicleUpdated}, {@code ContactPreferenceUpdated}, and
+ * {@code PartyNoteAdded} events with idempotency and atomicity guarantees.
+ * </p>
  *
- * <p>This component is conditionally activated by {@code pos.customer.kafka.enabled=true}.
+ * <p>
+ * This component is conditionally activated by
+ * {@code pos.customer.kafka.enabled=true}.
  * Set this property to {@code false} (default) to disable the listener
- * in environments where Kafka is not available.</p>
+ * in environments where Kafka is not available.
+ * </p>
  */
 @Slf4j
 @Component
@@ -55,10 +61,7 @@ public class WorkorderEventHandler {
      *
      * @param message the raw JSON string of the inbound event envelope
      */
-    @KafkaListener(
-            topics = "${pos.customer.kafka.workorder-events-topic}",
-            groupId = "pos-customer-workorder-events"
-    )
+    @KafkaListener(topics = "${pos.customer.kafka.workorder-events-topic}", groupId = "pos-customer-workorder-events")
     @Transactional
     @SuppressWarnings("java:S6809")
     public void handleWorkorderEvent(@NonNull String message) {
@@ -150,16 +153,16 @@ public class WorkorderEventHandler {
         try {
             final Map<String, Object> payloadMap = envelope.getPayload() == null ? Map.of() : envelope.getPayload();
             final ContactPreferenceUpdatedPayload payload = objectMapper.convertValue(
-                payloadMap,
-                ContactPreferenceUpdatedPayload.class);
+                    payloadMap,
+                    ContactPreferenceUpdatedPayload.class);
             final String partyIdValue = payload.getPartyId() == null
-                ? String.valueOf(payloadMap.getOrDefault("partyId", ""))
-                : payload.getPartyId();
+                    ? String.valueOf(payloadMap.getOrDefault("partyId", ""))
+                    : payload.getPartyId();
             final UUID partyId = UUID.fromString(partyIdValue);
 
             final CommunicationPreference preference = communicationPreferenceRepository
-                .findByPartyId(partyId)
-                .orElseGet(() -> CommunicationPreference.builder().partyId(partyId).build());
+                    .findByPartyId(partyId)
+                    .orElseGet(() -> CommunicationPreference.builder().partyId(partyId).build());
 
             preference.setEmailPreference(payload.getEmailPreference());
             preference.setSmsPreference(payload.getSmsPreference());
@@ -168,22 +171,22 @@ public class WorkorderEventHandler {
             communicationPreferenceRepository.save(preference);
 
             processingLogRepository.save(ProcessingLog.builder()
-                .eventId(envelope.getEventId())
-                .eventType(envelope.getEventType())
-                .correlationId(envelope.getCorrelationId())
-                .status(ProcessingStatus.SUCCESS)
-                .processedAt(Instant.now())
-                .build());
+                    .eventId(envelope.getEventId())
+                    .eventType(envelope.getEventType())
+                    .correlationId(envelope.getCorrelationId())
+                    .status(ProcessingStatus.SUCCESS)
+                    .processedAt(Instant.now())
+                    .build());
         } catch (Exception ex) {
             log.error("ContactPreferenceUpdated processing failed for eventId={}", envelope.getEventId(), ex);
             processingLogRepository.save(ProcessingLog.builder()
-                .eventId(envelope.getEventId())
-                .eventType(envelope.getEventType())
-                .correlationId(envelope.getCorrelationId())
-                .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                .failureReason(ex.getMessage())
-                .processedAt(Instant.now())
-                .build());
+                    .eventId(envelope.getEventId())
+                    .eventType(envelope.getEventType())
+                    .correlationId(envelope.getCorrelationId())
+                    .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
+                    .failureReason(ex.getMessage())
+                    .processedAt(Instant.now())
+                    .build());
         }
     }
 

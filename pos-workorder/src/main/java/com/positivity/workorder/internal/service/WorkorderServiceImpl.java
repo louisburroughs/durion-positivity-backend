@@ -126,7 +126,9 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .status(WorkorderStatus.DRAFT)
                 .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
                 .crmVehicleId(estimate != null ? estimate.getCrmVehicleId() : null)
-                .crmContactIds(estimate != null && estimate.getCrmContactIds() != null ? new ArrayList<>(estimate.getCrmContactIds()) : new ArrayList<>())
+                .crmContactIds(estimate != null && estimate.getCrmContactIds() != null
+                        ? new ArrayList<>(estimate.getCrmContactIds())
+                        : new ArrayList<>())
                 .build();
         return createWorkorderInternal(workorder);
     }
@@ -160,7 +162,8 @@ public class WorkorderServiceImpl implements WorkorderService {
             }
         }
 
-        // Create new workorder — fetch estimate to propagate CRM reference IDs (CAP-094 Story #93)
+        // Create new workorder — fetch estimate to propagate CRM reference IDs (CAP-094
+        // Story #93)
         Estimate estimate = estimateId != null
                 ? estimateRepository.findById(estimateId)
                         .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId))
@@ -176,7 +179,9 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .status(WorkorderStatus.DRAFT)
                 .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
                 .crmVehicleId(estimate != null ? estimate.getCrmVehicleId() : null)
-                .crmContactIds(estimate != null && estimate.getCrmContactIds() != null ? new ArrayList<>(estimate.getCrmContactIds()) : new ArrayList<>())
+                .crmContactIds(estimate != null && estimate.getCrmContactIds() != null
+                        ? new ArrayList<>(estimate.getCrmContactIds())
+                        : new ArrayList<>())
                 .build();
         Workorder created = createWorkorderInternal(workorder);
 

@@ -252,7 +252,9 @@ public class EstimateServiceImpl implements EstimateService {
                                 .approvalConfigurationId(config.getId())
                                 .crmPartyId(request.getCrmPartyId())
                                 .crmVehicleId(request.getCrmVehicleId())
-                                .crmContactIds(request.getCrmContactIds() != null ? new ArrayList<>(request.getCrmContactIds()) : new ArrayList<>())
+                                .crmContactIds(request.getCrmContactIds() != null
+                                                ? new ArrayList<>(request.getCrmContactIds())
+                                                : new ArrayList<>())
                                 .build();
 
                 Estimate saved = estimateRepository.save(estimate);

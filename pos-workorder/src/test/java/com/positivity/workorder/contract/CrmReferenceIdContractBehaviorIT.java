@@ -27,18 +27,24 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.http.ContentType;
 
 /**
- * Integration tests for Story #93 (CAP-094): Emit CRM Reference IDs in Workorder Artifacts.
+ * Integration tests for Story #93 (CAP-094): Emit CRM Reference IDs in
+ * Workorder Artifacts.
  *
- * <p>Verifies that {@code crmPartyId}, {@code crmVehicleId}, and {@code crmContactIds} are
- * correctly accepted on Estimate creation, persisted to the database, returned in the response,
+ * <p>
+ * Verifies that {@code crmPartyId}, {@code crmVehicleId}, and
+ * {@code crmContactIds} are
+ * correctly accepted on Estimate creation, persisted to the database, returned
+ * in the response,
  * and propagated to Workorder entities upon conversion.
  *
- * <p>Covers:
+ * <p>
+ * Covers:
  * <ul>
- *   <li>AC-1: Estimate creation with CRM IDs — fields persisted and returned in 201 response</li>
- *   <li>AC-1b: Empty {@code crmContactIds = []} is valid</li>
- *   <li>AC-2: Estimate-to-Workorder conversion propagates CRM IDs</li>
- *   <li>AC-3: Missing required CRM fields return 400 Bad Request</li>
+ * <li>AC-1: Estimate creation with CRM IDs — fields persisted and returned in
+ * 201 response</li>
+ * <li>AC-1b: Empty {@code crmContactIds = []} is valid</li>
+ * <li>AC-2: Estimate-to-Workorder conversion propagates CRM IDs</li>
+ * <li>AC-3: Missing required CRM fields return 400 Bad Request</li>
  * </ul>
  *
  * @see com.positivity.workorder.internal.service.EstimateServiceImpl
@@ -174,7 +180,8 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("AC-2: Promote estimate to workorder — workorder response contains crmPartyId")
     void ac2_promoteEstimate_workorder_containsCrmPartyId() {
         // Seed an APPROVED estimate directly with CRM fields already set, to isolate
-        // the workorder-promotion behaviour from the (also broken) create-estimate path.
+        // the workorder-promotion behaviour from the (also broken) create-estimate
+        // path.
         UUID estimateId = seedApprovedEstimateWithCrmFields(CRM_PARTY_ID, CRM_VEHICLE_ID,
                 List.of(CRM_CONTACT_ID));
 

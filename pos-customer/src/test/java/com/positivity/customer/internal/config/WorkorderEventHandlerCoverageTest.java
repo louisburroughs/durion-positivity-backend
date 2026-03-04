@@ -31,11 +31,13 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Coverage-gap tests for {@link WorkorderEventHandler}.
  *
- * <p>Targets uncovered branches from Story #92: the
+ * <p>
+ * Targets uncovered branches from Story #92: the
  * {@code ContactPreferenceUpdated} and {@code PartyNoteAdded} dispatch paths
  * in {@link WorkorderEventHandler#handleWorkorderEvent(String)}, the unknown
  * event type path, the {@link tools.jackson.core.JacksonException} path,
- * and the {@code catch(Exception)} branches in the three typed handlers.</p>
+ * and the {@code catch(Exception)} branches in the three typed handlers.
+ * </p>
  *
  * Issue: #92
  */
@@ -62,8 +64,7 @@ class WorkorderEventHandlerCoverageTest {
                 processingLogRepository,
                 communicationPreferenceRepository,
                 personPartyRepository,
-                new ObjectMapper()
-        );
+                new ObjectMapper());
     }
 
     // -----------------------------------------------------------------------
@@ -143,7 +144,8 @@ class WorkorderEventHandlerCoverageTest {
 
     /**
      * An envelope carrying an unsupported {@code eventType} triggers the
-     * warn-and-fail path, saving a {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED}
+     * warn-and-fail path, saving a
+     * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED}
      * log with the "Unsupported event type" failure reason.
      */
     @Test
@@ -211,8 +213,7 @@ class WorkorderEventHandlerCoverageTest {
                 .timestamp("2026-03-04T10:00:00Z")
                 .payload(Map.of(
                         "partyId", "not-a-valid-uuid",
-                        "emailPreference", "OPT_IN"
-                ))
+                        "emailPreference", "OPT_IN"))
                 .build();
 
         handler.handleContactPreferenceUpdated(envelope);
@@ -246,8 +247,7 @@ class WorkorderEventHandlerCoverageTest {
                 .payload(Map.of(
                         "partyId", "not-a-valid-uuid",
                         "noteText", "some note",
-                        "noteType", "SERVICE"
-                ))
+                        "noteType", "SERVICE"))
                 .build();
 
         handler.handlePartyNoteAdded(envelope);
@@ -264,7 +264,8 @@ class WorkorderEventHandlerCoverageTest {
 
     /**
      * A {@link RuntimeException} thrown by the first
-     * {@link ProcessingLogRepository#save} call in {@link WorkorderEventHandler#handleVehicleUpdated}
+     * {@link ProcessingLogRepository#save} call in
+     * {@link WorkorderEventHandler#handleVehicleUpdated}
      * exercises the {@code catch(Exception)} path and triggers a second save with
      * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED}.
      */
