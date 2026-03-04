@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.time.Year;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -249,6 +250,11 @@ public class EstimateServiceImpl implements EstimateService {
                                 .taxAmount(request.getTaxAmount())
                                 .total(request.getTotal())
                                 .approvalConfigurationId(config.getId())
+                                .crmPartyId(request.getCrmPartyId())
+                                .crmVehicleId(request.getCrmVehicleId())
+                                .crmContactIds(request.getCrmContactIds() != null
+                                                ? new ArrayList<>(request.getCrmContactIds())
+                                                : new ArrayList<>())
                                 .build();
 
                 Estimate saved = estimateRepository.save(estimate);

@@ -48,7 +48,7 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @DisplayName("Accounting Backend Contract Behavioral Tests")
-public class ContractBehaviorIT extends BaseContractIntegrationTest {
+class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private JournalEntryRepository journalEntryRepository;
         @Autowired
@@ -98,7 +98,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-001: Create GL Account with valid contract fields")
 
-        public void testCreateGLAccountHappyPath() throws Exception {
+        void testCreateGLAccountHappyPath() throws Exception {
                 // Arrange: Prepare valid payload per contract guide
                 GLAccountCreateRequest request = new GLAccountCreateRequest();
                 request.setAccountCode("1000-000");
@@ -134,7 +134,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-002: Create Journal Entry with basic fields")
 
-        public void testCreateJournalEntryHappyPath() throws Exception {
+        void testCreateJournalEntryHappyPath() throws Exception {
                 // Arrange: Create GL accounts first (prerequisites)
                 UUID debitAccountId = createGLAccount("1000-000", "Cash", AccountType.ASSET);
                 UUID creditAccountId = createGLAccount("4000-000", "Sales Revenue", AccountType.REVENUE);
@@ -157,7 +157,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("CP-002a: Journal Entry audit fields populated correctly")
-        public void testJournalEntryAuditFieldsPopulated() throws Exception {
+        void testJournalEntryAuditFieldsPopulated() throws Exception {
                 // Arrange: Create GL accounts first (prerequisites)
                 UUID debitAccountId = createGLAccount("1000-001", "Cash - Audit Test", AccountType.ASSET);
                 UUID creditAccountId = createGLAccount("4000-001", "Revenue - Audit Test", AccountType.REVENUE);
@@ -204,7 +204,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-001: Reject GL Account with invalid account code format")
 
-        public void testCreateGLAccountInvalidCodeFormat() throws Exception {
+        void testCreateGLAccountInvalidCodeFormat() throws Exception {
                 // Arrange: Prepare invalid account code (should match pattern)
                 GLAccountCreateRequest request = new GLAccountCreateRequest();
                 request.setAccountCode("INVALID"); // Not in format ####-###
@@ -223,7 +223,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-002: Reject Journal Entry with missing required fields")
 
-        public void testCreateJournalEntryUnbalanced() throws Exception {
+        void testCreateJournalEntryUnbalanced() throws Exception {
                 // Arrange: Prepare journal entry missing required fields
                 JournalEntryCreateRequest request = new JournalEntryCreateRequest();
                 // Missing transactionDate and description
@@ -241,7 +241,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-003: Reject GL Account creation with duplicate account code")
 
-        public void testCreateGLAccountDuplicate() throws Exception {
+        void testCreateGLAccountDuplicate() throws Exception {
                 // Arrange: Create first GL account
                 GLAccountCreateRequest first = new GLAccountCreateRequest();
                 first.setAccountCode("1000-000");
@@ -273,7 +273,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("ID-001: Journal Entry POST works correctly")
 
-        public void testJournalEntryIdempotency() throws Exception {
+        void testJournalEntryIdempotency() throws Exception {
                 // Arrange
                 UUID debitAccountId = createGLAccount("1000-000", "Cash", AccountType.ASSET);
                 UUID creditAccountId = createGLAccount("4000-000", "Sales Revenue", AccountType.REVENUE);
@@ -306,7 +306,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CC-001: Optimistic locking prevents concurrent updates")
 
-        public void testOptimisticLockingPreventsConflict() throws Exception {
+        void testOptimisticLockingPreventsConflict() throws Exception {
                 // Arrange: Create GL account
                 MvcResult createResult = mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -334,7 +334,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CC-002: Journal Entry creation is validated")
 
-        public void testJournalEntryBalanceInvariant() throws Exception {
+        void testJournalEntryBalanceInvariant() throws Exception {
                 // Arrange: Create GL account
                 UUID debitAccountId = createGLAccount("1000-000", "Cash", AccountType.ASSET);
                 UUID creditAccountId = createGLAccount("4000-000", "Sales Revenue", AccountType.REVENUE);
@@ -367,7 +367,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("FF-001: Monetary amounts are accepted in GL Account")
 
-        public void testMonetaryFieldPrecision() throws Exception {
+        void testMonetaryFieldPrecision() throws Exception {
                 // Arrange: Create GL account with monetary data
                 GLAccountCreateRequest request = createGLAccountRequest("2000-000", "Bank Account", AccountType.ASSET);
 
@@ -382,7 +382,7 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("FF-002: Timestamps are in ISO 8601 format with timezone")
 
-        public void testTimestampFormat() throws Exception {
+        void testTimestampFormat() throws Exception {
                 // Arrange
                 GLAccountCreateRequest request = createGLAccountRequest("1000-000", "Cash", AccountType.ASSET);
 

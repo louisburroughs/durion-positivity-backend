@@ -12,10 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.positivity.workorder.support.BaseContractIntegrationTest;
@@ -23,13 +21,11 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Workorder Estimate Backend Contract Behavioral Tests")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
 
-        @Autowired
-        private MockMvc mockMvc;
+       
 
         @Autowired
         private ObjectMapper objectMapper;
@@ -249,8 +245,13 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         private String createEstimatePayload(String customerId, String vehicleId, String locationId,
                         String subtotal, String taxAmount, String total) {
+                // crmPartyId and crmVehicleId are required fields (CAP-094 Story #93)
                 return String.format(
-                                "{\"customerId\":\"%s\",\"vehicleId\":\"%s\",\"locationId\":\"%s\",\"subtotal\":%s,\"taxAmount\":%s,\"total\":%s}",
+                                "{\"customerId\":\"%s\",\"vehicleId\":\"%s\",\"locationId\":\"%s\","
+                                                + "\"subtotal\":%s,\"taxAmount\":%s,\"total\":%s,"
+                                                + "\"crmPartyId\":\"01952f4e-0000-7000-8000-000000000001\","
+                                                + "\"crmVehicleId\":\"01952f4e-0000-7000-8000-000000000002\","
+                                                + "\"crmContactIds\":[]}",
                                 toUuidString(customerId), toUuidString(vehicleId), toUuidString(locationId),
                                 subtotal, taxAmount, total);
         }

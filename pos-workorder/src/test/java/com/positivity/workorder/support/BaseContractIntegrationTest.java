@@ -5,6 +5,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.positivity.workorder.config.TestSecurityConfig;
@@ -21,6 +22,8 @@ import io.restassured.specification.RequestSpecification;
 @ActiveProfiles("test")
 @Import({ TestSecurityConfig.class, ContractTestConfiguration.class })
 public abstract class BaseContractIntegrationTest {
+
+    protected MockMvc mockMvc;
 
     protected static final String SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
 

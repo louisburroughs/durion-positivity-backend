@@ -13,6 +13,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -21,6 +22,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -104,6 +107,18 @@ public class Estimate {
     // Version tracking for estimate revisions
     @Builder.Default
     private Integer version = 1;
+
+    // CRM reference IDs — immutable point-in-time snapshot (CAP-094 Story #93)
+    @Column(length = 36, updatable = false)
+    private String crmPartyId;
+
+    @Column(length = 36, updatable = false)
+    private String crmVehicleId;
+
+    @Builder.Default
+    @Column(columnDefinition = "TEXT", updatable = false)
+    @Convert(converter = StringListJsonConverter.class)
+    private List<String> crmContactIds = new ArrayList<>();
 
     /**
      * Check if estimate can be transitioned to approved state.
