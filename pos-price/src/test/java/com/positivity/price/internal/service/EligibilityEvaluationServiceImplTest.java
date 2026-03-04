@@ -1,7 +1,9 @@
 package com.positivity.price.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.price.internal.client.AccountContext;
@@ -13,6 +15,7 @@ import com.positivity.price.internal.enums.ConditionType;
 import com.positivity.price.internal.enums.EligibilityReasonCode;
 import com.positivity.price.internal.enums.RuleCombination;
 import com.positivity.price.internal.enums.RuleOperator;
+import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
 import com.positivity.price.internal.repository.PromotionEligibilityRuleRepository;
 import com.positivity.price.internal.repository.PromotionOfferRepository;
 import com.positivity.price.service.EligibilityDecision;
@@ -226,6 +229,26 @@ class EligibilityEvaluationServiceImplTest {
     }
 
     @Test
+    void givenAccountIdListRule_withUnsupportedOperator_whenEvaluate_thenEvaluationError() {
+        UUID promotionId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.EQUALS, accountId.toString());
+
+        when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
+                ruleRepo,
+                promotionRepo,
+                accountProvider,
+                vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, accountId, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.EVALUATION_ERROR);
+    }
+
+    @Test
     void givenFleetSizeRule_andMissingAccountContext_whenEvaluate_thenMissingContext() {
         UUID promotionId = UUID.randomUUID();
         PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.GREATER_THAN_OR_EQUAL_TO,
@@ -243,6 +266,60 @@ class EligibilityEvaluationServiceImplTest {
 
         assertThat(decision.isEligible()).isFalse();
         assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.MISSING_ACCOUNT_CONTEXT);
+    }
+
+    @Test
+    void givenVehicleTagRule_withUnsupportedOperator_whenEvaluate_thenEvaluationError() {
+        UUID promotionId = UUID.randomUUID();
+        UUID vehicleId = UUID.randomUUID();
+        PromotionEligibilityRule rule = rule(ConditionType.VEHICLE_TAG, RuleOperator.IN, "tractor");
+
+        when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
+                ruleRepo,
+                promotionRepo,
+                accountProvider,
+                vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, vehicleId);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.EVALUATION_ERROR);
+    }
+
+    @Test
+    void givenMatchingPromotionAndRule_whenDeleteRule_thenDeletesScopedRule() {
+        UUID promotionId = UUID.randomUUID();
+        UUID ruleId = UUID.randomUUID();
+        when(ruleRepo.deleteByRuleIdAndPromotionId(ruleId, promotionId)).thenReturn(1L);
+
+        EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
+                ruleRepo,
+                promotionRepo,
+                accountProvider,
+                vehicleProvider);
+
+        service.deleteRule(promotionId, ruleId);
+
+        verify(ruleRepo).deleteByRuleIdAndPromotionId(ruleId, promotionId);
+    }
+
+    @Test
+    void givenRuleNotUnderPromotion_whenDeleteRule_thenThrowsNotFound() {
+        UUID promotionId = UUID.randomUUID();
+        UUID ruleId = UUID.randomUUID();
+        when(ruleRepo.deleteByRuleIdAndPromotionId(ruleId, promotionId)).thenReturn(0L);
+
+        EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
+                ruleRepo,
+                promotionRepo,
+                accountProvider,
+                vehicleProvider);
+
+        assertThatThrownBy(() -> service.deleteRule(promotionId, ruleId))
+                .isInstanceOf(EligibilityRuleNotFoundException.class)
+                .hasMessageContaining(ruleId.toString());
     }
 
     private PromotionEligibilityRule rule(ConditionType conditionType, RuleOperator operator, String value) {

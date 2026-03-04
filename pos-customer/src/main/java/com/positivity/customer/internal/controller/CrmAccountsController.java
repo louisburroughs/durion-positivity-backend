@@ -92,7 +92,6 @@ public class CrmAccountsController {
         @EmitEvent(id = "CUSTOMER_ACCOUNT_TIER_RESOLVE", apiVersion = "1")
         public ResponseEntity<ResolveAccountTierResponse> resolveAccountTier(
                         @Parameter(description = "Tier resolution request", required = true) @RequestBody ResolveAccountTierRequest body) {
-              
                 try {
                         ResolveAccountTierResponse response = accountTierService.resolveAccountTier(body);
                         return ResponseEntity.ok(response);

@@ -64,23 +64,7 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
             throw new DuplicateRedemptionException(request.getPromotionId(), request.getWorkorderId());
         }
 
-        boolean counterSaved = false;
-        while (!counterSaved) {
-            PromotionCounter counter = promotionCounterRepository.findByPromotionId(request.getPromotionId())
-                    .orElseGet(() -> {
-                        PromotionCounter createdCounter = new PromotionCounter();
-                        createdCounter.setPromotionId(request.getPromotionId());
-                        createdCounter.setTotalUsageCount(0);
-                        return createdCounter;
-                    });
-            counter.setTotalUsageCount(counter.getTotalUsageCount() + 1);
-            try {
-                promotionCounterRepository.save(counter);
-                counterSaved = true;
-            } catch (DataIntegrityViolationException ex) {
-                // Concurrent insert of the same promotion counter; re-fetch and retry.
-            }
-        }
+        incrementPromotionCounter(request.getPromotionId());
 
         return PromotionRedemptionMapper.toResponse(saved);
     }
@@ -92,5 +76,27 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
                 .stream()
                 .map(PromotionRedemptionMapper::toResponse)
                 .collect(Collectors.toList());
+    }
+
+    private void incrementPromotionCounter(@NonNull UUID promotionId) {
+        if (promotionCounterRepository.incrementTotalUsageCount(promotionId) > 0) {
+            return;
+        }
+
+        PromotionCounter createdCounter = new PromotionCounter();
+        createdCounter.setPromotionId(promotionId);
+        createdCounter.setTotalUsageCount(1);
+
+        try {
+            promotionCounterRepository.saveAndFlush(createdCounter);
+            return;
+        } catch (DataIntegrityViolationException ex) {
+            // Counter was concurrently created after our update miss; fall through to retry update.
+        }
+
+        if (promotionCounterRepository.incrementTotalUsageCount(promotionId) == 0) {
+            throw new IllegalStateException(
+                    "Failed to increment promotion counter for promotionId=" + promotionId);
+        }
     }
 }

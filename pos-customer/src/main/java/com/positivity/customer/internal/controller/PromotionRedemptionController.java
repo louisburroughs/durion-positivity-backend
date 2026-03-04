@@ -54,10 +54,8 @@ public class PromotionRedemptionController {
     }
 
     @Operation(summary = "Get redemptions by customer", description = "Retrieve all recorded redemptions for a customer")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Promotion redemptions returned", content = @Content(array = @ArraySchema(schema = @Schema(implementation = PromotionRedemptionResponse.class)))),
-            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
-    })
+    @ApiResponse(responseCode = "200", description = "Promotion redemptions returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PromotionRedemptionResponse.class))))
+    @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
     @GetMapping("/by-customer/{customerId}")
     @PreAuthorize("hasAuthority('Promotion:ViewRedemption')")
     @EmitEvent(id = "PROMOTION_REDEMPTION_LIST", apiVersion = "1")

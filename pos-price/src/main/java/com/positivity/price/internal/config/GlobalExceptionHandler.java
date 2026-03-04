@@ -157,7 +157,7 @@ public class GlobalExceptionHandler {
 
         return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,
-                "VALIDATION_FAILED",
+                "VALIDATION_ERROR",
                 "Validation failed",
                 fieldErrors,
                 request);

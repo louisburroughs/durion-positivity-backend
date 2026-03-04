@@ -1,5 +1,16 @@
 package com.positivity.price.internal.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.positivity.price.internal.dto.ApplyPromotionRequest;
 import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
@@ -17,15 +28,8 @@ import com.positivity.price.service.EligibilityDecision;
 import com.positivity.price.service.EligibilityEvaluationService;
 import com.positivity.price.service.PromotionOfferService;
 import com.positivity.security.common.SecurityContextHelper;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
+
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementation of promotion offer lifecycle service.
@@ -38,12 +42,15 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
 
     private final PromotionOfferRepository promotionOfferRepository;
     private final EligibilityEvaluationService eligibilityEvaluationService;
+    private final Clock clock;
 
     public PromotionOfferServiceImpl(
             PromotionOfferRepository promotionOfferRepository,
-            EligibilityEvaluationService eligibilityEvaluationService) {
+            EligibilityEvaluationService eligibilityEvaluationService,
+            Clock clock) {
         this.promotionOfferRepository = promotionOfferRepository;
         this.eligibilityEvaluationService = eligibilityEvaluationService;
+        this.clock = clock;
     }
 
     @Override
@@ -98,7 +105,7 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         if (offer.getStatus() == PromotionStatus.EXPIRED) {
             throw new PromotionOfferStateException("Cannot activate an expired promotion");
         }
-        if (offer.getEndDate() != null && offer.getEndDate().isBefore(LocalDate.now())) {
+        if (offer.getEndDate() != null && offer.getEndDate().isBefore(LocalDate.now(clock))) {
             throw new PromotionOfferStateException("Cannot activate a promotion whose end date has already passed");
         }
 
@@ -139,7 +146,7 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
             throw new PromotionNotApplicableException("Promotion '" + promoCode + "' is not active");
         }
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         if (today.isBefore(offer.getStartDate()) || today.isAfter(offer.getEndDate())) {
             throw new PromotionNotApplicableException(
                     "Promotion '" + promoCode + "' is outside its valid date range");
@@ -152,6 +159,13 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         if (!decision.isEligible()) {
             throw new PromotionNotApplicableException(
                     "Promotion '" + promoCode + "' is not applicable: " + decision.reasonCode());
+        }
+
+        // Usage is consumed at apply-time to enforce limits for estimate-time
+        // application attempts.
+        if (promotionOfferRepository.incrementUsageCountIfUnderLimit(offer.getPromotionOfferId()) == 0) {
+            throw new PromotionNotApplicableException(
+                    "Promotion '" + promoCode + "' has reached its usage limit");
         }
 
         BigDecimal subtotal = ctx.getSubtotal();

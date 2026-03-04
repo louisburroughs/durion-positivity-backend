@@ -150,7 +150,11 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 .build();
 
         substitutePart = workorderPartRepository.save(substitutePart);
-        log.info("Created substitute part *** for original part ***");
+        if (log.isInfoEnabled()) {
+            log.info("Created substitute part {} for original part {}",
+                    maskForLog(substitutePart.getId()),
+                    maskForLog(originalPartId));
+        }
 
         // Create SUBSTITUTION adjustment event
         WorkorderPartAdjustmentEvent event = WorkorderPartAdjustmentEvent.builder()
@@ -172,7 +176,12 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
         }
 
-        log.info("Substituted part *** with *** on workorder ***");
+        if (log.isInfoEnabled()) {
+            log.info("Substituted part {} with {} on workorder {}",
+                    maskForLog(originalPartId),
+                    maskForLog(substitutePart.getId()),
+                    maskForLog(workorderId));
+        }
         return toResponse(event);
     }
 
@@ -269,7 +278,12 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
         }
 
-        log.info("Returned *** of part *** on workorder ***");
+        if (log.isInfoEnabled()) {
+            log.info("Returned {} of part {} on workorder {}",
+                    quantity,
+                    maskForLog(partId),
+                    maskForLog(workorderId));
+        }
         return toResponse(event);
     }
 
@@ -359,7 +373,13 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
         }
 
-        log.info("Corrected quantity of part *** from *** to *** on workorder ***");
+        if (log.isInfoEnabled()) {
+            log.info("Corrected quantity of part {} from {} to {} on workorder {}",
+                    maskForLog(partId),
+                    oldQuantity,
+                    newQuantity,
+                    maskForLog(workorderId));
+        }
         return toResponse(event);
     }
 
@@ -413,6 +433,21 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 .performedAt(event.getPerformedAt())
                 .notes(event.getNotes())
                 .build();
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 
     /**

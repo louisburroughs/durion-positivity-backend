@@ -114,7 +114,7 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
         }
 
         /**
-         * AC-4: Missing required fields produce 400 VALIDATION_FAILED.
+         * AC-4: Missing required fields produce 400 VALIDATION_ERROR.
          *
          * <p>
          * DTO-level {@code @NotBlank}/{@code @NotNull} annotations fire before the
@@ -126,13 +126,13 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
          * Issue: #97
          */
         @Test
-        @DisplayName("POC-004: POST /v1/promotions/offers with missing required fields → 400 VALIDATION_FAILED")
+        @DisplayName("POC-004: POST /v1/promotions/offers with missing required fields → 400 VALIDATION_ERROR")
         void givenMissingRequiredFields_whenCreateOffer_thenReturns400() throws Exception {
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{}")))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         }
 
         // ========== RETRIEVAL BY ID ==========
