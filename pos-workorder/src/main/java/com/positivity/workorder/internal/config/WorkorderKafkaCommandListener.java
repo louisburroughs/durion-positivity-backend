@@ -42,8 +42,9 @@ public class WorkorderKafkaCommandListener {
     public void onCommand(@NonNull String message) {
         try {
             JsonNode root = objectMapper.readTree(message);
+            boolean hasCommandType = root.hasNonNull("commandType");
             String commandType = COMMAND_ASSIGNMENT_UPDATED;
-            if (root.hasNonNull("commandType")) {
+            if (hasCommandType) {
                 String rawCommandType = root.get("commandType").textValue();
                 if (rawCommandType != null && !rawCommandType.isBlank()) {
                     commandType = rawCommandType.toUpperCase(Locale.ROOT);
@@ -55,9 +56,11 @@ public class WorkorderKafkaCommandListener {
                 return;
             }
 
-            JsonNode payloadNode = root.has("payload") && !root.get("payload").isNull()
-                    ? root.get("payload")
-                    : root;
+            JsonNode payloadNode = hasCommandType
+                    && root.has("payload")
+                    && !root.get("payload").isNull()
+                            ? root.get("payload")
+                            : root;
 
             AssignmentUpdatedEvent event = objectMapper.treeToValue(payloadNode, AssignmentUpdatedEvent.class);
             if (event.getWorkorderId() == null || event.getPayload() == null) {

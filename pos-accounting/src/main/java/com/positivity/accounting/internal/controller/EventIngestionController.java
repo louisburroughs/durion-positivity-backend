@@ -64,8 +64,6 @@ public class EventIngestionController {
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Filter by processing status") @RequestParam(required = false) String status) {
-                log.debug("Listing accounting events: org={}, page={}, size={}, status={}", organizationId, page, size,
-                                status);
 
                 Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "receivedAt"));
                 Page<AccountingEventResponse> eventPage = eventIngestionService.listEvents(organizationId, status,
@@ -100,8 +98,7 @@ public class EventIngestionController {
         @EmitEvent(id = "ACCOUNTING_EVENT_SUBMIT", apiVersion = "1")
         public ResponseEntity<AccountingEventResponse> submitEvent(
                         @Valid @RequestBody AccountingEventSubmitRequest request) {
-                log.info("Submitting accounting event: type={}, org={}", request.getEventType(),
-                                request.getOrganizationId());
+
                 AccountingEventResponse response = eventIngestionService.submitEvent(request.toMap());
                 return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
         }
@@ -131,9 +128,6 @@ public class EventIngestionController {
         public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId,
                         @Valid @RequestBody ReprocessEventRequest request) {
-                log.info("Reprocessing suspended event {} triggered by user {}", eventId,
-                                request.getTriggeredByUserId());
-
                 try {
                         AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
                         HttpStatus status = AccountingEventStatus.PROCESSED.equals(response.getStatus())

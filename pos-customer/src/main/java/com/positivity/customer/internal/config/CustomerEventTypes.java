@@ -15,7 +15,7 @@ public final class CustomerEventTypes {
 
         /**
          * All event type registrations for the customer module.
-         * Total: 26 event types.
+         * Total: 27 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -88,6 +88,16 @@ public final class CustomerEventTypes {
                                 EventTypeRegistration.fastRead("CRM_SNAPSHOT_VEHICLE_RETRIEVE",
                                                 "Retrieve comprehensive CRM snapshot via vehicle ownership").build(),
                                 EventTypeRegistration.fastRead("CRM_SNAPSHOT_BILLING_RULES_GET",
-                                                "Get billing rules for party").build());
+                                                "Get billing rules for party").build(),
+
+                                // PromotionRedemptionController - 2 events (Story #94)
+                                EventTypeRegistration.write("PROMOTION_REDEMPTION_RECORD",
+                                                "Record a promotion redemption for a customer")
+                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration.search("PROMOTION_REDEMPTION_LIST",
+                                                "List redemptions by customer ID")
+                                                .apiVersion("1")
+                                                .build());
         }
 }
