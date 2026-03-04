@@ -62,13 +62,13 @@ class PromotionOfferServiceImplTest {
 
     private EstimateContext validEstimateContext() {
         LineItemContext line = new LineItemContext("SKU-001", BigDecimal.ONE, new BigDecimal("100.00"));
-                return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
+        return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
                 new BigDecimal("100.00"), null);
     }
 
     private EstimateContext estimateContextWithPromos(List<String> applied) {
         LineItemContext line = new LineItemContext("SKU-001", BigDecimal.ONE, new BigDecimal("100.00"));
-                return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
+        return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
                 new BigDecimal("100.00"), applied);
     }
 
