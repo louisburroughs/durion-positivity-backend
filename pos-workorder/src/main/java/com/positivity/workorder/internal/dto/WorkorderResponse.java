@@ -8,6 +8,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -50,6 +52,15 @@ public class WorkorderResponse {
     @Schema(description = "Date and time the workorder was reopened")
     private Instant reopenedAt;
 
+    @Schema(description = "CRM party identifier", example = "01952f4e-0000-7000-8000-000000000001")
+    private String crmPartyId;
+
+    @Schema(description = "CRM vehicle identifier", example = "01952f4e-0000-7000-8000-000000000002")
+    private String crmVehicleId;
+
+    @Schema(description = "List of CRM contact identifiers")
+    private List<String> crmContactIds;
+
     /**
      * Convert entity to response DTO
      */
@@ -69,6 +80,9 @@ public class WorkorderResponse {
                 .completedAt(entity.getCompletedAt())
                 .isReopened(entity.getIsReopened())
                 .reopenedAt(entity.getReopenedAt())
+                .crmPartyId(entity.getCrmPartyId())
+                .crmVehicleId(entity.getCrmVehicleId())
+                .crmContactIds(entity.getCrmContactIds() != null ? entity.getCrmContactIds() : new ArrayList<>())
                 .build();
     }
 }
