@@ -10,10 +10,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Unit tests for {@link StringListJsonConverter} — JPA AttributeConverter for List&lt;String&gt; ↔ JSON TEXT columns.
+ * Unit tests for {@link StringListJsonConverter} — JPA AttributeConverter for
+ * List&lt;String&gt; ↔ JSON TEXT columns.
  *
- * <p>Verifies all branches of the converter: null/blank/empty inputs, valid JSON arrays,
- * and invalid JSON error handling. Created as part of Story #93 (CAP-094) coverage hardening.</p>
+ * <p>
+ * Verifies all branches of the converter: null/blank/empty inputs, valid JSON
+ * arrays,
+ * and invalid JSON error handling. Created as part of Story #93 (CAP-094)
+ * coverage hardening.
+ * </p>
  */
 @DisplayName("StringListJsonConverter Unit Tests")
 class StringListJsonConverterTest {
@@ -57,8 +62,7 @@ class StringListJsonConverterTest {
     void convertToDatabaseColumn_uuidStrings_serialisesCorrectly() {
         List<String> contactIds = List.of(
                 "01952f4e-a003-7000-8000-crm0000003",
-                "01952f4e-a004-7000-8000-crm0000004"
-        );
+                "01952f4e-a004-7000-8000-crm0000004");
         String result = converter.convertToDatabaseColumn(contactIds);
         assertThat(result)
                 .contains("01952f4e-a003-7000-8000-crm0000003")

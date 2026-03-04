@@ -31,15 +31,22 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * GREEN-phase unit tests for {@link WorkorderEventHandler}.
  *
- * <p>Verifies the full processing contract for inbound workorder-originated events:
+ * <p>
+ * Verifies the full processing contract for inbound workorder-originated
+ * events:
  * idempotency (SKIPPED_DUPLICATE), happy-path persistence (SUCCESS), business
  * rule violation handling (BUSINESS_RULE_VIOLATION), and exception isolation
- * (no exception may escape to the Kafka broker/retry mechanism).</p>
+ * (no exception may escape to the Kafka broker/retry mechanism).
+ * </p>
  *
- * <p>Uses {@code @ExtendWith(MockitoExtension.class)} with manual handler construction
- * to avoid starting a full Spring context and triggering Kafka auto-configuration,
+ * <p>
+ * Uses {@code @ExtendWith(MockitoExtension.class)} with manual handler
+ * construction
+ * to avoid starting a full Spring context and triggering Kafka
+ * auto-configuration,
  * since the handler is gated by
- * {@code @ConditionalOnProperty(pos.customer.kafka.enabled=true)}.</p>
+ * {@code @ConditionalOnProperty(pos.customer.kafka.enabled=true)}.
+ * </p>
  *
  * Issue: #92
  */
@@ -67,12 +74,11 @@ class WorkorderEventHandlerTest {
                 processingLogRepository,
                 communicationPreferenceRepository,
                 personPartyRepository,
-                new ObjectMapper()
-        );
+                new ObjectMapper());
     }
 
     // -----------------------------------------------------------------------
-    // AC-1  VehicleUpdated — new event (happy path)
+    // AC-1 VehicleUpdated — new event (happy path)
     // -----------------------------------------------------------------------
 
     /**
@@ -93,7 +99,7 @@ class WorkorderEventHandlerTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-2  VehicleUpdated — duplicate detection
+    // AC-2 VehicleUpdated — duplicate detection
     // -----------------------------------------------------------------------
 
     /**
@@ -116,12 +122,13 @@ class WorkorderEventHandlerTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-3  ContactPreferenceUpdated — new event (happy path)
+    // AC-3 ContactPreferenceUpdated — new event (happy path)
     // -----------------------------------------------------------------------
 
     /**
      * AC-3: A fresh {@code ContactPreferenceUpdated} envelope is processed,
-     * the CommunicationPreference is upserted, and a {@link ProcessingStatus#SUCCESS}
+     * the CommunicationPreference is upserted, and a
+     * {@link ProcessingStatus#SUCCESS}
      * {@link ProcessingLog} is saved.
      */
     @Test
@@ -139,7 +146,7 @@ class WorkorderEventHandlerTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-4  ContactPreferenceUpdated — duplicate detection
+    // AC-4 ContactPreferenceUpdated — duplicate detection
     // -----------------------------------------------------------------------
 
     /**
@@ -164,7 +171,7 @@ class WorkorderEventHandlerTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-5  PartyNoteAdded — new event, party found (happy path)
+    // AC-5 PartyNoteAdded — new event, party found (happy path)
     // -----------------------------------------------------------------------
 
     /**
@@ -189,7 +196,7 @@ class WorkorderEventHandlerTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-6  PartyNoteAdded — duplicate detection
+    // AC-6 PartyNoteAdded — duplicate detection
     // -----------------------------------------------------------------------
 
     /**
@@ -212,12 +219,13 @@ class WorkorderEventHandlerTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-7  handleWorkorderEvent — top-level JSON dispatch
+    // AC-7 handleWorkorderEvent — top-level JSON dispatch
     // -----------------------------------------------------------------------
 
     /**
      * AC-7: The top-level Kafka listener dispatches a {@code VehicleUpdated} JSON
-     * message to the correct typed handler and saves a {@link ProcessingStatus#SUCCESS}
+     * message to the correct typed handler and saves a
+     * {@link ProcessingStatus#SUCCESS}
      * {@link ProcessingLog}.
      */
     @Test
@@ -240,7 +248,8 @@ class WorkorderEventHandlerTest {
     }
 
     // -----------------------------------------------------------------------
-    // Exception isolation — failure in handler must not propagate (AC-6 / isolation req)
+    // Exception isolation — failure in handler must not propagate (AC-6 / isolation
+    // req)
     // -----------------------------------------------------------------------
 
     /**
@@ -266,7 +275,7 @@ class WorkorderEventHandlerTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-8  PartyNoteAdded — business rule violation (party not found)
+    // AC-8 PartyNoteAdded — business rule violation (party not found)
     // -----------------------------------------------------------------------
 
     /**
@@ -308,8 +317,7 @@ class WorkorderEventHandlerTest {
                         "make", "Honda",
                         "model", "Accord",
                         "year", 2022,
-                        "color", "White"
-                ))
+                        "color", "White"))
                 .build();
     }
 
@@ -326,8 +334,7 @@ class WorkorderEventHandlerTest {
                         "emailPreference", "OPT_IN",
                         "smsPreference", "OPT_OUT",
                         "phonePreference", "OPT_IN",
-                        "marketingPreference", "OPT_OUT"
-                ))
+                        "marketingPreference", "OPT_OUT"))
                 .build();
     }
 
@@ -343,8 +350,7 @@ class WorkorderEventHandlerTest {
                         "partyId", partyId,
                         "noteText", "Vehicle service note from workorder",
                         "noteType", "SERVICE",
-                        "sourceWorkorderId", UUID.randomUUID().toString()
-                ))
+                        "sourceWorkorderId", UUID.randomUUID().toString()))
                 .build();
     }
 }

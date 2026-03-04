@@ -26,9 +26,12 @@ import lombok.NoArgsConstructor;
 /**
  * Audit log for inbound workorder-originated events consumed by the CRM system.
  *
- * <p>Each inbound event produces exactly one {@code ProcessingLog} entry recording
+ * <p>
+ * Each inbound event produces exactly one {@code ProcessingLog} entry recording
  * the event's identity, type, final processing status, and any failure details.
- * The {@code eventId} column carries a unique index to support fast idempotency checks.</p>
+ * The {@code eventId} column carries a unique index to support fast idempotency
+ * checks.
+ * </p>
  *
  * @see ProcessingStatus
  */
@@ -55,7 +58,10 @@ public class ProcessingLog {
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
 
-    /** Workorder ID (or other correlation reference) copied from the event envelope for traceability. */
+    /**
+     * Workorder ID (or other correlation reference) copied from the event envelope
+     * for traceability.
+     */
     @Column(name = "correlation_id", nullable = true, length = 36)
     private String correlationId;
 

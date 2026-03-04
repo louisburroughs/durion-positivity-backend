@@ -1,9 +1,12 @@
 package com.positivity.customer.internal.enums;
 
 /**
- * Lifecycle status for a {@link com.positivity.customer.internal.entity.ProcessingLog} entry.
+ * Lifecycle status for a
+ * {@link com.positivity.customer.internal.entity.ProcessingLog} entry.
  *
- * <p>Represents the final outcome of processing a single inbound workorder event.</p>
+ * <p>
+ * Represents the final outcome of processing a single inbound workorder event.
+ * </p>
  */
 public enum ProcessingStatus {
 
@@ -19,6 +22,9 @@ public enum ProcessingStatus {
     /** Event payload failed schema validation; routed to DLQ. */
     SCHEMA_VALIDATION_FAILED,
 
-    /** Event payload was valid but violated a business rule (e.g. entity not found); routed to DLQ. */
+    /**
+     * Event payload was valid but violated a business rule (e.g. entity not found);
+     * routed to DLQ.
+     */
     BUSINESS_RULE_VIOLATION
 }
