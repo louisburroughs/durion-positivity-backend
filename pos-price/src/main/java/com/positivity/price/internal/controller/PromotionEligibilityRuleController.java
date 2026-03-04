@@ -63,7 +63,7 @@ public class PromotionEligibilityRuleController {
     public ResponseEntity<Void> deleteRule(
             @PathVariable("promotionId") UUID promotionId,
             @PathVariable("ruleId") UUID ruleId) {
-        eligibilityEvaluationService.deleteRule(ruleId);
+        eligibilityEvaluationService.deleteRule(promotionId, ruleId);
         return ResponseEntity.noContent().build();
     }
 

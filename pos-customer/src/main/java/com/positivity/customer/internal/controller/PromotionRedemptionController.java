@@ -19,6 +19,7 @@ import com.positivity.customer.service.PromotionRedemptionService;
 import com.positivity.events.EmitEvent;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -54,7 +55,7 @@ public class PromotionRedemptionController {
 
     @Operation(summary = "Get redemptions by customer", description = "Retrieve all recorded redemptions for a customer")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Promotion redemptions returned", content = @Content(schema = @Schema(implementation = PromotionRedemptionResponse.class))),
+            @ApiResponse(responseCode = "200", description = "Promotion redemptions returned", content = @Content(array = @ArraySchema(schema = @Schema(implementation = PromotionRedemptionResponse.class)))),
             @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
     })
     @GetMapping("/by-customer/{customerId}")

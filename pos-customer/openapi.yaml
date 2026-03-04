@@ -920,7 +920,9 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PromotionRedemptionResponse"
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromotionRedemptionResponse"
         "403":
           description: Forbidden - insufficient permissions
   /v1/crm/snapshot/vehicle/{vehicleId}:
