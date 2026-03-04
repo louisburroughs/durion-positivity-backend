@@ -5,6 +5,7 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -12,6 +13,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import java.util.ArrayList;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -101,6 +103,18 @@ public class Workorder {
 
     @Column(columnDefinition = "TEXT")
     private String reopenReason;
+
+    // CRM reference IDs — immutable point-in-time snapshot (CAP-094 Story #93)
+    @Column(length = 36, updatable = false)
+    private String crmPartyId;
+
+    @Column(length = 36, updatable = false)
+    private String crmVehicleId;
+
+    @Builder.Default
+    @Column(columnDefinition = "TEXT", updatable = false)
+    @Convert(converter = StringListJsonConverter.class)
+    private List<String> crmContactIds = new ArrayList<>();
 
     /**
      * Check if the work order is locked from modifications.

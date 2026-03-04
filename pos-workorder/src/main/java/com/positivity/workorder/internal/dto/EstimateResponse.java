@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import com.positivity.workorder.internal.entity.Estimate;
@@ -98,6 +100,15 @@ public class EstimateResponse {
     @Schema(description = "Optimistic locking version")
     private Integer version;
 
+    @Schema(description = "CRM party identifier", example = "01952f4e-0000-7000-8000-000000000001")
+    private String crmPartyId;
+
+    @Schema(description = "CRM vehicle identifier", example = "01952f4e-0000-7000-8000-000000000002")
+    private String crmVehicleId;
+
+    @Schema(description = "List of CRM contact identifiers")
+    private List<String> crmContactIds;
+
     /**
      * Convert entity to response DTO
      */
@@ -131,6 +142,9 @@ public class EstimateResponse {
                 .approvalNotes(entity.getApprovalNotes())
                 .purchaseOrderNumber(entity.getPurchaseOrderNumber())
                 .version(entity.getVersion())
+                .crmPartyId(entity.getCrmPartyId())
+                .crmVehicleId(entity.getCrmVehicleId())
+                .crmContactIds(entity.getCrmContactIds() != null ? List.copyOf(entity.getCrmContactIds()) : List.of())
                 .build();
     }
 }

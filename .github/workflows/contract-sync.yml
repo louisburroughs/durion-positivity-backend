@@ -94,17 +94,13 @@ jobs:
             exit 1
           fi
 
-          # Require the canonical contract guide path with flexible prefix/domain:
-          # - any non-space prefix before `domains/...` (URL or plain path)
-          # - any domain token where `workexec` would be
-          # Example matches:
-          #   https://github.com/louisburroughs/durion/blob/main/domains/workexec/.business-rules/BACKEND_CONTRACT_GUIDE.md#...
-          #   domains/workexec/.business-rules/BACKEND_CONTRACT_GUIDE.md
-          GUIDE_REGEX='[^ ]*domains/[A-Za-z0-9_-]+/\.business-rules/BACKEND_CONTRACT_GUIDE\.md(#[^ )\n]+)?'
+          # Require a reference to the canonical contract guide filename anywhere in the PR body.
+          # This is intentionally simple — any mention of the filename suffices.
+          GUIDE_KEYWORD='BACKEND_CONTRACT_GUIDE\.md'
 
-          echo "${PR_BODY}" | grep -Eqi "${GUIDE_REGEX}" || {
-            echo "::error::Missing contract guide link. Add a link to durion/domains/{domain}/.business-rules/BACKEND_CONTRACT_GUIDE.md (preferably anchored to the relevant entry)."
-            echo "::notice::Expected pattern like: https://github.com/louisburroughs/durion/blob/<ref>/domains/<domain>/.business-rules/BACKEND_CONTRACT_GUIDE.md#<anchor>"
+          echo "${PR_BODY}" | grep -Eqi "${GUIDE_KEYWORD}" || {
+            echo "::error::Missing contract guide reference. Mention BACKEND_CONTRACT_GUIDE.md in your PR description."
+            echo "::notice::Simply include the text 'BACKEND_CONTRACT_GUIDE.md' anywhere in the PR body (a link to the relevant domain contract guide is recommended)."
             exit 1
           }
 

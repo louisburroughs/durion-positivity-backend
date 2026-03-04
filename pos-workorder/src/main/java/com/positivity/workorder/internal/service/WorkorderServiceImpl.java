@@ -110,10 +110,12 @@ public class WorkorderServiceImpl implements WorkorderService {
     @Override
     @Transactional
     public Workorder createWorkorder(UUID estimateId, UUID customerId) {
-        // If customerId is null, fetch it from the estimate
-        if (customerId == null && estimateId != null) {
-            Estimate estimate = estimateRepository.findById(estimateId)
-                    .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+        Estimate estimate = estimateId != null
+                ? estimateRepository.findById(estimateId)
+                        .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId))
+                : null;
+
+        if (customerId == null && estimate != null) {
             customerId = estimate.getCustomerId();
             log.debug("Fetched customerId {} from estimate {}", customerId, estimateId);
         }
@@ -122,6 +124,11 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .estimateId(estimateId)
                 .customerId(customerId)
                 .status(WorkorderStatus.DRAFT)
+                .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
+                .crmVehicleId(estimate != null ? estimate.getCrmVehicleId() : null)
+                .crmContactIds(estimate != null && estimate.getCrmContactIds() != null
+                        ? new ArrayList<>(estimate.getCrmContactIds())
+                        : new ArrayList<>())
                 .build();
         return createWorkorderInternal(workorder);
     }
@@ -155,11 +162,26 @@ public class WorkorderServiceImpl implements WorkorderService {
             }
         }
 
-        // Create new workorder
+        // Create new workorder — fetch estimate to propagate CRM reference IDs (CAP-094
+        // Story #93)
+        Estimate estimate = estimateId != null
+                ? estimateRepository.findById(estimateId)
+                        .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId))
+                : null;
+
+        if (customerId == null && estimate != null) {
+            customerId = estimate.getCustomerId();
+        }
+
         Workorder workorder = Workorder.builder()
                 .estimateId(estimateId)
                 .customerId(customerId)
                 .status(WorkorderStatus.DRAFT)
+                .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
+                .crmVehicleId(estimate != null ? estimate.getCrmVehicleId() : null)
+                .crmContactIds(estimate != null && estimate.getCrmContactIds() != null
+                        ? new ArrayList<>(estimate.getCrmContactIds())
+                        : new ArrayList<>())
                 .build();
         Workorder created = createWorkorderInternal(workorder);
 
