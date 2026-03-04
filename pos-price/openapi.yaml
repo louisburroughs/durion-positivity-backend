@@ -529,8 +529,6 @@ components:
           - EVALUATION_ERROR
         eligible:
           type: boolean
-        isEligible:
-          type: boolean
     ApplyPromotionRequest:
       type: object
       properties:
