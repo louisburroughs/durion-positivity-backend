@@ -3,116 +3,99 @@ package com.positivity.accounting.internal.config;
 import com.positivity.accounting.internal.dto.PaymentClearedEvent;
 import com.positivity.accounting.service.PaymentApplicationService;
 
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.event.EventListener;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
- * Message listener configuration for payment events (CAP:051 Story #114).
- * Listens for PaymentCleared events from Payment domain.
- * 
+ * Kafka listener for PaymentCleared events (CAP:051 Story #114).
+ * Consumes PaymentCleared events from the Payment domain's Kafka topic.
+ *
  * <p>
  * When a payment clears (credit card authorization, check clearing, etc.),
- * the Payment domain emits a PaymentCleared event. This listener consumes
- * that event and creates a ReceivablePayment record in the Accounting domain,
- * making the payment available for application to invoices.
- * 
+ * the Payment domain publishes a PaymentCleared event to Kafka. This listener
+ * consumes that event and creates a ReceivablePayment record in the Accounting
+ * domain, making the payment available for application to invoices.
+ *
  * <p>
  * <strong>Idempotency:</strong> Uses event.eventId as sourceEventId to ensure
  * duplicate events are ignored.
- * 
+ *
  * <p>
  * <strong>Activation:</strong> Listener is conditionally activated when
- * pos.accounting.event-listener.enabled=true in application.yml. This allows
- * graceful compilation without Kafka dependency until messaging infrastructure
- * is configured.
- * 
- * <p>
- * <strong>TODO:</strong> Replace Spring @EventListener with Kafka/RabbitMQ
- * listener annotations once message broker is configured. For now, this uses
- * Spring's internal event bus for testing/development.
- * 
+ * {@code pos.accounting.kafka.enabled=true} in application.yml.
+ *
  * @see PaymentApplicationService#handlePaymentCleared
  * @see com.positivity.accounting.internal.entity.ReceivablePayment
  */
-@NoArgsConstructor(access = lombok.AccessLevel.PRIVATE)
-@Configuration
-@ConditionalOnProperty(prefix = "pos.accounting.event-listener", name = "enabled", havingValue = "true", matchIfMissing = false)
+@Slf4j
+@Component
+@RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class PaymentEventListenerConfig {
 
+    private final ObjectMapper objectMapper;
+    private final PaymentApplicationService paymentApplicationService;
+
     /**
-     * Spring event listener for PaymentCleared events.
-     * 
-     * <p>
-     * <strong>TEMPORARY IMPLEMENTATION:</strong> Uses Spring's internal
-     * ApplicationEventPublisher for development. Will be replaced with
-     * Kafka/RabbitMQ listener when message broker is configured.
-     * 
-     * <p>
-     * Consumes events and delegates to PaymentApplicationService for
-     * business logic execution.
+     * Kafka listener for PaymentCleared events from the Payment domain.
+     *
+     * <p>Deserializes the JSON message into a {@link PaymentClearedEvent},
+     * validates required fields, and delegates to
+     * {@link PaymentApplicationService#handlePaymentCleared} for business logic.
+     *
+     * <p><strong>Error Handling:</strong>
+     * <ul>
+     *   <li>Deserialization errors: logged and event skipped</li>
+     *   <li>Validation errors: logged and event skipped</li>
+     *   <li>Service errors: logged and rethrown for Kafka retry/DLQ handling</li>
+     *   <li>Idempotency: duplicate events silently ignored (logged at DEBUG)</li>
+     * </ul>
+     *
+     * @param message raw JSON message from Kafka topic
      */
-    @Slf4j
-    @Component
-    @RequiredArgsConstructor
-    public static class PaymentEventListener {
+    @KafkaListener(
+            topics = "${pos.accounting.kafka.payments-topic:payment.cleared.v1}",
+            groupId = "${pos.accounting.kafka.consumer-group:pos-accounting-payments}")
+    public void onPaymentCleared(@NonNull String message) {
+        try {
+            PaymentClearedEvent event = objectMapper.readValue(message, PaymentClearedEvent.class);
 
-        private final PaymentApplicationService paymentApplicationService;
+            log.debug("Received PaymentCleared event: {}", event.getEventId());
 
-        /**
-         * Listen for PaymentCleared events via Spring's internal event bus.
-         * 
-         * <p>
-         * <strong>Error Handling:</strong>
-         * <ul>
-         * <li>Validation errors: logged and event skipped</li>
-         * <li>Service errors: logged and rethrown for potential retry</li>
-         * <li>Idempotency: duplicate events silently ignored (logged at DEBUG)</li>
-         * </ul>
-         * 
-         * <p>
-         * <strong>TODO:</strong> Replace with @KafkaListener or @RabbitListener
-         * when message broker is configured. For now, events can be published
-         * programmatically via ApplicationEventPublisher for testing.
-         * 
-         * @param event PaymentCleared event from Payment domain
-         */
-        @EventListener
-        public void onPaymentCleared(PaymentClearedEvent event) {
-            try {
-                log.debug("Received PaymentCleared event: {}", event.getEventId());
+            // Validate required fields
+            event.validate();
 
-                // Validate required fields
-                event.validate();
+            // Process event (idempotent via sourceEventId check)
+            paymentApplicationService.handlePaymentCleared(
+                    event.getPaymentId(),
+                    event.getCustomerId(),
+                    event.getCurrencyCode(),
+                    event.getAmount(),
+                    event.getClearedAt(),
+                    event.getEventId() // sourceEventId for idempotency
+            );
 
-                // Process event (idempotent via sourceEventId check)
-                paymentApplicationService.handlePaymentCleared(
-                        event.getPaymentId(),
-                        event.getCustomerId(),
-                        event.getCurrencyCode(),
-                        event.getAmount(),
-                        event.getClearedAt(),
-                        event.getEventId() // sourceEventId for idempotency
-                );
+            log.info("Successfully processed PaymentCleared event {} for payment {}",
+                    event.getEventId(), event.getPaymentId());
 
-                log.info("Successfully processed PaymentCleared event {} for payment {}",
-                        event.getEventId(), event.getPaymentId());
+        } catch (JacksonException e) {
+            log.error("Failed to deserialize PaymentCleared Kafka message: {}", message, e);
+            // Skip unparseable messages (don't rethrow — would cause infinite retry loop)
 
-            } catch (IllegalArgumentException e) {
-                log.error("Invalid PaymentCleared event {} for payment {}", event.getEventId(),
-                        event.getPaymentId(), e);
-                // Skip invalid events (don't rethrow to prevent retry loop)
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid PaymentCleared event from Kafka message: {}", message, e);
+            // Skip invalid events (don't rethrow to prevent retry loop)
 
-            } catch (Exception e) {
-                log.error("Error processing PaymentCleared event {} for payment {}", event.getEventId(),
-                        event.getPaymentId(), e);
-                // Rethrow to trigger retry mechanism (if configured)
-                throw e;
-            }
+        } catch (Exception e) {
+            log.error("Error processing PaymentCleared event from Kafka: {}", message, e);
+            // Rethrow to trigger Kafka retry / dead-letter-topic handling
+            throw new RuntimeException("Failed to process PaymentCleared Kafka event", e);
         }
     }
 }

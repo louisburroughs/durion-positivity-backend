@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.config;
+package com.positivity.customer.internal.event.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -270,9 +270,15 @@ class WorkorderEventHandlerTest {
      * {@link WorkorderEventHandler#handleWorkorderEvent(String)}.
      * This prevents Kafka from entering a retry/poison-pill loop on a
      * persistently-failing message.
+     *
+     * <p>
+     * F-02: The generic {@code catch(Exception)} block must also persist a
+     * {@link ProcessingLog} with {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED}
+     * so the failure is auditable without crashing the consumer.
+     * </p>
      */
     @Test
-    void handleWorkorderEvent_handlerThrowsException_doesNotPropagate() {
+    void handleWorkorderEvent_handlerThrowsException_doesNotPropagateAndSavesSchemaValidationFailedLog() {
         when(processingLogRepository.findByEventId(any()))
                 .thenThrow(new RuntimeException("simulated DB error"));
         String json = "{\"eventId\":\"" + UUID.randomUUID() + "\","
@@ -284,6 +290,13 @@ class WorkorderEventHandlerTest {
                 + "\"payload\":{}}";
 
         assertDoesNotThrow(() -> handler.handleWorkorderEvent(json));
+
+        // F-02: generic catch block must save a SCHEMA_VALIDATION_FAILED processing log
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
+        assertThat(captor.getValue().getEventId())
+                .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     }
 
     // -----------------------------------------------------------------------
