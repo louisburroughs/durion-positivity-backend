@@ -12,10 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.positivity.workorder.support.BaseContractIntegrationTest;
@@ -23,13 +21,11 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Workorder Estimate Backend Contract Behavioral Tests")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
 
-        @Autowired
-        private MockMvc mockMvc;
+       
 
         @Autowired
         private ObjectMapper objectMapper;

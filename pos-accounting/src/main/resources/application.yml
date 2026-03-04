@@ -60,6 +60,10 @@ pos:
       tax-payable-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID}
       # Required: GL account for accounts receivable reductions (typically 1200-1299 range)
       ar-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID}
+    kafka:
+      enabled: ${POS_ACCOUNTING_KAFKA_ENABLED:false}
+      payments-topic: ${POS_ACCOUNTING_KAFKA_PAYMENTS_TOPIC:payment.cleared.v1}
+      consumer-group: ${POS_ACCOUNTING_KAFKA_CONSUMER_GROUP:${spring.application.name}-payments}
 
 # Payment Gateway Configuration
 payment:

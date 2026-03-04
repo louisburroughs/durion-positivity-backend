@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.config;
+package com.positivity.customer.internal.event.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

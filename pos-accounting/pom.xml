@@ -77,6 +77,12 @@
             <version>${opentelemetry.version}</version>
         </dependency>
 
+        <!-- Kafka producer/consumer support -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
         <!-- Spring Retry -->
         <dependency>
             <groupId>org.springframework.retry</groupId>

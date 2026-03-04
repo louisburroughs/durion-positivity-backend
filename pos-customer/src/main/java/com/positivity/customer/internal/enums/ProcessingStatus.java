@@ -10,9 +10,6 @@ package com.positivity.customer.internal.enums;
  */
 public enum ProcessingStatus {
 
-    /** Event is currently being processed. */
-    PROCESSING,
-
     /** Event was successfully applied to the CRM data. */
     SUCCESS,
 

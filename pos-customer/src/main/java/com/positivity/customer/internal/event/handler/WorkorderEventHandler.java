@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.config;
+package com.positivity.customer.internal.event.handler;
 
 import java.time.Instant;
 import java.util.Map;
@@ -48,8 +48,11 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.customer.kafka", name = "enabled", havingValue = "true")
 public class WorkorderEventHandler {
 
-    private static final String DUPLICATE_EVENT_MESSAGE = "Skipping duplicate event [eventId={}] — already processed";
+    private static final String UNKNOWN_EVENT_TYPE = "UNKNOWN";
+    private static final String DUPLICATE_EVENT_MESSAGE = "Skipping duplicate event eventId={} eventType={} status=already_processed";
+    private static final String DUPLICATE_SAVE_COLLISION_MESSAGE = "Concurrent duplicate save collision suppressed for eventId={}";
     private static final String DUPLICATE_FAILURE_REASON_PREFIX = "Duplicate of eventId: ";
+    private static final int MAX_FAILURE_REASON_LENGTH = 490;
 
     private final ProcessingLogRepository processingLogRepository;
     private final CommunicationPreferenceRepository communicationPreferenceRepository;
@@ -69,44 +72,42 @@ public class WorkorderEventHandler {
         try {
             final EventEnvelope envelope = objectMapper.readValue(message, EventEnvelope.class);
 
-            final String eventType = envelope.getEventType();
-            if ("VehicleUpdated".equals(eventType)) {
-                handleVehicleUpdated(envelope);
-                return;
-            }
-            if ("ContactPreferenceUpdated".equals(eventType)) {
-                handleContactPreferenceUpdated(envelope);
-                return;
-            }
-            if ("PartyNoteAdded".equals(eventType)) {
-                handlePartyNoteAdded(envelope);
+            if (dispatchByEventType(envelope)) {
                 return;
             }
 
-            log.warn("Unsupported workorder event type: {}", eventType);
-            final String safeEventId = (envelope.getEventId() == null || envelope.getEventId().isBlank())
-                    ? UUID.randomUUID().toString()
-                    : envelope.getEventId();
-            final String safeEventType = (eventType == null || eventType.isBlank()) ? "UNKNOWN" : eventType;
+            final String safeEventType = normalizeEventType(envelope.getEventType());
+            log.warn("Unsupported workorder event type eventId={} eventType={}", envelope.getEventId(), safeEventType);
             processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(safeEventId)
+                    .eventId((envelope.getEventId() == null || envelope.getEventId().isBlank())
+                            ? UUID.randomUUID().toString()
+                            : envelope.getEventId())
                     .eventType(safeEventType)
                     .correlationId(envelope.getCorrelationId())
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                    .failureReason("Unsupported event type: " + safeEventType)
+                    .failureReason(truncateFailureReason("Unsupported event type: " + safeEventType))
                     .processedAt(Instant.now())
                     .build());
         } catch (JacksonException ex) {
             log.error("Failed to deserialize workorder event payload", ex);
             processingLogRepository.save(ProcessingLog.builder()
                     .eventId(UUID.randomUUID().toString())
-                    .eventType("UNKNOWN")
+                    .eventType(UNKNOWN_EVENT_TYPE)
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                    .failureReason("SCHEMA validation failed: " + ex.getMessage())
+                    .failureReason(truncateFailureReason("SCHEMA validation failed: " + ex.getMessage()))
                     .processedAt(Instant.now())
                     .build());
         } catch (Exception ex) {
             log.error("Unhandled exception while processing workorder event", ex);
+            processingLogRepository.save(ProcessingLog.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .eventType(UNKNOWN_EVENT_TYPE)
+                    .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
+                    .failureReason("Unhandled exception: " + (ex.getMessage() != null
+                            ? ex.getMessage().substring(0, Math.min(ex.getMessage().length(), 490))
+                            : "null"))
+                    .processedAt(Instant.now())
+                    .build());
         }
     }
 
@@ -117,22 +118,30 @@ public class WorkorderEventHandler {
      */
     void handleVehicleUpdated(@NonNull EventEnvelope envelope) {
         if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
-            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId());
-            processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(UUID.randomUUID().toString())
-                    .eventType(envelope.getEventType())
-                    .correlationId(envelope.getCorrelationId())
-                    .status(ProcessingStatus.SKIPPED_DUPLICATE)
-                    .failureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId())
-                    .processedAt(Instant.now())
-                    .build());
+            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId(), envelope.getEventType());
+            try {
+                processingLogRepository.save(ProcessingLog.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .eventType(envelope.getEventType())
+                        .correlationId(envelope.getCorrelationId())
+                        .status(ProcessingStatus.SKIPPED_DUPLICATE)
+                        .failureReason(truncateFailureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId()))
+                        .processedAt(Instant.now())
+                        .build());
+            } catch (org.springframework.dao.DataIntegrityViolationException dive) {
+                log.debug(DUPLICATE_SAVE_COLLISION_MESSAGE, envelope.getEventId());
+            }
             return;
         }
 
         try {
             final Map<String, Object> payloadMap = envelope.getPayload() == null ? Map.of() : envelope.getPayload();
-            objectMapper.convertValue(payloadMap, VehicleUpdatedPayload.class);
-            processingLogRepository.save(ProcessingLog.builder()
+            final VehicleUpdatedPayload payload = objectMapper.convertValue(payloadMap, VehicleUpdatedPayload.class);
+                // TODO F-01: Implement vehicle entity update when VehicleRepository is available // NOSONAR
+            log.warn("handleVehicleUpdated: No vehicle repository available — CRM vehicle data not updated for vehicleId={}",
+                    payload.getVehicleId());
+
+                processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
                     .correlationId(envelope.getCorrelationId())
@@ -140,13 +149,16 @@ public class WorkorderEventHandler {
                     .processedAt(Instant.now())
                     .build());
         } catch (Exception ex) {
-            log.error("VehicleUpdated payload processing failed for eventId={}", envelope.getEventId(), ex);
+            log.error("VehicleUpdated payload processing failed eventId={} eventType={}",
+                    envelope.getEventId(),
+                    envelope.getEventType(),
+                    ex);
             processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
                     .correlationId(envelope.getCorrelationId())
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                    .failureReason(ex.getMessage())
+                    .failureReason(truncateFailureReason(ex.getMessage()))
                     .processedAt(Instant.now())
                     .build());
         }
@@ -159,15 +171,19 @@ public class WorkorderEventHandler {
      */
     void handleContactPreferenceUpdated(@NonNull EventEnvelope envelope) {
         if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
-            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId());
-            processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(UUID.randomUUID().toString())
-                    .eventType(envelope.getEventType())
-                    .correlationId(envelope.getCorrelationId())
-                    .status(ProcessingStatus.SKIPPED_DUPLICATE)
-                    .failureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId())
-                    .processedAt(Instant.now())
-                    .build());
+            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId(), envelope.getEventType());
+            try {
+                processingLogRepository.save(ProcessingLog.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .eventType(envelope.getEventType())
+                        .correlationId(envelope.getCorrelationId())
+                        .status(ProcessingStatus.SKIPPED_DUPLICATE)
+                        .failureReason(truncateFailureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId()))
+                        .processedAt(Instant.now())
+                        .build());
+            } catch (org.springframework.dao.DataIntegrityViolationException dive) {
+                log.debug(DUPLICATE_SAVE_COLLISION_MESSAGE, envelope.getEventId());
+            }
             return;
         }
 
@@ -191,7 +207,7 @@ public class WorkorderEventHandler {
             preference.setMarketingPreference(payload.getMarketingPreference());
             communicationPreferenceRepository.save(preference);
 
-            processingLogRepository.save(ProcessingLog.builder()
+                processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
                     .correlationId(envelope.getCorrelationId())
@@ -199,13 +215,16 @@ public class WorkorderEventHandler {
                     .processedAt(Instant.now())
                     .build());
         } catch (Exception ex) {
-            log.error("ContactPreferenceUpdated processing failed for eventId={}", envelope.getEventId(), ex);
+            log.error("ContactPreferenceUpdated processing failed eventId={} eventType={}",
+                    envelope.getEventId(),
+                    envelope.getEventType(),
+                    ex);
             processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
                     .correlationId(envelope.getCorrelationId())
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                    .failureReason(ex.getMessage())
+                    .failureReason(truncateFailureReason(ex.getMessage()))
                     .processedAt(Instant.now())
                     .build());
         }
@@ -218,15 +237,19 @@ public class WorkorderEventHandler {
      */
     void handlePartyNoteAdded(@NonNull EventEnvelope envelope) {
         if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
-            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId());
-            processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(UUID.randomUUID().toString())
-                    .eventType(envelope.getEventType())
-                    .correlationId(envelope.getCorrelationId())
-                    .status(ProcessingStatus.SKIPPED_DUPLICATE)
-                    .failureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId())
-                    .processedAt(Instant.now())
-                    .build());
+            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId(), envelope.getEventType());
+            try {
+                processingLogRepository.save(ProcessingLog.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .eventType(envelope.getEventType())
+                        .correlationId(envelope.getCorrelationId())
+                        .status(ProcessingStatus.SKIPPED_DUPLICATE)
+                        .failureReason(truncateFailureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId()))
+                        .processedAt(Instant.now())
+                        .build());
+            } catch (org.springframework.dao.DataIntegrityViolationException dive) {
+                log.debug(DUPLICATE_SAVE_COLLISION_MESSAGE, envelope.getEventId());
+            }
             return;
         }
 
@@ -244,13 +267,20 @@ public class WorkorderEventHandler {
                         .eventType(envelope.getEventType())
                         .correlationId(envelope.getCorrelationId())
                         .status(ProcessingStatus.BUSINESS_RULE_VIOLATION)
-                        .failureReason("Party not found: " + payload.getPartyId())
+                        .failureReason(truncateFailureReason("Party not found: " + payload.getPartyId()))
                         .processedAt(Instant.now())
                         .build());
                 return;
             }
 
-            processingLogRepository.save(ProcessingLog.builder()
+                // TODO F-05: Implement party note persistence when PartyNoteRepository is available // NOSONAR
+            log.info("PartyNoteAdded accepted eventId={} eventType={} partyId={} noteType={}",
+                    envelope.getEventId(),
+                    envelope.getEventType(),
+                    payload.getPartyId(),
+                    payload.getNoteType());
+
+                processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
                     .correlationId(envelope.getCorrelationId())
@@ -258,15 +288,49 @@ public class WorkorderEventHandler {
                     .processedAt(Instant.now())
                     .build());
         } catch (Exception ex) {
-            log.error("PartyNoteAdded processing failed for eventId={}", envelope.getEventId(), ex);
+            log.error("PartyNoteAdded processing failed eventId={} eventType={}",
+                    envelope.getEventId(),
+                    envelope.getEventType(),
+                    ex);
             processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
                     .correlationId(envelope.getCorrelationId())
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                    .failureReason(ex.getMessage())
+                    .failureReason(truncateFailureReason(ex.getMessage()))
                     .processedAt(Instant.now())
                     .build());
         }
+    }
+
+    private boolean dispatchByEventType(EventEnvelope envelope) {
+        final String eventType = envelope.getEventType();
+        if ("VehicleUpdated".equals(eventType)) {
+            handleVehicleUpdated(envelope);
+            return true;
+        }
+        if ("ContactPreferenceUpdated".equals(eventType)) {
+            handleContactPreferenceUpdated(envelope);
+            return true;
+        }
+        if ("PartyNoteAdded".equals(eventType)) {
+            handlePartyNoteAdded(envelope);
+            return true;
+        }
+        return false;
+    }
+
+    private String normalizeEventType(String eventType) {
+        return eventType == null || eventType.isBlank() ? UNKNOWN_EVENT_TYPE : eventType;
+    }
+
+    private String truncateFailureReason(String failureReason) {
+        if (failureReason == null) {
+            return null;
+        }
+        if (failureReason.length() <= MAX_FAILURE_REASON_LENGTH) {
+            return failureReason;
+        }
+        return failureReason.substring(0, MAX_FAILURE_REASON_LENGTH);
     }
 }

@@ -8,6 +8,7 @@ import java.util.UUID;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -46,10 +47,12 @@ public class CreateEstimateRequest {
     private BigDecimal total;
 
     @NotBlank(message = "crmPartyId is required")
+    @Size(max = 36, message = "crmPartyId must be at most 36 characters")
     @Schema(description = "CRM party identifier (UUIDv7 string)", example = "01952f4e-0000-7000-8000-000000000001")
     private String crmPartyId;
 
     @NotBlank(message = "crmVehicleId is required")
+    @Size(max = 36, message = "crmVehicleId must be at most 36 characters")
     @Schema(description = "CRM vehicle identifier (UUIDv7 string)", example = "01952f4e-0000-7000-8000-000000000002")
     private String crmVehicleId;
 
