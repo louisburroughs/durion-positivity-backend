@@ -446,6 +446,13 @@ public final class WorkorderEventTypes {
                         .approval("WORKORDER_TIME_ENTRY_REJECTED", "Reject a submitted time entry")
                         .apiVersion("1").build();
 
+        // ==================== DASHBOARD EVENTS (CAP-142) ====================
+
+        public static final EventTypeRegistration WORKEXEC_DASHBOARD_TODAY_GET = EventTypeRegistration
+                        .fastRead("WORKEXEC_DASHBOARD_TODAY_GET", "Get daily dispatch board dashboard")
+                        .apiVersion("1")
+                        .build();
+
         // ==================== ALL EVENT TYPES ====================
 
         /** All event types for registration at startup */
@@ -526,5 +533,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT,
                         // Time entry events (Story #66)
                         WORKORDER_TIME_ENTRY_APPROVED,
-                        WORKORDER_TIME_ENTRY_REJECTED);
+                        WORKORDER_TIME_ENTRY_REJECTED,
+                        // Dashboard events (CAP-142)
+                        WORKEXEC_DASHBOARD_TODAY_GET);
 }
