@@ -1,9 +1,12 @@
 package com.positivity.workorder.internal.dto;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,4 +44,17 @@ public class CreateEstimateRequest {
 
     @Schema(description = "Optional total amount including tax", example = "550.00")
     private BigDecimal total;
+
+    @NotBlank(message = "crmPartyId is required")
+    @Schema(description = "CRM party identifier (UUIDv7 string)", example = "01952f4e-0000-7000-8000-000000000001")
+    private String crmPartyId;
+
+    @NotBlank(message = "crmVehicleId is required")
+    @Schema(description = "CRM vehicle identifier (UUIDv7 string)", example = "01952f4e-0000-7000-8000-000000000002")
+    private String crmVehicleId;
+
+    @NotNull(message = "crmContactIds is required")
+    @Builder.Default
+    @Schema(description = "List of CRM contact identifiers (may be empty)", example = "[\"01952f4e-0000-7000-8000-000000000003\"]")
+    private List<String> crmContactIds = new ArrayList<>();
 }
