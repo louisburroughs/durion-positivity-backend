@@ -64,8 +64,7 @@ public class CycleCountController {
         })
         public ResponseEntity<CountResponse> submitCount(
                         @Valid @RequestBody SubmitCountRequest request) {
-              
-
+                log.info("Submitting cycle count request");
                 CountResponse response = cycleCountService.submitCount(request);
                 return ResponseEntity.ok(response);
         }
