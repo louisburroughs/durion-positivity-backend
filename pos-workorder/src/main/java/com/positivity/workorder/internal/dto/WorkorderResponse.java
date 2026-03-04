@@ -82,7 +82,7 @@ public class WorkorderResponse {
                 .reopenedAt(entity.getReopenedAt())
                 .crmPartyId(entity.getCrmPartyId())
                 .crmVehicleId(entity.getCrmVehicleId())
-                .crmContactIds(entity.getCrmContactIds() != null ? entity.getCrmContactIds() : new ArrayList<>())
+                .crmContactIds(entity.getCrmContactIds() != null ? List.copyOf(entity.getCrmContactIds()) : List.of())
                 .build();
     }
 }
