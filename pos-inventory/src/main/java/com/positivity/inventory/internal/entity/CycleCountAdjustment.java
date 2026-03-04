@@ -43,7 +43,7 @@ public class CycleCountAdjustment {
      * SKU identifier for the stock item being adjusted.
      */
     @Column(nullable = false)
-    private String stockItemId;
+    private UUID stockItemId;
 
     /**
      * Reason code for the adjustment (e.g., 'CYCLE_COUNT_SHRINK',

@@ -164,8 +164,29 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
         }
 
-        log.info("Substituted part {} with {} on workorder {}", originalPartId, substitutePart.getId(), workorderId);
+        if (log.isInfoEnabled()) {
+            log.info("Substituted part {} with {} on workorder {}",
+                    maskForLog(originalPartId),
+                    maskForLog(substitutePart.getId()),
+                    maskForLog(workorderId));
+        }
+
         return toResponse(event);
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 
     private UUID resolveOriginalProductReference(WorkorderPart originalPart, UUID originalPartId) {

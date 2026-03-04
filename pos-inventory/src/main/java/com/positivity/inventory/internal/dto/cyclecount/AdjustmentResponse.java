@@ -22,7 +22,7 @@ import com.positivity.inventory.internal.enums.ApprovalTier;
 public class AdjustmentResponse {
 
     private UUID adjustmentId;
-    private String stockItemId;
+    private UUID stockItemId;
     private String reasonCode;
     private Integer quantityChange;
     private BigDecimal costAtTimeOfAdjustment;

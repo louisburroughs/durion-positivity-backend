@@ -188,7 +188,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                                         : InventoryLedgerEventType.COUNT_VARIANCE_OUT;
 
                         InventoryLedgerEntry ledgerEntry = InventoryLedgerEntry.builder()
-                                        .stockItemId(adjustment.getStockItemId())
+                                        .stockItemId(adjustment.getStockItemId().toString())
                                         .adjustmentId(adjustment.getAdjustmentId())
                                         .eventType(eventType)
                                         .changeInQuantity(adjustment.getQuantityChange())

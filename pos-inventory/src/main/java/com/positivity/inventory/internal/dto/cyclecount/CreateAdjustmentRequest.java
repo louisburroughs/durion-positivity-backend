@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
  * Request DTO for creating a new cycle count adjustment.
@@ -17,8 +18,8 @@ import java.math.BigDecimal;
 @Builder
 public class CreateAdjustmentRequest {
     
-    @NotBlank(message = "Stock item ID is required")
-    private String stockItemId;
+    @NotNull(message = "Stock item ID is required")
+    private UUID stockItemId;
     
     @NotBlank(message = "Reason code is required")
     private String reasonCode;

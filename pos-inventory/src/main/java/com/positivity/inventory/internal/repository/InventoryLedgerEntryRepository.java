@@ -32,11 +32,7 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
     Optional<InventoryLedgerEntry> findByAdjustmentId(UUID adjustmentId);
 
     default Integer calculateOnHandQuantity(UUID stockItemId) {
-        return calculateOnHandQuantity(stockItemId.toString());
-    }
-
-    default Integer calculateOnHandQuantity(String stockItemId) {
-        return calculateOnHandQuantityForEventTypes(stockItemId,
+        return calculateOnHandQuantityForEventTypes(stockItemId.toString(),
                 InventoryLedgerEventType.onHandAffectingTypes());
     }
 
@@ -48,6 +44,18 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
             """)
     Integer calculateOnHandQuantityForEventTypes(@Param("stockItemId") String stockItemId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+
+    default Integer calculateOnHandQuantityAtLocation(UUID stockItemId, UUID locationId) {
+        return calculateOnHandQuantityAtLocationForEventTypes(stockItemId.toString(), locationId,
+                InventoryLedgerEventType.onHandAffectingTypes());
+    }
+
+    default Integer calculateOnHandQuantityAtLocation(
+            UUID stockItemId,
+            UUID locationId,
+            Collection<InventoryLedgerEventType> eventTypes) {
+        return calculateOnHandQuantityAtLocationForEventTypes(stockItemId.toString(), locationId, eventTypes);
+    }
 
     default Integer calculateOnHandQuantityAtLocation(String stockItemId, UUID locationId) {
         return calculateOnHandQuantityAtLocationForEventTypes(stockItemId, locationId,
