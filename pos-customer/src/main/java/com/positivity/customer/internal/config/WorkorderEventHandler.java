@@ -49,6 +49,7 @@ import tools.jackson.databind.ObjectMapper;
 public class WorkorderEventHandler {
 
     private static final String DUPLICATE_EVENT_MESSAGE = "Skipping duplicate event [eventId={}] — already processed";
+    private static final String DUPLICATE_FAILURE_REASON_PREFIX = "Duplicate of eventId: ";
 
     private final ProcessingLogRepository processingLogRepository;
     private final CommunicationPreferenceRepository communicationPreferenceRepository;
@@ -83,21 +84,25 @@ public class WorkorderEventHandler {
             }
 
             log.warn("Unsupported workorder event type: {}", eventType);
+            final String safeEventId = (envelope.getEventId() == null || envelope.getEventId().isBlank())
+                    ? UUID.randomUUID().toString()
+                    : envelope.getEventId();
+            final String safeEventType = (eventType == null || eventType.isBlank()) ? "UNKNOWN" : eventType;
             processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(envelope.getEventId())
-                    .eventType(eventType)
+                    .eventId(safeEventId)
+                    .eventType(safeEventType)
                     .correlationId(envelope.getCorrelationId())
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                    .failureReason("Unsupported event type: " + eventType)
+                    .failureReason("Unsupported event type: " + safeEventType)
                     .processedAt(Instant.now())
                     .build());
         } catch (JacksonException ex) {
             log.error("Failed to deserialize workorder event payload", ex);
             processingLogRepository.save(ProcessingLog.builder()
-                    .eventId("SCHEMA-" + UUID.randomUUID())
+                    .eventId(UUID.randomUUID().toString())
                     .eventType("UNKNOWN")
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                    .failureReason(ex.getMessage())
+                    .failureReason("SCHEMA validation failed: " + ex.getMessage())
                     .processedAt(Instant.now())
                     .build());
         } catch (Exception ex) {
@@ -113,6 +118,14 @@ public class WorkorderEventHandler {
     void handleVehicleUpdated(@NonNull EventEnvelope envelope) {
         if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
             log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId());
+            processingLogRepository.save(ProcessingLog.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .eventType(envelope.getEventType())
+                    .correlationId(envelope.getCorrelationId())
+                    .status(ProcessingStatus.SKIPPED_DUPLICATE)
+                    .failureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId())
+                    .processedAt(Instant.now())
+                    .build());
             return;
         }
 
@@ -147,6 +160,14 @@ public class WorkorderEventHandler {
     void handleContactPreferenceUpdated(@NonNull EventEnvelope envelope) {
         if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
             log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId());
+            processingLogRepository.save(ProcessingLog.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .eventType(envelope.getEventType())
+                    .correlationId(envelope.getCorrelationId())
+                    .status(ProcessingStatus.SKIPPED_DUPLICATE)
+                    .failureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId())
+                    .processedAt(Instant.now())
+                    .build());
             return;
         }
 
@@ -198,6 +219,14 @@ public class WorkorderEventHandler {
     void handlePartyNoteAdded(@NonNull EventEnvelope envelope) {
         if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
             log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId());
+            processingLogRepository.save(ProcessingLog.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .eventType(envelope.getEventType())
+                    .correlationId(envelope.getCorrelationId())
+                    .status(ProcessingStatus.SKIPPED_DUPLICATE)
+                    .failureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId())
+                    .processedAt(Instant.now())
+                    .build());
             return;
         }
 

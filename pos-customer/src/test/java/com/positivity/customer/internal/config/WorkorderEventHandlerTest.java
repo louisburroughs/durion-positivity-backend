@@ -104,10 +104,11 @@ class WorkorderEventHandlerTest {
 
     /**
      * AC-2: A {@code VehicleUpdated} envelope with a duplicate {@code eventId}
-     * is skipped — no new {@link ProcessingLog} is saved (original is the record).
+     * causes a {@link ProcessingStatus#SKIPPED_DUPLICATE} {@link ProcessingLog}
+     * to be saved with a surrogate eventId, leaving the original record intact.
      */
     @Test
-    void handleVehicleUpdated_duplicateEvent_skipsProcessingCompletely() {
+    void handleVehicleUpdated_duplicateEvent_savesSkippedDuplicateLog() {
         String duplicateId = UUID.randomUUID().toString();
         when(processingLogRepository.findByEventId(duplicateId))
                 .thenReturn(Optional.of(ProcessingLog.builder()
@@ -118,7 +119,10 @@ class WorkorderEventHandlerTest {
 
         handler.handleVehicleUpdated(envelope);
 
-        verify(processingLogRepository, never()).save(any());
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SKIPPED_DUPLICATE);
+        assertThat(captor.getValue().getFailureReason()).contains(duplicateId);
     }
 
     // -----------------------------------------------------------------------
@@ -151,11 +155,12 @@ class WorkorderEventHandlerTest {
 
     /**
      * AC-4: A {@code ContactPreferenceUpdated} envelope with a duplicate
-     * {@code eventId} is skipped — no preference update and no new
-     * {@link ProcessingLog} are persisted.
+     * {@code eventId} causes no preference update and saves a
+     * {@link ProcessingStatus#SKIPPED_DUPLICATE} {@link ProcessingLog} with a
+     * surrogate eventId.
      */
     @Test
-    void handleContactPreferenceUpdated_duplicateEvent_skipsProcessingCompletely() {
+    void handleContactPreferenceUpdated_duplicateEvent_savesSkippedDuplicateLog() {
         String duplicateId = UUID.randomUUID().toString();
         when(processingLogRepository.findByEventId(duplicateId))
                 .thenReturn(Optional.of(ProcessingLog.builder()
@@ -167,7 +172,10 @@ class WorkorderEventHandlerTest {
         handler.handleContactPreferenceUpdated(envelope);
 
         verify(communicationPreferenceRepository, never()).save(any());
-        verify(processingLogRepository, never()).save(any());
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SKIPPED_DUPLICATE);
+        assertThat(captor.getValue().getFailureReason()).contains(duplicateId);
     }
 
     // -----------------------------------------------------------------------
@@ -201,10 +209,11 @@ class WorkorderEventHandlerTest {
 
     /**
      * AC-6: A {@code PartyNoteAdded} envelope with a duplicate {@code eventId}
-     * is skipped — no new {@link ProcessingLog} is saved.
+     * saves a {@link ProcessingStatus#SKIPPED_DUPLICATE} {@link ProcessingLog}
+     * with a surrogate eventId.
      */
     @Test
-    void handlePartyNoteAdded_duplicateEvent_skipsProcessingCompletely() {
+    void handlePartyNoteAdded_duplicateEvent_savesSkippedDuplicateLog() {
         String duplicateId = UUID.randomUUID().toString();
         when(processingLogRepository.findByEventId(duplicateId))
                 .thenReturn(Optional.of(ProcessingLog.builder()
@@ -215,7 +224,10 @@ class WorkorderEventHandlerTest {
 
         handler.handlePartyNoteAdded(envelope);
 
-        verify(processingLogRepository, never()).save(any());
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SKIPPED_DUPLICATE);
+        assertThat(captor.getValue().getFailureReason()).contains(duplicateId);
     }
 
     // -----------------------------------------------------------------------
