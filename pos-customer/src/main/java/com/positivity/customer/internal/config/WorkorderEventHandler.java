@@ -42,6 +42,8 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.customer.kafka", name = "enabled", havingValue = "true")
 public class WorkorderEventHandler {
 
+    private static final String DUPLICATE_EVENT_MESSAGE = "Skipping duplicate event [eventId={}] — already processed";
+
     private final ProcessingLogRepository processingLogRepository;
     private final CommunicationPreferenceRepository communicationPreferenceRepository;
     private final PersonPartyRepository personPartyRepository;
@@ -57,6 +59,7 @@ public class WorkorderEventHandler {
             topics = "${pos.customer.kafka.workorder-events-topic}",
             groupId = "pos-customer-workorder-events"
     )
+    @Transactional
     @SuppressWarnings("java:S6809")
     public void handleWorkorderEvent(@NonNull String message) {
         try {
@@ -104,16 +107,9 @@ public class WorkorderEventHandler {
      *
      * @param envelope the deserialized event envelope
      */
-    @Transactional
     void handleVehicleUpdated(@NonNull EventEnvelope envelope) {
         if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
-            processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(envelope.getEventId())
-                    .eventType(envelope.getEventType())
-                    .correlationId(envelope.getCorrelationId())
-                    .status(ProcessingStatus.SKIPPED_DUPLICATE)
-                    .processedAt(Instant.now())
-                    .build());
+            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId());
             return;
         }
 
@@ -145,16 +141,9 @@ public class WorkorderEventHandler {
      *
      * @param envelope the deserialized event envelope
      */
-        @Transactional
     void handleContactPreferenceUpdated(@NonNull EventEnvelope envelope) {
         if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
-            processingLogRepository.save(ProcessingLog.builder()
-                .eventId(envelope.getEventId())
-                .eventType(envelope.getEventType())
-                .correlationId(envelope.getCorrelationId())
-                .status(ProcessingStatus.SKIPPED_DUPLICATE)
-                .processedAt(Instant.now())
-                .build());
+            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId());
             return;
         }
 
@@ -203,16 +192,9 @@ public class WorkorderEventHandler {
      *
      * @param envelope the deserialized event envelope
      */
-    @Transactional
     void handlePartyNoteAdded(@NonNull EventEnvelope envelope) {
         if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
-            processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(envelope.getEventId())
-                    .eventType(envelope.getEventType())
-                    .correlationId(envelope.getCorrelationId())
-                    .status(ProcessingStatus.SKIPPED_DUPLICATE)
-                    .processedAt(Instant.now())
-                    .build());
+            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId());
             return;
         }
 
@@ -239,7 +221,7 @@ public class WorkorderEventHandler {
             processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
-                    .correlationId(payload.getSourceWorkorderId())
+                    .correlationId(envelope.getCorrelationId())
                     .status(ProcessingStatus.SUCCESS)
                     .processedAt(Instant.now())
                     .build());

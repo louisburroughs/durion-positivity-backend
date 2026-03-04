@@ -1,14 +1,26 @@
 package com.positivity.customer.internal.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.positivity.customer.internal.entity.PersonParty;
+import com.positivity.customer.internal.entity.ProcessingLog;
+import com.positivity.customer.internal.enums.ProcessingStatus;
 import com.positivity.customer.internal.event.EventEnvelope;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -17,14 +29,14 @@ import com.positivity.customer.internal.repository.ProcessingLogRepository;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * RED-phase tests for {@link WorkorderEventHandler}.
+ * GREEN-phase unit tests for {@link WorkorderEventHandler}.
  *
- * <p>All tests MUST FAIL — specifically, each test calls a handler method
- * directly so that the {@link UnsupportedOperationException} thrown by the stub
- * propagates out and JUnit records it as an ERROR. This provides deterministic
- * RED evidence for Story #92 (pos-customer inbound workorder event handler).</p>
+ * <p>Verifies the full processing contract for inbound workorder-originated events:
+ * idempotency (SKIPPED_DUPLICATE), happy-path persistence (SUCCESS), business
+ * rule violation handling (BUSINESS_RULE_VIOLATION), and exception isolation
+ * (no exception may escape to the Kafka broker/retry mechanism).</p>
  *
- * <p>Uses {@code @ExtendWith(MockitoExtension.class)} with manual construction
+ * <p>Uses {@code @ExtendWith(MockitoExtension.class)} with manual handler construction
  * to avoid starting a full Spring context and triggering Kafka auto-configuration,
  * since the handler is gated by
  * {@code @ConditionalOnProperty(pos.customer.kafka.enabled=true)}.</p>
@@ -43,11 +55,14 @@ class WorkorderEventHandlerTest {
     @Mock
     private PersonPartyRepository personPartyRepository;
 
+    @Mock
+    private PersonParty personParty;
+
     private WorkorderEventHandler handler;
 
     @BeforeEach
     void setUp() {
-        // Issue #92: real ObjectMapper required — handler deserialises raw JSON
+        // Real ObjectMapper required — handler deserializes raw JSON strings
         handler = new WorkorderEventHandler(
                 processingLogRepository,
                 communicationPreferenceRepository,
@@ -61,13 +76,20 @@ class WorkorderEventHandlerTest {
     // -----------------------------------------------------------------------
 
     /**
-     * AC-1: A fresh VehicleUpdated envelope must be processed by the handler.
-     * RED: UnsupportedOperationException propagates from the stub — JUnit records ERROR.
+     * AC-1: A fresh {@code VehicleUpdated} envelope is processed and a
+     * {@link ProcessingStatus#SUCCESS} {@link ProcessingLog} entry is saved.
      */
     @Test
-    void handleVehicleUpdated_processesNewEvent_throwsUnsupportedOperationException() {
-        EventEnvelope envelope = vehicleUpdatedEnvelope(UUID.randomUUID().toString());
+    void handleVehicleUpdated_novelEvent_savesSuccessLog() {
+        String eventId = UUID.randomUUID().toString();
+        EventEnvelope envelope = vehicleUpdatedEnvelope(eventId);
+
         handler.handleVehicleUpdated(envelope);
+
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
     }
 
     // -----------------------------------------------------------------------
@@ -75,14 +97,22 @@ class WorkorderEventHandlerTest {
     // -----------------------------------------------------------------------
 
     /**
-     * AC-2: A VehicleUpdated envelope with a duplicate eventId must be skipped
-     * (idempotency). RED: UnsupportedOperationException propagates from the stub.
+     * AC-2: A {@code VehicleUpdated} envelope with a duplicate {@code eventId}
+     * is skipped — no new {@link ProcessingLog} is saved (original is the record).
      */
     @Test
-    void handleVehicleUpdated_duplicateEvent_throwsUnsupportedOperationException() {
+    void handleVehicleUpdated_duplicateEvent_skipsProcessingCompletely() {
         String duplicateId = UUID.randomUUID().toString();
+        when(processingLogRepository.findByEventId(duplicateId))
+                .thenReturn(Optional.of(ProcessingLog.builder()
+                        .eventId(duplicateId)
+                        .status(ProcessingStatus.SUCCESS)
+                        .build()));
         EventEnvelope envelope = vehicleUpdatedEnvelope(duplicateId);
+
         handler.handleVehicleUpdated(envelope);
+
+        verify(processingLogRepository, never()).save(any());
     }
 
     // -----------------------------------------------------------------------
@@ -90,13 +120,22 @@ class WorkorderEventHandlerTest {
     // -----------------------------------------------------------------------
 
     /**
-     * AC-3: A fresh ContactPreferenceUpdated envelope must be processed.
-     * RED: UnsupportedOperationException propagates from the stub.
+     * AC-3: A fresh {@code ContactPreferenceUpdated} envelope is processed,
+     * the CommunicationPreference is upserted, and a {@link ProcessingStatus#SUCCESS}
+     * {@link ProcessingLog} is saved.
      */
     @Test
-    void handleContactPreferenceUpdated_processesNewEvent_throwsUnsupportedOperationException() {
-        EventEnvelope envelope = contactPreferenceUpdatedEnvelope(UUID.randomUUID().toString());
+    void handleContactPreferenceUpdated_novelEvent_upsertsPreferenceAndSavesSuccessLog() {
+        String eventId = UUID.randomUUID().toString();
+        EventEnvelope envelope = contactPreferenceUpdatedEnvelope(eventId);
+
         handler.handleContactPreferenceUpdated(envelope);
+
+        verify(communicationPreferenceRepository).save(any());
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
     }
 
     // -----------------------------------------------------------------------
@@ -104,28 +143,49 @@ class WorkorderEventHandlerTest {
     // -----------------------------------------------------------------------
 
     /**
-     * AC-4: A ContactPreferenceUpdated envelope with a duplicate eventId must be
-     * skipped. RED: UnsupportedOperationException propagates from the stub.
+     * AC-4: A {@code ContactPreferenceUpdated} envelope with a duplicate
+     * {@code eventId} is skipped — no preference update and no new
+     * {@link ProcessingLog} are persisted.
      */
     @Test
-    void handleContactPreferenceUpdated_duplicateEvent_throwsUnsupportedOperationException() {
+    void handleContactPreferenceUpdated_duplicateEvent_skipsProcessingCompletely() {
         String duplicateId = UUID.randomUUID().toString();
+        when(processingLogRepository.findByEventId(duplicateId))
+                .thenReturn(Optional.of(ProcessingLog.builder()
+                        .eventId(duplicateId)
+                        .status(ProcessingStatus.SUCCESS)
+                        .build()));
         EventEnvelope envelope = contactPreferenceUpdatedEnvelope(duplicateId);
+
         handler.handleContactPreferenceUpdated(envelope);
+
+        verify(communicationPreferenceRepository, never()).save(any());
+        verify(processingLogRepository, never()).save(any());
     }
 
     // -----------------------------------------------------------------------
-    // AC-5  PartyNoteAdded — new event (happy path)
+    // AC-5  PartyNoteAdded — new event, party found (happy path)
     // -----------------------------------------------------------------------
 
     /**
-     * AC-5: A fresh PartyNoteAdded envelope must be processed.
-     * RED: UnsupportedOperationException propagates from the stub.
+     * AC-5a: A fresh {@code PartyNoteAdded} envelope for an existing party is
+     * acknowledged, and a {@link ProcessingStatus#SUCCESS} {@link ProcessingLog}
+     * is saved.
      */
     @Test
-    void handlePartyNoteAdded_processesNewEvent_throwsUnsupportedOperationException() {
-        EventEnvelope envelope = partyNoteAddedEnvelope(UUID.randomUUID().toString(), UUID.randomUUID().toString());
+    void handlePartyNoteAdded_novelEventPartyFound_savesSuccessLog() {
+        String eventId = UUID.randomUUID().toString();
+        String partyId = UUID.randomUUID().toString();
+        when(personPartyRepository.findByPersonId(UUID.fromString(partyId)))
+                .thenReturn(Optional.of(personParty));
+        EventEnvelope envelope = partyNoteAddedEnvelope(eventId, partyId);
+
         handler.handlePartyNoteAdded(envelope);
+
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
     }
 
     // -----------------------------------------------------------------------
@@ -133,27 +193,37 @@ class WorkorderEventHandlerTest {
     // -----------------------------------------------------------------------
 
     /**
-     * AC-6: A PartyNoteAdded envelope with a duplicate eventId must be skipped.
-     * RED: UnsupportedOperationException propagates from the stub.
+     * AC-6: A {@code PartyNoteAdded} envelope with a duplicate {@code eventId}
+     * is skipped — no new {@link ProcessingLog} is saved.
      */
     @Test
-    void handlePartyNoteAdded_duplicateEvent_throwsUnsupportedOperationException() {
+    void handlePartyNoteAdded_duplicateEvent_skipsProcessingCompletely() {
         String duplicateId = UUID.randomUUID().toString();
+        when(processingLogRepository.findByEventId(duplicateId))
+                .thenReturn(Optional.of(ProcessingLog.builder()
+                        .eventId(duplicateId)
+                        .status(ProcessingStatus.SUCCESS)
+                        .build()));
         EventEnvelope envelope = partyNoteAddedEnvelope(duplicateId, UUID.randomUUID().toString());
+
         handler.handlePartyNoteAdded(envelope);
+
+        verify(processingLogRepository, never()).save(any());
     }
 
     // -----------------------------------------------------------------------
-    // AC-7  handleWorkorderEvent top-level dispatch
+    // AC-7  handleWorkorderEvent — top-level JSON dispatch
     // -----------------------------------------------------------------------
 
     /**
-     * AC-7: The top-level Kafka listener entry-point must dispatch and process
-     * the raw JSON message. RED: UnsupportedOperationException propagates from the stub.
+     * AC-7: The top-level Kafka listener dispatches a {@code VehicleUpdated} JSON
+     * message to the correct typed handler and saves a {@link ProcessingStatus#SUCCESS}
+     * {@link ProcessingLog}.
      */
     @Test
-    void handleWorkorderEvent_throwsUnsupportedOperationException() {
-        String json = "{\"eventId\":\"" + UUID.randomUUID() + "\","
+    void handleWorkorderEvent_vehicleUpdatedJson_dispatchesAndSavesSuccessLog() {
+        String eventId = UUID.randomUUID().toString();
+        String json = "{\"eventId\":\"" + eventId + "\","
                 + "\"eventType\":\"VehicleUpdated\","
                 + "\"eventVersion\":\"1.0\","
                 + "\"sourceSystem\":\"WorkorderExecution\","
@@ -162,22 +232,62 @@ class WorkorderEventHandlerTest {
                 + "\"payload\":{}}";
 
         handler.handleWorkorderEvent(json);
+
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
     }
 
     // -----------------------------------------------------------------------
-    // AC-8  Business rule violation — party not found
+    // Exception isolation — failure in handler must not propagate (AC-6 / isolation req)
     // -----------------------------------------------------------------------
 
     /**
-     * AC-8: A PartyNoteAdded event referencing a non-existent partyId must
-     * result in a business-rule-violation outcome. RED: UnsupportedOperationException
-     * propagates from the stub.
+     * Failure isolation: an unhandled {@link RuntimeException} from a typed
+     * handler must NOT propagate out of
+     * {@link WorkorderEventHandler#handleWorkorderEvent(String)}.
+     * This prevents Kafka from entering a retry/poison-pill loop on a
+     * persistently-failing message.
      */
     @Test
-    void handlePartyNoteAdded_nonExistentParty_throwsUnsupportedOperationException() {
+    void handleWorkorderEvent_handlerThrowsException_doesNotPropagate() {
+        when(processingLogRepository.findByEventId(any()))
+                .thenThrow(new RuntimeException("simulated DB error"));
+        String json = "{\"eventId\":\"" + UUID.randomUUID() + "\","
+                + "\"eventType\":\"VehicleUpdated\","
+                + "\"eventVersion\":\"1.0\","
+                + "\"sourceSystem\":\"WorkorderExecution\","
+                + "\"correlationId\":\"" + UUID.randomUUID() + "\","
+                + "\"timestamp\":\"2026-03-03T10:00:00Z\","
+                + "\"payload\":{}}";
+
+        assertDoesNotThrow(() -> handler.handleWorkorderEvent(json));
+    }
+
+    // -----------------------------------------------------------------------
+    // AC-8  PartyNoteAdded — business rule violation (party not found)
+    // -----------------------------------------------------------------------
+
+    /**
+     * AC-8: A {@code PartyNoteAdded} event referencing a non-existent
+     * {@code partyId} results in a
+     * {@link ProcessingStatus#BUSINESS_RULE_VIOLATION} {@link ProcessingLog}.
+     * No exception is propagated to the caller.
+     */
+    @Test
+    void handlePartyNoteAdded_partyNotFound_savesBusinessRuleViolationLog() {
+        String eventId = UUID.randomUUID().toString();
         String nonExistentPartyId = UUID.randomUUID().toString();
-        EventEnvelope envelope = partyNoteAddedEnvelope(UUID.randomUUID().toString(), nonExistentPartyId);
+        // personPartyRepository.findByPersonId returns Optional.empty() by default
+        EventEnvelope envelope = partyNoteAddedEnvelope(eventId, nonExistentPartyId);
+
         handler.handlePartyNoteAdded(envelope);
+
+        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+        verify(processingLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.BUSINESS_RULE_VIOLATION);
+        assertThat(captor.getValue().getFailureReason()).contains("Party not found");
     }
 
     // -----------------------------------------------------------------------
