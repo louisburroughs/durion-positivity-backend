@@ -144,7 +144,7 @@ public class EstimateResponse {
                 .version(entity.getVersion())
                 .crmPartyId(entity.getCrmPartyId())
                 .crmVehicleId(entity.getCrmVehicleId())
-                .crmContactIds(entity.getCrmContactIds() != null ? entity.getCrmContactIds() : new ArrayList<>())
+                .crmContactIds(entity.getCrmContactIds() != null ? List.copyOf(entity.getCrmContactIds()) : List.of())
                 .build();
     }
 }
