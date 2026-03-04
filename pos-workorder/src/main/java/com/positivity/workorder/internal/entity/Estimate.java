@@ -109,14 +109,14 @@ public class Estimate {
     private Integer version = 1;
 
     // CRM reference IDs — immutable point-in-time snapshot (CAP-094 Story #93)
-    @Column
+    @Column(length = 36, updatable = false)
     private String crmPartyId;
 
-    @Column
+    @Column(length = 36, updatable = false)
     private String crmVehicleId;
 
     @Builder.Default
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT", updatable = false)
     @Convert(converter = StringListJsonConverter.class)
     private List<String> crmContactIds = new ArrayList<>();
 
