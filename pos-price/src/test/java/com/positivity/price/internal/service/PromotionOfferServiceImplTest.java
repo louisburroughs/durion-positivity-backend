@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.price.internal.dto.ApplyPromotionRequest;
@@ -21,7 +22,10 @@ import com.positivity.price.internal.repository.PromotionOfferRepository;
 import com.positivity.price.service.EligibilityDecision;
 import com.positivity.price.service.EligibilityEvaluationService;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,6 +46,9 @@ class PromotionOfferServiceImplTest {
     @Mock
     private EligibilityEvaluationService eligibilityEvaluationService;
 
+    @Mock
+    private Clock clock;
+
     @InjectMocks
     private PromotionOfferServiceImpl promotionOfferService;
 
@@ -49,11 +56,14 @@ class PromotionOfferServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+        when(clock.instant()).thenReturn(Instant.parse("2026-01-15T00:00:00Z"));
         testPromo = new PromotionOffer();
+        testPromo.setPromotionOfferId(UUID.randomUUID());
         testPromo.setPromoCode("TESTCODE");
         testPromo.setStatus(PromotionStatus.ACTIVE);
-        testPromo.setStartDate(LocalDate.now().minusDays(1));
-        testPromo.setEndDate(LocalDate.now().plusDays(1));
+        testPromo.setStartDate(LocalDate.now(clock).minusDays(1));
+        testPromo.setEndDate(LocalDate.now(clock).plusDays(1));
         testPromo.setDiscountType(DiscountType.PERCENT_LABOR);
         testPromo.setDiscountValue(BigDecimal.TEN);
         testPromo.setUsageCount(0);
@@ -78,6 +88,7 @@ class PromotionOfferServiceImplTest {
         when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
         when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
                 .thenReturn(new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE));
+        when(promotionOfferRepository.incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId())).thenReturn(1);
 
         ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
         ApplyPromotionResponse response = promotionOfferService.applyPromotion(request);
@@ -87,6 +98,7 @@ class PromotionOfferServiceImplTest {
         assertThat(response.getAppliedAdjustments()).hasSize(1);
         assertThat(response.getAppliedAdjustments().get(0).getAmount())
                 .isEqualByComparingTo(BigDecimal.TEN.negate());
+        verify(promotionOfferRepository).incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId());
     }
 
     @Test
@@ -97,6 +109,7 @@ class PromotionOfferServiceImplTest {
         when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
         when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
                 .thenReturn(new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE));
+        when(promotionOfferRepository.incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId())).thenReturn(1);
 
         ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
         ApplyPromotionResponse response = promotionOfferService.applyPromotion(request);
@@ -131,7 +144,7 @@ class PromotionOfferServiceImplTest {
     @Test
     @DisplayName("applyPromotion: Throws PromotionNotApplicableException for past end date")
     void applyPromotion_throwsNotApplicable_forPastEndDate() {
-        testPromo.setEndDate(LocalDate.now().minusDays(1));
+        testPromo.setEndDate(LocalDate.now(clock).minusDays(1));
         when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
         ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
 
@@ -143,7 +156,7 @@ class PromotionOfferServiceImplTest {
     @Test
     @DisplayName("applyPromotion: Throws PromotionNotApplicableException for future start date")
     void applyPromotion_throwsNotApplicable_forFutureStartDate() {
-        testPromo.setStartDate(LocalDate.now().plusDays(1));
+        testPromo.setStartDate(LocalDate.now(clock).plusDays(1));
         when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
         ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
 
@@ -163,6 +176,23 @@ class PromotionOfferServiceImplTest {
         assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
                 .isInstanceOf(PromotionNotApplicableException.class)
                 .hasMessage("Promotion 'TESTCODE' is not applicable: ACCOUNT_NOT_IN_LIST");
+    }
+
+    @Test
+    @DisplayName("applyPromotion: Throws PromotionNotApplicableException when usage limit is reached")
+    void applyPromotion_throwsNotApplicable_whenUsageLimitReached() {
+        testPromo.setUsageLimit(1);
+        testPromo.setUsageCount(1);
+        when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
+        when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
+                .thenReturn(new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE));
+        when(promotionOfferRepository.incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId())).thenReturn(0);
+
+        ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
+
+        assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
+                .isInstanceOf(PromotionNotApplicableException.class)
+                .hasMessage("Promotion 'TESTCODE' has reached its usage limit");
     }
 
     @Test

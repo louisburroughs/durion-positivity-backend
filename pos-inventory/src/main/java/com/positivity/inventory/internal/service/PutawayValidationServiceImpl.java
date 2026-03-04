@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.positivity.inventory.internal.client.StorageLocationValidationClient;
+import com.positivity.inventory.internal.client.StorageLocationValidationClient.StorageLocationValidation;
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.ValidationResult;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
@@ -96,28 +97,29 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         return ValidationResult.success();
     }
 
-    private void validateStorageLocation(UUID destinationLocationId) {
-        if (storageLocationValidationClient != null) {
-            StorageLocationValidationClient.StorageLocationValidation locationValidation = storageLocationValidationClient
-                    .getStorageLocationValidation(destinationLocationId.toString());
+    private StorageLocationValidation getStorageLocationValidation(UUID destinationLocationId) {
+        if (storageLocationValidationClient == null) {
+            return null;
+        }
+        return storageLocationValidationClient.getStorageLocationValidation(destinationLocationId.toString());
+    }
 
-            if (!locationValidation.isExists()) {
-                throw new IllegalArgumentException("Destination storage location does not exist");
-            }
-            if (!locationValidation.isActive()) {
-                throw new IllegalArgumentException("Destination storage location is inactive");
-            }
+    private void validateStorageLocation(StorageLocationValidation locationValidation) {
+        if (locationValidation == null) {
+            return;
+        }
+        if (!locationValidation.isExists()) {
+            throw new IllegalArgumentException("Destination storage location does not exist");
+        }
+        if (!locationValidation.isActive()) {
+            throw new IllegalArgumentException("Destination storage location is inactive");
         }
     }
 
-    private int getMaxCapacity(UUID destinationLocationId) {
+    private int getMaxCapacity(UUID destinationLocationId, StorageLocationValidation locationValidation) {
         int maxCapacity = 0;
-        if (storageLocationValidationClient != null) {
-            StorageLocationValidationClient.StorageLocationValidation locationValidation = storageLocationValidationClient
-                    .getStorageLocationValidation(destinationLocationId.toString());
-            if (locationValidation.getMaxUnitCapacity() != null) {
-                maxCapacity = locationValidation.getMaxUnitCapacity();
-            }
+        if (locationValidation != null && locationValidation.getMaxUnitCapacity() != null) {
+            maxCapacity = locationValidation.getMaxUnitCapacity();
         }
 
         if (maxCapacity <= 0 && replenishmentPolicyRepository != null) {
@@ -138,12 +140,13 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
             return result;
         }
 
-        validateStorageLocation(destinationLocationId);
+        StorageLocationValidation locationValidation = getStorageLocationValidation(destinationLocationId);
+        validateStorageLocation(locationValidation);
 
         int currentCapacity = safeInt(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                 destinationLocationId,
                 ON_HAND_EVENT_TYPES));
-        int maxCapacity = getMaxCapacity(destinationLocationId);
+        int maxCapacity = getMaxCapacity(destinationLocationId, locationValidation);
 
         if (maxCapacity <= 0) {
             throw new LocationAtCapacityException(destinationLocationId, currentCapacity, maxCapacity);

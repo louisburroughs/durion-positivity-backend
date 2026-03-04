@@ -53,7 +53,7 @@ public final class PriceEventTypes {
                                                 .apiVersion("1")
                                                 .build(),
 
-                                // PromotionEligibilityRuleController - 2 events
+                                // PromotionEligibilityRuleController - 3 events
                                 EventTypeRegistration
                                                 .write("PROMOTION_RULE_CREATE",
                                                                 "Add an eligibility rule to a promotion")

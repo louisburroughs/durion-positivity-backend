@@ -128,7 +128,6 @@ public class EventIngestionController {
         public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId,
                         @Valid @RequestBody ReprocessEventRequest request) {
-               
                 try {
                         AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
                         HttpStatus status = AccountingEventStatus.PROCESSED.equals(response.getStatus())

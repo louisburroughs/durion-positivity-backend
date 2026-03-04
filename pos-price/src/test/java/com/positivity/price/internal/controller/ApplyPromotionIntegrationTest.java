@@ -263,6 +263,34 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
                                 .andExpect(jsonPath("$.total").value(400.00));
         }
 
+        // ========== APT-009 ==========
+
+        /**
+         * ACTIVE promotion with usageLimit=1 can be applied once; second attempt must
+         * fail with PROMO_NOT_APPLICABLE after usage slot is consumed.
+         *
+         * Issue: #95
+         */
+        @Test
+        @DisplayName("APT-009: usageLimit reached after first apply → second apply returns 400 PROMO_NOT_APPLICABLE")
+        void givenUsageLimitOne_whenApplyTwice_thenSecondAttemptReturns400() throws Exception {
+                PromotionOffer offer = seedActiveOffer("LIMIT1", DiscountType.PERCENT_LABOR, BigDecimal.valueOf(10),
+                                LocalDate.now().minusDays(1), LocalDate.now().plusDays(30));
+                offer.setUsageLimit(1);
+                promotionOfferRepository.save(offer);
+
+                mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(applyRequest("LIMIT1", "500.00"))))
+                                .andExpect(status().isOk());
+
+                mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(applyRequest("LIMIT1", "500.00"))))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("PROMO_NOT_APPLICABLE"));
+        }
+
         // ========== HELPERS ==========
 
         /**

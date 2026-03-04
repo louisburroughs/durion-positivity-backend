@@ -84,7 +84,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     }
 
     /**
-     * ERC-002: POST with missing required fields produces 400 VALIDATION_FAILED.
+     * ERC-002: POST with missing required fields produces 400 VALIDATION_ERROR.
      *
      * <p>
      * DTO-level {@code @NotNull}/{@code @NotBlank} annotations fire before the
@@ -96,7 +96,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
      * Issue: #96
      */
     @Test
-    @DisplayName("ERC-002: POST /v1/promotions/offers/{promotionId}/rules with missing fields → 400 VALIDATION_FAILED")
+    @DisplayName("ERC-002: POST /v1/promotions/offers/{promotionId}/rules with missing fields → 400 VALIDATION_ERROR")
     void givenInvalidRequest_whenAddRule_thenReturns400() throws Exception {
         UUID promotionId = seedPromotion();
 
@@ -104,7 +104,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     // ========== GET RULES ==========
@@ -159,6 +159,21 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
                 delete("/v1/promotions/offers/{promotionId}/rules/{ruleId}", promotionId, UUID.randomUUID())))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ELIGIBILITY_RULE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("ERC-005b: DELETE with mismatched promotionId/ruleId pair \u2192 404 and rule remains")
+    void givenRuleBelongsToDifferentPromotion_whenDeleteRule_thenReturns404AndDoesNotDelete() throws Exception {
+        UUID owningPromotionId = seedPromotion();
+        UUID otherPromotionId = seedPromotion();
+        UUID ruleId = seedRule(owningPromotionId, ConditionType.ACCOUNT_ID_LIST, RuleOperator.IN, "acc-xyz");
+
+        mockMvc.perform(withGatewayAuth(
+                delete("/v1/promotions/offers/{promotionId}/rules/{ruleId}", otherPromotionId, ruleId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ELIGIBILITY_RULE_NOT_FOUND"));
+
+        org.assertj.core.api.Assertions.assertThat(promotionEligibilityRuleRepository.existsById(ruleId)).isTrue();
     }
 
     // ========== EVALUATE ==========

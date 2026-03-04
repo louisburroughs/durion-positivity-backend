@@ -9,4 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PromotionEligibilityRuleRepository extends JpaRepository<PromotionEligibilityRule, UUID> {
     List<PromotionEligibilityRule> findByPromotionId(UUID promotionId);
+
+    long deleteByRuleIdAndPromotionId(UUID ruleId, UUID promotionId);
 }
