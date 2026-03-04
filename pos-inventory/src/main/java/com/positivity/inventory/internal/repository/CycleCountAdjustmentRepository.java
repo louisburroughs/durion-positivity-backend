@@ -29,7 +29,7 @@ public interface CycleCountAdjustmentRepository extends JpaRepository<CycleCount
      * @param stockItemId the stock item ID
      * @return list of adjustments for that item
      */
-    List<CycleCountAdjustment> findByStockItemId(String stockItemId);
+    List<CycleCountAdjustment> findByStockItemId(UUID stockItemId);
 
     /**
      * Count adjustments with a specific status.

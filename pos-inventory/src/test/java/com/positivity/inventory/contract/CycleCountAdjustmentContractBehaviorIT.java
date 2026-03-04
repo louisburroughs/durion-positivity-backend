@@ -76,7 +76,7 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
                 // Issue #26: seed high thresholds so variance=1 never triggers approval
                 seedHighThreshold();
 
-                String body = buildCreateRequestBody("SKU-AC26-1", 101, 100, "10.00");
+                String body = buildCreateRequestBody(UUID.randomUUID(), 101, 100, "10.00");
 
                 // Issue #26: auto-approve path posts to ledger synchronously within the same
                 // transaction; the response therefore reflects the final POSTED status.
@@ -100,7 +100,7 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
                 // Issue #26: seed low thresholds so variance=2 (>=1) requires approval
                 seedLowThreshold();
 
-                String body = buildCreateRequestBody("SKU-AC26-2", 102, 100, "10.00");
+                String body = buildCreateRequestBody(UUID.randomUUID(), 102, 100, "10.00");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -121,7 +121,7 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
         @DisplayName("AC-26-3: approving pending adjustment returns 200 with POSTED status and approver ID")
         void approveAdjustment_pendingApproval_returns200WithPostedStatusAndApproverId() throws Exception {
                 seedLowThreshold();
-                UUID adjustmentId = createPendingApprovalAdjustment("SKU-AC26-3");
+                UUID adjustmentId = createPendingApprovalAdjustment(UUID.randomUUID());
 
                 // Issue #26: approverUserId field, and X-User-Id sets ADR-0018 actor
                 String approveBody = objectMapper.writeValueAsString(
@@ -149,7 +149,7 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
         @DisplayName("AC-26-4: rejecting pending adjustment returns 200 with REJECTED status and reason")
         void rejectAdjustment_pendingApproval_returns200WithRejectedStatusAndReason() throws Exception {
                 seedLowThreshold();
-                UUID adjustmentId = createPendingApprovalAdjustment("SKU-AC26-4");
+                UUID adjustmentId = createPendingApprovalAdjustment(UUID.randomUUID());
 
                 // Issue #26: rejectorUserId is the request body field name in
                 // RejectAdjustmentRequest
@@ -180,7 +180,7 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
                 seedHighThreshold();
 
                 // Issue #26: variance = 100 - 100 = 0 → IAE → 400
-                String body = buildCreateRequestBody("SKU-AC26-5", 100, 100, "10.00");
+                String body = buildCreateRequestBody(UUID.randomUUID(), 100, 100, "10.00");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -198,7 +198,7 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
         @DisplayName("AC-26-6: get adjustment by ID returns 200 with matching adjustmentId")
         void getAdjustment_existingId_returns200WithMatchingAdjustmentId() throws Exception {
                 seedHighThreshold();
-                UUID adjustmentId = createAutoApprovedAdjustment("SKU-AC26-6");
+                UUID adjustmentId = createAutoApprovedAdjustment(UUID.randomUUID());
 
                 mockMvc.perform(withGatewayAuth(
                                 get("/v1/inventory/cycleCountAdjustments/{adjustmentId}", adjustmentId)))
@@ -216,9 +216,9 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
         @DisplayName("AC-26-7: list adjustments filtered by PENDING_APPROVAL returns 200 with at least 2 items")
         void listAdjustments_pendingStatus_returns200WithAtLeast2Items() throws Exception {
                 seedLowThreshold();
-                // Issue #26: use distinct SKUs to avoid interference between items
-                createPendingApprovalAdjustment("SKU-AC26-7A");
-                createPendingApprovalAdjustment("SKU-AC26-7B");
+                // Issue #26: use distinct stock item IDs to avoid interference between items
+                createPendingApprovalAdjustment(UUID.randomUUID());
+                createPendingApprovalAdjustment(UUID.randomUUID());
 
                 mockMvc.perform(withGatewayAuth(
                                 get("/v1/inventory/cycleCountAdjustments")
@@ -264,20 +264,20 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
         /**
          * Builds a JSON request body string for creating an adjustment.
          *
-         * @param stockItemId          unique SKU identifier
+         * @param stockItemId          unique stock item identifier
          * @param countedQuantity      the physical counted quantity
          * @param quantityOnHandBefore the system quantity before count
          * @param cost                 unit cost as string (e.g. "10.00")
          * @return serialized JSON request body
          */
         private String buildCreateRequestBody(
-                        String stockItemId,
+                        UUID stockItemId,
                         int countedQuantity,
                         int quantityOnHandBefore,
                         String cost) throws Exception {
                 return objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
-                                                .put("stockItemId", stockItemId)
+                                                .put("stockItemId", stockItemId.toString())
                                                 .put("reasonCode", "CYCLE_COUNT_RECONCILIATION")
                                                 .put("countedQuantity", countedQuantity)
                                                 .put("quantityOnHandBefore", quantityOnHandBefore)
@@ -290,11 +290,11 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
          * Uses variance=2 with low thresholds to ensure the adjustment requires
          * approval.
          *
-         * @param stockItemId unique SKU to avoid cross-test interference
+         * @param stockItemId unique stock item ID to avoid cross-test interference
          * @return the created adjustment UUID
          *         Issue: #26
          */
-        private UUID createPendingApprovalAdjustment(String stockItemId) throws Exception {
+        private UUID createPendingApprovalAdjustment(UUID stockItemId) throws Exception {
                 String body = buildCreateRequestBody(stockItemId, 102, 100, "10.00");
 
                 MvcResult result = mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))
@@ -311,11 +311,11 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
          * Creates an AUTO_APPROVED adjustment via the API and returns its ID.
          * Uses variance=1 with high thresholds to ensure the adjustment auto-approves.
          *
-         * @param stockItemId unique SKU to avoid cross-test interference
+         * @param stockItemId unique stock item ID to avoid cross-test interference
          * @return the created adjustment UUID
          *         Issue: #26
          */
-        private UUID createAutoApprovedAdjustment(String stockItemId) throws Exception {
+        private UUID createAutoApprovedAdjustment(UUID stockItemId) throws Exception {
                 String body = buildCreateRequestBody(stockItemId, 101, 100, "10.00");
 
                 MvcResult result = mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))

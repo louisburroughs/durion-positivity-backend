@@ -3,7 +3,6 @@ package com.positivity.inventory.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -67,7 +66,7 @@ class CycleCountAdjustmentServiceImplTest {
 
     private static final String ACTOR_USER_ID = "actor-person-id-001";
     private static final String ACTOR_USERNAME = "manager-user";
-    private static final String STOCK_ITEM_ID = "SKU-001";
+    private static final UUID STOCK_ITEM_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private Clock clock = Clock.systemDefaultZone();
 
     @BeforeEach
@@ -148,7 +147,7 @@ class CycleCountAdjustmentServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(AdjustmentStatus.PENDING_APPROVAL);
         assertThat(response.getRequiredApprovalTier()).isEqualTo(ApprovalTier.TIER_1_MANAGER);
         verify(ledgerRepository, never()).save(any());
-        verify(ledgerRepository, never()).calculateOnHandQuantity(anyString());
+        verify(ledgerRepository, never()).calculateOnHandQuantity(any(UUID.class));
     }
 
     // -------------------------------------------------------------------------
@@ -175,7 +174,7 @@ class CycleCountAdjustmentServiceImplTest {
         AdjustmentResponse response = service.approveAdjustment(adjustmentId, request, "corr-id-001");
 
         assertThat(response.getStatus()).isEqualTo(AdjustmentStatus.POSTED);
-        assertThat(response.getApprovedByUserId()).isEqualTo(ACTOR_USER_ID);
+        assertThat(response.getApprovedByUserId()).isEqualTo(ACTOR_USERNAME);
         verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
         verify(eventPublisher).publishEvent(any(Object.class));
     }
@@ -273,7 +272,7 @@ class CycleCountAdjustmentServiceImplTest {
     // -------------------------------------------------------------------------
 
     /**
-     * Builds a minimal {@link CreateAdjustmentRequest} for SKU-001 with the
+     * Builds a minimal {@link CreateAdjustmentRequest} with the
      * given counted and on-hand quantities.
      */
     private CreateAdjustmentRequest createRequest(int counted, int onHand) {
