@@ -45,38 +45,8 @@ jobs:
           
           echo "Changed modules: $CHANGED_MODULES"
 
-  build-changed-modules:
-    name: Build Changed Modules
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.has-changes == 'true'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRIBUTION }}
-          cache: maven
-      
-      - name: Build changed modules and dependencies
-        run: |
-          IFS=',' read -ra MODULES <<< "${{ needs.detect-changes.outputs.modules }}"
-          for module in "${MODULES[@]}"; do
-            echo "Building module: $module"
-            ./mvnw clean install -pl "$module" -am -B -DskipTests -DskipITs
-          done
-      
-      - name: Test changed modules
-        run: |
-          IFS=',' read -ra MODULES <<< "${{ needs.detect-changes.outputs.modules }}"
-          for module in "${MODULES[@]}"; do
-            echo "Testing module: $module"
-            ./mvnw test -pl "$module" -B
-          done
+  # Note: Build and test are now handled by ci.yml to avoid duplication.
+  # This workflow focuses on PR-specific checks and reporting.
 
   validate-dockerfile:
     name: Validate Dockerfiles
@@ -106,7 +76,7 @@ jobs:
   pr-comment:
     name: PR Summary Comment
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-changed-modules]
+    needs: [detect-changes]
     if: always()
     permissions:
       pull-requests: write
@@ -117,7 +87,6 @@ jobs:
         with:
           script: |
             const modules = '${{ needs.detect-changes.outputs.modules }}';
-            const buildStatus = '${{ needs.build-changed-modules.result }}';
             
             let comment = '## 🔍 PR Analysis\n\n';
             
@@ -126,15 +95,7 @@ jobs:
             } else {
               comment += '### Changed Modules\n';
               comment += modules.split(',').map(m => `- \`${m}\``).join('\n');
-              comment += '\n\n### Build Status\n';
-              
-              if (buildStatus === 'success') {
-                comment += '✅ All changed modules built and tested successfully!\n';
-              } else if (buildStatus === 'failure') {
-                comment += '❌ Build or tests failed for changed modules. Please review the logs.\n';
-              } else {
-                comment += '⏭️  Build was skipped or not applicable.\n';
-              }
+              comment += '\n\n_Build and test status will be reported by the main CI workflow._\n';
             }
             
             github.rest.issues.createComment({
