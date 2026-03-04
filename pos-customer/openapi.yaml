@@ -387,14 +387,14 @@ paths:
               $ref: "#/components/schemas/RecordRedemptionRequest"
         required: true
       responses:
-        "403":
-          description: Forbidden - insufficient permissions
         "201":
           description: Promotion redemption recorded
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PromotionRedemptionResponse"
+        "403":
+          description: Forbidden - insufficient permissions
         "409":
           description: Duplicate redemption
   /v1/crm:
@@ -468,14 +468,14 @@ paths:
               $ref: "#/components/schemas/CreateVehicleForPartyRequest"
         required: true
       responses:
-        "400":
-          description: Bad request - invalid input
         "201":
           description: Vehicle created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
+        "400":
+          description: Bad request - invalid input
         "404":
           description: Customer not found
         "403":
@@ -602,14 +602,14 @@ paths:
       responses:
         "403":
           description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
         "200":
           description: Preferences retrieved successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
+        "404":
+          description: Party not found
     post:
       tags:
       - CRM Communication Preferences
@@ -632,14 +632,14 @@ paths:
               $ref: "#/components/schemas/UpsertCommunicationPreferencesRequest"
         required: true
       responses:
-        "403":
-          description: Forbidden - insufficient permissions
         "200":
           description: Preferences updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
+        "403":
+          description: Forbidden - insufficient permissions
         "404":
           description: Party not found
         "400":
@@ -742,14 +742,14 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateCommercialAccountRequest"
       responses:
-        "403":
-          description: Forbidden - insufficient permissions
         "201":
           description: Account created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CreateCommercialAccountResponse"
+        "403":
+          description: Forbidden - insufficient permissions
         "400":
           description: Invalid request
   /v1/crm/accounts/parties/{partyId}/vehicles:
@@ -808,14 +808,14 @@ paths:
       responses:
         "400":
           description: Invalid merge request
-        "403":
-          description: Forbidden - insufficient permissions
         "200":
           description: Parties merged successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MergePartiesResponse"
+        "403":
+          description: Forbidden - insufficient permissions
         "404":
           description: Party not found
   /v1/crm/accounts/parties/{partyId}/communicationPreferences:
@@ -836,14 +836,14 @@ paths:
       responses:
         "403":
           description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
         "200":
           description: Preferences retrieved successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
+        "404":
+          description: Party not found
     post:
       tags:
       - CRM Accounts
@@ -867,14 +867,14 @@ paths:
       responses:
         "400":
           description: Invalid preference data
-        "403":
-          description: Forbidden - insufficient permissions
         "200":
           description: Preferences updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
+        "403":
+          description: Forbidden - insufficient permissions
         "404":
           description: Party not found
   /v1/crm/accounts/parties/search:
@@ -890,16 +890,16 @@ paths:
             schema:
               $ref: "#/components/schemas/SearchPartiesRequest"
       responses:
+        "400":
+          description: Invalid search criteria
+        "403":
+          description: Forbidden - insufficient permissions
         "200":
           description: Search results returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchPartiesResponse"
-        "400":
-          description: Invalid search criteria
-        "403":
-          description: Forbidden - insufficient permissions
   /v1/promotions/redemptions/by-customer/{customerId}:
     get:
       tags:
@@ -918,7 +918,7 @@ paths:
         "200":
           description: Promotion redemptions returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -1035,14 +1035,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetPersonResponse"
-        "404":
-          description: Person not found
+        "200":
+          description: Person found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetPersonResponse"
-        "200":
-          description: Person found
+        "404":
+          description: Person not found
           content:
             '*/*':
               schema:
@@ -1117,6 +1117,12 @@ paths:
         schema:
           type: string
       responses:
+        "200":
+          description: Contacts retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
         "403":
           description: Forbidden - missing required permission
           content:
@@ -1125,12 +1131,6 @@ paths:
                 $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
         "404":
           description: Party not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-        "200":
-          description: Contacts retrieved successfully
           content:
             '*/*':
               schema:
@@ -1183,16 +1183,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
         "200":
           description: Party details retrieved successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GetPartyResponse"
+        "403":
+          description: Forbidden - insufficient permissions
+        "404":
+          description: Party not found
   /v1/crm/accounts/parties/{partyId}/contacts:
     get:
       tags:
@@ -1284,7 +1284,7 @@ components:
         primaryAddress:
           type: string
           description: Primary address label or identifier for the customer
-          example: 123
+          example: "123 Main St, Springfield, IL 62701"
         vehicleVins:
           type: array
           description: List of vehicle VINs associated with the customer
@@ -1339,7 +1339,7 @@ components:
         description:
           type: string
           description: Human-readable vehicle description.
-          example: 2024
+          example:  "2024 Ford F-150 XL"
         licensePlate:
           type: string
           description: License plate value.
@@ -1479,6 +1479,8 @@ components:
         discountType:
           type: string
         promotionCode:
+          type: string
+        recordedBy:
           type: string
         recordedOverLimit:
           type: boolean
