@@ -27,17 +27,22 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.http.ContentType;
 
 /**
- * RED contract tests for CAP-094 Story #93: CRM Reference IDs on Estimate and
- * Workorder.
+ * Integration tests for Story #93 (CAP-094): Emit CRM Reference IDs in Workorder Artifacts.
  *
- * <p>
- * These tests MUST FAIL because {@code EstimateServiceImpl.createEstimate()}
- * does not yet map CRM fields from the request DTO to the entity, and
- * {@code WorkorderServiceImpl.createWorkorder()} does not propagate CRM fields
- * from the estimate to the workorder.
+ * <p>Verifies that {@code crmPartyId}, {@code crmVehicleId}, and {@code crmContactIds} are
+ * correctly accepted on Estimate creation, persisted to the database, returned in the response,
+ * and propagated to Workorder entities upon conversion.
  *
- * <p>
- * Tests will go GREEN once the service layer is implemented.
+ * <p>Covers:
+ * <ul>
+ *   <li>AC-1: Estimate creation with CRM IDs — fields persisted and returned in 201 response</li>
+ *   <li>AC-1b: Empty {@code crmContactIds = []} is valid</li>
+ *   <li>AC-2: Estimate-to-Workorder conversion propagates CRM IDs</li>
+ *   <li>AC-3: Missing required CRM fields return 400 Bad Request</li>
+ * </ul>
+ *
+ * @see com.positivity.workorder.internal.service.EstimateServiceImpl
+ * @see com.positivity.workorder.internal.service.WorkorderServiceImpl
  */
 @DisplayName("CAP-094 Story #93: CRM Reference ID Contract Behavior Tests")
 class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
@@ -71,9 +76,6 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
     void ac1_createEstimate_crmPartyId_persistedAndReturned() {
         String payload = buildEstimatePayload(CRM_PARTY_ID, CRM_VEHICLE_ID, List.of(CRM_CONTACT_ID));
 
-        // RED: EstimateServiceImpl.createEstimate() does not call
-        // .crmPartyId(request.getCrmPartyId()) on the builder, so the
-        // response will contain null instead of the supplied crmPartyId.
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(payload)
@@ -90,7 +92,6 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
     void ac1_createEstimate_crmVehicleId_persistedAndReturned() {
         String payload = buildEstimatePayload(CRM_PARTY_ID, CRM_VEHICLE_ID, List.of(CRM_CONTACT_ID));
 
-        // RED: Same root cause — crmVehicleId is not mapped in the service builder.
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(payload)
@@ -107,7 +108,6 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
     void ac1_createEstimate_crmContactIds_persistedAndReturned() {
         String payload = buildEstimatePayload(CRM_PARTY_ID, CRM_VEHICLE_ID, List.of(CRM_CONTACT_ID));
 
-        // RED: crmContactIds is not mapped in the service builder.
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(payload)
@@ -135,7 +135,6 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
                 .extract()
                 .path("id");
 
-        // RED: GET will also return null because the field was never saved.
         givenWithGatewayAuth()
                 .when()
                 .get("/v1/workorders/estimates/{id}", estimateId)
@@ -155,8 +154,6 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
     void ac1b_createEstimate_emptyCrmContactIds_isAccepted() {
         String payload = buildEstimatePayload(CRM_PARTY_ID, CRM_VEHICLE_ID, List.of());
 
-        // RED: crmPartyId will still be null in the response even though the
-        // request was valid. The 201 will pass, but field assertions fail.
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(payload)
@@ -181,9 +178,6 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
         UUID estimateId = seedApprovedEstimateWithCrmFields(CRM_PARTY_ID, CRM_VEHICLE_ID,
                 List.of(CRM_CONTACT_ID));
 
-        // RED: WorkorderServiceImpl.createWorkorder() builds Workorder.builder()
-        // without .crmPartyId() / .crmVehicleId() / .crmContactIds(), so the
-        // workorder entity (and response) will have null CRM fields.
         givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{id}/promote", estimateId)
@@ -199,7 +193,6 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
         UUID estimateId = seedApprovedEstimateWithCrmFields(CRM_PARTY_ID, CRM_VEHICLE_ID,
                 List.of(CRM_CONTACT_ID));
 
-        // RED: same root cause as ac2 crmPartyId test.
         givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{id}/promote", estimateId)
@@ -215,7 +208,6 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
         UUID estimateId = seedApprovedEstimateWithCrmFields(CRM_PARTY_ID, CRM_VEHICLE_ID,
                 List.of(CRM_CONTACT_ID));
 
-        // RED: crmContactIds not propagated from estimate entity to workorder builder.
         givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{id}/promote", estimateId)
