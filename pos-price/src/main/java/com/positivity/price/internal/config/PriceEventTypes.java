@@ -17,7 +17,7 @@ public final class PriceEventTypes {
 
         /**
          * All event type registrations for the price module.
-         * Total: 3 event types.
+         * Total: 10 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -35,6 +35,39 @@ public final class PriceEventTypes {
                                 // PriceQuoteController - 1 event
                                 EventTypeRegistration.search("PRICE_QUOTE_CALCULATE",
                                                 "Calculate contextual quote pricing for product, location, and customer tier")
+                                                .build(),
+
+                                // PromotionOfferController - 4 events
+                                EventTypeRegistration.write("PROMOTION_OFFER_CREATE", "Create a promotion offer")
+                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration.approval("PROMOTION_OFFER_ACTIVATE", "Activate a promotion offer")
+                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration
+                                                .write("PROMOTION_OFFER_DEACTIVATE", "Deactivate a promotion offer")
+                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration.write("PROMOTION_OFFER_APPLY",
+                                                "Apply a promotion offer to an estimate pricing context")
+                                                .apiVersion("1")
+                                                .build(),
+
+                                // PromotionEligibilityRuleController - 3 events
+                                EventTypeRegistration
+                                                .write("PROMOTION_RULE_CREATE",
+                                                                "Add an eligibility rule to a promotion")
+                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration
+                                                .write("PROMOTION_RULE_DELETE",
+                                                                "Remove an eligibility rule from a promotion")
+                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration
+                                                .search("PROMOTION_RULE_EVALUATE",
+                                                                "Evaluate eligibility for promotion")
+                                                .apiVersion("1")
                                                 .build());
         }
 }

@@ -21,9 +21,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.time.Instant;
 import java.util.List;
@@ -59,11 +58,11 @@ class TravelSegmentServiceImplTest {
 
     @BeforeEach
     void setUpSecurityContext() {
-        Authentication auth = org.mockito.Mockito.mock(Authentication.class);
-        SecurityContext context = org.mockito.Mockito.mock(SecurityContext.class);
-        when(context.getAuthentication()).thenReturn(auth);
-        when(auth.isAuthenticated()).thenReturn(true);
-        when(auth.getPrincipal()).thenReturn(TECHNICIAN_ID.toString());
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new UsernamePasswordAuthenticationToken(
+                TECHNICIAN_ID.toString(),
+                "N/A",
+                List.of()));
         SecurityContextHolder.setContext(context);
     }
 
