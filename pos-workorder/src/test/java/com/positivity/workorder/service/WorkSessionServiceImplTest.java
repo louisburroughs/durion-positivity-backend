@@ -216,6 +216,7 @@ class WorkSessionServiceImplTest {
         when(secCtx.getAuthentication()).thenReturn(auth);
         when(auth.getAuthorities()).thenAnswer(inv -> List.of());
         when(auth.isAuthenticated()).thenReturn(true);
+        when(auth.getPrincipal()).thenReturn(SYSTEM_USER_ID.toString());
         SecurityContextHolder.setContext(secCtx);
 
         WorkSession existing = inProgressSession(Instant.now().minus(30, ChronoUnit.MINUTES));
