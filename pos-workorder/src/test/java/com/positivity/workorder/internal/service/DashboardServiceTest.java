@@ -34,7 +34,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * <p>Validates that {@link DashboardServiceImpl} correctly aggregates workorders,
  * mechanics, bays, and conflict entries for the dispatch board view, including
  * double-booked mechanic (AC-4a), PTO overlap (AC-4b), break overlap (AC-6),
- * clock-out mismatch (AC-4d), and bay double-booking detection.
+ * clock-out mismatch (AC-4d), bay double-booking (AC-2a), bay unavailable (AC-2b),
+ * location mismatch (AC-3a), and skill mismatch (AC-3b).
  *
  * Issue: CAP-142
  */
@@ -266,7 +267,7 @@ class DashboardServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC-4: Two workorders assigned to same bay generates BAY_DOUBLE_BOOKED BLOCKING conflict")
+    @DisplayName("AC-2a: Two workorders assigned to same bay generates BAY_DOUBLE_BOOKED BLOCKING conflict")
     void getDashboard_bayDoubleBooked_returnsBlockingConflict() {
         // Arrange
         // Issue CAP-142: bay double-booking detection

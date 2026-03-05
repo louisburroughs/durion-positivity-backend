@@ -53,7 +53,6 @@ public class ShopmgrOperationalContextClient {
      * @param locationId the location UUID
      * @return list of bay availability DTOs, empty list on 404 or connection error
      */
-    @SuppressWarnings("unchecked")
     public List<BayAvailabilityDto> getBayStatusForLocation(@NonNull UUID locationId) {
         try {
             List<BayAvailabilityDto> result = restClient.get()
