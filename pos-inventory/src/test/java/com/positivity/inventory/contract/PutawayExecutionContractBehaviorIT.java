@@ -46,8 +46,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Putaway Execution Contract Behavior")
 class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -72,11 +71,11 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         void executePutaway_validRequest_returns200WithCompletedResponse() throws Exception {
                 // Issue #31: successful execution must return ledgerEntryId (non-null),
                 // taskId, status=COMPLETED, transactionType=PUTAWAY
-                String taskId = UUID.randomUUID().toString();
-                String ledgerEntryId = UUID.randomUUID().toString();
-                String skuId = UUID.randomUUID().toString();
-                UUID sourceLocationId = UUID.randomUUID();
-                UUID destinationLocationId = UUID.randomUUID();
+                String taskId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                String ledgerEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                String skuId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                UUID sourceLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PutawayExecutionResponse response = PutawayExecutionResponse.builder()
                                 .ledgerEntryId(ledgerEntryId)
@@ -129,10 +128,10 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         void executePutaway_invalidDestinationForSku_returns422WithLocationNotValidErrorCode() throws Exception {
                 // Issue #31: LocationNotValidForSkuException → 422 LOCATION_NOT_VALID_FOR_SKU
                 // No ledger entry must be created (throws before persistence)
-                String taskId = UUID.randomUUID().toString();
-                String skuId = UUID.randomUUID().toString();
-                UUID sourceLocationId = UUID.randomUUID();
-                UUID destinationLocationId = UUID.randomUUID();
+                String taskId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                String skuId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                UUID sourceLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                                 .thenThrow(new LocationNotValidForSkuException(
@@ -164,10 +163,10 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC3: destination at full capacity returns 422 with LOCATION_AT_CAPACITY error code")
         void executePutaway_destinationAtCapacity_returns422WithLocationAtCapacityErrorCode() throws Exception {
                 // Issue #31: LocationAtCapacityException → 422 LOCATION_AT_CAPACITY
-                String taskId = UUID.randomUUID().toString();
-                String skuId = UUID.randomUUID().toString();
-                UUID sourceLocationId = UUID.randomUUID();
-                UUID destinationLocationId = UUID.randomUUID();
+                String taskId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                String skuId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                UUID sourceLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                                 .thenThrow(new LocationAtCapacityException(destinationLocationId, 100, 100));
@@ -205,10 +204,10 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #31: NoOnHandAtSourceLocationException → 422
                 // NO_ON_HAND_AT_SOURCE_LOCATION
                 // System must NOT silently create inventory (data consistency error path)
-                String taskId = UUID.randomUUID().toString();
-                String skuId = UUID.randomUUID().toString();
-                UUID sourceLocationId = UUID.randomUUID();
-                UUID destinationLocationId = UUID.randomUUID();
+                String taskId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                String skuId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                UUID sourceLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                                 .thenThrow(new NoOnHandAtSourceLocationException(sourceLocationId, skuId));
@@ -240,11 +239,11 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         void executePutaway_missingAuthority_returns403() throws Exception {
                 // Issue #31: ADR-0011/ADR-0014 require authority enforcement;
                 // absent X-Authorities header must yield 403 Forbidden
-                String taskId = UUID.randomUUID().toString();
+                String taskId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 String requestBody = buildExecutionRequestBody(
-                                UUID.randomUUID().toString(),
-                                UUID.randomUUID().toString(),
-                                UUID.randomUUID().toString(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
                                 1);
 
                 mockMvc.perform(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId)

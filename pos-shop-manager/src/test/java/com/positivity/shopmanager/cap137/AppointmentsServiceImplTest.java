@@ -117,7 +117,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void reschedule_succeeds_whenScheduled() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Instant originalStart = Instant.parse("2026-03-10T10:00:00Z");
                 Instant originalEnd = Instant.parse("2026-03-10T11:00:00Z");
                 Instant newStart = Instant.parse("2026-03-11T10:00:00Z");
@@ -157,7 +157,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void reschedule_throwsAppointmentNotFoundException_whenNotFound() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
                 request.setNewStartAt(Instant.parse("2026-03-11T10:00:00Z"));
                 request.setNewEndAt(Instant.parse("2026-03-11T11:00:00Z"));
@@ -171,7 +171,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void reschedule_throwsAppointmentStateException_whenNotScheduled() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Appointment appointment = buildAppointment(
                                 appointmentId,
                                 AppointmentStatus.CANCELLED,
@@ -190,7 +190,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void cancel_succeeds_whenScheduled() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Appointment appointment = buildAppointment(
                                 appointmentId,
                                 AppointmentStatus.SCHEDULED,
@@ -224,7 +224,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void cancel_throwsAppointmentNotFoundException_whenNotFound() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CancelAppointmentRequest request = new CancelAppointmentRequest();
                 request.setCancellationReason(CancellationReasonCode.OTHER);
 
@@ -236,7 +236,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void cancel_throwsAppointmentStateException_whenNotScheduled() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Appointment appointment = buildAppointment(
                                 appointmentId,
                                 AppointmentStatus.COMPLETED,
@@ -253,7 +253,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void getScheduleView_returnsEmptyResources_whenLocationExistsAndNoAppointments() {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 ScheduleViewRequest request = scheduleRequest(locationId, LocalDate.of(2026, 3, 10), false);
 
                 when(shopRepository.findById(locationId)).thenReturn(Optional.empty());
@@ -261,7 +261,8 @@ class AppointmentsServiceImplTest {
                                 any(UUID.class), any(Instant.class), any(Instant.class))).thenReturn(List.of());
                 when(shopRepository.existsById(locationId)).thenReturn(true);
 
-                ScheduleViewResponse response = appointmentsService.getScheduleView(request, UUID.randomUUID());
+                ScheduleViewResponse response = appointmentsService.getScheduleView(request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 assertEquals(locationId, response.getLocationId());
                 assertEquals(request.getDate(), response.getDate());
@@ -274,7 +275,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void getScheduleView_throwsLocationNotFoundException_whenNoAppointmentsAndLocationUnknown() {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 ScheduleViewRequest request = scheduleRequest(locationId, LocalDate.of(2026, 3, 10), false);
 
                 when(shopRepository.findById(locationId)).thenReturn(Optional.empty());
@@ -283,12 +284,13 @@ class AppointmentsServiceImplTest {
                 when(shopRepository.existsById(locationId)).thenReturn(false);
 
                 assertThrows(LocationNotFoundException.class,
-                                () -> appointmentsService.getScheduleView(request, UUID.randomUUID()));
+                                () -> appointmentsService.getScheduleView(request,
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001")));
         }
 
         @Test
         void getScheduleView_marksConflicts_whenTwoAppointmentsOverlapForSameResource() {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 ScheduleViewRequest request = scheduleRequest(locationId, LocalDate.of(2026, 3, 10), false);
 
                 Appointment first = buildAppointment(
@@ -314,7 +316,8 @@ class AppointmentsServiceImplTest {
                                 any(UUID.class), any(Instant.class), any(Instant.class)))
                                 .thenReturn(List.of(first, second));
 
-                ScheduleViewResponse response = appointmentsService.getScheduleView(request, UUID.randomUUID());
+                ScheduleViewResponse response = appointmentsService.getScheduleView(request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 assertEquals(1, response.getResources().size());
                 var events = response.getResources().get(0).getEvents();
@@ -331,7 +334,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void getScheduleView_setsUnavailableOverlay_whenHrOverlayFails() {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 ScheduleViewRequest request = scheduleRequest(locationId, LocalDate.of(2026, 3, 10), true);
 
                 when(shopRepository.findById(locationId)).thenReturn(Optional.empty());
@@ -341,7 +344,8 @@ class AppointmentsServiceImplTest {
                 when(hrAvailabilityClient.getAvailabilityOverlay(anyString(), any(LocalDate.class)))
                                 .thenThrow(new RuntimeException("HR unavailable"));
 
-                ScheduleViewResponse response = appointmentsService.getScheduleView(request, UUID.randomUUID());
+                ScheduleViewResponse response = appointmentsService.getScheduleView(request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 assertEquals("UNAVAILABLE", response.getAvailabilityOverlayStatus());
                 assertEquals(List.of("HR_SYSTEM_UNAVAILABLE"), response.getWarnings());
@@ -352,11 +356,11 @@ class AppointmentsServiceImplTest {
 
         @Test
         void createAppointment_succeeds_andPersistsServiceRequests() {
-                UUID locationId = UUID.randomUUID();
-                UUID customerId = UUID.randomUUID();
-                UUID vehicleId = UUID.randomUUID();
-                UUID appointmentId = UUID.randomUUID();
-                UUID serviceRequestId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID serviceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
                 request.setLocationId(locationId);
@@ -392,9 +396,9 @@ class AppointmentsServiceImplTest {
         @Test
         void createAppointment_throwsValidation_whenServiceRequestIdsMissing() {
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
-                request.setLocationId(UUID.randomUUID());
-                request.setCrmCustomerId(UUID.randomUUID());
-                request.setCrmVehicleId(UUID.randomUUID());
+                request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 request.setStartAt(Instant.parse("2026-03-10T10:00:00Z"));
                 request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
                 request.setServiceRequestIds(List.of());
@@ -406,18 +410,19 @@ class AppointmentsServiceImplTest {
         @Test
         void createAppointment_throwsMismatch_whenVehicleOwnerDiffersFromCustomer() {
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
-                UUID customerId = UUID.randomUUID();
-                request.setLocationId(UUID.randomUUID());
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 request.setCrmCustomerId(customerId);
-                request.setCrmVehicleId(UUID.randomUUID());
+                request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 request.setStartAt(Instant.parse("2026-03-10T10:00:00Z"));
                 request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
-                request.setServiceRequestIds(List.of(UUID.randomUUID()));
+                request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
                 when(crmCustomerClient.getCustomerById(request.getCrmCustomerId()))
                                 .thenReturn(java.util.Map.of("firstName", "Jane"));
                 when(crmVehicleClient.getVehicleById(request.getCrmVehicleId()))
-                                .thenReturn(java.util.Map.of("ownerCustomerId", UUID.randomUUID().toString()));
+                                .thenReturn(java.util.Map.of("ownerCustomerId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()));
 
                 assertThrows(VehicleCustomerMismatchException.class,
                                 () -> appointmentsService.createAppointment(request, null, null));
@@ -425,11 +430,11 @@ class AppointmentsServiceImplTest {
 
         @Test
         void createAppointment_returnsExisting_whenIdempotencyKeyMatchesSameRequest() {
-                UUID locationId = UUID.randomUUID();
-                UUID customerId = UUID.randomUUID();
-                UUID vehicleId = UUID.randomUUID();
-                UUID appointmentId = UUID.randomUUID();
-                UUID serviceRequestId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID serviceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String idempotencyKey = "idem-123";
 
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
@@ -467,11 +472,11 @@ class AppointmentsServiceImplTest {
 
         @Test
         void createAppointment_throwsValidation_whenIdempotencyKeyReusedWithDifferentRequest() {
-                UUID locationId = UUID.randomUUID();
-                UUID customerId = UUID.randomUUID();
-                UUID vehicleId = UUID.randomUUID();
-                UUID appointmentId = UUID.randomUUID();
-                UUID existingServiceRequestId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID existingServiceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String idempotencyKey = "idem-123";
 
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
@@ -481,7 +486,7 @@ class AppointmentsServiceImplTest {
                 request.setResourceId("tech-1");
                 request.setStartAt(Instant.parse("2026-03-10T10:30:00Z"));
                 request.setEndAt(Instant.parse("2026-03-10T11:30:00Z"));
-                request.setServiceRequestIds(List.of(UUID.randomUUID()));
+                request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
                 Appointment existing = new Appointment();
                 existing.setAppointmentId(appointmentId);
@@ -506,12 +511,12 @@ class AppointmentsServiceImplTest {
 
         @Test
         void loadCreateModel_delegatesToAppointmentLoadService() {
-                UUID facilityId = UUID.randomUUID();
+                UUID facilityId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 AppointmentCreateModel expected = new AppointmentCreateModel();
                 when(shopRepository.existsById(facilityId)).thenReturn(true);
                 when(sourceEligibilityService.getWorkOrderStatus("wo-1", facilityId.toString())).thenReturn("OPEN");
                 when(appointmentLoadService.getFacilityTimeZoneId(facilityId)).thenReturn("UTC");
-                UUID correlationId = UUID.randomUUID();
+                UUID correlationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(appointmentLoadService.loadCreateModel("WORKORDER", "wo-1", facilityId, correlationId))
                                 .thenReturn(expected);
 
@@ -530,7 +535,7 @@ class AppointmentsServiceImplTest {
 
         @Test
         void loadCreateModel_generatesCorrelationId_whenMissing() {
-                UUID facilityId = UUID.randomUUID();
+                UUID facilityId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 AppointmentCreateModel expected = new AppointmentCreateModel();
                 ArgumentCaptor<UUID> correlationCaptor = ArgumentCaptor.forClass(UUID.class);
 
@@ -563,10 +568,10 @@ class AppointmentsServiceImplTest {
                 Appointment appointment = new Appointment();
                 appointment.setAppointmentId(appointmentId);
                 appointment.setStatus(status);
-                appointment.setLocationId(UUID.randomUUID());
+                appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 appointment.setResourceId("resource-1");
-                appointment.setCrmCustomerId(UUID.randomUUID());
-                appointment.setCrmVehicleId(UUID.randomUUID());
+                appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 appointment.setStartAt(startAt);
                 appointment.setEndAt(endAt);
                 return appointment;

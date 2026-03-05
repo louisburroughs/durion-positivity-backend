@@ -57,14 +57,14 @@ class VendorBillServiceGLPostingTest {
 
     @BeforeEach
     void setUp() {
-        testVendorId = UUID.randomUUID();
-        testPoId = UUID.randomUUID();
-        testProductId1 = UUID.randomUUID();
-        testProductId2 = UUID.randomUUID();
+        testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testPoId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testProductId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testProductId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         testEvent = GoodsReceivedEvent.builder()
-                .eventId(UUID.randomUUID())
-                .organizationId(UUID.randomUUID())
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .purchaseOrderId(testPoId)
                 .vendorId(testVendorId)
                 .vendorName("Test Vendor Inc")
@@ -211,7 +211,7 @@ class VendorBillServiceGLPostingTest {
 
     private VendorBill createSavedBill() {
         VendorBill bill = new VendorBill();
-        bill.setVendorBillId(UUID.randomUUID());
+        bill.setVendorBillId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         bill.setVendorId(testVendorId);
         bill.setVendorName("Test Vendor Inc");
         bill.setBillNumber("BILL-2026-00456");

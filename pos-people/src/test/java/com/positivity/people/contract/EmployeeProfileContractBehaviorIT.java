@@ -19,13 +19,15 @@ class EmployeeProfileContractBehaviorIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("CP-117-001: Create employee profile -> 201 Created")
 	void cp117001_createEmployeeProfile_returns201() throws Exception {
-		String employeeNumber = "EMP-117-001-" + UUID.randomUUID().toString().substring(0, 8);
+		String employeeNumber = "EMP-117-001-"
+				+ UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8);
 		mockMvc
-			.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
-				.content(employeePayload(employeeNumber, "alex.117.001+" + employeeNumber + "@example.com", "STRICT"))))
-			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.employeeNumber").value(employeeNumber))
-			.andExpect(jsonPath("$.legalName").value("Alex Carter"));
+				.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
+						.content(employeePayload(employeeNumber, "alex.117.001+" + employeeNumber + "@example.com",
+								"STRICT"))))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.employeeNumber").value(employeeNumber))
+				.andExpect(jsonPath("$.legalName").value("Alex Carter"));
 	}
 
 	@Test
@@ -48,73 +50,82 @@ class EmployeeProfileContractBehaviorIT extends BaseContractIntegrationTest {
 				""";
 
 		mockMvc.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON).content(payload)))
-			.andExpect(status().isUnprocessableContent());
+				.andExpect(status().isUnprocessableContent());
 	}
 
 	@Test
 	@DisplayName("VE-117-002: STRICT duplicate detection -> 409")
 	void ve117002_strictDuplicate_returns409() throws Exception {
-		String employeeNumber = "EMP-117-003-" + UUID.randomUUID().toString().substring(0, 8);
+		String employeeNumber = "EMP-117-003-"
+				+ UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8);
 		mockMvc
-			.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
-				.content(employeePayload(employeeNumber, "alex.117.003+" + employeeNumber + "@example.com", "STRICT"))))
-			.andExpect(status().isCreated());
+				.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
+						.content(employeePayload(employeeNumber, "alex.117.003+" + employeeNumber + "@example.com",
+								"STRICT"))))
+				.andExpect(status().isCreated());
 
 		mockMvc
-			.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
-				.content(employeePayload(employeeNumber, "alex.117.004+" + employeeNumber + "@example.com", "STRICT"))))
-			.andExpect(status().isConflict());
+				.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
+						.content(employeePayload(employeeNumber, "alex.117.004+" + employeeNumber + "@example.com",
+								"STRICT"))))
+				.andExpect(status().isConflict());
 	}
 
 	@Test
 	@DisplayName("CP-117-002: BALANCED duplicate detection -> 201 with warnings")
 	void cp117002_balancedDuplicate_returns201WithWarnings() throws Exception {
-		String employeeNumber = "EMP-117-004-" + UUID.randomUUID().toString().substring(0, 8);
+		String employeeNumber = "EMP-117-004-"
+				+ UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8);
 		mockMvc
-			.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
-				.content(employeePayload(employeeNumber, "alex.117.005+" + employeeNumber + "@example.com", "STRICT"))))
-			.andExpect(status().isCreated());
+				.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
+						.content(employeePayload(employeeNumber, "alex.117.005+" + employeeNumber + "@example.com",
+								"STRICT"))))
+				.andExpect(status().isCreated());
 
 		mockMvc
-			.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
-				.content(employeePayload(employeeNumber, "alex.117.006+" + employeeNumber + "@example.com",
-						"BALANCED"))))
-			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.warnings").isArray())
-			.andExpect(jsonPath("$.warnings[0]").exists());
+				.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
+						.content(employeePayload(employeeNumber, "alex.117.006+" + employeeNumber + "@example.com",
+								"BALANCED"))))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.warnings").isArray())
+				.andExpect(jsonPath("$.warnings[0]").exists());
 	}
 
 	@Test
 	@DisplayName("CP-117-003: Get employee profile -> 200 OK")
 	void cp117003_getEmployeeProfile_returns200() throws Exception {
-		String employeeNumber = "EMP-117-005-" + UUID.randomUUID().toString().substring(0, 8);
+		String employeeNumber = "EMP-117-005-"
+				+ UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8);
 		String response = mockMvc
-			.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
-				.content(employeePayload(employeeNumber, "alex.117.005+" + employeeNumber + "@example.com", "STRICT"))))
-			.andExpect(status().isCreated())
-			.andReturn()
-			.getResponse()
-			.getContentAsString();
+				.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
+						.content(employeePayload(employeeNumber, "alex.117.005+" + employeeNumber + "@example.com",
+								"STRICT"))))
+				.andExpect(status().isCreated())
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
 
 		UUID employeeId = UUID.fromString(objectMapper.readTree(response).get("id").asText());
 
 		mockMvc.perform(withAuth(get("/v1/people/employees/{employeeId}", employeeId)))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.employeeNumber").value(employeeNumber))
-			.andExpect(jsonPath("$.status").value("ACTIVE"));
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.employeeNumber").value(employeeNumber))
+				.andExpect(jsonPath("$.status").value("ACTIVE"));
 	}
 
 	@Test
 	@DisplayName("CP-117-004: Update employee profile -> 200 OK")
 	void cp117004_updateEmployeeProfile_returns200() throws Exception {
-		String employeeNumber = "EMP-117-007-" + UUID.randomUUID().toString().substring(0, 8);
+		String employeeNumber = "EMP-117-007-"
+				+ UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8);
 		String response = mockMvc
-			.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
-				.content(employeePayload(employeeNumber, "alex.117.007+" + employeeNumber + "@example.com", "STRICT"))))
-			.andExpect(status().isCreated())
-			.andReturn()
-			.getResponse()
-			.getContentAsString();
+				.perform(withAuth(post("/v1/people/employees").contentType(MediaType.APPLICATION_JSON)
+						.content(employeePayload(employeeNumber, "alex.117.007+" + employeeNumber + "@example.com",
+								"STRICT"))))
+				.andExpect(status().isCreated())
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
 
 		UUID employeeId = UUID.fromString(objectMapper.readTree(response).get("id").asText());
 
@@ -135,12 +146,12 @@ class EmployeeProfileContractBehaviorIT extends BaseContractIntegrationTest {
 				"alex.117.007+" + employeeNumber + "@example.com");
 
 		mockMvc
-			.perform(withAuth(
-					put("/v1/people/employees/{employeeId}", employeeId).contentType(MediaType.APPLICATION_JSON)
-						.content(updatePayload)))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.preferredName").value("A. Carter"))
-			.andExpect(jsonPath("$.status").value("ON_LEAVE"));
+				.perform(withAuth(
+						put("/v1/people/employees/{employeeId}", employeeId).contentType(MediaType.APPLICATION_JSON)
+								.content(updatePayload)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.preferredName").value("A. Carter"))
+				.andExpect(jsonPath("$.status").value("ON_LEAVE"));
 	}
 
 	private String employeePayload(String employeeNumber, String email, String duplicatePolicy) {

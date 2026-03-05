@@ -49,8 +49,7 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 @DisplayName("Workorder Item Generation Contract Behavior Tests (CAP:004 Story #27)")
 @Import(ContractTestConfiguration.class)
 class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -431,7 +430,8 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 initTestIds();
 
                 Estimate estimate = Estimate.builder()
-                                .estimateNumber("EST-TEST-" + UUID.randomUUID().toString().substring(0, 8))
+                                .estimateNumber("EST-TEST-" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                .toString().substring(0, 8))
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
@@ -497,7 +497,8 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 initTestIds();
 
                 Estimate estimate = Estimate.builder()
-                                .estimateNumber("EST-TEST-" + UUID.randomUUID().toString().substring(0, 8))
+                                .estimateNumber("EST-TEST-" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                .toString().substring(0, 8))
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
@@ -534,7 +535,8 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 initTestIds();
 
                 Estimate estimate = Estimate.builder()
-                                .estimateNumber("EST-TEST-" + UUID.randomUUID().toString().substring(0, 8))
+                                .estimateNumber("EST-TEST-" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                .toString().substring(0, 8))
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
@@ -566,7 +568,9 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 initTestIds();
 
                 Estimate estimate = Estimate.builder()
-                                .estimateNumber("EST-TEST-MIXED-" + UUID.randomUUID().toString().substring(0, 8))
+                                .estimateNumber("EST-TEST-MIXED-"
+                                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString()
+                                                                .substring(0, 8))
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
@@ -645,9 +649,9 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
         private void initTestIds() {
                 if (testCustomerId == null) {
-                        testCustomerId = UUID.randomUUID();
-                        testLocationId = UUID.randomUUID();
-                        testVehicleId = UUID.randomUUID();
+                        testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 }
         }
 }

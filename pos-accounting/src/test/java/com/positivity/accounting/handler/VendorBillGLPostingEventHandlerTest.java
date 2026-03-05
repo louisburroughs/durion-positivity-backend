@@ -53,15 +53,15 @@ class VendorBillGLPostingEventHandlerTest {
 
         @BeforeEach
         void setUp() {
-                testBillId = UUID.randomUUID();
-                testVendorId = UUID.randomUUID();
-                testPoId = UUID.randomUUID();
-                testProductId1 = UUID.randomUUID();
-                testProductId2 = UUID.randomUUID();
+                testBillId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testPoId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testProductId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testProductId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 testEvent = VendorBillGLPostingEvent.builder()
-                                .eventId(UUID.randomUUID())
-                                .organizationId(UUID.randomUUID())
+                                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .vendorBillId(testBillId)
                                 .vendorId(testVendorId)
                                 .vendorName("Test Vendor Inc")
@@ -97,7 +97,7 @@ class VendorBillGLPostingEventHandlerTest {
         void shouldSubmitAccountingEventWhenGLPostingEventReceived() {
                 // Given: Event ingestion service returns success response
                 AccountingEventResponse response = new AccountingEventResponse();
-                response.setEventId(UUID.randomUUID());
+                response.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 response.setStatus(AccountingEventStatus.RECEIVED);
                 when(eventIngestionService.submitEvent(any(Map.class))).thenReturn(response);
 
@@ -113,7 +113,7 @@ class VendorBillGLPostingEventHandlerTest {
         void shouldMapEventTypeCorrectly() {
                 // Given
                 AccountingEventResponse response = new AccountingEventResponse();
-                response.setEventId(UUID.randomUUID());
+                response.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 response.setStatus(AccountingEventStatus.RECEIVED);
                 when(eventIngestionService.submitEvent(any(Map.class))).thenReturn(response);
 
@@ -134,7 +134,7 @@ class VendorBillGLPostingEventHandlerTest {
         void shouldMapVendorBillDetailsCorrectly() {
                 // Given
                 AccountingEventResponse response = new AccountingEventResponse();
-                response.setEventId(UUID.randomUUID());
+                response.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 response.setStatus(AccountingEventStatus.RECEIVED);
                 when(eventIngestionService.submitEvent(any(Map.class))).thenReturn(response);
 
@@ -163,7 +163,7 @@ class VendorBillGLPostingEventHandlerTest {
         void shouldPreserveIsInventoryItemFlagInLineItems() {
                 // Given
                 AccountingEventResponse response = new AccountingEventResponse();
-                response.setEventId(UUID.randomUUID());
+                response.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 response.setStatus(AccountingEventStatus.RECEIVED);
                 when(eventIngestionService.submitEvent(any(Map.class))).thenReturn(response);
 
@@ -200,7 +200,7 @@ class VendorBillGLPostingEventHandlerTest {
         void shouldMapAllLineItemFieldsCorrectly() {
                 // Given
                 AccountingEventResponse response = new AccountingEventResponse();
-                response.setEventId(UUID.randomUUID());
+                response.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 response.setStatus(AccountingEventStatus.RECEIVED);
                 when(eventIngestionService.submitEvent(any(Map.class))).thenReturn(response);
 
@@ -245,7 +245,7 @@ class VendorBillGLPostingEventHandlerTest {
         void shouldUseTransactionDateFromBillDate() {
                 // Given
                 AccountingEventResponse response = new AccountingEventResponse();
-                response.setEventId(UUID.randomUUID());
+                response.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 response.setStatus(AccountingEventStatus.RECEIVED);
                 when(eventIngestionService.submitEvent(any(Map.class))).thenReturn(response);
 

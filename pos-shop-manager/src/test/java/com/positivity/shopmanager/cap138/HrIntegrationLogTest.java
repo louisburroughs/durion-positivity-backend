@@ -35,7 +35,7 @@ class HrIntegrationLogTest {
     @Test
     void requireEventId_whenEventIdPresent_doesNotThrow() {
         HrIntegrationLog log = HrIntegrationLog.builder()
-                .eventId(UUID.randomUUID())
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .personId("HR-001")
                 .eventType("MECHANIC_UPSERTED")
                 .status("PROCESSED")

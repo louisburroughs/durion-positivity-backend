@@ -55,7 +55,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 class AssignmentControllerStory10Test {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Autowired
     private MockMvc mockMvc;
 
@@ -71,8 +70,8 @@ class AssignmentControllerStory10Test {
     @Test
     @WithMockUser(authorities = "shopmgmt.assignment.view")
     void listAssignments_withViewAssignmentsAuthority_returns200() throws Exception {
-        UUID appointmentId = UUID.randomUUID();
-        UUID assignmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         AssignmentResponse mockResponse = AssignmentResponse.builder()
                 .assignmentId(assignmentId)
@@ -99,7 +98,7 @@ class AssignmentControllerStory10Test {
     @Test
     @WithMockUser(authorities = "workexec.assignment.read")
     void listAssignments_withWorkexecReadAuthority_returns200() throws Exception {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(assignmentService.getByAppointmentId(any(UUID.class))).thenReturn(List.of());
 
         mockMvc.perform(get("/v1/appointments/{appointmentId}/assignments", appointmentId))
@@ -116,7 +115,7 @@ class AssignmentControllerStory10Test {
     @Test
     @WithMockUser(authorities = "some.unrelated.authority")
     void listAssignments_withoutAuthority_returns403() throws Exception {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         mockMvc.perform(get("/v1/appointments/{appointmentId}/assignments", appointmentId))
                 .andExpect(status().isForbidden());
@@ -132,7 +131,7 @@ class AssignmentControllerStory10Test {
     @Test
     @WithMockUser(authorities = "workexec.assignment.create")
     void listAssignments_withCreateOnlyAuthority_returns403() throws Exception {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         mockMvc.perform(get("/v1/appointments/{appointmentId}/assignments", appointmentId))
                 .andExpect(status().isForbidden());

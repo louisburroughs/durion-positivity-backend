@@ -42,7 +42,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "currency", "USD",
                                                 "effectiveStartDate",
                                                 LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.productId").value(productId.toString()))
                                 .andExpect(jsonPath("$.amount").value("199.9900"));
@@ -66,7 +67,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "currency", "USD",
                                                 "effectiveStartDate", LocalDate.now(FIXED_CLOCK).toString(),
                                                 "effectiveEndDate", LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isBadRequest());
         }
 
@@ -83,7 +85,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "effectiveStartDate",
                                                 LocalDate.now(FIXED_CLOCK).minusDays(2).toString(),
                                                 "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(2).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/{productId}/msrp", productId))
@@ -93,7 +96,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "currency", "USD",
                                                 "effectiveStartDate", LocalDate.now(FIXED_CLOCK).plusDays(1).toString(),
                                                 "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(4).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isConflict());
         }
 
@@ -110,7 +114,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "effectiveStartDate",
                                                 LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
                                                 "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(10).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
@@ -127,7 +132,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "effectiveStartDate",
                                                 LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
                                                 "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(10).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.amount").value("84.9900"));
 

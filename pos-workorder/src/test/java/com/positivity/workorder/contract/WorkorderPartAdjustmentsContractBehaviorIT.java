@@ -73,7 +73,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 // Given: A workorder with a part
                 UUID workorderId = seedWorkorderWithPart();
                 UUID originalPartId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
-                UUID substitutePartId = UUID.randomUUID();
+                UUID substitutePartId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When: Substitute the part
                 Map<String, Object> substituteRequest = Map.of(
@@ -122,8 +122,8 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 // Given: A workorder with a part
                 UUID workorderId = seedWorkorderWithPart();
                 UUID originalPartId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
-                UUID substitutePartId = UUID.randomUUID();
-                String idempotencyKey = "test-substitute-" + UUID.randomUUID();
+                UUID substitutePartId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                String idempotencyKey = "test-substitute-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> substituteRequest = Map.of(
                                 "originalPartId", originalPartId.toString(),
@@ -174,7 +174,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 // When: Substitute the part
                 Map<String, Object> substituteRequest = Map.of(
                                 "originalPartId", originalPartId.toString(),
-                                "substitutePartId", UUID.randomUUID().toString(),
+                                "substitutePartId", UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
                                 "reason", "Substitution test");
 
                 givenWithGatewayAuth()
@@ -211,7 +211,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 // When: Substitute the part
                 Map<String, Object> substituteRequest = Map.of(
                                 "originalPartId", originalPart.getId().toString(),
-                                "substitutePartId", UUID.randomUUID().toString(),
+                                "substitutePartId", UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
                                 "reason", "Quantity test");
 
                 String substitutePartIdStr = givenWithGatewayAuth()
@@ -282,7 +282,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 UUID workorderId = seedWorkorderWithPartiallyConsumedPart(BigDecimal.valueOf(10.0),
                                 BigDecimal.valueOf(6.0));
                 UUID partId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
-                String idempotencyKey = "test-return-" + UUID.randomUUID();
+                String idempotencyKey = "test-return-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> returnRequest = Map.of(
                                 "workorderPartId", partId.toString(),
@@ -397,7 +397,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 // Given: A workorder with a part
                 UUID workorderId = seedWorkorderWithPart();
                 UUID partId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
-                String idempotencyKey = "test-correct-" + UUID.randomUUID();
+                String idempotencyKey = "test-correct-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> correctRequest = Map.of(
                                 "workorderPartId", partId.toString(),
@@ -461,9 +461,9 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         // ========== HELPER METHODS FOR TEST DATA SEEDING ==========
 
         private UUID seedWorkorderWithPart() {
-                testCustomerId = UUID.randomUUID();
-                testLocationId = UUID.randomUUID();
-                testVehicleId = UUID.randomUUID();
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Create and save workorder
                 Workorder workorder = Workorder.builder()
@@ -512,7 +512,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 // Create substitute (first adjustment)
                 Map<String, Object> substituteRequest = Map.of(
                                 "originalPartId", originalPartId.toString(),
-                                "substitutePartId", UUID.randomUUID().toString(),
+                                "substitutePartId", UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
                                 "reason", "First adjustment");
 
                 givenWithGatewayAuth()

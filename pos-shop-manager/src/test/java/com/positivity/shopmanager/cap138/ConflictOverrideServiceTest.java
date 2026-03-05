@@ -34,7 +34,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 class ConflictOverrideServiceTest {
 
         private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-06-15T12:00:00Z"), ZoneOffset.UTC);
-        private static final UUID APPT_ID = UUID.randomUUID();
+        private static final UUID APPT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
         private static final String ACTOR_SYSTEM = "system";
 
         @Mock
@@ -186,9 +186,9 @@ class ConflictOverrideServiceTest {
         private Appointment buildAppointment(UUID appointmentId) {
                 return Appointment.builder()
                                 .appointmentId(appointmentId)
-                                .locationId(UUID.randomUUID())
-                                .crmCustomerId(UUID.randomUUID())
-                                .crmVehicleId(UUID.randomUUID())
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .resourceId("HR-7001")
                                 .resourceType("MECHANIC")
                                 .startAt(Instant.parse("2026-06-15T10:00:00Z"))

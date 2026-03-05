@@ -49,7 +49,7 @@ class PermissionServiceImplTest {
             when(permissionRepository.findByName("pricing:price_book:edit")).thenReturn(Optional.empty());
             when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> {
                 Permission permission = invocation.getArgument(0);
-                permission.setId(UUID.randomUUID());
+                permission.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 return permission;
             });
 
@@ -64,7 +64,7 @@ class PermissionServiceImplTest {
         @DisplayName("updates existing permission when key already exists")
         void registerPermissions_existingPermission_updates() {
             Permission existingPermission = new Permission();
-            existingPermission.setId(UUID.randomUUID());
+            existingPermission.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
             existingPermission.setName("pricing:price_book:edit");
             existingPermission.setDescription("Old description");
 
@@ -122,7 +122,7 @@ class PermissionServiceImplTest {
         @Test
         @DisplayName("returns mapped dto when permission exists")
         void getPermission_found_returnsDto() {
-            UUID permissionId = UUID.randomUUID();
+            UUID permissionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             Permission permission = new Permission();
             permission.setId(permissionId);
             permission.setName("pricing:price_book:edit");
@@ -140,7 +140,7 @@ class PermissionServiceImplTest {
         @Test
         @DisplayName("throws when permission does not exist")
         void getPermission_notFound_throws() {
-            UUID permissionId = UUID.randomUUID();
+            UUID permissionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(permissionRepository.findById(permissionId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> sut.getPermission(permissionId))

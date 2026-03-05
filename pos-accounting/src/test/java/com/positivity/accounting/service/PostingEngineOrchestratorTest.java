@@ -107,10 +107,10 @@ class PostingEngineOrchestratorTest {
                 reprocessingAttemptHistoryRepository,
                 objectMapper);
 
-        testOrganizationId = UUID.randomUUID();
-        testEventId = UUID.randomUUID();
-        testMappingVersion = UUID.randomUUID();
-        testJournalEntryId = UUID.randomUUID();
+        testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testEventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testMappingVersion = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testJournalEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testUserId = "test-user-123";
 
         // Setup test payload
@@ -142,7 +142,7 @@ class PostingEngineOrchestratorTest {
         List<JournalEntryLine> lines = new ArrayList<>();
 
         JournalEntryLine debitLine = new JournalEntryLine();
-        debitLine.setGlAccountId(UUID.randomUUID());
+        debitLine.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         debitLine.setAccountCode("1000");
         debitLine.setAccountName("Cash");
         debitLine.setDebitAmount(new BigDecimal("1000.00"));
@@ -150,7 +150,7 @@ class PostingEngineOrchestratorTest {
         lines.add(debitLine);
 
         JournalEntryLine creditLine = new JournalEntryLine();
-        creditLine.setGlAccountId(UUID.randomUUID());
+        creditLine.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         creditLine.setAccountCode("2000");
         creditLine.setAccountName("Accounts Payable");
         creditLine.setDebitAmount(BigDecimal.ZERO);

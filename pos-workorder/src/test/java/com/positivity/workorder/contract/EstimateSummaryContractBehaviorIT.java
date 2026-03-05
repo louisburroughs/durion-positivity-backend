@@ -183,13 +183,13 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
 
         private UUID seedEstimateWithPartAndLaborItems() {
                 Estimate estimate = Estimate.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .estimateNumber("EST-" + System.nanoTime())
-                                .locationId(UUID.randomUUID())
-                                .vehicleId(UUID.randomUUID())
-                                .customerId(UUID.randomUUID())
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .currencyUomId("USD")
-                                .taxRegionId(UUID.randomUUID())
+                                .taxRegionId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(EstimateStatus.DRAFT)
                                 .subtotal(new BigDecimal("200.00"))
                                 .taxAmount(new BigDecimal("16.50"))
@@ -211,7 +211,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
         private EstimateItem buildItem(UUID estimateId, EstimateItemType type, String description,
                         BigDecimal quantity, BigDecimal unitPrice) {
                 return EstimateItem.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .estimateId(estimateId)
                                 .itemType(type)
                                 .description(description)

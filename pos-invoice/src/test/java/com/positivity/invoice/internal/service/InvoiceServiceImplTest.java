@@ -47,8 +47,8 @@ class InvoiceServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        invoiceId = UUID.randomUUID();
-        workorderId = UUID.randomUUID();
+        invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         draftInvoice = new Invoice();
         draftInvoice.setId(invoiceId);
@@ -77,7 +77,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> invoiceService.getInvoice(invoiceId))
-            .isInstanceOf(InvoiceNotFoundException.class);
+                .isInstanceOf(InvoiceNotFoundException.class);
     }
 
     // ---- createInvoice(InvoiceGenerationRequest) ----
@@ -114,7 +114,7 @@ class InvoiceServiceImplTest {
         request.setWorkorderId(null);
 
         assertThatThrownBy(() -> invoiceService.createInvoice(request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     // ---- createInvoice(InvoiceCreationRequest) ----
@@ -162,7 +162,7 @@ class InvoiceServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> invoiceService.createInvoice(request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     // ---- applyAdjustment ----
@@ -195,7 +195,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(InvoiceNotFoundException.class);
+                .isInstanceOf(InvoiceNotFoundException.class);
     }
 
     @Test
@@ -210,7 +210,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(RuntimeException.class);
     }
 
     @Test
@@ -224,7 +224,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -238,7 +238,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -252,7 +252,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -266,6 +266,6 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

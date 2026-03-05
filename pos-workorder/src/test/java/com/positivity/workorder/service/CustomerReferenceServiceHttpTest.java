@@ -20,7 +20,7 @@ class CustomerReferenceServiceHttpTest {
 
     @Test
     void resolve_parsesNameAndPhone_fromDataEnvelope() throws Exception {
-        UUID customerId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String payload = """
                 {"data":{"customerName":"Jane Doe","phoneNumber":"+1-555-0100"}}
                 """;
@@ -42,7 +42,7 @@ class CustomerReferenceServiceHttpTest {
 
     @Test
     void resolve_returnsFallback_whenRemoteReturns404() throws Exception {
-        UUID customerId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
         HttpServer server = startServer("/v1/customers/" + customerId, 404, "{}", callCount);
         try {
@@ -61,7 +61,7 @@ class CustomerReferenceServiceHttpTest {
 
     @Test
     void resolveAll_deDuplicatesRequests_forRepeatedIds() throws Exception {
-        UUID customerId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
         HttpServer server = startServer("/v1/customers/" + customerId, 200,
                 "{\"customerName\":\"Repeated Customer\",\"phone\":\"+1-555-2222\"}", callCount);

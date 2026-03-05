@@ -154,7 +154,7 @@ class InternalServiceImplementationsTest {
     void conflictDetectionService_returnsExpectedDefaults() {
         ConflictDetectionServiceImpl service = new ConflictDetectionServiceImpl();
 
-        service.detectConflicts(null, UUID.randomUUID());
+        service.detectConflicts(null, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         assertTrue(service.isWithinOperatingHours("FAC-1", "start", "end", "UTC"));
         assertTrue(service.checkMechanicAvailability("FAC-1", "start", "end").isEmpty());
@@ -164,9 +164,10 @@ class InternalServiceImplementationsTest {
     @Test
     void appointmentLoadService_returnsCreateModelAndUtcTimeZone() {
         AppointmentLoadServiceImpl service = new AppointmentLoadServiceImpl();
-        UUID facilityId = UUID.randomUUID();
+        UUID facilityId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        AppointmentCreateModel model = service.loadCreateModel("ESTIMATE", "SRC-1", facilityId, UUID.randomUUID());
+        AppointmentCreateModel model = service.loadCreateModel("ESTIMATE", "SRC-1", facilityId,
+                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         assertNotNull(model);
         assertEquals("UTC", service.getFacilityTimeZoneId(facilityId));
@@ -176,8 +177,8 @@ class InternalServiceImplementationsTest {
     void shopService_getTechnicianPerson_returnsNullWhenPersonIdMissing() {
         ShopServiceImpl service = new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient,
                 shopServiceRepository);
-        UUID locationId = UUID.randomUUID();
-        UUID technicianId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Technician technician = new Technician();
         technician.setId(technicianId);
         technician.setPersonId(null);
@@ -192,8 +193,8 @@ class InternalServiceImplementationsTest {
     void shopService_getTechnicianPerson_returnsPersonWhenPersonIdPresent() {
         ShopServiceImpl service = new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient,
                 shopServiceRepository);
-        UUID locationId = UUID.randomUUID();
-        UUID technicianId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Technician technician = new Technician();
         technician.setId(technicianId);
         technician.setPersonId(42L);
@@ -211,8 +212,8 @@ class InternalServiceImplementationsTest {
     void shopService_getTechnicianPerson_throwsWhenTechnicianMissing() {
         ShopServiceImpl service = new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient,
                 shopServiceRepository);
-        UUID locationId = UUID.randomUUID();
-        UUID technicianId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(technicianRepository.findByIdAndShopId(technicianId, locationId)).thenReturn(Optional.empty());
 
         assertThrows(java.util.NoSuchElementException.class,
@@ -223,8 +224,8 @@ class InternalServiceImplementationsTest {
     void shopService_getShopServiceDetails_returnsNullWhenServiceEntityIdMissing() {
         ShopServiceImpl service = new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient,
                 shopServiceRepository);
-        UUID locationId = UUID.randomUUID();
-        UUID shopServiceId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID shopServiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ShopService shopService = new ShopService();
         shopService.setId(shopServiceId);
         shopService.setServiceEntityId(null);
@@ -239,8 +240,8 @@ class InternalServiceImplementationsTest {
     void shopService_getShopServiceDetails_returnsServiceEntityWhenPresent() {
         ShopServiceImpl service = new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient,
                 shopServiceRepository);
-        UUID locationId = UUID.randomUUID();
-        UUID shopServiceId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID shopServiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ShopService shopService = new ShopService();
         shopService.setId(shopServiceId);
         shopService.setServiceEntityId(77L);
@@ -258,8 +259,8 @@ class InternalServiceImplementationsTest {
     void shopService_getShopServiceDetails_throwsWhenShopServiceMissing() {
         ShopServiceImpl service = new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient,
                 shopServiceRepository);
-        UUID locationId = UUID.randomUUID();
-        UUID shopServiceId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID shopServiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(shopServiceRepository.findByIdAndShopId(shopServiceId, locationId)).thenReturn(Optional.empty());
 
         assertThrows(java.util.NoSuchElementException.class,

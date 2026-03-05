@@ -55,8 +55,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PickListServiceImpl — Story #28 unit tests (RED phase)")
 class PickListServiceImplTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Mock
         private PickListRepository pickListRepository;
@@ -85,10 +84,11 @@ class PickListServiceImplTest {
                 // Issue #28: SC1 — createPickList must return DRAFT status and non-null
                 // pickListId
                 // Arrange
-                UUID workorderId = UUID.randomUUID();
-                CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now(TEST_CLOCK).plusSeconds(3600),
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                CreatePickListRequest request = new CreatePickListRequest(workorderId,
+                                Instant.now(TEST_CLOCK).plusSeconds(3600),
                                 1,
-                                UUID.randomUUID());
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Act — RED: impl throws UnsupportedOperationException; assertions never
                 // reached
@@ -113,9 +113,10 @@ class PickListServiceImplTest {
         void SC2_createPickList_validRequest_createsPickTasksWithPendingStatusAndSortOrder() {
                 // Issue #28: SC2 — pick tasks must be created with status=PENDING and sortOrder
                 // Arrange
-                UUID workorderId = UUID.randomUUID();
-                UUID reservationId = UUID.randomUUID();
-                CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now(TEST_CLOCK).plusSeconds(3600),
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID reservationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                CreatePickListRequest request = new CreatePickListRequest(workorderId,
+                                Instant.now(TEST_CLOCK).plusSeconds(3600),
                                 1,
                                 reservationId);
 
@@ -162,10 +163,10 @@ class PickListServiceImplTest {
         void SC4_getPickList_validId_returnMatchingResponse() {
                 // Issue #28: SC4 — getPickList must return the stored entity by ID
                 // Arrange
-                UUID validId = UUID.randomUUID();
+                UUID validId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PickListEntity entity = PickListEntity.builder()
                                 .pickListId(validId)
-                                .workorderId(UUID.randomUUID())
+                                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(PickListStatus.DRAFT)
                                 .priority(0)
                                 .createdAt(Instant.now(TEST_CLOCK))
@@ -194,7 +195,7 @@ class PickListServiceImplTest {
                 // Issue #28: SC5 — unknown pickListId must throw ResourceNotFoundException;
                 // UnsupportedOperationException is RED proof
                 // Arrange
-                UUID unknownId = UUID.randomUUID();
+                UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act + Assert — RED: impl throws UnsupportedOperationException, not
                 // ResourceNotFoundException
@@ -216,7 +217,7 @@ class PickListServiceImplTest {
         void SC6_getPickListsForWorkorder_validWorkorderId_returnsList() {
                 // Issue #28: SC6 — getPickListsForWorkorder must return a non-null list
                 // Arrange
-                UUID workorderId = UUID.randomUUID();
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act — RED: impl throws UnsupportedOperationException
                 List<PickListResponse> result = service.getPickListsForWorkorder(workorderId);
@@ -240,7 +241,7 @@ class PickListServiceImplTest {
                 // Issue #28: SC7 — status transition DRAFT → READY_TO_PICK must be reflected in
                 // response
                 // Arrange
-                UUID pickListId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act — RED: impl throws UnsupportedOperationException
                 PickListResponse result = service.updatePickListStatus(pickListId, PickListStatus.READY_TO_PICK);
@@ -263,7 +264,7 @@ class PickListServiceImplTest {
         void SC8_cancelPickList_validId_completesWithoutException() {
                 // Issue #28: SC8 — cancelPickList must succeed silently
                 // Arrange
-                UUID pickListId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act + Assert — RED: impl throws UnsupportedOperationException
                 assertThatCode(() -> service.cancelPickList(pickListId)).doesNotThrowAnyException();
@@ -291,10 +292,10 @@ class PickListServiceImplTest {
         void PS1_releasePickList_draftPickList_returnsReadyToPickResponse() {
                 // Issue #179: PS1 — releasePickList must transition DRAFT → READY_TO_PICK
                 // Arrange
-                UUID pickListId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PickListEntity entity = PickListEntity.builder()
                                 .pickListId(pickListId)
-                                .workorderId(UUID.randomUUID())
+                                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(PickListStatus.DRAFT)
                                 .priority(0)
                                 .createdAt(Instant.now(TEST_CLOCK))
@@ -330,15 +331,15 @@ class PickListServiceImplTest {
         void PS2_confirmPickTask_validScan_returnsPickedTaskResponse() {
                 // Issue #179: PS2 — valid scan must set task status=PICKED
                 // Arrange
-                UUID pickListId = UUID.randomUUID();
-                UUID pickTaskId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 int quantityRequired = 2;
 
                 PickListEntity pickList = PickListEntity.builder()
                                 .pickListId(pickListId)
-                                .workorderId(UUID.randomUUID())
+                                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(PickListStatus.READY_TO_PICK)
                                 .priority(0)
                                 .build();
@@ -386,15 +387,16 @@ class PickListServiceImplTest {
         void PS3_confirmPickTask_wrongSkuId_throwsPickScanMismatchException() {
                 // Issue #179: PS3 — scan mismatch must throw PickScanMismatchException (→ 422)
                 // Arrange
-                UUID pickListId = UUID.randomUUID();
-                UUID pickTaskId = UUID.randomUUID();
-                UUID correctProductId = UUID.randomUUID();
-                UUID wrongScannedSkuId = UUID.randomUUID(); // different from correctProductId
-                UUID locationId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID correctProductId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID wrongScannedSkuId = UUID.fromString("00000000-0000-0000-0000-000000000001"); // different from
+                                                                                                  // correctProductId
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PickListEntity pickList = PickListEntity.builder()
                                 .pickListId(pickListId)
-                                .workorderId(UUID.randomUUID())
+                                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(PickListStatus.READY_TO_PICK)
                                 .priority(0)
                                 .build();
@@ -436,16 +438,16 @@ class PickListServiceImplTest {
         void PS4_confirmPickTask_quantityExceedsRequired_throwsIllegalArgumentException() {
                 // Issue #179: PS4 — over-pick must be rejected with IllegalArgumentException
                 // Arrange
-                UUID pickListId = UUID.randomUUID();
-                UUID pickTaskId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 int quantityRequired = 2;
                 int overPickQuantity = quantityRequired + 1;
 
                 PickListEntity pickList = PickListEntity.builder()
                                 .pickListId(pickListId)
-                                .workorderId(UUID.randomUUID())
+                                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(PickListStatus.READY_TO_PICK)
                                 .priority(0)
                                 .build();
@@ -490,15 +492,15 @@ class PickListServiceImplTest {
                 // Issue #179: PS5 — confirming last task must trigger pick list
                 // status=COMPLETED
                 // Arrange
-                UUID pickListId = UUID.randomUUID();
-                UUID taskId1 = UUID.randomUUID();
-                UUID taskId2 = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID taskId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID taskId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PickListEntity pickList = PickListEntity.builder()
                                 .pickListId(pickListId)
-                                .workorderId(UUID.randomUUID())
+                                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(PickListStatus.IN_PROGRESS)
                                 .priority(0)
                                 .build();
@@ -507,7 +509,7 @@ class PickListServiceImplTest {
                 PickTaskEntity task1 = PickTaskEntity.builder()
                                 .pickTaskId(taskId1)
                                 .pickList(pickList)
-                                .productId(UUID.randomUUID())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .sku("SKU-DONE")
                                 .quantityRequired(1)
                                 .status(PickTaskStatus.PICKED)

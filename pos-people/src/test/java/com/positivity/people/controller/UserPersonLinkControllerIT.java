@@ -20,12 +20,12 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-		properties = { "spring.datasource.url=jdbc:h2:mem:userpersonlink;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
-				"spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa",
-				"spring.datasource.password=", "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-				"spring.jpa.hibernate.ddl-auto=create-drop", "spring.flyway.enabled=false",
-				"eureka.client.enabled=false" })
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+		"spring.datasource.url=jdbc:h2:mem:userpersonlink;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+		"spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa",
+		"spring.datasource.password=", "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+		"spring.jpa.hibernate.ddl-auto=create-drop", "spring.flyway.enabled=false",
+		"eureka.client.enabled=false" })
 @AutoConfigureTestRestTemplate
 @ActiveProfiles("test")
 class UserPersonLinkControllerIT {
@@ -44,7 +44,7 @@ class UserPersonLinkControllerIT {
 	@Test
 	void linkUserToPerson_success_returns201() {
 		UUID personId = createPerson("Casey", "Lane", "casey@example.com");
-		String userId = UUID.randomUUID().toString();
+		String userId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 
 		HttpEntity<String> entity = new HttpEntity<>(
 				createLinkRequestJson(userId, personId, "PRIMARY", "integration test"), authenticatedHeaders());
@@ -60,8 +60,9 @@ class UserPersonLinkControllerIT {
 
 	@Test
 	void linkUserToPerson_personNotFound_returns404() {
-		String userId = UUID.randomUUID().toString();
-		HttpEntity<String> entity = new HttpEntity<>(createLinkRequestJson(userId, UUID.randomUUID(), "PRIMARY", null),
+		String userId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+		HttpEntity<String> entity = new HttpEntity<>(
+				createLinkRequestJson(userId, UUID.fromString("00000000-0000-0000-0000-000000000001"), "PRIMARY", null),
 				authenticatedHeaders());
 		ResponseEntity<Map<String, Object>> response = restTemplate.exchange("/v1/people/users/link", HttpMethod.POST,
 				entity, new ParameterizedTypeReference<>() {
@@ -75,7 +76,7 @@ class UserPersonLinkControllerIT {
 	@Test
 	void linkUserToPerson_alreadyLinked_returns200() {
 		UUID personId = createPerson("Taylor", "Ray", "taylor@example.com");
-		String userId = UUID.randomUUID().toString();
+		String userId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 		HttpEntity<String> entity = new HttpEntity<>(createLinkRequestJson(userId, personId, "PRIMARY", null),
 				authenticatedHeaders());
 
@@ -112,7 +113,7 @@ class UserPersonLinkControllerIT {
 	@Test
 	void unlinkUserFromPerson_success_returns204() {
 		UUID personId = createPerson("Chris", "Doe", "chris@example.com");
-		String userId = UUID.randomUUID().toString();
+		String userId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 		linkUser(userId, personId);
 
 		HttpEntity<Void> entity = new HttpEntity<>(authenticatedHeaders());
@@ -127,7 +128,7 @@ class UserPersonLinkControllerIT {
 		HttpEntity<Void> entity = new HttpEntity<>(authenticatedHeaders());
 		ResponseEntity<Map<String, Object>> response = restTemplate.exchange("/v1/people/users/{userId}/link",
 				HttpMethod.DELETE, entity, new ParameterizedTypeReference<>() {
-				}, UUID.randomUUID().toString());
+				}, UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 		assertThat(response.getBody()).isNotNull();
@@ -137,7 +138,7 @@ class UserPersonLinkControllerIT {
 	@Test
 	void findPersonByUserId_success_returns200() {
 		UUID personId = createPerson("Jordan", "Case", "jordan@example.com");
-		String userId = UUID.randomUUID().toString();
+		String userId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 		linkUser(userId, personId);
 
 		HttpEntity<Void> entity = new HttpEntity<>(authenticatedHeaders());
@@ -156,7 +157,7 @@ class UserPersonLinkControllerIT {
 		HttpEntity<Void> entity = new HttpEntity<>(authenticatedHeaders());
 		ResponseEntity<Map<String, Object>> response = restTemplate.exchange("/v1/people/users/{userId}/person",
 				HttpMethod.GET, entity, new ParameterizedTypeReference<>() {
-				}, UUID.randomUUID().toString());
+				}, UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 		assertThat(response.getBody()).isNotNull();
@@ -166,8 +167,8 @@ class UserPersonLinkControllerIT {
 	@Test
 	void findUserIdsByPersonId_success_returns200() {
 		UUID personId = createPerson("Dana", "Stone", "dana@example.com");
-		String userA = UUID.randomUUID().toString();
-		String userB = UUID.randomUUID().toString();
+		String userA = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+		String userB = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 		linkUser(userA, personId);
 		linkUser(userB, personId);
 

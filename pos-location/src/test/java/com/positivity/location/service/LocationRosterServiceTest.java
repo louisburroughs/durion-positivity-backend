@@ -63,8 +63,10 @@ class LocationRosterServiceTest {
     @DisplayName("#40 - getRoster with no filter returns all locations paged")
     void getRoster_noFilter_returnsAllLocationsPage() {
         Pageable pageable = PageRequest.of(0, 10);
-        Location loc1 = buildLocation(UUID.randomUUID(), "Shop A", "SHOP-A", "ACTIVE");
-        Location loc2 = buildLocation(UUID.randomUUID(), "Shop B", "SHOP-B", "INACTIVE");
+        Location loc1 = buildLocation(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Shop A", "SHOP-A",
+                "ACTIVE");
+        Location loc2 = buildLocation(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Shop B", "SHOP-B",
+                "INACTIVE");
         Page<Location> locationPage = new PageImpl<>(List.of(loc1, loc2), pageable, 2);
 
         when(locationRepository.findAll(any(Pageable.class))).thenReturn(locationPage);
@@ -87,7 +89,8 @@ class LocationRosterServiceTest {
     @DisplayName("#40 - getRoster with status=ACTIVE returns only active locations")
     void getRoster_filterByStatus_returnsFiltered() {
         Pageable pageable = PageRequest.of(0, 10);
-        Location active = buildLocation(UUID.randomUUID(), "Active Shop", "ACT-001", "ACTIVE");
+        Location active = buildLocation(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Active Shop",
+                "ACT-001", "ACTIVE");
         Page<Location> activePage = new PageImpl<>(List.of(active), pageable, 1);
 
         when(locationRepository.findByStatus(eq("ACTIVE"), any(Pageable.class))).thenReturn(activePage);
@@ -111,7 +114,8 @@ class LocationRosterServiceTest {
     void getRoster_filterBySinceUpdatedAt_returnsRecent() {
         Pageable pageable = PageRequest.of(0, 10);
         Instant since = Instant.parse("2026-01-01T00:00:00Z");
-        Location recent = buildLocation(UUID.randomUUID(), "Recent Shop", "REC-001", "ACTIVE");
+        Location recent = buildLocation(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Recent Shop",
+                "REC-001", "ACTIVE");
         Page<Location> recentPage = new PageImpl<>(List.of(recent), pageable, 1);
 
         when(locationRepository.findByUpdatedAtAfter(eq(since), any(Pageable.class))).thenReturn(recentPage);
@@ -153,7 +157,7 @@ class LocationRosterServiceTest {
     @Test
     @DisplayName("#40 - toLocationRef maps id, name, code, status, hrLocationId, updatedAt")
     void toLocationRef_mapsAllFields() {
-        UUID id = UUID.randomUUID();
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Instant updatedAt = Instant.parse("2026-02-15T10:00:00Z");
         Location location = Location.builder()
                 .id(id)

@@ -51,8 +51,7 @@ import tools.jackson.databind.ObjectMapper;
 @ActiveProfiles("test")
 @DisplayName("DefaultGLMappingController Tests")
 class DefaultGLMappingControllerTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private WebApplicationContext context;
@@ -219,7 +218,7 @@ class DefaultGLMappingControllerTest {
                 @DisplayName("should return 404 when mapping not found")
                 void shouldReturn404WhenMappingNotFound() throws Exception {
                         // Arrange
-                        UUID unknownId = UUID.randomUUID();
+                        UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         when(service.updateDefaultMapping(eq(unknownId), any(DefaultGLMappingRequest.class)))
                                         .thenThrow(new IllegalArgumentException(
                                                         "Default GL mapping not found: " + unknownId));
@@ -255,7 +254,7 @@ class DefaultGLMappingControllerTest {
                 @DisplayName("should return 404 when mapping not found for deactivation")
                 void shouldReturn404WhenMappingNotFoundForDeactivation() throws Exception {
                         // Arrange
-                        UUID unknownId = UUID.randomUUID();
+                        UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         doThrow(new IllegalArgumentException("Default GL mapping not found: " + unknownId))
                                         .when(service).deactivateDefaultMapping(unknownId);
 
@@ -291,7 +290,7 @@ class DefaultGLMappingControllerTest {
                 @DisplayName("should return 404 when mapping not found")
                 void shouldReturn404WhenMappingNotFound() throws Exception {
                         // Arrange
-                        UUID unknownId = UUID.randomUUID();
+                        UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         when(service.getDefaultMapping(unknownId))
                                         .thenThrow(new IllegalArgumentException(
                                                         "Default GL mapping not found: " + unknownId));
@@ -423,7 +422,7 @@ class DefaultGLMappingControllerTest {
                         // Arrange
                         validResponse.setOrganizationId(null);
                         DefaultGLMappingResponse anotherGlobal = DefaultGLMappingResponse.builder()
-                                        .mappingId(UUID.randomUUID())
+                                        .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                         .eventType("REFUND_ISSUED")
                                         .organizationId(null)
                                         .debitAccountId(DEBIT_ACCOUNT_ID)

@@ -41,7 +41,7 @@ class BillingRulesServiceImplTest {
         ReflectionTestUtils.setField(billingRulesService, "defaultInvoiceGroupingStrategy", "PER_WORKORDER");
 
         existingRules = new BillingRules();
-        existingRules.setId(UUID.randomUUID());
+        existingRules.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         existingRules.setPartyId(partyId);
         existingRules.setPurchaseOrderRequired(false);
         existingRules.setPaymentTermsCode("NET_30");

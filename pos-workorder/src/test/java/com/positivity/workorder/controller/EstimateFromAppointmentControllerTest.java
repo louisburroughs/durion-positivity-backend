@@ -92,7 +92,7 @@ class EstimateFromAppointmentControllerTest {
 
         private CreateEstimateFromAppointmentRequest validRequest() {
                 return CreateEstimateFromAppointmentRequest.builder()
-                                .idempotencyKey(UUID.randomUUID())
+                                .idempotencyKey(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .appointmentId(APPOINTMENT_ID)
                                 .customerId(CUSTOMER_ID)
                                 .vehicleId(VEHICLE_ID)

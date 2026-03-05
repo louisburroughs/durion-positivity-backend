@@ -126,7 +126,8 @@ class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractInteg
         @Test
         @DisplayName("getCommunicationPreferences - Not Found: Party does not exist")
         void getCommunicationPreferences_partyNotFound() {
-                assertThatThrownBy(() -> preferenceService.getCommunicationPreferences(UUID.randomUUID()))
+                assertThatThrownBy(() -> preferenceService
+                                .getCommunicationPreferences(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Party not found");
         }
@@ -224,7 +225,8 @@ class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractInteg
                                 .emailPreference("OPT_IN")
                                 .build();
 
-                assertThatThrownBy(() -> preferenceService.upsertCommunicationPreferences(UUID.randomUUID(), request))
+                assertThatThrownBy(() -> preferenceService.upsertCommunicationPreferences(
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"), request))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Party not found");
         }

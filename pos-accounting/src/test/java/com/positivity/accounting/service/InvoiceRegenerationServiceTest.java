@@ -34,10 +34,10 @@ class InvoiceRegenerationServiceTest {
     @Test
     @DisplayName("Should delegate to workorder client and return response")
     void testRegenerateInvoiceFromWorkorder_Success() {
-        UUID workorderId = UUID.randomUUID();
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String idempotencyKey = "idem-regen-service-001";
         InvoiceGenerationResponse expected = InvoiceGenerationResponse.builder()
-                .invoiceId(UUID.randomUUID())
+                .invoiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderId(workorderId)
                 .status("DRAFT")
                 .build();
@@ -53,7 +53,7 @@ class InvoiceRegenerationServiceTest {
     @Test
     @DisplayName("Should map client 404 to ResponseStatusException 404")
     void testRegenerateInvoiceFromWorkorder_MapsNotFound() {
-        UUID workorderId = UUID.randomUUID();
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String message = "Workorder not found";
 
         when(workorderInvoiceClient.regenerateInvoiceFromWorkorder(workorderId, null))
@@ -71,7 +71,7 @@ class InvoiceRegenerationServiceTest {
     @Test
     @DisplayName("Should map unknown client status to ResponseStatusException 503")
     void testRegenerateInvoiceFromWorkorder_MapsUnknownStatusToServiceUnavailable() {
-        UUID workorderId = UUID.randomUUID();
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String message = "Unexpected downstream failure";
 
         when(workorderInvoiceClient.regenerateInvoiceFromWorkorder(workorderId, null))

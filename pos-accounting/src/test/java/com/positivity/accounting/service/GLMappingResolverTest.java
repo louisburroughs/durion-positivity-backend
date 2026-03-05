@@ -43,8 +43,7 @@ import com.positivity.accounting.internal.service.GLMappingResolverImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GLMappingResolver Unit Tests")
 class GLMappingResolverTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Mock
         private GLMappingRepository mappingRepository;
@@ -58,8 +57,8 @@ class GLMappingResolverTest {
 
         @BeforeEach
         void setUp() {
-                postingCategoryId = UUID.randomUUID();
-                mappingKeyId = UUID.randomUUID();
+                postingCategoryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                mappingKeyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 transactionDate = LocalDateTime.of(2026, 1, 15, 12, 0);
         }
 
@@ -75,7 +74,7 @@ class GLMappingResolverTest {
                 @DisplayName("Should resolve exact dimensional match when all dimensions match")
                 void shouldResolveExactDimensionalMatch() {
                         // Arrange
-                        UUID expectedAccountId = UUID.randomUUID();
+                        UUID expectedAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         Map<String, String> dimensions = Map.of(
                                         "businessUnitId", "BU-001",
                                         "locationId", "LOC-100",
@@ -100,8 +99,8 @@ class GLMappingResolverTest {
                 @DisplayName("Should not match when dimensions differ")
                 void shouldNotMatchWhenDimensionsDiffer() {
                         // Arrange
-                        UUID mappingAccountId = UUID.randomUUID();
-                        UUID defaultAccountId = UUID.randomUUID();
+                        UUID mappingAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        UUID defaultAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                         Map<String, String> mappingDimensions = Map.of(
                                         "businessUnitId", "BU-001",
@@ -135,7 +134,7 @@ class GLMappingResolverTest {
                 @DisplayName("Should skip null/empty dimension context and fall through")
                 void shouldSkipNullDimensionContext() {
                         // Arrange
-                        UUID defaultAccountId = UUID.randomUUID();
+                        UUID defaultAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         GLMapping defaultMapping = createMapping(defaultAccountId, null);
 
                         when(mappingRepository.findEffectiveMapping(
@@ -154,7 +153,7 @@ class GLMappingResolverTest {
                 @DisplayName("Should skip empty dimension context and fall through")
                 void shouldSkipEmptyDimensionContext() {
                         // Arrange
-                        UUID defaultAccountId = UUID.randomUUID();
+                        UUID defaultAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         GLMapping defaultMapping = createMapping(defaultAccountId, null);
 
                         when(mappingRepository.findEffectiveMapping(
@@ -182,7 +181,7 @@ class GLMappingResolverTest {
                 @DisplayName("Should fall back when costCenterId removed matches a mapping")
                 void shouldFallBackByCostCenter() {
                         // Arrange
-                        UUID fallbackAccountId = UUID.randomUUID();
+                        UUID fallbackAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                         // Request has 4 dimensions, mapping has 3 (no costCenterId)
                         Map<String, String> requestDimensions = Map.of(
@@ -214,7 +213,7 @@ class GLMappingResolverTest {
                 @DisplayName("Should fall back when costCenterId and departmentId removed matches")
                 void shouldFallBackTwoLevels() {
                         // Arrange
-                        UUID fallbackAccountId = UUID.randomUUID();
+                        UUID fallbackAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                         Map<String, String> requestDimensions = Map.of(
                                         "businessUnitId", "BU-001",
@@ -245,7 +244,7 @@ class GLMappingResolverTest {
                 @DisplayName("Should fall back to businessUnitId only")
                 void shouldFallBackToBusinessUnitOnly() {
                         // Arrange
-                        UUID fallbackAccountId = UUID.randomUUID();
+                        UUID fallbackAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                         Map<String, String> requestDimensions = Map.of(
                                         "businessUnitId", "BU-001",
@@ -274,8 +273,8 @@ class GLMappingResolverTest {
                 @DisplayName("Should prefer more specific fallback over less specific")
                 void shouldPreferMoreSpecificFallback() {
                         // Arrange
-                        UUID specificAccountId = UUID.randomUUID();
-                        UUID broadAccountId = UUID.randomUUID();
+                        UUID specificAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        UUID broadAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                         Map<String, String> requestDimensions = Map.of(
                                         "businessUnitId", "BU-001",
@@ -312,8 +311,8 @@ class GLMappingResolverTest {
                 @DisplayName("Should fall through to category default when no fallback matches")
                 void shouldFallThroughToCategoryDefault() {
                         // Arrange
-                        UUID defaultAccountId = UUID.randomUUID();
-                        UUID unrelatedAccountId = UUID.randomUUID();
+                        UUID defaultAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        UUID unrelatedAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                         Map<String, String> requestDimensions = Map.of(
                                         "businessUnitId", "BU-001",
@@ -356,7 +355,7 @@ class GLMappingResolverTest {
                 @DisplayName("Should resolve category default when no dimensional match exists")
                 void shouldResolveCategoryDefault() {
                         // Arrange
-                        UUID defaultAccountId = UUID.randomUUID();
+                        UUID defaultAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         GLMapping defaultMapping = createMapping(defaultAccountId, null);
 
                         when(mappingRepository.findAllEffectiveMappings(
@@ -409,9 +408,9 @@ class GLMappingResolverTest {
                 @DisplayName("Should prefer exact match over fallback and default")
                 void shouldPreferExactOverFallbackAndDefault() {
                         // Arrange
-                        UUID exactAccountId = UUID.randomUUID();
-                        UUID fallbackAccountId = UUID.randomUUID();
-                        UUID defaultAccountId = UUID.randomUUID();
+                        UUID exactAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        UUID fallbackAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        UUID defaultAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                         Map<String, String> requestDimensions = Map.of(
                                         "businessUnitId", "BU-001",
@@ -442,7 +441,7 @@ class GLMappingResolverTest {
 
         private GLMapping createMapping(UUID glAccountId, Map<String, String> dimensions) {
                 GLMapping mapping = new GLMapping();
-                mapping.setGlMappingId(UUID.randomUUID());
+                mapping.setGlMappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 mapping.setPostingCategoryId(postingCategoryId);
                 mapping.setMappingKeyId(mappingKeyId);
                 mapping.setGlAccountId(glAccountId);

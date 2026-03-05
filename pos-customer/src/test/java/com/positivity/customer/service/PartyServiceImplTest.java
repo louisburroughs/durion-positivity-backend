@@ -57,7 +57,6 @@ import static org.mockito.Mockito.when;
 class PartyServiceImplTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Mock
     private CommercialPartyRepository partyRepository;
     @Mock
@@ -98,14 +97,14 @@ class PartyServiceImplTest {
         when(cache.get(any())).thenReturn(null);
         when(partyRepository.findByPartyId(any())).thenReturn(null);
 
-        CrmSnapshotDTO result = service.buildSnapshotForParty(UUID.randomUUID());
+        CrmSnapshotDTO result = service.buildSnapshotForParty(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         assertThat(result).isNull();
     }
 
     @Test
     void buildSnapshotForParty_returnsFreshSnapshot_onCacheMiss() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
 
         when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
@@ -126,7 +125,7 @@ class PartyServiceImplTest {
 
     @Test
     void buildSnapshotForParty_returnsFromCache_onCacheHit() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         CrmSnapshotDTO cachedSnapshot = new CrmSnapshotDTO();
         SnapshotMetadata metadata = new SnapshotMetadata();
@@ -147,7 +146,7 @@ class PartyServiceImplTest {
 
     @Test
     void buildSnapshotForParty_handlesNullCache_gracefully() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
 
         when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(null);
@@ -162,11 +161,11 @@ class PartyServiceImplTest {
 
     @Test
     void buildSnapshotForParty_handlesContactsWithPhoneAndEmail() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
 
         Contact c = new Contact();
-        c.setId(UUID.randomUUID());
+        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         c.setFirstName("Jane");
         c.setLastName("Doe");
         c.setPhoneNumber("555-1234");
@@ -189,11 +188,11 @@ class PartyServiceImplTest {
 
     @Test
     void buildSnapshotForParty_handlesBlankContactName() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
 
         Contact c = new Contact();
-        c.setId(UUID.randomUUID());
+        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         c.setFirstName(" ");
         c.setLastName(null);
         c.setCommercialParty(p);
@@ -211,7 +210,7 @@ class PartyServiceImplTest {
 
     @Test
     void buildSnapshotForParty_usesLegalName_whenDisplayNameNullOrBlank() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         p.setDisplayName(" ");
         p.setLegalName("Legal Corp");
@@ -228,7 +227,7 @@ class PartyServiceImplTest {
 
     @Test
     void findPartyById_delegatesToRepository() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
 
@@ -239,9 +238,9 @@ class PartyServiceImplTest {
 
     @Test
     void findContactsByParty_delegatesToRepository() {
-        CommercialParty p = party(UUID.randomUUID());
+        CommercialParty p = party(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         Contact c = new Contact();
-        c.setId(UUID.randomUUID());
+        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         c.setFirstName("Alex");
         c.setLastName("Rivera");
         when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
@@ -265,7 +264,7 @@ class PartyServiceImplTest {
 
     @Test
     void createCommercialAccount_savesPartyAndContact() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
         request.setLegalName("Acme Legal");
         request.setDisplayName("Acme Display");
@@ -296,7 +295,7 @@ class PartyServiceImplTest {
 
     @Test
     void getParty_returnsMappedResponse() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         p.setTaxId("TX-1");
         p.setBillingTermsId("NET45");
@@ -312,7 +311,7 @@ class PartyServiceImplTest {
 
     @Test
     void getParty_throwsNotFound_whenMissing() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(partyRepository.findByPartyId(partyId)).thenReturn(null);
 
         assertThatThrownBy(() -> service.getParty(partyId))
@@ -323,10 +322,10 @@ class PartyServiceImplTest {
 
     @Test
     void getContactsWithRoles_returnsContacts() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         Contact c = new Contact();
-        c.setId(UUID.randomUUID());
+        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         c.setFirstName("Mary");
         c.setLastName("Jane");
         c.setEmail("mary@acme.com");
@@ -346,12 +345,12 @@ class PartyServiceImplTest {
 
     @Test
     void searchParties_filtersByNameAndTaxId() {
-        CommercialParty match = party(UUID.randomUUID());
+        CommercialParty match = party(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         match.setLegalName("Acme Industrial");
         match.setDisplayName("Acme");
         match.setTaxId("T1");
 
-        CommercialParty miss = party(UUID.randomUUID());
+        CommercialParty miss = party(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         miss.setLegalName("Other Corp");
         miss.setDisplayName("Other");
         miss.setTaxId("T2");
@@ -371,13 +370,13 @@ class PartyServiceImplTest {
 
     @Test
     void mergeParties_mergesContactsIdentifiersAndVins() {
-        UUID survivorId = UUID.randomUUID();
-        UUID loserId = UUID.randomUUID();
+        UUID survivorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID loserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty survivor = party(survivorId);
         CommercialParty loser = party(loserId);
 
         Contact loserContact = new Contact();
-        loserContact.setId(UUID.randomUUID());
+        loserContact.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         loserContact.setFirstName("Loser");
         loserContact.setLastName("Contact");
         loserContact.setCommercialParty(loser);
@@ -405,7 +404,7 @@ class PartyServiceImplTest {
 
     @Test
     void mergeParties_throwsBadRequest_forInvalidLosingPartyId() {
-        UUID survivorId = UUID.randomUUID();
+        UUID survivorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty survivor = party(survivorId);
         when(partyRepository.findByPartyId(survivorId)).thenReturn(survivor);
 
@@ -421,7 +420,7 @@ class PartyServiceImplTest {
 
     @Test
     void mergeParties_throwsBadRequest_whenMergingSelf() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty party = party(partyId);
         when(partyRepository.findByPartyId(partyId)).thenReturn(party);
 
@@ -436,8 +435,8 @@ class PartyServiceImplTest {
 
     @Test
     void updateContactRoles_returnsSuccess_whenContactBelongsToParty() {
-        UUID partyId = UUID.randomUUID();
-        UUID contactId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         Contact c = new Contact();
         c.setId(contactId);
@@ -456,10 +455,10 @@ class PartyServiceImplTest {
 
     @Test
     void updateContactRoles_throwsBadRequest_whenContactNotInParty() {
-        UUID partyId = UUID.randomUUID();
-        UUID contactId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p1 = party(partyId);
-        CommercialParty p2 = party(UUID.randomUUID());
+        CommercialParty p2 = party(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         Contact c = new Contact();
         c.setId(contactId);
         c.setCommercialParty(p2);
@@ -475,7 +474,7 @@ class PartyServiceImplTest {
 
     @Test
     void getCommunicationPreferences_returnsDefaults() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
 
@@ -489,7 +488,7 @@ class PartyServiceImplTest {
 
     @Test
     void upsertCommunicationPreferences_throwsBadRequest_whenBodyNull() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(partyRepository.findByPartyId(partyId)).thenReturn(party(partyId));
 
         assertThatThrownBy(() -> service.upsertCommunicationPreferences(partyId, null))
@@ -500,7 +499,7 @@ class PartyServiceImplTest {
 
     @Test
     void upsertCommunicationPreferences_returnsSuccess_whenBodyPresent() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(partyRepository.findByPartyId(partyId)).thenReturn(party(partyId));
 
         UpsertCommunicationPreferencesResponse response = service.upsertCommunicationPreferences(
@@ -513,7 +512,7 @@ class PartyServiceImplTest {
 
     @Test
     void createVehicleForParty_throwsBadRequest_whenVinMissing() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         assertThatThrownBy(() -> service.createVehicleForParty(partyId, new CreateVehicleForPartyRequest()))
                 .isInstanceOf(ResponseStatusException.class)
@@ -523,7 +522,7 @@ class PartyServiceImplTest {
 
     @Test
     void createVehicleForParty_throwsConflict_whenVinAlreadyAssociated() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         p.getVehicleVins().add("VIN-1");
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
@@ -539,7 +538,7 @@ class PartyServiceImplTest {
 
     @Test
     void createVehicleForParty_addsVinAndSaves() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
 
@@ -556,7 +555,7 @@ class PartyServiceImplTest {
 
     @Test
     void getBillingRulesForParty_returnsDefaults_whenPartyExists() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
 
@@ -569,7 +568,7 @@ class PartyServiceImplTest {
 
     @Test
     void getBillingRulesForParty_returnsNull_whenPartyNotFound() {
-        UUID partyId = UUID.randomUUID();
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(partyRepository.findByPartyId(partyId)).thenReturn(null);
 
         var result = service.getBillingRulesForParty(partyId);

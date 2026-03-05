@@ -50,264 +50,272 @@ import org.mockito.quality.Strictness;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class WorkorderStatusEventServiceTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
+        @Mock
+        private AppointmentRepository appointmentRepository;
 
-    @Mock
-    private AppointmentRepository appointmentRepository;
+        @Mock
+        private WorkOrderAppointmentMappingRepository mappingRepository;
 
-    @Mock
-    private WorkOrderAppointmentMappingRepository mappingRepository;
+        @InjectMocks
+        private WorkorderStatusEventServiceImpl service;
 
-    @InjectMocks
-    private WorkorderStatusEventServiceImpl service;
+        // -------------------------------------------------------------------------
+        // Helpers
+        // -------------------------------------------------------------------------
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
+        private Appointment buildAppointment(UUID appointmentId, AppointmentStatus status) {
+                Instant now = Instant.now(TEST_CLOCK);
+                return Appointment.builder()
+                                .appointmentId(appointmentId)
+                                .status(status)
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .startAt(now)
+                                .endAt(now.plusSeconds(3600))
+                                .statusTimeline(new ArrayList<>())
+                                .build();
+        }
 
-    private Appointment buildAppointment(UUID appointmentId, AppointmentStatus status) {
-        Instant now = Instant.now(TEST_CLOCK);
-        return Appointment.builder()
-                .appointmentId(appointmentId)
-                .status(status)
-                .locationId(UUID.randomUUID())
-                .crmCustomerId(UUID.randomUUID())
-                .crmVehicleId(UUID.randomUUID())
-                .startAt(now)
-                .endAt(now.plusSeconds(3600))
-                .statusTimeline(new ArrayList<>())
-                .build();
-    }
+        private WorkOrderAppointmentMapping buildMapping(UUID workOrderId, UUID appointmentId) {
+                return WorkOrderAppointmentMapping.builder()
+                                .workOrderId(workOrderId)
+                                .appointmentId(appointmentId)
+                                .build();
+        }
 
-    private WorkOrderAppointmentMapping buildMapping(UUID workOrderId, UUID appointmentId) {
-        return WorkOrderAppointmentMapping.builder()
-                .workOrderId(workOrderId)
-                .appointmentId(appointmentId)
-                .build();
-    }
+        // -------------------------------------------------------------------------
+        // AC1 — Known status maps correctly; appointment updated + timeline entry
+        // appended
+        // -------------------------------------------------------------------------
 
-    // -------------------------------------------------------------------------
-    // AC1 — Known status maps correctly; appointment updated + timeline entry
-    // appended
-    // -------------------------------------------------------------------------
+        @Test
+        void handleWorkorderStatusChanged_knownStatus_updatesAppointmentStatusAndAppendsTimelineEntry() {
+                // Arrange
+                UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                Instant eventTimestamp = Instant.now(TEST_CLOCK);
 
-    @Test
-    void handleWorkorderStatusChanged_knownStatus_updatesAppointmentStatusAndAppendsTimelineEntry() {
-        // Arrange
-        UUID workOrderId = UUID.randomUUID();
-        UUID appointmentId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
-        Instant eventTimestamp = Instant.now(TEST_CLOCK);
+                WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
+                                eventId, workOrderId, "DRAFT", eventTimestamp,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-        WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                eventId, workOrderId, "DRAFT", eventTimestamp, UUID.randomUUID());
+                when(mappingRepository.findByWorkOrderId(workOrderId))
+                                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
+                when(appointmentRepository.findById(appointmentId))
+                                .thenReturn(Optional.of(buildAppointment(appointmentId, AppointmentStatus.SCHEDULED)));
 
-        when(mappingRepository.findByWorkOrderId(workOrderId))
-                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
-        when(appointmentRepository.findById(appointmentId))
-                .thenReturn(Optional.of(buildAppointment(appointmentId, AppointmentStatus.SCHEDULED)));
+                // Act
+                service.handleWorkorderStatusChanged(event);
 
-        // Act
-        service.handleWorkorderStatusChanged(event);
+                // Assert — DRAFT maps to SCHEDULED; one timeline entry added with correct
+                // fields
+                ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+                verify(appointmentRepository).save(captor.capture());
+                Appointment saved = captor.getValue();
+                assertThat(saved.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+                assertThat(saved.getStatusTimeline()).hasSize(1);
+                StatusTimelineEntry entry = saved.getStatusTimeline().get(0);
+                assertThat(entry.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+                assertThat(entry.getSourceEventId()).isEqualTo(eventId);
+                assertThat(entry.getChangeTimestamp()).isNotNull();
+        }
 
-        // Assert — DRAFT maps to SCHEDULED; one timeline entry added with correct
-        // fields
-        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
-        verify(appointmentRepository).save(captor.capture());
-        Appointment saved = captor.getValue();
-        assertThat(saved.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
-        assertThat(saved.getStatusTimeline()).hasSize(1);
-        StatusTimelineEntry entry = saved.getStatusTimeline().get(0);
-        assertThat(entry.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
-        assertThat(entry.getSourceEventId()).isEqualTo(eventId);
-        assertThat(entry.getChangeTimestamp()).isNotNull();
-    }
+        // -------------------------------------------------------------------------
+        // AC2 — Duplicate sourceEventId → idempotent; appointment NOT modified
+        // -------------------------------------------------------------------------
 
-    // -------------------------------------------------------------------------
-    // AC2 — Duplicate sourceEventId → idempotent; appointment NOT modified
-    // -------------------------------------------------------------------------
+        @Test
+        void handleWorkorderStatusChanged_duplicateSourceEventId_isIdempotentAndSkipsSave() {
+                // Arrange
+                UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                Instant now = Instant.now(TEST_CLOCK);
 
-    @Test
-    void handleWorkorderStatusChanged_duplicateSourceEventId_isIdempotentAndSkipsSave() {
-        // Arrange
-        UUID workOrderId = UUID.randomUUID();
-        UUID appointmentId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
-        Instant now = Instant.now(TEST_CLOCK);
+                StatusTimelineEntry existingEntry = StatusTimelineEntry.builder()
+                                .status(AppointmentStatus.SCHEDULED)
+                                .changeTimestamp(now.minusSeconds(60))
+                                .sourceEventId(eventId) // same event already processed
+                                .build();
 
-        StatusTimelineEntry existingEntry = StatusTimelineEntry.builder()
-                .status(AppointmentStatus.SCHEDULED)
-                .changeTimestamp(now.minusSeconds(60))
-                .sourceEventId(eventId) // same event already processed
-                .build();
+                Appointment appointment = Appointment.builder()
+                                .appointmentId(appointmentId)
+                                .status(AppointmentStatus.SCHEDULED)
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .startAt(now)
+                                .endAt(now.plusSeconds(3600))
+                                .statusTimeline(new ArrayList<>(List.of(existingEntry)))
+                                .build();
 
-        Appointment appointment = Appointment.builder()
-                .appointmentId(appointmentId)
-                .status(AppointmentStatus.SCHEDULED)
-                .locationId(UUID.randomUUID())
-                .crmCustomerId(UUID.randomUUID())
-                .crmVehicleId(UUID.randomUUID())
-                .startAt(now)
-                .endAt(now.plusSeconds(3600))
-                .statusTimeline(new ArrayList<>(List.of(existingEntry)))
-                .build();
+                WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
+                                eventId, workOrderId, "DRAFT", now,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-        WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                eventId, workOrderId, "DRAFT", now, UUID.randomUUID());
+                when(mappingRepository.findByWorkOrderId(workOrderId))
+                                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
+                when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
 
-        when(mappingRepository.findByWorkOrderId(workOrderId))
-                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+                // Act
+                service.handleWorkorderStatusChanged(event);
 
-        // Act
-        service.handleWorkorderStatusChanged(event);
+                // Assert — duplicate event: save must never be called
+                verify(appointmentRepository, never()).save(any());
+        }
 
-        // Assert — duplicate event: save must never be called
-        verify(appointmentRepository, never()).save(any());
-    }
+        // -------------------------------------------------------------------------
+        // AC3 — WorkOrderAppointmentMapping not found → orphan alert; no modification
+        // -------------------------------------------------------------------------
 
-    // -------------------------------------------------------------------------
-    // AC3 — WorkOrderAppointmentMapping not found → orphan alert; no modification
-    // -------------------------------------------------------------------------
+        @Test
+        void handleWorkorderStatusChanged_mappingNotFound_treatsAsOrphanAndSkipsSave() {
+                // Arrange
+                UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-    @Test
-    void handleWorkorderStatusChanged_mappingNotFound_treatsAsOrphanAndSkipsSave() {
-        // Arrange
-        UUID workOrderId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
+                WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
+                                eventId, workOrderId, "DRAFT", Instant.now(TEST_CLOCK),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-        WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                eventId, workOrderId, "DRAFT", Instant.now(TEST_CLOCK), UUID.randomUUID());
+                when(mappingRepository.findByWorkOrderId(workOrderId)).thenReturn(Optional.empty());
 
-        when(mappingRepository.findByWorkOrderId(workOrderId)).thenReturn(Optional.empty());
+                // Act
+                service.handleWorkorderStatusChanged(event);
 
-        // Act
-        service.handleWorkorderStatusChanged(event);
+                // Assert — no appointment lookup or update when mapping is absent
+                verify(appointmentRepository, never()).findById(any());
+                verify(appointmentRepository, never()).save(any());
+        }
 
-        // Assert — no appointment lookup or update when mapping is absent
-        verify(appointmentRepository, never()).findById(any());
-        verify(appointmentRepository, never()).save(any());
-    }
+        // -------------------------------------------------------------------------
+        // AC4 — Unknown workexec status → unprocessable; no modification
+        // -------------------------------------------------------------------------
 
-    // -------------------------------------------------------------------------
-    // AC4 — Unknown workexec status → unprocessable; no modification
-    // -------------------------------------------------------------------------
+        @Test
+        void handleWorkorderStatusChanged_unknownWorkexecStatus_skipsProcessingAndDoesNotSave() {
+                // Arrange
+                UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-    @Test
-    void handleWorkorderStatusChanged_unknownWorkexecStatus_skipsProcessingAndDoesNotSave() {
-        // Arrange
-        UUID workOrderId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
+                WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
+                                eventId, workOrderId, "TOTALLY_UNKNOWN_STATUS", Instant.now(TEST_CLOCK),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-        WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                eventId, workOrderId, "TOTALLY_UNKNOWN_STATUS", Instant.now(TEST_CLOCK), UUID.randomUUID());
+                // Act
+                service.handleWorkorderStatusChanged(event);
 
-        // Act
-        service.handleWorkorderStatusChanged(event);
+                // Assert — unmappable status: appointment must not be saved
+                verify(mappingRepository, never()).findByWorkOrderId(any());
+                verify(appointmentRepository, never()).save(any());
+        }
 
-        // Assert — unmappable status: appointment must not be saved
-        verify(mappingRepository, never()).findByWorkOrderId(any());
-        verify(appointmentRepository, never()).save(any());
-    }
+        // -------------------------------------------------------------------------
+        // AC5 — COMPLETED maps to QUALITY_CHECK
+        // -------------------------------------------------------------------------
 
-    // -------------------------------------------------------------------------
-    // AC5 — COMPLETED maps to QUALITY_CHECK
-    // -------------------------------------------------------------------------
+        @Test
+        void handleWorkorderStatusChanged_completedStatus_mapsToQualityCheck() {
+                // Arrange
+                UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                Instant now = Instant.now(TEST_CLOCK);
 
-    @Test
-    void handleWorkorderStatusChanged_completedStatus_mapsToQualityCheck() {
-        // Arrange
-        UUID workOrderId = UUID.randomUUID();
-        UUID appointmentId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
-        Instant now = Instant.now(TEST_CLOCK);
+                WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
+                                eventId, workOrderId, "COMPLETED", now,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-        WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                eventId, workOrderId, "COMPLETED", now, UUID.randomUUID());
+                when(mappingRepository.findByWorkOrderId(workOrderId))
+                                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
+                when(appointmentRepository.findById(appointmentId))
+                                .thenReturn(Optional.of(
+                                                buildAppointment(appointmentId, AppointmentStatus.WORK_IN_PROGRESS)));
 
-        when(mappingRepository.findByWorkOrderId(workOrderId))
-                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
-        when(appointmentRepository.findById(appointmentId))
-                .thenReturn(Optional.of(buildAppointment(appointmentId, AppointmentStatus.WORK_IN_PROGRESS)));
+                // Act
+                service.handleWorkorderStatusChanged(event);
 
-        // Act
-        service.handleWorkorderStatusChanged(event);
+                // Assert — COMPLETED must map to QUALITY_CHECK per spec
+                ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+                verify(appointmentRepository).save(captor.capture());
+                assertThat(captor.getValue().getStatus()).isEqualTo(AppointmentStatus.QUALITY_CHECK);
+        }
 
-        // Assert — COMPLETED must map to QUALITY_CHECK per spec
-        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
-        verify(appointmentRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(AppointmentStatus.QUALITY_CHECK);
-    }
+        // -------------------------------------------------------------------------
+        // AC6 — INVOICED maps to INVOICED
+        // -------------------------------------------------------------------------
 
-    // -------------------------------------------------------------------------
-    // AC6 — INVOICED maps to INVOICED
-    // -------------------------------------------------------------------------
+        @Test
+        void handleWorkorderStatusChanged_invoicedStatus_mapsToInvoiced() {
+                // Arrange
+                UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                Instant now = Instant.now(TEST_CLOCK);
 
-    @Test
-    void handleWorkorderStatusChanged_invoicedStatus_mapsToInvoiced() {
-        // Arrange
-        UUID workOrderId = UUID.randomUUID();
-        UUID appointmentId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
-        Instant now = Instant.now(TEST_CLOCK);
+                WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
+                                eventId, workOrderId, "INVOICED", now,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-        WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                eventId, workOrderId, "INVOICED", now, UUID.randomUUID());
+                when(mappingRepository.findByWorkOrderId(workOrderId))
+                                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
+                when(appointmentRepository.findById(appointmentId))
+                                .thenReturn(Optional
+                                                .of(buildAppointment(appointmentId, AppointmentStatus.QUALITY_CHECK)));
 
-        when(mappingRepository.findByWorkOrderId(workOrderId))
-                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
-        when(appointmentRepository.findById(appointmentId))
-                .thenReturn(Optional.of(buildAppointment(appointmentId, AppointmentStatus.QUALITY_CHECK)));
+                // Act
+                service.handleWorkorderStatusChanged(event);
 
-        // Act
-        service.handleWorkorderStatusChanged(event);
+                // Assert — INVOICED status maps 1:1 to INVOICED
+                ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+                verify(appointmentRepository).save(captor.capture());
+                assertThat(captor.getValue().getStatus()).isEqualTo(AppointmentStatus.INVOICED);
+        }
 
-        // Assert — INVOICED status maps 1:1 to INVOICED
-        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
-        verify(appointmentRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(AppointmentStatus.INVOICED);
-    }
+        // -------------------------------------------------------------------------
+        // AC7 — REOPENED → reopenFlag set permanently to true; status set to REOPENED
+        // -------------------------------------------------------------------------
 
-    // -------------------------------------------------------------------------
-    // AC7 — REOPENED → reopenFlag set permanently to true; status set to REOPENED
-    // -------------------------------------------------------------------------
+        @Test
+        void handleWorkorderStatusChanged_reopenedStatus_setsReopenFlagTrueAndMapsStatus() {
+                // Arrange
+                UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                Instant now = Instant.now(TEST_CLOCK);
 
-    @Test
-    void handleWorkorderStatusChanged_reopenedStatus_setsReopenFlagTrueAndMapsStatus() {
-        // Arrange
-        UUID workOrderId = UUID.randomUUID();
-        UUID appointmentId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
-        Instant now = Instant.now(TEST_CLOCK);
+                Appointment appointment = Appointment.builder()
+                                .appointmentId(appointmentId)
+                                .status(AppointmentStatus.INVOICED)
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .startAt(now)
+                                .endAt(now.plusSeconds(3600))
+                                .statusTimeline(new ArrayList<>())
+                                .reopenFlag(false)
+                                .build();
 
-        Appointment appointment = Appointment.builder()
-                .appointmentId(appointmentId)
-                .status(AppointmentStatus.INVOICED)
-                .locationId(UUID.randomUUID())
-                .crmCustomerId(UUID.randomUUID())
-                .crmVehicleId(UUID.randomUUID())
-                .startAt(now)
-                .endAt(now.plusSeconds(3600))
-                .statusTimeline(new ArrayList<>())
-                .reopenFlag(false)
-                .build();
+                WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
+                                eventId, workOrderId, "REOPENED", now,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-        WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                eventId, workOrderId, "REOPENED", now, UUID.randomUUID());
+                when(mappingRepository.findByWorkOrderId(workOrderId))
+                                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
+                when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
 
-        when(mappingRepository.findByWorkOrderId(workOrderId))
-                .thenReturn(Optional.of(buildMapping(workOrderId, appointmentId)));
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+                // Act
+                service.handleWorkorderStatusChanged(event);
 
-        // Act
-        service.handleWorkorderStatusChanged(event);
-
-        // Assert — reopenFlag must be true and status must be REOPENED
-        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
-        verify(appointmentRepository).save(captor.capture());
-        Appointment saved = captor.getValue();
-        assertThat(saved.isReopenFlag()).isTrue();
-        assertThat(saved.getStatus()).isEqualTo(AppointmentStatus.REOPENED);
-    }
+                // Assert — reopenFlag must be true and status must be REOPENED
+                ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+                verify(appointmentRepository).save(captor.capture());
+                Appointment saved = captor.getValue();
+                assertThat(saved.isReopenFlag()).isTrue();
+                assertThat(saved.getStatus()).isEqualTo(AppointmentStatus.REOPENED);
+        }
 }

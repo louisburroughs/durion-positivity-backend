@@ -204,7 +204,7 @@ class MechanicAvailabilityServiceTest {
                 when(appointmentRepository.findByResourceIdAndResourceTypeAndStartAtLessThanAndEndAtGreaterThan(
                                 anyString(), anyString(), any(), any())).thenReturn(List.of());
                 TravelBlock block = TravelBlock.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .personId(PERSON_ID)
                                 .startTime(Instant.parse("2026-06-15T10:30:00Z"))
                                 .endTime(Instant.parse("2026-06-15T12:00:00Z"))
@@ -284,7 +284,7 @@ class MechanicAvailabilityServiceTest {
 
         private Mechanic buildMechanic() {
                 return Mechanic.builder()
-                                .mechanicId(UUID.randomUUID())
+                                .mechanicId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .personId(PERSON_ID)
                                 .firstName("Test")
                                 .lastName("Mechanic")
@@ -295,7 +295,7 @@ class MechanicAvailabilityServiceTest {
 
         private Appointment buildAppointment(Instant startAt, Instant endAt) {
                 return Appointment.builder()
-                                .appointmentId(UUID.randomUUID())
+                                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .resourceId(PERSON_ID)
                                 .resourceType("MECHANIC")
                                 .startAt(startAt)

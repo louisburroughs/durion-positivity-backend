@@ -63,8 +63,7 @@ import io.restassured.specification.RequestSpecification;
 @DisplayName("Workorder Detail Visibility Contract Behavior Tests (CAP:005 Story #155)")
 @Import(ContractTestConfiguration.class)
 class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -365,7 +364,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                 Workorder workorder = Workorder.builder()
                                 .customerId(customer.getId())
                                 .vehicleId(vehicle.getId())
-                                .shopId(UUID.randomUUID())
+                                .shopId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(WorkorderStatus.APPROVED)
                                 .build();
                 workorderRepository.save(workorder);
@@ -373,7 +372,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                 // Create service line item
                 WorkorderService service = WorkorderService.builder()
                                 .workOrder(workorder)
-                                .serviceEntityId(UUID.randomUUID())
+                                .serviceEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .description("Brake Pad Replacement")
                                 .quantity(new BigDecimal("2.5"))
                                 .unitPrice(new BigDecimal("85.00"))
@@ -386,7 +385,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                 WorkorderPart part = WorkorderPart.builder()
                                 .workorder(workorder)
                                 .workOrderService(service)
-                                .productEntityId(UUID.randomUUID())
+                                .productEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .description("Brake Rotor - Front")
                                 .quantity(new BigDecimal("2.00"))
                                 .unitPrice(new BigDecimal("65.00"))
@@ -403,9 +402,9 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
 
         private UUID seedWorkorderInProgress() {
                 Workorder workorder = Workorder.builder()
-                                .customerId(UUID.randomUUID())
-                                .vehicleId(UUID.randomUUID())
-                                .shopId(UUID.randomUUID())
+                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .shopId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(WorkorderStatus.WORK_IN_PROGRESS)
                                 .build();
                 return workorderRepository.save(workorder).getId();
@@ -435,7 +434,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                                 .workorder(workorder)
                                 .workorderId(workorder.getId())
                                 .workorderServiceId(service.getId())
-                                .technicianId(UUID.randomUUID())
+                                .technicianId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(2))
                                 .endTime(LocalDateTime.now(TEST_CLOCK))
                                 .hoursWorked(new BigDecimal("2.0"))

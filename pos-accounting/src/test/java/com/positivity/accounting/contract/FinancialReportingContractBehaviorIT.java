@@ -152,7 +152,8 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("Drilldown to Journal Lines - Happy Path")
         void testDrilldownToJournalLines_Success() throws Exception {
                 // Use the revenue account ID from test data
-                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/drilldown/journal-lines/" + REVENUE_ACCOUNT_ID))
+                mockMvc.perform(withAuth(
+                                get("/v1/accounting/reports/financial/drilldown/journal-lines/" + REVENUE_ACCOUNT_ID))
                                 .param("startDate", "2024-01-01")
                                 .param("endDate", "2024-12-31")
                                 .accept(MediaType.APPLICATION_JSON))
@@ -210,7 +211,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
         private void createSampleStatementLineMappings() {
                 // Income Statement Mappings
                 statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.randomUUID())
+                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .glAccountId(REVENUE_ACCOUNT_ID)
                                 .accountName("Sales Revenue")
                                 .statementType(StatementType.INCOME_STATEMENT)
@@ -221,7 +222,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.randomUUID())
+                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .glAccountId(COGS_ACCOUNT_ID)
                                 .accountName("Cost of Goods Sold")
                                 .statementType(StatementType.INCOME_STATEMENT)
@@ -233,7 +234,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Balance Sheet Mappings
                 statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.randomUUID())
+                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .glAccountId(CASH_ACCOUNT_ID)
                                 .accountName("Cash")
                                 .statementType(StatementType.BALANCE_SHEET)
@@ -244,7 +245,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.randomUUID())
+                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .glAccountId(AP_ACCOUNT_ID)
                                 .accountName("Accounts Payable")
                                 .statementType(StatementType.BALANCE_SHEET)
@@ -255,7 +256,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.randomUUID())
+                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .glAccountId(EQUITY_ACCOUNT_ID)
                                 .accountName("Owner's Equity")
                                 .statementType(StatementType.BALANCE_SHEET)

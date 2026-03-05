@@ -40,8 +40,7 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 @ActiveProfiles("test")
 @Transactional
 class PromotionValidationServiceIT {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private PromotionValidationService validationService;
@@ -61,9 +60,9 @@ class PromotionValidationServiceIT {
 
         @BeforeEach
         void setUp() {
-                testCustomerId = UUID.randomUUID();
-                testVehicleId = UUID.randomUUID();
-                testLocationId = UUID.randomUUID();
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         }
 
         @Test
@@ -157,7 +156,7 @@ class PromotionValidationServiceIT {
         @DisplayName("Block promotion when estimate not found")
         void testBlockPromotionWhenEstimateNotFound() {
                 // Given a non-existent estimate ID
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When attempting to validate promotion
                 // Then validation fails with ESTIMATE_NOT_FOUND

@@ -79,15 +79,16 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-005: Substitutes endpoint returns not implemented")
         void testGetSubstitutes_NotImplemented() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/products/{productId}/substitutes", UUID.randomUUID())))
+                mockMvc.perform(withAuth(get("/v1/products/{productId}/substitutes",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isNotImplemented());
         }
 
         @Test
         @DisplayName("CP-006: Create supplier-item cost tiers with valid contiguous ranges")
         void testCreateSupplierItemCost_HappyPath() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(post("/v1/products/supplier-costs"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -107,8 +108,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-007: Retrieve supplier-item cost tiers by supplier and item")
         void testGetSupplierItemCost_HappyPath() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
                 mockMvc.perform(withAuth(get("/v1/products/supplier-costs/{id}", supplierItemCostId)))
@@ -121,8 +122,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-008: Update supplier-item cost tiers")
         void testUpdateSupplierItemCost_HappyPath() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
                 mockMvc.perform(withAuth(put("/v1/products/supplier-costs/{id}", supplierItemCostId))
@@ -138,8 +139,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-009: Delete supplier-item cost tiers")
         void testDeleteSupplierItemCost_HappyPath() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
                 mockMvc.perform(withAuth(delete("/v1/products/supplier-costs/{id}", supplierItemCostId)))
@@ -152,9 +153,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-010: Create active location override within auto-approval threshold")
         void testCreateLocationOverride_ActiveWithinThreshold() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CP-010 Product");
-                UUID actorUserId = UUID.randomUUID();
+                UUID actorUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
                                 BigDecimal.valueOf(10));
@@ -179,9 +180,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-011: Create pending location override above auto-approval threshold")
         void testCreateLocationOverride_PendingApproval() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CP-011 Product");
-                UUID actorUserId = UUID.randomUUID();
+                UUID actorUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
                                 BigDecimal.valueOf(10));
@@ -207,10 +208,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-012: Approve pending location override and activate effective price")
         void testApproveLocationOverride_HappyPath() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CP-012 Product");
-                UUID createdByUserId = UUID.randomUUID();
-                UUID approverUserId = UUID.randomUUID();
+                UUID createdByUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID approverUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
                                 BigDecimal.valueOf(10));
@@ -239,10 +240,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-013: Reject pending location override and persist rejection metadata")
         void testRejectLocationOverride_HappyPath() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CP-013 Product");
-                UUID createdByUserId = UUID.randomUUID();
-                UUID approverUserId = UUID.randomUUID();
+                UUID createdByUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID approverUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
                                 BigDecimal.valueOf(10));
@@ -271,14 +272,16 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-001: Unknown catalog id returns 404")
         void testGetCatalogById_NotFound() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/catalogs/{catalogId}", UUID.randomUUID())))
+                mockMvc.perform(withAuth(get("/v1/catalogs/{catalogId}",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isNotFound());
         }
 
         @Test
         @DisplayName("VE-002: Update non-existent catalog returns 404")
         void testUpdateCatalog_NotFound() throws Exception {
-                mockMvc.perform(withAuth(put("/v1/catalogs/{catalogId}", UUID.randomUUID()))
+                mockMvc.perform(withAuth(put("/v1/catalogs/{catalogId}",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(catalogPayload("Missing", "Missing")))
                                 .andExpect(status().isNotFound());
@@ -287,7 +290,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-003: Delete non-existent catalog returns 404")
         void testDeleteCatalog_NotFound() throws Exception {
-                mockMvc.perform(withAuth(delete("/v1/catalogs/{catalogId}", UUID.randomUUID())))
+                mockMvc.perform(withAuth(delete("/v1/catalogs/{catalogId}",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isNotFound());
         }
 
@@ -295,15 +299,16 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("VE-004: Unsupported item type returns 400")
         void testUnsupportedType_BadRequest() throws Exception {
                 mockMvc.perform(withAuth(
-                                delete("/v1/catalog-items/{type}/{catalogId}", "unsupported", UUID.randomUUID())))
+                                delete("/v1/catalog-items/{type}/{catalogId}", "unsupported",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isBadRequest());
         }
 
         @Test
         @DisplayName("VE-005: Reject overlapping supplier-item cost tiers")
         void testCreateSupplierItemCost_OverlappingTiers() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(post("/v1/products/supplier-costs"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -316,8 +321,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-006: Reject supplier-item cost tiers with quantity gap")
         void testCreateSupplierItemCost_GapTiers() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(post("/v1/products/supplier-costs"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -331,8 +336,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-007: Reject supplier-item cost tiers with non-positive unit cost")
         void testCreateSupplierItemCost_InvalidUnitCost() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(post("/v1/products/supplier-costs"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -346,15 +351,16 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-008: Missing supplier-item cost returns 404")
         void testGetSupplierItemCost_NotFound() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/products/supplier-costs/{id}", UUID.randomUUID())))
+                mockMvc.perform(withAuth(get("/v1/products/supplier-costs/{id}",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isNotFound());
         }
 
         @Test
         @DisplayName("VE-009: Create supplier-item cost forbidden without edit role")
         void testCreateSupplierItemCost_Forbidden() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(post("/v1/products/supplier-costs"), "ROLE_CATALOG_VIEW")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -365,7 +371,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-010: Hard guardrail minimum margin violation returns 400")
         void testCreateLocationOverride_MinMarginViolation() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("VE-010 Product");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
@@ -373,7 +379,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(locationOverridePayload(locationId, productId, UUID.randomUUID(), 100.00,
+                                .content(locationOverridePayload(locationId, productId,
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 100.00,
                                                 70.00, 75.00)))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$")
@@ -383,7 +390,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-011: Hard guardrail max discount violation returns 400")
         void testCreateLocationOverride_MaxDiscountViolation() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("VE-011 Product");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
@@ -391,7 +398,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(locationOverridePayload(locationId, productId, UUID.randomUUID(), 100.00,
+                                .content(locationOverridePayload(locationId, productId,
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 100.00,
                                                 50.00, 70.00)))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$")
@@ -401,14 +409,16 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-012: Invalid product for location override returns 404")
         void testCreateLocationOverride_ProductNotFound() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
                                 BigDecimal.valueOf(10));
 
                 mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(locationOverridePayload(locationId, UUID.randomUUID(), UUID.randomUUID(),
+                                .content(locationOverridePayload(locationId,
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                                 100.00, 50.00, 95.00)))
                                 .andExpect(status().isNotFound())
                                 .andExpect(jsonPath("$")
@@ -418,7 +428,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-013: Unauthorized role cannot create location override")
         void testCreateLocationOverride_Forbidden() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("VE-013 Product");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
@@ -426,7 +436,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"), "ROLE_CATALOG_VIEW")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(locationOverridePayload(locationId, productId, UUID.randomUUID(), 100.00,
+                                .content(locationOverridePayload(locationId, productId,
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 100.00,
                                                 50.00, 95.00)))
                                 .andExpect(status().isForbidden());
         }
@@ -434,10 +445,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-014: Reject override requires rejection notes")
         void testRejectLocationOverride_MissingNotes() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("VE-014 Product");
-                UUID createdByUserId = UUID.randomUUID();
-                UUID approverUserId = UUID.randomUUID();
+                UUID createdByUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID approverUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
                                 BigDecimal.valueOf(10));
@@ -491,8 +502,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("ID-003: Repeated GET for supplier-item cost returns stable response")
         void testGetSupplierItemCost_IdempotentRead() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
                 mockMvc.perform(withAuth(get("/v1/products/supplier-costs/{id}", supplierItemCostId)))
@@ -509,12 +520,13 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("ID-004: Repeated effective price lookup returns stable payload")
         void testEffectivePrice_IdempotentRead() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("ID-004 Product");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
                                 BigDecimal.valueOf(10));
-                createLocationOverrideAndReturnResponse(locationId, productId, UUID.randomUUID(), 100.00, 50.00, 95.00,
+                createLocationOverrideAndReturnResponse(locationId, productId,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 100.00, 50.00, 95.00,
                                 "ROLE_ADMIN");
 
                 mockMvc.perform(withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}",
@@ -567,8 +579,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CC-003: Sequential supplier-item cost updates preserve supplier-item identity")
         void testSupplierItemCostSequentialUpdates_PreserveIdentity() throws Exception {
-                UUID supplierId = UUID.randomUUID();
-                UUID itemId = UUID.randomUUID();
+                UUID supplierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID itemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
                 mockMvc.perform(withAuth(put("/v1/products/supplier-costs/{id}", supplierItemCostId))
@@ -589,10 +601,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CC-004: Approve override with stale version returns 409")
         void testApproveLocationOverride_StaleVersionConflict() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CC-004 Product");
-                UUID createdByUserId = UUID.randomUUID();
-                UUID approverUserId = UUID.randomUUID();
+                UUID createdByUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID approverUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25),
                                 BigDecimal.valueOf(10));
@@ -674,7 +686,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 "name", name,
                                 "shortDescription", name + " short description",
                                 "longDescription", name + " long description",
-                                "sku", "SKU-" + UUID.randomUUID()));
+                                "sku", "SKU-" + UUID.fromString("00000000-0000-0000-0000-000000000001")));
         }
 
         private String guardrailPolicyPayload(UUID locationId, BigDecimal minMarginPercent,

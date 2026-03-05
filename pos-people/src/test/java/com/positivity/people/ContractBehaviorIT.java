@@ -354,7 +354,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("happy path: list assignments with includeHistory")
 	void listAssignments_happyPath() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		UserRoleDto assignment = UserRoleDto.builder()
 				.userId("11111111-1111-1111-1111-111111111111")
 				.roleCode("SHOP_MANAGER")
@@ -378,7 +378,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("happy path: create assignment using contract example")
 	void createAssignment_happyPath() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		UserRoleDto created = UserRoleDto.builder()
 				.userId("11111111-1111-1111-1111-111111111111")
 				.roleCode("SHOP_MANAGER")
@@ -411,7 +411,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("validation: reject missing roleCode")
 	void createAssignment_rejectsMissingRoleCode() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 		mockMvc
 				.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
@@ -424,7 +424,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("validation: reject endDate earlier than startDate")
 	void createAssignment_rejectsInvalidDateWindow() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 		when(peopleAccessControlService.assignRoleToPerson(eq(personUuid), eq("SHOP_MANAGER"), any(), any(), any()))
 				.thenThrow(new IllegalArgumentException("endDate must be greater than or equal to startDate"));
@@ -449,7 +449,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("auth failure: unauthenticated request is rejected")
 	void createAssignment_unauthenticatedRejected() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 		mockMvc
 				.perform(post("/v1/people/{personUuid}/access/assignments", personUuid)
@@ -461,7 +461,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("concurrency invariant: overlap conflict maps to 409")
 	void createAssignment_overlapConflict() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 		when(peopleAccessControlService.assignRoleToPerson(eq(personUuid), eq("MECHANIC"), any(), any(), any()))
 				.thenThrow(new SecurityServiceException("Overlapping assignments are not allowed", 409));
@@ -486,7 +486,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("happy path: revoke assignment returns 204")
 	void revokeAssignment_happyPath() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		String roleCode = "SHOP_MANAGER";
 
 		doNothing().when(peopleAccessControlService)

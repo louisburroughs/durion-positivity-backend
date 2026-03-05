@@ -44,8 +44,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("Workorder Completion Contract Behavior Tests (CAP:006)")
 @Import(ContractTestConfiguration.class)
 class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private WorkorderRepository workorderRepository;
@@ -280,14 +279,15 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
 
         private UUID seedWorkorder(WorkorderStatus status, boolean isReopened) {
                 Workorder workorder = Workorder.builder()
-                                .customerId(UUID.randomUUID())
-                                .shopId(UUID.randomUUID())
-                                .vehicleId(UUID.randomUUID())
-                                .estimateId(UUID.randomUUID())
-                                .approvalId(UUID.randomUUID())
+                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .shopId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .estimateId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .approvalId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(status)
                                 .isReopened(isReopened)
-                                .completedAt(status == WorkorderStatus.COMPLETED ? Instant.now(TEST_CLOCK).minusSeconds(120)
+                                .completedAt(status == WorkorderStatus.COMPLETED
+                                                ? Instant.now(TEST_CLOCK).minusSeconds(120)
                                                 : null)
                                 .completedBy(status == WorkorderStatus.COMPLETED ? "system" : null)
                                 .build();
@@ -301,7 +301,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
 
                 WorkorderService service = WorkorderService.builder()
                                 .workOrder(workorder)
-                                .serviceEntityId(UUID.randomUUID())
+                                .serviceEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .description("Service line for completion contract test")
                                 .quantity(new BigDecimal("1.0000"))
                                 .unitPrice(lineTotal)
@@ -320,7 +320,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
 
                 WorkorderPart part = WorkorderPart.builder()
                                 .workorder(workorder)
-                                .productEntityId(UUID.randomUUID())
+                                .productEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .description("Part line for completion contract test")
                                 .quantity(new BigDecimal("1.0000"))
                                 .unitPrice(lineTotal)

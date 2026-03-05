@@ -39,7 +39,8 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         @Test
         @DisplayName("Should return 404 with ROLE_NOT_FOUND when role does not exist")
         void testGetRoleByName_NotFound() throws Exception {
-                String nonExistentRoleName = "NON_EXISTENT_ROLE_" + UUID.randomUUID();
+                String nonExistentRoleName = "NON_EXISTENT_ROLE_"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 MvcResult result = mockMvc.perform(
                                 withAuth(get("/v1/roles/" + nonExistentRoleName))
@@ -72,7 +73,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         @Test
         @DisplayName("Should return 404 with USER_NOT_FOUND when user does not exist")
         void testGetUserRoleAssignments_UserNotFound() throws Exception {
-                UUID nonExistentUserId = UUID.randomUUID();
+                UUID nonExistentUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 MvcResult result = mockMvc.perform(
                                 withAuth(get("/v1/roles/assignments/user/" + nonExistentUserId))
@@ -105,7 +106,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         @Test
         @DisplayName("Should return 404 with USER_NOT_FOUND when getting permissions for non-existent user")
         void testGetUserPermissions_UserNotFound() throws Exception {
-                UUID nonExistentUserId = UUID.randomUUID();
+                UUID nonExistentUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 MvcResult result = mockMvc.perform(
                                 withAuth(get("/v1/roles/permissions/user/" + nonExistentUserId))
@@ -137,7 +138,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         @Test
         @DisplayName("Should return 404 with USER_NOT_FOUND when checking permission for non-existent user")
         void testCheckUserPermission_UserNotFound() throws Exception {
-                UUID nonExistentUserId = UUID.randomUUID();
+                UUID nonExistentUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 MvcResult result = mockMvc.perform(
                                 withAuth(get("/v1/roles/check-permission")

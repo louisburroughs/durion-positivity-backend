@@ -86,7 +86,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build();
 
                 // When: creating person
-                CreatePersonResponse response = personService.createPerson(request, UUID.randomUUID());
+                CreatePersonResponse response = personService.createPerson(request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: person is persisted
                 assertThat(response.getPersonId()).isNotNull();
@@ -136,7 +137,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build();
 
                 // When: creating person
-                CreatePersonResponse response = personService.createPerson(request, UUID.randomUUID());
+                CreatePersonResponse response = personService.createPerson(request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: 4 contact points persisted
                 assertThat(response.getContactPointsCreated()).isEqualTo(4);
@@ -175,7 +177,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build();
 
                 // When/Then: expect validation error
-                assertThatThrownBy(() -> personService.createPerson(request, UUID.randomUUID()))
+                assertThatThrownBy(() -> personService.createPerson(request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -205,7 +208,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build();
 
                 // When/Then: expect validation error
-                assertThatThrownBy(() -> personService.createPerson(request, UUID.randomUUID()))
+                assertThatThrownBy(() -> personService.createPerson(request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -235,7 +239,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                                                 .isPrimary(true)
                                                                 .build()))
                                 .build();
-                CreatePersonResponse created = personService.createPerson(request, UUID.randomUUID());
+                CreatePersonResponse created = personService.createPerson(request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // When: getting person by ID
                 GetPersonResponse response = personService.getPerson(created.getPersonId());
@@ -252,7 +257,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         @Order(6)
         void getPerson_nonExistentPerson_returns404() {
                 // Given: non-existent person ID
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When/Then: expect not found
                 assertThatThrownBy(() -> personService.getPerson(nonExistentId))
@@ -282,9 +287,9 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .lastName("Brown")
                                 .preferredContactMethod(PreferredContactMethod.SMS)
                                 .build();
-                personService.createPerson(request1, UUID.randomUUID());
-                personService.createPerson(request2, UUID.randomUUID());
-                personService.createPerson(request3, UUID.randomUUID());
+                personService.createPerson(request1, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                personService.createPerson(request2, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                personService.createPerson(request3, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // When: searching by last name
                 List<GetPersonResponse> results = personService.searchPersons("Johnson", null, null, 20, 0);
@@ -310,7 +315,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build();
 
                 // When: creating person
-                CreatePersonResponse response = personService.createPerson(request, UUID.randomUUID());
+                CreatePersonResponse response = personService.createPerson(request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: email stored in lowercase
                 List<ContactPoint> contacts = contactPointRepository.findByPersonPartyId(response.getPersonId());

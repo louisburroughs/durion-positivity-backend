@@ -67,8 +67,8 @@ class AssignmentServiceImplStory10Test {
      */
     @Test
     void getByAppointmentId_mapsNotesToAssignmentNotes() {
-        UUID appointmentId = UUID.randomUUID();
-        UUID assignmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Assignment assignment = baseAssignment(assignmentId, appointmentId)
                 .notes("Test note")
                 .build();
@@ -90,8 +90,8 @@ class AssignmentServiceImplStory10Test {
      */
     @Test
     void getByAppointmentId_mapsCreatedAtToAssignedAt() {
-        UUID appointmentId = UUID.randomUUID();
-        UUID assignmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Assignment assignment = baseAssignment(assignmentId, appointmentId)
                 .createdAt(CREATED)
                 .updatedAt(UPDATED)
@@ -113,8 +113,8 @@ class AssignmentServiceImplStory10Test {
      */
     @Test
     void getByAppointmentId_mapsUpdatedAtToLastUpdatedAt() {
-        UUID appointmentId = UUID.randomUUID();
-        UUID assignmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Assignment assignment = baseAssignment(assignmentId, appointmentId)
                 .createdAt(CREATED)
                 .updatedAt(UPDATED)
@@ -136,8 +136,8 @@ class AssignmentServiceImplStory10Test {
      */
     @Test
     void getByAppointmentId_nullNotesReturnedAsNull() {
-        UUID appointmentId = UUID.randomUUID();
-        UUID assignmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Assignment assignment = baseAssignment(assignmentId, appointmentId)
                 .notes(null)
                 .build();

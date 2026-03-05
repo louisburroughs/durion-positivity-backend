@@ -89,16 +89,16 @@ class PostingRuleEvaluatorFeatureFlagTest {
                 defaultGLMappingProperties,
                 new ObjectMapper());
 
-        testOrganizationId = UUID.randomUUID();
-        testDebitAccountId = UUID.randomUUID();
-        testCreditAccountId = UUID.randomUUID();
+        testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testDebitAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testCreditAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
     // ── Helper methods ──────────────────────────────────────────────────────
 
     private AccountingEvent createEvent(String eventType, Map<String, Object> payload) {
         AccountingEvent event = new AccountingEvent();
-        event.setEventId(UUID.randomUUID());
+        event.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         event.setOrganizationId(testOrganizationId);
         event.setEventType(eventType);
         event.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
@@ -116,7 +116,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
 
     private DefaultGLMapping createDefaultMapping(UUID organizationId) {
         DefaultGLMapping mapping = new DefaultGLMapping();
-        mapping.setMappingId(UUID.randomUUID());
+        mapping.setMappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         mapping.setEventType("billing.invoicePosted");
         mapping.setOrganizationId(organizationId);
         mapping.setDebitAccountId(testDebitAccountId);

@@ -83,7 +83,7 @@ class AssignmentServiceTest {
         @Test
         void ac4_multipleWithNoLead_throwsIllegalArgument() {
                 var request = CreateAssignmentRequest.builder()
-                                .appointmentId(UUID.randomUUID())
+                                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .mechanics(List.of(
                                                 MechanicAssignmentItem.builder().mechanicPersonId("P1")
                                                                 .role(MechanicRole.ASSIST).build(),
@@ -104,7 +104,7 @@ class AssignmentServiceTest {
         @Test
         void c2_f02_multiMechanicWithNullRole_throwsIllegalArgument() {
                 var request = CreateAssignmentRequest.builder()
-                                .appointmentId(UUID.randomUUID())
+                                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .mechanics(List.of(
                                                 MechanicAssignmentItem.builder().mechanicPersonId("P1")
                                                                 .role(MechanicRole.LEAD).build(),
@@ -124,7 +124,7 @@ class AssignmentServiceTest {
 
         @Test
         void appointmentNotFound_throwsIllegalArgument() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 var request = buildSingleLeadRequest(appointmentId, "P-001");
 
                 when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
@@ -140,7 +140,7 @@ class AssignmentServiceTest {
 
         @Test
         void ac6_appointmentCancelled_throwsIllegalStateException() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 var appointment = buildAppointment(appointmentId, AppointmentStatus.CANCELLED);
                 var request = buildSingleLeadRequest(appointmentId, "P-001");
 
@@ -157,7 +157,7 @@ class AssignmentServiceTest {
 
         @Test
         void c2_f03_duplicateActiveAssignment_throwsIllegalState() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
                 var existingAssignment = buildSavedAssignment(appointmentId);
                 var request = buildSingleLeadRequest(appointmentId, "P-001");
@@ -179,7 +179,7 @@ class AssignmentServiceTest {
 
         @Test
         void ac7_mechanicNotFound_throwsIllegalArgument() {
-                UUID appointmentId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
                 var request = buildSingleLeadRequest(appointmentId, "P-UNKNOWN");
 
@@ -197,12 +197,12 @@ class AssignmentServiceTest {
 
         @Test
         void ac1_singleLead_createsConfirmedAssignment() {
-                UUID appointmentId = UUID.randomUUID();
-                UUID mechanicId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID mechanicId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 var mechanic = buildMechanic(mechanicId, "P-001");
                 var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
                 var savedAssignment = Assignment.builder()
-                                .assignmentId(UUID.randomUUID())
+                                .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .appointmentId(appointmentId)
                                 .status(AssignmentStatusEnum.CONFIRMED)
                                 .version(1)
@@ -210,7 +210,7 @@ class AssignmentServiceTest {
                                 .updatedAt(FIXED_NOW)
                                 .build();
                 var savedMechLink = AssignmentMechanic.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .assignmentId(savedAssignment.getAssignmentId())
                                 .mechanicId(mechanicId)
                                 .role(MechanicRoleEnum.LEAD)
@@ -239,12 +239,12 @@ class AssignmentServiceTest {
 
         @Test
         void ac5_overrideFieldRoundTrips() {
-                UUID appointmentId = UUID.randomUUID();
-                UUID mechanicId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID mechanicId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 var mechanic = buildMechanic(mechanicId, "P-001");
                 var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
                 var savedAssignment = Assignment.builder()
-                                .assignmentId(UUID.randomUUID())
+                                .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .appointmentId(appointmentId)
                                 .status(AssignmentStatusEnum.CONFIRMED)
                                 .isOverride(true)
@@ -254,7 +254,7 @@ class AssignmentServiceTest {
                                 .updatedAt(FIXED_NOW)
                                 .build();
                 var savedMechLink = AssignmentMechanic.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .assignmentId(savedAssignment.getAssignmentId())
                                 .mechanicId(mechanicId)
                                 .role(MechanicRoleEnum.LEAD)
@@ -290,9 +290,9 @@ class AssignmentServiceTest {
 
         @Test
         void ac2_getByAppointmentId_returnsMappedList() {
-                UUID appointmentId = UUID.randomUUID();
-                UUID assignmentId = UUID.randomUUID();
-                UUID mechanicId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID mechanicId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 var assignment = Assignment.builder()
                                 .assignmentId(assignmentId)
                                 .appointmentId(appointmentId)
@@ -302,7 +302,7 @@ class AssignmentServiceTest {
                                 .updatedAt(FIXED_NOW)
                                 .build();
                 var mechLink = AssignmentMechanic.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .assignmentId(assignmentId)
                                 .mechanicId(mechanicId)
                                 .role(MechanicRoleEnum.LEAD)
@@ -335,9 +335,9 @@ class AssignmentServiceTest {
         private static Appointment buildAppointment(UUID appointmentId, AppointmentStatus status) {
                 return Appointment.builder()
                                 .appointmentId(appointmentId)
-                                .crmCustomerId(UUID.randomUUID())
-                                .crmVehicleId(UUID.randomUUID())
-                                .locationId(UUID.randomUUID())
+                                .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .startAt(FIXED_NOW)
                                 .endAt(FIXED_NOW.plusSeconds(3600))
                                 .status(status)
@@ -355,7 +355,7 @@ class AssignmentServiceTest {
 
         private static Assignment buildSavedAssignment(UUID appointmentId) {
                 return Assignment.builder()
-                                .assignmentId(UUID.randomUUID())
+                                .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .appointmentId(appointmentId)
                                 .status(AssignmentStatusEnum.CONFIRMED)
                                 .version(1)
@@ -367,7 +367,7 @@ class AssignmentServiceTest {
         private static AssignmentMechanic buildMechLink(UUID assignmentId, UUID mechanicId,
                         MechanicRoleEnum role) {
                 return AssignmentMechanic.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .assignmentId(assignmentId)
                                 .mechanicId(mechanicId)
                                 .role(role)
@@ -378,8 +378,8 @@ class AssignmentServiceTest {
 
         @Test
         void ac4_singleMechanicNullRole_defaultsToLead() {
-                UUID appointmentId = UUID.randomUUID();
-                UUID mechanicId = UUID.randomUUID();
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID mechanicId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 var request = CreateAssignmentRequest.builder()
                                 .appointmentId(appointmentId)
                                 .mechanics(List.of(MechanicAssignmentItem.builder()
@@ -412,7 +412,7 @@ class AssignmentServiceTest {
         @Test
         void ac4_multipleWithMultipleLeads_throwsIllegalArgument() {
                 var request = CreateAssignmentRequest.builder()
-                                .appointmentId(UUID.randomUUID())
+                                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .mechanics(List.of(
                                                 MechanicAssignmentItem.builder().mechanicPersonId("P1")
                                                                 .role(MechanicRole.LEAD).build(),
@@ -434,7 +434,7 @@ class AssignmentServiceTest {
         void ac10_overrideWithoutPermission_throwsAccessDenied() {
                 // SecurityContextHolder is empty in tests — canOverride=false
                 var request = CreateAssignmentRequest.builder()
-                                .appointmentId(UUID.randomUUID())
+                                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .mechanics(List.of(MechanicAssignmentItem.builder()
                                                 .mechanicPersonId("P-001")
                                                 .role(MechanicRole.LEAD)
@@ -458,7 +458,7 @@ class AssignmentServiceTest {
                 SecurityContextHolder.getContext().setAuthentication(auth);
 
                 var request = CreateAssignmentRequest.builder()
-                                .appointmentId(UUID.randomUUID())
+                                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .mechanics(List.of(MechanicAssignmentItem.builder()
                                                 .mechanicPersonId("P-001")
                                                 .role(MechanicRole.LEAD)

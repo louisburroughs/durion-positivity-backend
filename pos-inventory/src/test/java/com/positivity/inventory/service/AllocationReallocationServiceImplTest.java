@@ -40,7 +40,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * <p>
  * ADR compliance:
  * <ul>
- * <li>ADR-0013: UUIDv7 identifiers — {@code UUID.randomUUID()} used in tests
+ * <li>ADR-0013: UUIDv7 identifiers —
+ * {@code UUID.fromString("00000000-0000-0000-0000-000000000001")} used in tests
  * (exact value not required for contract correctness)</li>
  * <li>ADR-0017: 200 for successful reallocation mutation</li>
  * <li>ADR-0018: actor sourced from SecurityContext, not request body</li>
@@ -109,7 +110,7 @@ class AllocationReallocationServiceImplTest {
         private ReservationEntity buildReservation(UUID workorderId, UUID stockItemId, int priority,
                         int required, Instant waitingSince) {
                 return ReservationEntity.builder()
-                                .reservationId(UUID.randomUUID())
+                                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .workorderLineId(workorderId)
                                 .stockItemId(stockItemId)
                                 .requiredQuantity(required)
@@ -416,7 +417,7 @@ class AllocationReallocationServiceImplTest {
                 // wins
                 UUID stockItemId = STOCK_ITEM_ID;
                 ReservationEntity earlyDueDate = ReservationEntity.builder()
-                                .reservationId(UUID.randomUUID())
+                                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .workorderLineId(WORKORDER_HIGH_PRIO)
                                 .stockItemId(stockItemId)
                                 .requiredQuantity(5)
@@ -430,7 +431,7 @@ class AllocationReallocationServiceImplTest {
                                 .updatedAt(FIXED_NOW)
                                 .build();
                 ReservationEntity lateDueDate = ReservationEntity.builder()
-                                .reservationId(UUID.randomUUID())
+                                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .workorderLineId(WORKORDER_LOW_PRIO)
                                 .stockItemId(stockItemId)
                                 .requiredQuantity(5)

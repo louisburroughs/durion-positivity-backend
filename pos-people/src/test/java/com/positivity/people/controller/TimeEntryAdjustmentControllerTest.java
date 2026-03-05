@@ -33,9 +33,9 @@ class TimeEntryAdjustmentControllerTest {
 
 	@Test
 	void listForTimeEntry_returnsList() {
-		UUID timeEntryId = UUID.randomUUID();
+		UUID timeEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryAdjustment a = new TimeEntryAdjustment();
-		a.setAdjustmentId(UUID.randomUUID());
+		a.setAdjustmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 		a.setTimeEntryId(timeEntryId);
 		when(service.listForTimeEntry(timeEntryId)).thenReturn(List.of(a));
 
@@ -47,14 +47,15 @@ class TimeEntryAdjustmentControllerTest {
 
 	@Test
 	void createAdjustment_success_returnsOk() {
-		UUID timeEntryId = UUID.randomUUID();
+		UUID timeEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryAdjustmentRequest req = new TimeEntryAdjustmentRequest();
 		req.setTimeEntryId(timeEntryId);
 		req.setReasonCode("RC1");
 		req.setMinutesDelta(15);
 		req.setCreatedBy("tester");
 
-		TimeEntryAdjustmentResponse created = new TimeEntryAdjustmentResponse(UUID.randomUUID(), true, "created");
+		TimeEntryAdjustmentResponse created = new TimeEntryAdjustmentResponse(
+				UUID.fromString("00000000-0000-0000-0000-000000000001"), true, "created");
 		when(service.createAdjustment(req)).thenReturn(created);
 
 		ResponseEntity<TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
@@ -66,7 +67,7 @@ class TimeEntryAdjustmentControllerTest {
 
 	@Test
 	void createAdjustment_failure_throwsExceptionForHandler() {
-		UUID timeEntryId = UUID.randomUUID();
+		UUID timeEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryAdjustmentRequest req = new TimeEntryAdjustmentRequest();
 		req.setTimeEntryId(timeEntryId);
 		req.setReasonCode(" ");
@@ -80,9 +81,9 @@ class TimeEntryAdjustmentControllerTest {
 
 	@Test
 	void approveAdjustment_notFound_throwsExceptionForHandler() {
-		UUID adjustmentId = UUID.randomUUID();
+		UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		doThrow(new NotFoundException("Adjustment not found")).when(service)
-			.approveAdjustment(eq(adjustmentId), anyString(), any(), any());
+				.approveAdjustment(eq(adjustmentId), anyString(), any(), any());
 
 		assertThrows(NotFoundException.class,
 				() -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));
@@ -90,9 +91,9 @@ class TimeEntryAdjustmentControllerTest {
 
 	@Test
 	void approveAdjustment_forbidden_throwsExceptionForHandler() {
-		UUID adjustmentId = UUID.randomUUID();
+		UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		doThrow(new AccessDeniedException("Permission denied")).when(service)
-			.approveAdjustment(eq(adjustmentId), anyString(), any(), any());
+				.approveAdjustment(eq(adjustmentId), anyString(), any(), any());
 
 		assertThrows(AccessDeniedException.class,
 				() -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));

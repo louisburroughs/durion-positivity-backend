@@ -40,8 +40,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class RoleManagementServiceImplTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Mock
         private RoleRepository roleRepository;
@@ -69,7 +68,7 @@ class RoleManagementServiceImplTest {
                                                 List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
 
                 Role role = new Role();
-                UUID roleId = UUID.randomUUID();
+                UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 role.setId(roleId);
                 role.setName("MANAGER");
 
@@ -91,9 +90,9 @@ class RoleManagementServiceImplTest {
 
         @Test
         void createRoleAssignment_andPermissionChecks_success() {
-                UUID userId = UUID.randomUUID();
-                UUID roleId = UUID.randomUUID();
-                UUID assignmentId = UUID.randomUUID();
+                UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 User user = new User();
                 user.setId(userId);
@@ -140,8 +139,8 @@ class RoleManagementServiceImplTest {
 
         @Test
         void validationBranches_throwOnInvalidScopeAndMissingRole() {
-                UUID userId = UUID.randomUUID();
-                UUID roleId = UUID.randomUUID();
+                UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 RoleAssignmentRequest invalidLocationRequest = new RoleAssignmentRequest(
                                 userId,

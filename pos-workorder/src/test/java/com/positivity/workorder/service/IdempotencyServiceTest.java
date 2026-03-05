@@ -36,7 +36,6 @@ import com.positivity.workorder.internal.service.IdempotencyServiceImpl;
 class IdempotencyServiceTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Mock
     private IdempotencyKeyRepository repository;
 
@@ -48,8 +47,8 @@ class IdempotencyServiceTest {
 
     @BeforeEach
     void setUp() {
-        testKeyValue = "test-key-" + UUID.randomUUID();
-        testWorkorderId = UUID.randomUUID();
+        testKeyValue = "test-key-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testWorkorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
     // ===== GET EXISTING WORKORDER ID TESTS =====

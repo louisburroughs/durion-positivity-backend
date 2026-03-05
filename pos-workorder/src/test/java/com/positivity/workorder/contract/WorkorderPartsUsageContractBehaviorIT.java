@@ -132,7 +132,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                 // Given: A workorder with a part
                 UUID workorderId = seedWorkorderWithPart();
                 UUID partId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
-                String idempotencyKey = "test-issue-parts-" + UUID.randomUUID();
+                String idempotencyKey = "test-issue-parts-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> issueRequest = Map.of(
                                 "workorderPartId", partId.toString(),
@@ -211,7 +211,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                 // Given: A workorder with an issued part
                 UUID workorderId = seedWorkorderWithIssuedPart(BigDecimal.valueOf(5.0));
                 UUID partId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
-                String idempotencyKey = "test-consume-parts-" + UUID.randomUUID();
+                String idempotencyKey = "test-consume-parts-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> consumeRequest = Map.of(
                                 "workorderPartId", partId.toString(),
@@ -317,7 +317,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                 UUID workorderId = seedWorkorderWithPartiallyConsumedPart(BigDecimal.valueOf(5.0),
                                 BigDecimal.valueOf(3.0));
                 UUID partId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
-                String idempotencyKey = "test-return-parts-" + UUID.randomUUID();
+                String idempotencyKey = "test-return-parts-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> returnRequest = Map.of(
                                 "workorderPartId", partId.toString(),
@@ -429,9 +429,9 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         // ========== HELPER METHODS FOR TEST DATA SEEDING ==========
 
         private UUID seedWorkorderWithPart() {
-                testCustomerId = UUID.randomUUID();
-                testLocationId = UUID.randomUUID();
-                testVehicleId = UUID.randomUUID();
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Create and save workorder
                 Workorder workorder = Workorder.builder()

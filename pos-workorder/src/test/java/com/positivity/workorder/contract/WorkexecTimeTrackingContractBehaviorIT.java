@@ -50,9 +50,10 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
         @Test
         @DisplayName("CAP121-81: labor-performed create returns 201 and replay returns 200 with replay header")
         void laborPerformedCreateAndReplay() {
-                Workorder workorder = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, UUID.randomUUID());
-                UUID technicianId = UUID.randomUUID();
-                String idempotencyKey = "cap121-labor-" + UUID.randomUUID();
+                Workorder workorder = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                UUID technicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                String idempotencyKey = "cap121-labor-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> payload = WorkexecContractPayloads.laborPerformedPayload(
                                 workorder.getId(),
@@ -88,17 +89,20 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
         @Test
         @DisplayName("CAP121-81: labor-performed rejects blocked workorder status with stable conflict code")
         void laborPerformedRejectsBlockedWorkorderStatus() {
-                Workorder workorder = seedWorkorder(WorkorderStatus.CANCELLED, UUID.randomUUID());
+                Workorder workorder = seedWorkorder(WorkorderStatus.CANCELLED,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 Map<String, Object> payload = WorkexecContractPayloads.laborPerformedPayload(
                                 workorder.getId(),
-                                UUID.randomUUID(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                 BigDecimal.ONE,
                                 "te-blocked");
 
                 givenWithGatewayAuth()
                                 .contentType(ContentType.JSON)
-                                .header("Idempotency-Key", "cap121-blocked-" + UUID.randomUUID())
+                                .header("Idempotency-Key",
+                                                "cap121-blocked-" + UUID
+                                                                .fromString("00000000-0000-0000-0000-000000000001"))
                                 .body(payload)
                                 .when()
                                 .post("/v1/workexec/labor-performed")
@@ -110,7 +114,8 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
         @Test
         @DisplayName("CAP121-82: timer start creates active entry and second start fails with TIMER_ALREADY_ACTIVE")
         void timerStartAndSingleActiveConstraint() {
-                Workorder workorder = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, UUID.randomUUID());
+                Workorder workorder = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 Map<String, Object> startPayload = WorkexecContractPayloads.timerStartPayload(workorder.getId(),
                                 "DIAG");
@@ -144,7 +149,8 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
         @Test
         @DisplayName("CAP121-82: timer stop fails when no active timer and succeeds after start")
         void timerStopBehavior() {
-                Workorder workorder = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, UUID.randomUUID());
+                Workorder workorder = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 givenWithGatewayAuth()
                                 .when()
@@ -173,8 +179,8 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
         @Test
         @DisplayName("CAP121-80 dependency: job-time-totals aggregates by technician/location/date")
         void jobTimeTotalsAggregation() {
-                UUID locationId = UUID.randomUUID();
-                UUID technicianId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID technicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Workorder workorder = seedWorkorder(WorkorderStatus.COMPLETED, locationId);
 
                 seedCompletedLaborEntry(workorder, technicianId, LocalDateTime.of(2026, 2, 16, 10, 0),
@@ -206,8 +212,8 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
         private Workorder seedWorkorder(WorkorderStatus status, UUID shopId) {
                 Workorder workorder = Workorder.builder()
                                 .shopId(shopId)
-                                .customerId(UUID.randomUUID())
-                                .vehicleId(UUID.randomUUID())
+                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(status)
                                 .isReopened(false)
                                 .build();
@@ -223,7 +229,7 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
                                 .workorderId(workorder.getId())
-                                .workorderServiceId(UUID.randomUUID())
+                                .workorderServiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .technicianId(technicianId)
                                 .startTime(endTimeUtc.minusSeconds(seconds))
                                 .endTime(endTimeUtc)

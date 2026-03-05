@@ -33,12 +33,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InventoryLocationServiceImplTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Test
     void deactivateLocation_returnsInactiveResponseWithProvidedLocationIds() {
-        UUID sourceLocationId = UUID.randomUUID();
-        UUID destinationLocationId = UUID.randomUUID();
-        UUID siteId = UUID.randomUUID();
+        UUID sourceLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         List<InventoryLedgerEntry> persistedEntries = new ArrayList<>();
         List<Object> publishedEvents = new ArrayList<>();
         Map<String, StorageLocationValidationClient.StorageLocationValidation> validations = new HashMap<>();
@@ -67,9 +66,9 @@ class InventoryLocationServiceImplTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("inventory-test-user", "n/a", List.of()));
         try {
-            UUID sourceLocationId = UUID.randomUUID();
-            UUID destinationLocationId = UUID.randomUUID();
-            UUID siteId = UUID.randomUUID();
+            UUID sourceLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             List<InventoryLedgerEntry> persistedEntries = new ArrayList<>();
             Map<String, StorageLocationValidationClient.StorageLocationValidation> validations = new HashMap<>();
             validations.put(sourceLocationId.toString(), validation(sourceLocationId, siteId, true, true));

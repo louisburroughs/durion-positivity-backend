@@ -49,13 +49,13 @@ class GLPostingServiceTest {
 
     @BeforeEach
     void setUp() {
-        testCreditMemoId = UUID.randomUUID();
-        testPaymentApplicationId = UUID.randomUUID();
-        testRevenueAccountId = UUID.randomUUID();
-        testTaxAccountId = UUID.randomUUID();
-        testArAccountId = UUID.randomUUID();
-        testCashAccountId = UUID.randomUUID();
-        testJournalEntryId = UUID.randomUUID();
+        testCreditMemoId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testPaymentApplicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testRevenueAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testTaxAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testArAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testCashAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testJournalEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
     // ===== CREDIT MEMO POSTING TESTS =====

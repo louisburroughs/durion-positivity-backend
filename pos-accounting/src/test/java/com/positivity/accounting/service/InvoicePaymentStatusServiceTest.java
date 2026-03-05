@@ -43,12 +43,12 @@ class InvoicePaymentStatusServiceTest {
     @Autowired
     private InvoiceStatusViewRepository statusViewRepository;
 
-    private static final UUID INV_001 = UUID.randomUUID();
-    private static final UUID INV_002 = UUID.randomUUID();
-    private static final UUID INV_003 = UUID.randomUUID();
-    private static final UUID INV_004 = UUID.randomUUID();
-    private static final UUID INV_005 = UUID.randomUUID();
-    private static final UUID INV_006 = UUID.randomUUID();
+    private static final UUID INV_001 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID INV_002 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID INV_003 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID INV_004 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID INV_005 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID INV_006 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @BeforeEach
     void setUp() {

@@ -75,8 +75,8 @@ class ReceivingItemsContractBehaviorIT extends BaseContractIntegrationTest {
         void receiveItems_exactExpectedQuantity_returns200WithNoVariances() throws Exception {
                 // Issue #34: exact receipt (receivedQty == expectedQty) must return 200, empty
                 // variances, linesProcessed=1
-                UUID sessionId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReceiveItemsResponse response = ReceiveItemsResponse.builder()
                                 .sessionId(sessionId)
@@ -122,8 +122,8 @@ class ReceivingItemsContractBehaviorIT extends BaseContractIntegrationTest {
         void receiveItems_shortOfExpectedQuantity_returns200WithShortageVariance() throws Exception {
                 // Issue #34: short receipt (receivedQty < expectedQty) must return 200 with
                 // SHORTAGE variance, varianceQty=2
-                UUID sessionId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReceiveItemsResponse response = ReceiveItemsResponse.builder()
                                 .sessionId(sessionId)
@@ -177,8 +177,8 @@ class ReceivingItemsContractBehaviorIT extends BaseContractIntegrationTest {
         void receiveItems_overExpectedQuantity_returns200WithOverageVariance() throws Exception {
                 // Issue #34: over receipt (receivedQty > expectedQty) must return 200 with
                 // OVERAGE variance, varianceQty=2
-                UUID sessionId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReceiveItemsResponse response = ReceiveItemsResponse.builder()
                                 .sessionId(sessionId)

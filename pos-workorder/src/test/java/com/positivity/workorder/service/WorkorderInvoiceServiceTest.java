@@ -44,8 +44,7 @@ import com.positivity.workorder.internal.service.WorkorderInvoiceServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WorkorderInvoiceService Unit Tests")
 class WorkorderInvoiceServiceTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         private static final String INV_KEY_1 = "inv-key-1";
 
@@ -73,9 +72,9 @@ class WorkorderInvoiceServiceTest {
 
         @BeforeEach
         void setUp() {
-                workorderId = UUID.randomUUID();
-                estimateId = UUID.randomUUID();
-                approvalId = UUID.randomUUID();
+                workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                estimateId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                approvalId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         }
 
         @Test
@@ -91,7 +90,7 @@ class WorkorderInvoiceServiceTest {
                                 .thenReturn(List.of());
                 when(idempotencyService.getExistingInvoiceId(INV_KEY_1)).thenReturn(Optional.empty());
 
-                UUID invoiceId = UUID.randomUUID();
+                UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
                                 .invoiceId(invoiceId)
                                 .status("DRAFT")
@@ -126,7 +125,7 @@ class WorkorderInvoiceServiceTest {
                 when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                                 .thenReturn(List.of());
 
-                UUID invoiceId = UUID.randomUUID();
+                UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InvoiceGenerationResponse upstreamResponse = InvoiceGenerationResponse.builder()
                                 .invoiceId(invoiceId)
                                 .status("DRAFT")
@@ -179,7 +178,7 @@ class WorkorderInvoiceServiceTest {
                                 .thenReturn(List.of());
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                                 .thenReturn(InvoiceGenerationResponse.builder()
-                                                .invoiceId(UUID.randomUUID())
+                                                .invoiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                                 .status("DRAFT")
                                                 .subtotal(new BigDecimal("210.0000"))
                                                 .taxAmount(BigDecimal.ZERO)
@@ -213,7 +212,7 @@ class WorkorderInvoiceServiceTest {
         @Test
         @DisplayName("generateInvoice returns existing invoice details when workorder already has invoice")
         void generateInvoice_AlreadyGenerated_ReturnsExistingInvoice() {
-                UUID existingInvoiceId = UUID.randomUUID();
+                UUID existingInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Workorder workorder = completedWorkorder();
                 workorder.setInvoiceId(existingInvoiceId);
 
@@ -255,7 +254,7 @@ class WorkorderInvoiceServiceTest {
                 // Create a duplicate part that will be returned by both queries (same ID)
                 // This simulates a scenario where a part has both workorder and
                 // workOrderService references
-                UUID duplicatePartId = UUID.randomUUID();
+                UUID duplicatePartId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 WorkorderPart duplicatePart1 = WorkorderPart.builder()
                                 .id(duplicatePartId)
                                 .description("Oil Filter")
@@ -274,7 +273,7 @@ class WorkorderInvoiceServiceTest {
 
                 // Create a standalone part with unique ID
                 WorkorderPart standalonePart = WorkorderPart.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .description("Standalone Part")
                                 .quantity(new BigDecimal("1.0000"))
                                 .unitPrice(new BigDecimal("25.0000"))
@@ -293,7 +292,7 @@ class WorkorderInvoiceServiceTest {
 
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                                 .thenReturn(InvoiceGenerationResponse.builder()
-                                                .invoiceId(UUID.randomUUID())
+                                                .invoiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                                 .status("DRAFT")
                                                 .subtotal(new BigDecimal("40.0000"))
                                                 .taxAmount(BigDecimal.ZERO)
@@ -337,8 +336,8 @@ class WorkorderInvoiceServiceTest {
                 when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                                 .thenReturn(List.of());
 
-                UUID newInvoiceId = UUID.randomUUID();
-                UUID existingInvoiceId = UUID.randomUUID();
+                UUID newInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID existingInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
                                 .invoiceId(newInvoiceId)
                                 .status("DRAFT")
@@ -440,7 +439,7 @@ class WorkorderInvoiceServiceTest {
                                 .thenReturn(List.of());
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                                 .thenReturn(InvoiceGenerationResponse.builder()
-                                                .invoiceId(UUID.randomUUID())
+                                                .invoiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                                 .status("DRAFT")
                                                 .subtotal(new BigDecimal("150.0000"))
                                                 .taxAmount(BigDecimal.ZERO)
@@ -477,7 +476,7 @@ class WorkorderInvoiceServiceTest {
         @Test
         @DisplayName("generateInvoice with idempotency key replay fetches existing invoice and updates workorder")
         void generateInvoice_IdempotencyKeyReplay_FetchesExistingInvoiceAndUpdatesWorkorder() {
-                UUID existingInvoiceId = UUID.randomUUID();
+                UUID existingInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Workorder workorder = completedWorkorder();
                 // Workorder does not have invoice ID yet (simulating a retry scenario)
                 workorder.setInvoiceId(null);

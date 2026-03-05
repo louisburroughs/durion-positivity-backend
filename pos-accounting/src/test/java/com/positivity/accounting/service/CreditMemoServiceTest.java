@@ -61,8 +61,7 @@ import com.positivity.accounting.internal.service.GLPostingServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CreditMemoService Unit Tests")
 class CreditMemoServiceTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Mock
         private CreditMemoRepository creditMemoRepository;
@@ -95,12 +94,12 @@ class CreditMemoServiceTest {
 
         @BeforeEach
         void setUp() {
-                testInvoiceId = UUID.randomUUID();
-                testCustomerId = UUID.randomUUID();
-                testCreditMemoId = UUID.randomUUID();
-                testRevenueAccountId = UUID.randomUUID();
-                testTaxAccountId = UUID.randomUUID();
-                testArAccountId = UUID.randomUUID();
+                testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testCreditMemoId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testRevenueAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testTaxAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testArAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 testRequest = new CreateCreditMemoRequest();
                 testRequest.setOriginalInvoiceId(testInvoiceId);
@@ -462,7 +461,7 @@ class CreditMemoServiceTest {
         @DisplayName("Should throw 404 when credit memo not found")
         void testGetCreditMemo_NotFound() {
                 // Given
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(creditMemoRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
                 // When / Then

@@ -56,7 +56,6 @@ import com.positivity.workorder.internal.service.WorkorderStateMachine;
 class WorkorderAssignmentServiceTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Mock
     private WorkorderRepository workorderRepository;
 
@@ -98,7 +97,7 @@ class WorkorderAssignmentServiceTest {
 
     private AssignmentUpdatedEvent validEvent() {
         return AssignmentUpdatedEvent.builder()
-                .eventId(UUID.randomUUID())
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .timestamp(Instant.now(TEST_CLOCK))
                 .workorderId(WORKORDER_ID)
                 .payload(AssignmentUpdatePayload.builder()

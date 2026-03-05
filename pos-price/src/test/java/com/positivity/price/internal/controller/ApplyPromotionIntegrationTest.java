@@ -260,7 +260,7 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         void applyPromotion_withVehicleId_passesVehicleIdToEligibilityCheck() throws Exception {
                 seedActiveOffer("VEHICLE20", DiscountType.PERCENT_LABOR, BigDecimal.valueOf(20),
                                 LocalDate.now(FIXED_CLOCK).minusDays(1), LocalDate.now(FIXED_CLOCK).plusDays(30));
-                UUID vehicleId = UUID.randomUUID();
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -355,6 +355,7 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
                                 : "";
                 return String.format(
                                 "{\"promotionCode\":\"%s\",\"estimateContext\":{\"estimateId\":\"%s\",\"customerId\":\"%s\",%s\"lineItems\":[{\"sku\":\"P001\",\"quantity\":1,\"unitPrice\":100.00}],\"subtotal\":%s}}",
-                                promotionCode, UUID.randomUUID(), UUID.randomUUID(), vehicleField, subtotal);
+                                promotionCode, UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"), vehicleField, subtotal);
         }
 }
