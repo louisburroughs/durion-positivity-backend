@@ -430,6 +430,146 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // Null availability response → treated as empty people list
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getDashboard handles null availability response without NPE")
+    void getDashboard_nullAvailabilityResponse_treatedAsEmptyPeople() {
+        // Arrange
+        // Issue CAP-142: null guard on availability response at line ~56
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of());
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(null);
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert: should not throw, mechanics list is empty
+        assertThat(response).isNotNull();
+        assertThat(response.getMechanics()).isEmpty();
+        assertThat(response.getConflicts()).isEmpty();
+    }
+
+    // -----------------------------------------------------------------------
+    // AC-2b: Bay with RESERVED status → BAY_UNAVAILABLE BLOCKING
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-2b: Bay with status RESERVED triggers BAY_UNAVAILABLE BLOCKING conflict")
+    void getDashboard_bayUnavailableReserved_returnsBlockingConflict() {
+        // Arrange
+        // Issue CAP-142: AC-2b — RESERVED should also trigger BAY_UNAVAILABLE
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000BA2");
+        Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-013", bayId);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(wo));
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(emptyAvailability());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
+                .thenReturn(List.of(new ShopmgrOperationalContextClient.BayAvailabilityDto(
+                        bayId, "Bay 2", "RESERVED")));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts())
+                .anySatisfy(conflict -> {
+                    assertThat(conflict.getConflictType()).isEqualTo("BAY_UNAVAILABLE");
+                    assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
+                    assertThat(conflict.getMessage()).contains("RESERVED");
+                });
+    }
+
+    // -----------------------------------------------------------------------
+    // AC-2b: Bay with UNDER_MAINTENANCE status → BAY_UNAVAILABLE BLOCKING
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-2b: Bay with status UNDER_MAINTENANCE triggers BAY_UNAVAILABLE BLOCKING conflict")
+    void getDashboard_bayUnavailableUnderMaintenance_returnsBlockingConflict() {
+        // Arrange
+        // Issue CAP-142: AC-2b — UNDER_MAINTENANCE should also trigger BAY_UNAVAILABLE
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000BA3");
+        Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-014", bayId);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(wo));
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(emptyAvailability());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
+                .thenReturn(List.of(new ShopmgrOperationalContextClient.BayAvailabilityDto(
+                        bayId, "Bay 3", "UNDER_MAINTENANCE")));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts())
+                .anySatisfy(conflict -> {
+                    assertThat(conflict.getConflictType()).isEqualTo("BAY_UNAVAILABLE");
+                    assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
+                    assertThat(conflict.getMessage()).contains("UNDER_MAINTENANCE");
+                });
+    }
+
+    // -----------------------------------------------------------------------
+    // parseCertifications with invalid JSON → treated as empty (no NPE/throw)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getDashboard with invalid certifications JSON does not throw and skips skill check")
+    void getDashboard_invalidCertificationsJson_doesNotThrow() {
+        // Arrange
+        // Issue CAP-142: parseCertifications warn-and-return-empty path
+        Workorder wo = Workorder.builder()
+                .id(UUID.randomUUID())
+                .locationId(LOCATION_UUID)
+                .mechanicIds("[\"MECH-015\"]")
+                .requiredCertifications("NOT_VALID_JSON")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(wo));
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(emptyAvailability());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
+                .thenReturn(List.of());
+
+        // Act + Assert: should not throw; invalid certifications treated as empty → no skill conflict
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+        assertThat(response).isNotNull();
+        assertThat(response.getConflicts())
+                .noneMatch(c -> "MECHANIC_SKILL_MISMATCH".equals(c.getConflictType()));
+    }
+
+    // -----------------------------------------------------------------------
+    // getDashboard with valid UUID locationId uses UUID.fromString path
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getDashboard with valid UUID locationId correctly parses UUID path")
+    void getDashboard_withValidUuidLocationId_usesUuidFromStringPath() {
+        // Arrange
+        // Issue CAP-142: covers UUID.fromString(locationId) branch
+        String uuidLocationId = LOCATION_UUID.toString();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of());
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(emptyAvailability());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(uuidLocationId, TEST_DATE);
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getLocationId()).isEqualTo(uuidLocationId);
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
