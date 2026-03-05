@@ -50,7 +50,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class DashboardServiceTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-        private static final LocalDate TEST_DATE = LocalDate.of(2026, 3, 1);
+        @Spy
+        Clock clock = TEST_CLOCK;
+
+        private static final LocalDate TEST_DATE = LocalDate.ofInstant(TEST_CLOCK.instant(), TEST_CLOCK.getZone());
         private static final UUID LOCATION_UUID = UUID.fromString("00000000-0000-0000-0000-000000000001");
         private static final String LOCATION_ID = LOCATION_UUID.toString();
 
@@ -61,11 +64,9 @@ class DashboardServiceTest {
         private PeopleAvailabilityClient peopleAvailabilityClient;
 
         @Mock
-        @SuppressWarnings("unused")
         private ShopmgrOperationalContextClient shopmgrOperationalContextClient;
 
         @Spy
-        @SuppressWarnings("unused")
         private ObjectMapper objectMapper = new ObjectMapper();
 
         @InjectMocks

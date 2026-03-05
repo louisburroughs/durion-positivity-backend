@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
@@ -41,6 +42,9 @@ class ReplenishmentServiceImplTest {
         private static final UUID LOC_02 = UUID.fromString("66666666-6666-6666-6666-666666666666");
         private static final UUID PICKFACE_01 = UUID.fromString("77777777-7777-7777-7777-777777777777");
 
+        @Spy
+        Clock clock = TEST_CLOCK;
+
         @InjectMocks
         private ReplenishmentServiceImpl replenishmentService;
 
@@ -54,7 +58,7 @@ class ReplenishmentServiceImplTest {
         void getReplenishmentTasks_shouldReturnMappedTasks() {
                 // Given
                 UUID taskId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID taskId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID taskId2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 Instant now = Instant.now(TEST_CLOCK);
 
                 ReplenishmentTask pendingTask = ReplenishmentTask.builder()

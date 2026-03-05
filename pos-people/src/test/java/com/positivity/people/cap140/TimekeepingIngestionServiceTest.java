@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
@@ -38,6 +39,9 @@ import static org.mockito.Mockito.when;
 class TimekeepingIngestionServiceTest {
 
 	private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+	@Spy
+	Clock clock = TEST_CLOCK;
 
 	@Mock
 	TimekeepingEntryRepository timekeepingEntryRepository;

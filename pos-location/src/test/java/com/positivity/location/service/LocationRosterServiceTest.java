@@ -1,28 +1,32 @@
 package com.positivity.location.service;
 
-import com.positivity.location.internal.dto.LocationRef;
-import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.service.LocationRosterServiceImpl;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
+import com.positivity.location.internal.dto.LocationRef;
+import com.positivity.location.internal.entity.Location;
+import com.positivity.location.internal.repository.LocationRepository;
+import com.positivity.location.internal.service.LocationRosterServiceImpl;
 
 /**
  * Unit tests for LocationRosterService — reconciliation roster for sync
@@ -44,6 +48,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("LocationRosterServiceTest")
 class LocationRosterServiceTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private LocationRepository locationRepository;
