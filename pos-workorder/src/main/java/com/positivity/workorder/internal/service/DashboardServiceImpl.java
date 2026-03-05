@@ -44,7 +44,6 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final WorkorderRepository workorderRepository;
     private final PeopleAvailabilityClient peopleAvailabilityClient;
-    @SuppressWarnings("unused")
     private final ShopmgrOperationalContextClient shopmgrOperationalContextClient;
     private final ObjectMapper objectMapper;
 
@@ -108,8 +107,11 @@ public class DashboardServiceImpl implements DashboardService {
 
         List<ConflictEntry> conflicts = new ArrayList<>();
         detectBayDoubleBooking(workorders, conflicts);
+        detectBayUnavailable(workorders, locationUuid, conflicts);
         detectMechanicDoubleBookingFromWorkorders(workorders, conflicts);
         detectMechanicStatusConflicts(workorders, people, date, conflicts);
+        detectLocationMismatch(workorders, people, conflicts);
+        detectMechanicSkillMismatch(workorders, people, conflicts);
 
         return DashboardResponse.builder()
                 .date(date)
@@ -141,6 +143,20 @@ public class DashboardServiceImpl implements DashboardService {
         return ids.isEmpty() ? null : ids.get(0);
     }
 
+    private List<String> parseCertifications(String certifications) {
+        if (certifications == null || certifications.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+            return mapper.readValue(certifications, new TypeReference<List<String>>() {
+            });
+        } catch (Exception e) {
+            log.warn("Failed to parse requiredCertifications JSON: {}", certifications, e);
+            return Collections.emptyList();
+        }
+    }
+
     private void detectBayDoubleBooking(List<Workorder> workorders, List<ConflictEntry> conflicts) {
         Map<UUID, List<Workorder>> byBay = workorders.stream()
                 .filter(wo -> wo.getResourceId() != null)
@@ -153,6 +169,32 @@ public class DashboardServiceImpl implements DashboardService {
                         .message("Bay " + entry.getKey() + " is assigned to multiple workorders")
                         .affectedResourceId(entry.getKey().toString())
                         .build());
+            }
+        }
+    }
+
+    private void detectBayUnavailable(
+            List<Workorder> workorders,
+            UUID locationId,
+            List<ConflictEntry> conflicts) {
+        List<ShopmgrOperationalContextClient.BayAvailabilityDto> bayStatuses =
+                shopmgrOperationalContextClient.getBayStatusForLocation(locationId);
+        Map<UUID, String> statusByBayId = bayStatuses.stream()
+                .collect(Collectors.toMap(
+                        ShopmgrOperationalContextClient.BayAvailabilityDto::bayId,
+                        ShopmgrOperationalContextClient.BayAvailabilityDto::status,
+                        (a, b) -> a));
+        for (Workorder wo : workorders) {
+            if (wo.getResourceId() != null) {
+                String status = statusByBayId.get(wo.getResourceId());
+                if ("CLOSED".equals(status) || "RESERVED".equals(status) || "UNDER_MAINTENANCE".equals(status)) {
+                    conflicts.add(ConflictEntry.builder()
+                            .conflictType("BAY_UNAVAILABLE")
+                            .severity("BLOCKING")
+                            .message("Bay " + wo.getResourceId() + " is not available (status: " + status + ")")
+                            .affectedResourceId(wo.getResourceId().toString())
+                            .build());
+                }
             }
         }
     }
@@ -199,9 +241,9 @@ public class DashboardServiceImpl implements DashboardService {
 
             if ("ON_JOB".equals(personAvailability.getCurrentStatus())) {
                 conflicts.add(ConflictEntry.builder()
-                        .conflictType("DOUBLE_BOOKED_MECHANIC")
-                        .severity("BLOCKING")
-                        .message("Mechanic " + mechanicId + " is currently on a job and unavailable")
+                        .conflictType("CLOCK_OUT_MISMATCH")
+                        .severity("WARNING")
+                        .message("Mechanic " + mechanicId + " is clocked in for another job and has not clocked out")
                         .affectedResourceId(personAvailability.getPersonId())
                         .build());
             }
@@ -225,6 +267,7 @@ public class DashboardServiceImpl implements DashboardService {
             BreakInfo breakInfo = personAvailability.getBreakInfo();
             if (breakInfo != null && breakInfo.isOnBreak()
                     && breakInfo.getExpectedReturn() != null
+                    && breakInfo.getExpectedReturn().isAfter(Instant.now())
                     && breakInfo.getExpectedReturn().isBefore(fifteenMinFromNow)) {
                 conflicts.add(ConflictEntry.builder()
                         .conflictType("MECHANIC_BREAK_OVERLAP")
@@ -232,6 +275,68 @@ public class DashboardServiceImpl implements DashboardService {
                         .message("Job overlaps with expected break time for mechanic " + mechanicId)
                         .affectedResourceId(mechanicId)
                         .build());
+            }
+        }
+    }
+
+    private void detectLocationMismatch(
+            List<Workorder> workorders,
+            List<PeopleAvailabilityResponse.PersonAvailability> people,
+            List<ConflictEntry> conflicts) {
+        Map<String, PeopleAvailabilityResponse.PersonAvailability> availabilityByPersonId = people.stream()
+                .collect(Collectors.toMap(
+                        PeopleAvailabilityResponse.PersonAvailability::getPersonId, pa -> pa, (a, b) -> a));
+        for (Workorder wo : workorders) {
+            if (wo.getLocationId() == null) {
+                continue;
+            }
+            String workorderLocationStr = wo.getLocationId().toString();
+            for (String mechanicId : parseMechanicIds(wo.getMechanicIds())) {
+                PeopleAvailabilityResponse.PersonAvailability pa = availabilityByPersonId.get(mechanicId);
+                if (pa == null || pa.getCurrentLocationId() == null) {
+                    continue;
+                }
+                if (!workorderLocationStr.equals(pa.getCurrentLocationId())) {
+                    conflicts.add(ConflictEntry.builder()
+                            .conflictType("LOCATION_MISMATCH")
+                            .severity("WARNING")
+                            .message("Mechanic " + mechanicId + " is at a different location than the workorder")
+                            .affectedResourceId(mechanicId)
+                            .build());
+                }
+            }
+        }
+    }
+
+    private void detectMechanicSkillMismatch(
+            List<Workorder> workorders,
+            List<PeopleAvailabilityResponse.PersonAvailability> people,
+            List<ConflictEntry> conflicts) {
+        Map<String, PeopleAvailabilityResponse.PersonAvailability> availabilityByPersonId = people.stream()
+                .collect(Collectors.toMap(
+                        PeopleAvailabilityResponse.PersonAvailability::getPersonId, pa -> pa, (a, b) -> a));
+        for (Workorder wo : workorders) {
+            List<String> requiredCerts = parseCertifications(wo.getRequiredCertifications());
+            if (requiredCerts.isEmpty()) {
+                continue;
+            }
+            for (String mechanicId : parseMechanicIds(wo.getMechanicIds())) {
+                PeopleAvailabilityResponse.PersonAvailability pa = availabilityByPersonId.get(mechanicId);
+                if (pa == null) {
+                    continue;
+                }
+                List<String> mechanicCerts = pa.getCertifications() != null ? pa.getCertifications() : List.of();
+                for (String required : requiredCerts) {
+                    if (!mechanicCerts.contains(required)) {
+                        conflicts.add(ConflictEntry.builder()
+                                .conflictType("MECHANIC_SKILL_MISMATCH")
+                                .severity("WARNING")
+                                .message("Mechanic " + mechanicId + " is missing required certification: " + required)
+                                .affectedResourceId(mechanicId)
+                                .build());
+                        break;
+                    }
+                }
             }
         }
     }
