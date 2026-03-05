@@ -50,10 +50,12 @@ import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.PromotionValidationService;
 import com.positivity.workorder.service.WorkorderService;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class WorkorderServiceImpl implements WorkorderService {
 
     private static final String SYSTEM_ACTOR = "system";
@@ -76,33 +78,6 @@ public class WorkorderServiceImpl implements WorkorderService {
     @Value("${customer.approval.service.url:http://localhost:8080/api/approvals}")
     private String customerApprovalServiceUrl;
 
-    public WorkorderServiceImpl(
-            WorkorderRepository workorderRepository,
-            EstimateRepository estimateRepository,
-            EstimateItemRepository estimateItemRepository,
-            WorkorderServiceRepository workorderServiceRepository,
-            WorkorderPartRepository workorderPartRepository,
-            RestClient restClient,
-            WorkorderStateMachine stateMachine,
-            AuditEventRepository auditEventRepository,
-            IdempotencyService idempotencyService,
-            PromotionValidationService promotionValidationService,
-            ShopmgrOperationalContextClient shopmgrClient,
-            Clock clock) {
-        this.clock = clock;
-        this.workorderRepository = workorderRepository;
-        this.estimateRepository = estimateRepository;
-        this.estimateItemRepository = estimateItemRepository;
-        this.workorderServiceRepository = workorderServiceRepository;
-        this.workorderPartRepository = workorderPartRepository;
-        this.restClient = restClient;
-        this.stateMachine = stateMachine;
-        this.auditEventRepository = auditEventRepository;
-        this.idempotencyService = idempotencyService;
-        this.promotionValidationService = promotionValidationService;
-        this.shopmgrClient = shopmgrClient;
-    }
-
     @Override
     public List<Workorder> getAllWorkorders() {
         return workorderRepository.findAll();
@@ -116,6 +91,10 @@ public class WorkorderServiceImpl implements WorkorderService {
     @Override
     @Transactional
     public Workorder createWorkorder(UUID estimateId, UUID customerId) {
+        return doCreateWorkorder(estimateId, customerId);
+    }
+
+    private Workorder doCreateWorkorder(UUID estimateId, UUID customerId) {
         Estimate estimate = estimateId != null
                 ? estimateRepository.findById(estimateId)
                         .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId))
@@ -156,84 +135,52 @@ public class WorkorderServiceImpl implements WorkorderService {
     @Override
     @Transactional
     public Workorder createWorkorderWithIdempotency(UUID estimateId, UUID customerId, String idempotencyKey) {
-        // Check for existing workorder if idempotency key is provided
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
-            if (existingWorkorderId.isPresent()) {
-                log.info("Idempotent request detected for key {}; returning existing workorder {}",
-                        idempotencyKey, existingWorkorderId.get());
-                return workorderRepository.findById(existingWorkorderId.get())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "Idempotency key points to non-existent workorder: " + existingWorkorderId.get()));
-            }
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return doCreateWorkorder(estimateId, customerId);
         }
 
-        // Create new workorder — fetch estimate to propagate CRM reference IDs (CAP-094
-        // Story #93)
-        Estimate estimate = estimateId != null
-                ? estimateRepository.findById(estimateId)
-                        .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId))
-                : null;
-
-        if (customerId == null && estimate != null) {
-            customerId = estimate.getCustomerId();
+        Optional<Workorder> existingWorkorder = getExistingIdempotentWorkorder(idempotencyKey);
+        if (existingWorkorder.isPresent()) {
+            return existingWorkorder.get();
         }
 
-        Workorder workorder = Workorder.builder()
-                .estimateId(estimateId)
-                .customerId(customerId)
-                .status(WorkorderStatus.DRAFT)
-                .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
-                .crmVehicleId(estimate != null ? estimate.getCrmVehicleId() : null)
-                .crmContactIds(estimate != null && estimate.getCrmContactIds() != null
-                        ? new ArrayList<>(estimate.getCrmContactIds())
-                        : new ArrayList<>())
-                .build();
-        Workorder created = createWorkorderInternal(workorder);
+        Workorder created = doCreateWorkorder(estimateId, customerId);
 
-        // Register idempotency key if provided
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            try {
-                idempotencyService.registerKey(idempotencyKey, created.getId());
-                // Force flush so any unique-constraint violation is raised within this
-                // try/catch
-                TransactionAspectSupport.currentTransactionStatus().flush();
-            } catch (DataIntegrityViolationException e) {
-                // Race condition: another request already registered this key
-                // The unique constraint violation means another transaction has committed the
-                // key.
-                // Mark our transaction for rollback to prevent persisting the duplicate
-                // workorder.
-                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        return registerIdempotencyKeyWithFallback(idempotencyKey, created);
+    }
 
-                // Retrieve the existing workorder that won the race
-                // Note: The DataIntegrityViolationException indicates the other transaction has
-                // committed, so the workorder should be visible with READ_COMMITTED isolation.
-                Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
-                if (existingWorkorderId.isPresent()) {
-                    log.warn(
-                            "Race condition detected: idempotency key {} already registered for workorder {}, returning existing workorder",
-                            idempotencyKey, existingWorkorderId.get());
-                    // Return the existing workorder to maintain idempotency semantics
-                    // The transaction will be rolled back, preventing the duplicate 'created'
-                    // workorder
-                    return workorderRepository.findById(existingWorkorderId.get())
-                            .orElseThrow(() -> new IllegalStateException(
-                                    "Idempotency key " + idempotencyKey + " points to non-existent workorder: "
-                                            + existingWorkorderId.get()));
-                } else {
-                    // This should not happen - if DataIntegrityViolationException was thrown,
-                    // the key must exist. This indicates a serious data inconsistency.
-                    log.error("Race condition detected but no existing workorder found for idempotency key {}",
-                            idempotencyKey);
-                    throw new IllegalStateException(
-                            "DataIntegrityViolationException occurred but no workorder found for key: "
-                                    + idempotencyKey);
-                }
-            }
+    private Optional<Workorder> getExistingIdempotentWorkorder(String idempotencyKey) {
+        Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+        if (existingWorkorderId.isPresent()) {
+            log.info("Idempotent request detected for key {}; returning existing workorder {}",
+                    idempotencyKey, existingWorkorderId.get());
+            Workorder workorder = workorderRepository.findById(existingWorkorderId.get())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Idempotency key points to non-existent workorder: " + existingWorkorderId.get()));
+            return Optional.of(workorder);
         }
+        return Optional.empty();
+    }
 
-        return created;
+    private Workorder registerIdempotencyKeyWithFallback(String idempotencyKey, Workorder created) {
+        try {
+            idempotencyService.registerKey(idempotencyKey, created.getId());
+            // Force flush so any unique-constraint violation is raised within this
+            // try/catch
+            TransactionAspectSupport.currentTransactionStatus().flush();
+            return created;
+        } catch (DataIntegrityViolationException e) {
+            // Race condition: another request already registered this key
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+
+            return getExistingIdempotentWorkorder(idempotencyKey).orElseThrow(() -> {
+                log.error("Race condition detected but no existing workorder found for idempotency key {}",
+                        idempotencyKey);
+                return new IllegalStateException(
+                        "DataIntegrityViolationException occurred but no workorder found for key: "
+                                + idempotencyKey);
+            });
+        }
     }
 
     @Override
