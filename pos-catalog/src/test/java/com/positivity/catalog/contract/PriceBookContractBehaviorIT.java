@@ -239,7 +239,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andReturn();
 
                 Map<String, Object> createdRule = objectMapper.readValue(ruleResult.getResponse().getContentAsString(),
-                                Map.class);
+                                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                });
                 String ruleId = String.valueOf(createdRule.get("ruleId"));
 
                 mockMvc.perform(withAuth(
@@ -272,7 +273,9 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
-                Map<String, Object> body = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+                Map<String, Object> body = objectMapper.readValue(result.getResponse().getContentAsString(),
+                                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                });
                 return String.valueOf(body.get("priceBookId"));
         }
 

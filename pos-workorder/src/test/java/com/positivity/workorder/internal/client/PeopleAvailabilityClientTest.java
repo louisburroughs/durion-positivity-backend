@@ -5,7 +5,6 @@ import java.time.Clock;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -66,7 +65,7 @@ class PeopleAvailabilityClientTest {
 
         RestClient mockRestClient = mock(RestClient.class, Answers.RETURNS_DEEP_STUBS);
         when(mockRestClient.get()
-                .uri(any(Function.class))
+                .uri(org.mockito.ArgumentMatchers.<Function<org.springframework.web.util.UriBuilder, java.net.URI>>any())
                 .retrieve()
                 .body(PeopleAvailabilityResponse.class))
                 .thenReturn(expected);

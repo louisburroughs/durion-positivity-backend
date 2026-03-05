@@ -1,15 +1,14 @@
 package com.positivity.workorder.contract;
 
-import java.time.ZoneOffset;
-import java.time.Instant;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,7 +21,6 @@ import org.springframework.context.annotation.Import;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
-import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
@@ -48,8 +46,7 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 @DisplayName("Partial Approval Promotion Contract Behavior Tests (CAP:004 Story #29)")
 @Import(ContractTestConfiguration.class)
 class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -110,7 +107,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 UUID workorderId = UUID.fromString(workorderIdStr);
 
                 // Then: Verify only APPROVED items were copied to workorder
-                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+                workorderRepository.findById(workorderId).orElseThrow();
 
                 // Count total workorder items (labor + parts)
                 List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository

@@ -115,7 +115,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andReturn();
 
                 Map<String, Object> created = objectMapper.readValue(createResult.getResponse().getContentAsString(),
-                                Map.class);
+                                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                });
                 String msrpId = String.valueOf(created.get("msrpId"));
 
                 mockMvc.perform(withAuth(put("/v1/products/{productId}/msrp/{msrpId}", productId, msrpId))

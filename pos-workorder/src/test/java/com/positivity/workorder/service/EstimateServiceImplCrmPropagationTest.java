@@ -26,7 +26,6 @@ import com.positivity.workorder.internal.client.DocumentClient;
 import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
-import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -132,7 +131,7 @@ class EstimateServiceImplCrmPropagationTest {
         ArgumentCaptor<Estimate> estimateCaptor = ArgumentCaptor.forClass(Estimate.class);
         when(estimateRepository.save(estimateCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
-        EstimateResponse response = estimateService.createEstimate(request, "test-user");
+        estimateService.createEstimate(request, "test-user");
 
         assertThat(estimateCaptor.getValue().getCrmContactIds())
                 .as("crmContactIds should be an empty list, never null, even when request field is null")
