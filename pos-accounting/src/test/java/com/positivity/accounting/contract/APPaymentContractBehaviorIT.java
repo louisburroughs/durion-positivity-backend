@@ -82,7 +82,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 vendorBillRepository.deleteAll();
 
                 // Setup test vendor and bills
-                testVendorId = UUID.randomUUID();
+                testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Bill 1: Due oldest (30 days ago), $500
                 bill1 = new VendorBill();
@@ -126,7 +126,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         void testExecutePayment_AutomaticAllocation_Success() throws Exception {
                 // Arrange: Payment of $600 with no explicit allocations (automatic allocation
                 // applies)
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request = new ExecuteAPPaymentRequest();
                 request.setVendorId(testVendorId);
                 request.setGrossAmount(new BigDecimal("600.00"));
@@ -174,7 +174,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-AP-002: Execute payment with explicit allocations")
         void testExecutePayment_ExplicitAllocations_Success() throws Exception {
                 // Arrange: Payment of $400 with explicit allocation to bill2 only
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request = new ExecuteAPPaymentRequest();
                 request.setVendorId(testVendorId);
                 request.setGrossAmount(new BigDecimal("400.00"));
@@ -217,7 +217,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-AP-003: Execute payment is idempotent (same paymentRef returns existing)")
         void testExecutePayment_Idempotency_Success() throws Exception {
                 // Arrange: Execute payment once
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request = new ExecuteAPPaymentRequest();
                 request.setVendorId(testVendorId);
                 request.setGrossAmount(new BigDecimal("200.00"));
@@ -281,7 +281,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-AP-005: Get payment by ID")
         void testGetPaymentById_Success() throws Exception {
                 // Arrange: Create a payment first
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 APPayment payment = new APPayment();
                 payment.setVendorId(testVendorId);
                 payment.setPaymentRef(paymentRef);
@@ -312,7 +312,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-AP-006: Get payment by paymentRef")
         void testGetPaymentByRef_Success() throws Exception {
                 // Arrange: Create a payment first
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 APPayment payment = new APPayment();
                 payment.setVendorId(testVendorId);
                 payment.setPaymentRef(paymentRef);
@@ -325,7 +325,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 payment.setStatus(APPaymentStatus.GL_POSTED);
                 payment.setGatewayTransactionId("TXN-67890");
                 payment.setGatewayTimestamp(Instant.now(TEST_CLOCK));
-                payment.setGlJournalEntryId(UUID.randomUUID());
+                payment.setGlJournalEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 payment.setGlPostedAt(Instant.now(TEST_CLOCK));
                 payment.setCreatedBy("test-user");
                 payment = apPaymentRepository.save(payment);
@@ -354,7 +354,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 request.setFeeAmount(BigDecimal.ZERO);
                 request.setNetAmount(new BigDecimal("-100.00"));
                 request.setCurrency("USD");
-                request.setPaymentRef(UUID.randomUUID().toString());
+                request.setPaymentRef(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
                 request.setPaymentMethod(PaymentMethod.ACH);
                 request.setAllocations(List.of());
 
@@ -370,7 +370,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("ERR-AP-002: Execute payment with allocations exceeding gross amount fails")
         void testExecutePayment_AllocationsExceedGross_BadRequest() throws Exception {
                 // Arrange: Invalid request with allocations > grossAmount
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request = new ExecuteAPPaymentRequest();
                 request.setVendorId(testVendorId);
                 request.setGrossAmount(new BigDecimal("100.00"));
@@ -398,7 +398,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("ERR-AP-003: Execute payment with same paymentRef but different payload fails")
         void testExecutePayment_IdempotencyConflict_409() throws Exception {
                 // Arrange: Execute payment once
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request1 = new ExecuteAPPaymentRequest();
                 request1.setVendorId(testVendorId);
                 request1.setGrossAmount(new BigDecimal("100.00"));
@@ -438,7 +438,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("ERR-AP-004: Get payment by invalid ID returns 404")
         void testGetPaymentById_NotFound() throws Exception {
                 // Arrange: Non-existent payment ID
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act & Assert: Expect 404 Not Found
                 mockMvc.perform(withAuth(get(API_V1_AP_PAYMENTS + "/" + nonExistentId)))
@@ -450,7 +450,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("ERR-AP-005: List bills for non-existent vendor returns empty list")
         void testListEligibleBills_EmptyList() throws Exception {
                 // Arrange: Vendor with no bills
-                UUID nonExistentVendor = UUID.randomUUID();
+                UUID nonExistentVendor = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act: GET /v1/accounting/ap/bills?vendorId={nonExistentVendor}
                 mockMvc.perform(withAuth(get(API_V1_AP_BILLS))

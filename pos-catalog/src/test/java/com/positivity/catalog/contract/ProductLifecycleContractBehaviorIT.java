@@ -56,7 +56,7 @@ class ProductLifecycleContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 LIFECYCLE_STATE, "INACTIVE",
                                                 "effectiveDate", LocalDate.now(TEST_CLOCK).plusDays(1),
-                                                "changedBy", UUID.randomUUID()))))
+                                                "changedBy", UUID.fromString("00000000-0000-0000-0000-000000000001")))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.productId").value(productId.toString()))
                                 .andExpect(jsonPath("$.lifecycleState").value("INACTIVE"));
@@ -75,7 +75,7 @@ class ProductLifecycleContractBehaviorIT extends BaseContractIntegrationTest {
                                                 LIFECYCLE_STATE, "DISCONTINUED",
                                                 "effectiveAt", Instant.now(TEST_CLOCK).plusSeconds(3600),
                                                 "overrideReason", "End of life",
-                                                "changedBy", UUID.randomUUID()))))
+                                                "changedBy", UUID.fromString("00000000-0000-0000-0000-000000000001")))))
                                 .andExpect(status().isForbidden());
         }
 
@@ -90,7 +90,7 @@ class ProductLifecycleContractBehaviorIT extends BaseContractIntegrationTest {
                                                 LIFECYCLE_STATE, "DISCONTINUED",
                                                 "effectiveAt", Instant.now(TEST_CLOCK).plusSeconds(3600),
                                                 "overrideReason", "End of life",
-                                                "changedBy", UUID.randomUUID()))))
+                                                "changedBy", UUID.fromString("00000000-0000-0000-0000-000000000001")))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.lifecycleState").value("DISCONTINUED"));
 
@@ -99,7 +99,7 @@ class ProductLifecycleContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 LIFECYCLE_STATE, "ACTIVE",
                                                 "effectiveAt", Instant.now(TEST_CLOCK).plusSeconds(7200),
-                                                "changedBy", UUID.randomUUID()))))
+                                                "changedBy", UUID.fromString("00000000-0000-0000-0000-000000000001")))))
                                 .andExpect(status().isConflict())
                                 .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
                                                 result.getResponse().getContentAsString()
@@ -119,7 +119,7 @@ class ProductLifecycleContractBehaviorIT extends BaseContractIntegrationTest {
                                                 LIFECYCLE_STATE, "DISCONTINUED",
                                                 "effectiveAt", Instant.now(TEST_CLOCK).plusSeconds(3600),
                                                 "overrideReason", "End of life",
-                                                "changedBy", UUID.randomUUID()))))
+                                                "changedBy", UUID.fromString("00000000-0000-0000-0000-000000000001")))))
                                 .andExpect(status().isOk());
 
                 mockMvc.perform(withAuth(post("/v1/products/{productId}/replacements", originalProductId))
@@ -150,7 +150,7 @@ class ProductLifecycleContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 LIFECYCLE_STATE, "ACTIVE",
                                                 "effectiveAt", Instant.now(TEST_CLOCK).plusSeconds(3600),
-                                                "changedBy", UUID.randomUUID()))))
+                                                "changedBy", UUID.fromString("00000000-0000-0000-0000-000000000001")))))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
                                                 result.getResponse().getContentAsString()

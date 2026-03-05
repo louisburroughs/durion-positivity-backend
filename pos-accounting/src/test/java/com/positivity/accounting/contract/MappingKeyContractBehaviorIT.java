@@ -73,7 +73,7 @@ public class MappingKeyContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("Create mapping key - posting category not found")
         void testCreateMappingKey_CategoryNotFound() {
                 // Given - non-existent category ID
-                UUID nonExistentCategoryId = UUID.randomUUID();
+                UUID nonExistentCategoryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When/Then
                 MappingKeyCreateRequest request = MappingKeyCreateRequest.builder()
@@ -171,7 +171,7 @@ public class MappingKeyContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("Retrieve mapping key - not found")
         void testGetMappingKey_NotFound() {
                 // Given
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When/Then
                 assertThatThrownBy(() -> mappingKeyService.getMappingKey(nonExistentId))

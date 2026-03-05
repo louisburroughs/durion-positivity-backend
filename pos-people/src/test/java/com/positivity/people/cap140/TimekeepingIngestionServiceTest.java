@@ -27,7 +27,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link TimekeepingIngestionServiceImpl} covering HR ingestion of work
+ * Unit tests for {@link TimekeepingIngestionServiceImpl} covering HR ingestion
+ * of work
  * sessions from shopmgr (CAP-140, Story #58).
  *
  * Issue: #58
@@ -52,10 +53,10 @@ class TimekeepingIngestionServiceTest {
 	void ingestWorkSession_newEntry_createsEntryWithPendingApproval() {
 		// Issue #58: AC1 — valid event, no existing entry → new
 		// TimekeepingEntry(PENDING_APPROVAL)
-		UUID tenantId = UUID.randomUUID();
-		UUID sessionId = UUID.randomUUID();
-		UUID employeeId = UUID.randomUUID();
-		UUID workOrderId = UUID.randomUUID();
+		UUID tenantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID employeeId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
 		Instant end = Instant.now(TEST_CLOCK);
 
@@ -64,7 +65,7 @@ class TimekeepingIngestionServiceTest {
 
 		when(timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(tenantId, "shopmgr",
 				sessionId))
-			.thenReturn(false);
+				.thenReturn(false);
 		when(timekeepingEntryRepository.save(any(TimekeepingEntry.class))).thenAnswer(inv -> inv.getArgument(0));
 
 		timekeepingIngestionService.ingestWorkSession(event);
@@ -91,15 +92,16 @@ class TimekeepingIngestionServiceTest {
 	@Test
 	void ingestWorkSession_duplicateEvent_isIdempotentAndDoesNotPersist() {
 		// Issue #58: AC2 — same (tenantId, sessionId) already in DB → no-op
-		UUID tenantId = UUID.randomUUID();
-		UUID sessionId = UUID.randomUUID();
+		UUID tenantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(tenantId, sessionId, UUID.randomUUID(),
+		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(tenantId, sessionId,
+				UUID.fromString("00000000-0000-0000-0000-000000000001"),
 				Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
 		when(timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(tenantId, "shopmgr",
 				sessionId))
-			.thenReturn(true);
+				.thenReturn(true);
 
 		timekeepingIngestionService.ingestWorkSession(event);
 
@@ -113,11 +115,13 @@ class TimekeepingIngestionServiceTest {
 	@Test
 	void ingestWorkSession_nullTenantId_throwsIllegalArgumentException() {
 		// Issue #58: AC3 — null tenantId simulates DLQ rejection
-		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(null, UUID.randomUUID(), UUID.randomUUID(),
+		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(null,
+				UUID.fromString("00000000-0000-0000-0000-000000000001"),
+				UUID.fromString("00000000-0000-0000-0000-000000000001"),
 				Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
 		assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
-			.isInstanceOf(IllegalArgumentException.class);
+				.isInstanceOf(IllegalArgumentException.class);
 
 		verify(timekeepingEntryRepository, never()).save(any());
 	}
@@ -129,11 +133,13 @@ class TimekeepingIngestionServiceTest {
 	@Test
 	void ingestWorkSession_nullSessionId_throwsIllegalArgumentException() {
 		// Issue #58: AC4 — null sessionId simulates DLQ rejection
-		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(UUID.randomUUID(), null, UUID.randomUUID(),
+		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
+				UUID.fromString("00000000-0000-0000-0000-000000000001"), null,
+				UUID.fromString("00000000-0000-0000-0000-000000000001"),
 				Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
 		assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
-			.isInstanceOf(IllegalArgumentException.class);
+				.isInstanceOf(IllegalArgumentException.class);
 
 		verify(timekeepingEntryRepository, never()).save(any());
 	}
@@ -146,11 +152,11 @@ class TimekeepingIngestionServiceTest {
 	void recordCorrection_validEvent_persistsCorrectionEntry() {
 		// Issue #58: AC5 — WorkSessionCorrectedEvent → supplemental TimekeepingEntry
 		// saved
-		UUID tenantId = UUID.randomUUID();
-		UUID originalSessionId = UUID.randomUUID();
-		UUID correctionId = UUID.randomUUID();
-		UUID employeeId = UUID.randomUUID();
-		UUID workOrderId = UUID.randomUUID();
+		UUID tenantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID originalSessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID correctionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID employeeId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		String correctionReason = "Clock error correction";
 		Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
 		Instant end = Instant.now(TEST_CLOCK);

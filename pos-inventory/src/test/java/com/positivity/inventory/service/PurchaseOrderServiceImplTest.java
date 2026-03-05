@@ -91,16 +91,17 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("createPurchaseOrder should save and return a valid purchase order")
         void createPurchaseOrder_shouldSaveAndReturnPurchaseOrder() {
                 // Arrange
-                PurchaseOrderLineRequest lineRequest = new PurchaseOrderLineRequest(1, UUID.randomUUID(), "Test Item",
+                PurchaseOrderLineRequest lineRequest = new PurchaseOrderLineRequest(1,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"), "Test Item",
                                 BigDecimal.TEN,
                                 1000L, "TAX-10", "GL-ACCOUNT-01");
                 CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
-                                UUID.randomUUID(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                 LocalDate.now(fixedClock),
                                 "USD",
                                 "NET30",
                                 LocalDate.now(fixedClock).plusDays(30),
-                                UUID.randomUUID(), // shipToLocationId
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"), // shipToLocationId
                                 "test-user",
                                 "Test PO",
                                 List.of(lineRequest));
@@ -108,7 +109,7 @@ class PurchaseOrderServiceImplTest {
                 when(purchaseOrderRepository.save(any(PurchaseOrderEntity.class))).thenAnswer(invocation -> {
                         PurchaseOrderEntity entity = invocation.getArgument(0);
                         if (entity.getPurchaseOrderId() == null) {
-                                entity.setPurchaseOrderId(UUID.randomUUID());
+                                entity.setPurchaseOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                         }
                         return entity;
                 });
@@ -142,7 +143,7 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("getPurchaseOrder should return a purchase order when found")
         void getPurchaseOrder_shouldReturnPoWhenFound() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderEntity po = new PurchaseOrderEntity();
                 po.setPurchaseOrderId(poId);
                 po.setLines(Collections.emptyList());
@@ -160,7 +161,7 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("getPurchaseOrder should throw exception when not found")
         void getPurchaseOrder_shouldThrowResourceNotFoundException() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.empty());
 
                 // Act & Assert
@@ -173,12 +174,12 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("approvePurchaseOrder should approve a DRAFT PO")
         void approvePurchaseOrder_shouldApproveDraftPo() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderEntity po = PurchaseOrderEntity.builder()
                                 .purchaseOrderId(poId)
                                 .status(PurchaseOrderStatus.DRAFT)
                                 .lines(Collections.emptyList())
-                                .vendorId(UUID.randomUUID())
+                                .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .grandTotalMinor(1000L)
                                 .currency("USD")
                                 .build();
@@ -200,7 +201,7 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("approvePurchaseOrder should throw exception for non-DRAFT PO")
         void approvePurchaseOrder_shouldThrowExceptionForNonDraftPo() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderEntity po = PurchaseOrderEntity.builder()
                                 .purchaseOrderId(poId)
                                 .status(PurchaseOrderStatus.APPROVED)
@@ -218,7 +219,7 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("revisePurchaseOrder should revise a PO")
         void revisePurchaseOrder_shouldRevisePo() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderEntity po = PurchaseOrderEntity.builder()
                                 .purchaseOrderId(poId)
                                 .versionNumber(1)
@@ -243,7 +244,7 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("cancelPurchaseOrder should cancel an cancellable PO")
         void cancelPurchaseOrder_shouldCancelCancellablePo() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderEntity po = PurchaseOrderEntity.builder()
                                 .purchaseOrderId(poId)
                                 .status(PurchaseOrderStatus.DRAFT)
@@ -264,7 +265,7 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("cancelPurchaseOrder should throw exception for non-cancellable PO")
         void cancelPurchaseOrder_shouldThrowExceptionForNonCancellablePo() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderEntity po = PurchaseOrderEntity.builder()
                                 .purchaseOrderId(poId)
                                 .status(PurchaseOrderStatus.CLOSED)
@@ -281,8 +282,8 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("receivePurchaseOrder should process partial receipt")
         void receivePurchaseOrder_shouldProcessPartialReceipt() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderLineEntity line = PurchaseOrderLineEntity.builder()
                                 .lineId(lineId)
                                 .openQuantityDecimal(BigDecimal.TEN)
@@ -321,8 +322,8 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("receivePurchaseOrder should process full receipt")
         void receivePurchaseOrder_shouldProcessFullReceipt() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderLineEntity line = PurchaseOrderLineEntity.builder()
                                 .lineId(lineId)
                                 .openQuantityDecimal(BigDecimal.TEN)
@@ -356,7 +357,7 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("receivePurchaseOrder should throw exception for DRAFT PO")
         void receivePurchaseOrder_shouldThrowExceptionForDraftPo() {
                 // Arrange
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderEntity po = PurchaseOrderEntity.builder()
                                 .purchaseOrderId(poId)
                                 .status(PurchaseOrderStatus.DRAFT)
@@ -375,7 +376,7 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("listPurchaseOrders should filter by vendor and status")
         void listPurchaseOrders_shouldFilterByVendorAndStatus() {
                 // Arrange
-                UUID vendorId = UUID.randomUUID();
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PurchaseOrderEntity po = PurchaseOrderEntity.builder().vendorId(vendorId)
                                 .status(PurchaseOrderStatus.APPROVED)
                                 .lines(Collections.emptyList()).build();
@@ -401,15 +402,16 @@ class PurchaseOrderServiceImplTest {
         @DisplayName("listPurchaseOrders should filter by vendor, currency, and location")
         void listPurchaseOrders_shouldFilterByVendorCurrencyAndLocation() {
                 // Arrange
-                UUID vendorId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String currency = "USD";
 
                 PurchaseOrderEntity po1 = PurchaseOrderEntity.builder().vendorId(vendorId).currency(currency)
                                 .shipToLocationId(locationId).lines(new ArrayList<>()).build();
                 PurchaseOrderEntity po2 = PurchaseOrderEntity.builder().vendorId(vendorId).currency("EUR")
                                 .shipToLocationId(locationId).lines(new ArrayList<>()).build();
-                PurchaseOrderEntity po3 = PurchaseOrderEntity.builder().vendorId(UUID.randomUUID()).currency(currency)
+                PurchaseOrderEntity po3 = PurchaseOrderEntity.builder()
+                                .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001")).currency(currency)
                                 .shipToLocationId(locationId).lines(new ArrayList<>()).build();
 
                 List<PurchaseOrderEntity> allPos = List.of(po1, po2, po3);

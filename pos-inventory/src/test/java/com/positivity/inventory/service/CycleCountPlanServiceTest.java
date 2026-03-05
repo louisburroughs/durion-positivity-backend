@@ -64,10 +64,11 @@ class CycleCountPlanServiceTest {
         @Test
         void createPlan_validRequest_returnsPlanResponseWithPlannedStatus() {
                 // Issue #176: happy path — future date, valid zones → PLANNED status
-                UUID locationId = UUID.randomUUID();
-                List<UUID> zoneIds = List.of(UUID.randomUUID(), UUID.randomUUID());
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                List<UUID> zoneIds = List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 LocalDate scheduledDate = LocalDate.now(FIXED_CLOCK).plusDays(7);
-                UUID generatedPlanId = UUID.randomUUID();
+                UUID generatedPlanId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
                                 .locationId(locationId)
@@ -100,8 +101,8 @@ class CycleCountPlanServiceTest {
         void createPlan_pastScheduledDate_throwsIllegalArgumentException() {
                 // Issue #176: scheduledDate yesterday → IAE → becomes 400 in controller
                 CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                                .locationId(UUID.randomUUID())
-                                .zoneIds(List.of(UUID.randomUUID()))
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .scheduledDate(LocalDate.now(FIXED_CLOCK).minusDays(1))
                                 .build();
 
@@ -120,7 +121,7 @@ class CycleCountPlanServiceTest {
         void createPlan_emptyZoneIds_throwsIllegalArgumentException() {
                 // Issue #176: no zones → IAE → becomes 400 in controller
                 CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                                .locationId(UUID.randomUUID())
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .zoneIds(List.of())
                                 .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(1))
                                 .build();
@@ -140,7 +141,7 @@ class CycleCountPlanServiceTest {
         void createPlan_nullLocationId_throwsIllegalArgumentException() {
                 CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
                                 .locationId(null) // Test case: null locationId
-                                .zoneIds(List.of(UUID.randomUUID()))
+                                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(1))
                                 .build();
 
@@ -158,7 +159,7 @@ class CycleCountPlanServiceTest {
         @Test
         void createPlan_nullZoneIds_throwsIllegalArgumentException() {
                 CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                                .locationId(UUID.randomUUID())
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .zoneIds(null) // Test case: null zoneIds
                                 .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(1))
                                 .build();
@@ -177,8 +178,8 @@ class CycleCountPlanServiceTest {
         @Test
         void createPlan_nullScheduledDate_throwsIllegalArgumentException() {
                 CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                                .locationId(UUID.randomUUID())
-                                .zoneIds(List.of(UUID.randomUUID()))
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .scheduledDate(null) // Test case: null scheduledDate
                                 .build();
 
@@ -196,8 +197,8 @@ class CycleCountPlanServiceTest {
         @Test
         void createPlan_todaysScheduledDate_throwsIllegalArgumentException() {
                 CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                                .locationId(UUID.randomUUID())
-                                .zoneIds(List.of(UUID.randomUUID()))
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .scheduledDate(LocalDate.now(FIXED_CLOCK)) // Test case: today's date
                                 .build();
 
@@ -216,9 +217,9 @@ class CycleCountPlanServiceTest {
         @Test
         void getPlan_existingId_returnsPlanResponse() {
                 // Issue #176: known planId → entity found → response populated
-                UUID planId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
-                List<UUID> zoneIds = List.of(UUID.randomUUID());
+                UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                List<UUID> zoneIds = List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 CycleCountPlan entity = CycleCountPlan.builder()
                                 .planId(planId)
@@ -247,7 +248,7 @@ class CycleCountPlanServiceTest {
         @Test
         void getPlan_nonExistentId_throwsException() {
                 // Issue #176: unknown planId → empty → CycleCountPlanNotFoundException → 404
-                UUID unknownId = UUID.randomUUID();
+                UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(cycleCountPlanRepository.findById(unknownId)).thenReturn(Optional.empty());
 
                 assertThatThrownBy(() -> service.getPlan(unknownId))

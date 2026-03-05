@@ -79,7 +79,7 @@ class UserPersonLinkServiceTest {
 		when(linkRepository.existsByUserId(testUserId)).thenReturn(false);
 		when(linkRepository.save(any(UserPersonLink.class))).thenAnswer(invocation -> {
 			UserPersonLink link = invocation.getArgument(0);
-			link.setId(UUID.randomUUID());
+			link.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 			link.setCreatedAt(Instant.now(TEST_CLOCK));
 			return link;
 		});
@@ -104,7 +104,7 @@ class UserPersonLinkServiceTest {
 		when(personRepository.findById(testPersonId2)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.linkUserToPerson(request)).isInstanceOf(PersonNotFoundException.class)
-			.hasMessageContaining("Person not found");
+				.hasMessageContaining("Person not found");
 
 		verify(linkRepository, never()).save(any(UserPersonLink.class));
 	}
@@ -114,11 +114,11 @@ class UserPersonLinkServiceTest {
 		LinkUserToPersonRequest request = new LinkUserToPersonRequest(testUserId, testPersonId);
 
 		when(personRepository.findById(testPersonId))
-			.thenReturn(Optional.of(Person.builder().id(testPersonId).build()));
+				.thenReturn(Optional.of(Person.builder().id(testPersonId).build()));
 		when(linkRepository.existsByUserId(testUserId)).thenReturn(true);
 
 		assertThatThrownBy(() -> service.linkUserToPerson(request)).isInstanceOf(UserAlreadyLinkedException.class)
-			.hasMessageContaining("already linked");
+				.hasMessageContaining("already linked");
 
 		verify(linkRepository, never()).save(any(UserPersonLink.class));
 	}
@@ -137,8 +137,8 @@ class UserPersonLinkServiceTest {
 		when(linkRepository.existsByUserId(testUserId2)).thenReturn(false);
 
 		assertThatThrownBy(() -> service.unlinkUserFromPerson(testUserId2))
-			.isInstanceOf(UserPersonLinkNotFoundException.class)
-			.hasMessageContaining("No person link found");
+				.isInstanceOf(UserPersonLinkNotFoundException.class)
+				.hasMessageContaining("No person link found");
 
 		verify(linkRepository, never()).deleteByUserId(any());
 	}
@@ -150,11 +150,11 @@ class UserPersonLinkServiceTest {
 		link.setPersonId(testPersonId);
 
 		Person person = Person.builder()
-			.id(testPersonId)
-			.firstName("Jordan")
-			.lastName("Case")
-			.primaryEmail("jordan@example.com")
-			.build();
+				.id(testPersonId)
+				.firstName("Jordan")
+				.lastName("Case")
+				.primaryEmail("jordan@example.com")
+				.build();
 
 		when(linkRepository.findByUserId(testUserId)).thenReturn(Optional.of(link));
 		when(personRepository.findById(testPersonId)).thenReturn(Optional.of(person));
@@ -172,14 +172,14 @@ class UserPersonLinkServiceTest {
 		when(linkRepository.findByUserId(testUserId2)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.findPersonByUserId(testUserId2))
-			.isInstanceOf(UserPersonLinkNotFoundException.class)
-			.hasMessageContaining("No person link found");
+				.isInstanceOf(UserPersonLinkNotFoundException.class)
+				.hasMessageContaining("No person link found");
 	}
 
 	@Test
 	void findUserIdsByPersonId_success() {
 		when(personRepository.findById(testPersonId))
-			.thenReturn(Optional.of(Person.builder().id(testPersonId).build()));
+				.thenReturn(Optional.of(Person.builder().id(testPersonId).build()));
 
 		UserPersonLink firstLink = new UserPersonLink();
 		firstLink.setUserId(testUserId);
@@ -199,7 +199,7 @@ class UserPersonLinkServiceTest {
 	@Test
 	void findUserIdsByPersonId_empty() {
 		when(personRepository.findById(testPersonId2))
-			.thenReturn(Optional.of(Person.builder().id(testPersonId2).build()));
+				.thenReturn(Optional.of(Person.builder().id(testPersonId2).build()));
 		when(linkRepository.findByPersonId(testPersonId2)).thenReturn(List.of());
 
 		List<UUID> userIds = service.findUserIdsByPersonId(testPersonId2);

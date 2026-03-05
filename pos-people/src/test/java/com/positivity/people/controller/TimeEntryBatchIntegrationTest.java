@@ -58,8 +58,8 @@ class TimeEntryBatchIntegrationTest {
 
 	@Test
 	void approveTimeEntries_withValidEntries_succeeds() {
-		java.util.UUID entryId1 = java.util.UUID.randomUUID();
-		java.util.UUID entryId2 = java.util.UUID.randomUUID();
+		java.util.UUID entryId1 = java.util.UUID.fromString("00000000-0000-0000-0000-000000000001");
+		java.util.UUID entryId2 = java.util.UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 		TimeEntry entry1 = new TimeEntry();
 		entry1.setTimeEntryId(entryId1);
@@ -87,11 +87,12 @@ class TimeEntryBatchIntegrationTest {
 	void rejectTimeEntries_withoutReasonForEntry_returnsBadRequest() {
 		TimeEntryDecisionBatchRequest request = new TimeEntryDecisionBatchRequest();
 		TimeEntryDecisionBatchRequest.Decision d1 = new TimeEntryDecisionBatchRequest.Decision();
-		d1.setTimeEntryId(java.util.UUID.randomUUID().toString());
+		d1.setTimeEntryId(java.util.UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 		d1.setRejectionReason(null);
 		request.setDecisions(Arrays.asList(d1));
 
-		// The validation logic moved to the service throwing IllegalArgumentException, OR
+		// The validation logic moved to the service throwing IllegalArgumentException,
+		// OR
 		// it will be caught by
 		// PeopleExceptionHandler as @Valid handles MethodArgumentNotValidException.
 		// For a unit test directly calling the controller without Spring Boot Web
@@ -105,7 +106,7 @@ class TimeEntryBatchIntegrationTest {
 
 	@Test
 	void rejectTimeEntries_withValidReasons_succeeds() {
-		java.util.UUID entryId = java.util.UUID.randomUUID();
+		java.util.UUID entryId = java.util.UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntry entry = new TimeEntry();
 		entry.setTimeEntryId(entryId);
 		entry.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL);

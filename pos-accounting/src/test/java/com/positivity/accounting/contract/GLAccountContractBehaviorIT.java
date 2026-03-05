@@ -41,8 +41,7 @@ import com.positivity.accounting.service.GLAccountService;
  */
 @Transactional
 public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private GLAccountService glAccountService;
@@ -120,7 +119,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("Retrieve GL account - not found")
         void testGetGLAccount_NotFound() {
                 // Given
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When/Then
                 assertThatThrownBy(() -> glAccountService.getGLAccount(nonExistentId))

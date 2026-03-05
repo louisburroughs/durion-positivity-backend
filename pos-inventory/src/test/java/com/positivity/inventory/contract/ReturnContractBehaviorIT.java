@@ -68,8 +68,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Return Contract Behavior — Story #177")
 class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -102,7 +101,7 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #177: RC1 — controller must delegate to ReturnService and surface its
                 // returnId.
 
-                UUID workorderId = UUID.randomUUID();
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID expectedReturnId = UUID.fromString("00000000-0000-0000-0000-000000000042");
 
                 ReturnResponse expectedReturnResponse = new ReturnResponse(
@@ -111,14 +110,15 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
                                 "Leftover brake pads",
                                 1,
                                 Instant.now(TEST_CLOCK),
-                                List.of(UUID.randomUUID()));
+                                List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
                 when(returnService.returnItemsToStock(any(ReturnItemsRequest.class)))
                                 .thenReturn(expectedReturnResponse);
 
                 ReturnItemsRequest requestBody = new ReturnItemsRequest(
                                 workorderId,
                                 "Leftover brake pads",
-                                List.of(new ReturnItemLine(UUID.randomUUID(), 2)));
+                                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                2)));
 
                 // Act + Assert
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns"))
@@ -147,9 +147,10 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
         void RC2_returnItemsToStock_missingGatewayAuth_returns403() throws Exception {
                 // Issue #177: ADR-0011/ADR-0014 — omitting X-Authorities must yield 403
                 ReturnItemsRequest requestBody = new ReturnItemsRequest(
-                                UUID.randomUUID(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                 "Surplus parts",
-                                List.of(new ReturnItemLine(UUID.randomUUID(), 1)));
+                                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                1)));
 
                 mockMvc.perform(post("/v1/inventory/returns")
                                 .header("X-User", "test-user")
@@ -176,9 +177,10 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
         void RC3_returnItemsToStock_blankReturnReason_returns400() throws Exception {
                 // Issue #177: RC3 — blank reason must be rejected by @NotBlank bean validation
                 ReturnItemsRequest requestBody = new ReturnItemsRequest(
-                                UUID.randomUUID(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                 "   ", // blank — violates @NotBlank
-                                List.of(new ReturnItemLine(UUID.randomUUID(), 1)));
+                                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                1)));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -203,12 +205,12 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /v1/inventory/returns with quantity exceeded → 422 Unprocessable Entity")
         void RC4_returnItemsToStock_quantityExceeded_returns422() throws Exception {
                 // Issue #177: RC4 — ReturnQuantityExceededException must map to 422 via handler
-                UUID skuId = UUID.randomUUID();
+                UUID skuId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(returnService.returnItemsToStock(any(ReturnItemsRequest.class)))
                                 .thenThrow(new ReturnQuantityExceededException(skuId, 99, 2));
 
                 ReturnItemsRequest requestBody = new ReturnItemsRequest(
-                                UUID.randomUUID(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                 "Overclaim return",
                                 List.of(new ReturnItemLine(skuId, 99)));
 

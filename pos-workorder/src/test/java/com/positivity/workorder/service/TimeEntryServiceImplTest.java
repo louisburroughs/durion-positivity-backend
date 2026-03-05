@@ -35,10 +35,9 @@ import static org.mockito.Mockito.when;
 class TimeEntryServiceImplTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
-    private static final UUID TIME_ENTRY_ID = UUID.randomUUID();
-    private static final UUID WORK_ORDER_ID = UUID.randomUUID();
-    private static final UUID PERSON_ID = UUID.randomUUID();
+    private static final UUID TIME_ENTRY_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID WORK_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID PERSON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Mock
     private TimeEntryRepository timeEntryRepository;
@@ -76,7 +75,8 @@ class TimeEntryServiceImplTest {
     @DisplayName("AC4: approveEntry non-existent ID throws TimeEntryNotFoundException")
     void approveEntry_notFound_throws() {
         when(timeEntryRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> timeEntryService.approveTimeEntry(UUID.randomUUID()))
+        assertThatThrownBy(
+                () -> timeEntryService.approveTimeEntry(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                 .isInstanceOf(TimeEntryNotFoundException.class);
     }
 
@@ -106,8 +106,9 @@ class TimeEntryServiceImplTest {
     @DisplayName("AC4 (reject): rejectEntry non-existent ID throws TimeEntryNotFoundException")
     void rejectEntry_notFound_throws() {
         when(timeEntryRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> timeEntryService.rejectTimeEntry(UUID.randomUUID(),
-                new RejectTimeEntryRequest("some reason")))
+        assertThatThrownBy(
+                () -> timeEntryService.rejectTimeEntry(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        new RejectTimeEntryRequest("some reason")))
                 .isInstanceOf(TimeEntryNotFoundException.class);
     }
 

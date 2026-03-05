@@ -86,7 +86,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
-                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 submitRequest.setSourceSystem("TEST_SYSTEM");
                 submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
@@ -128,7 +128,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
-                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 submitRequest.setSourceSystem("TEST_SYSTEM");
                 submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
@@ -192,7 +192,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
-                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 submitRequest.setSourceSystem("TEST_SYSTEM");
                 submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
@@ -236,7 +236,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
-                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 submitRequest.setSourceSystem("TEST_SYSTEM");
                 submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
@@ -282,7 +282,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("Reprocess returns 404 for non-existent event")
         void testReprocessNonExistentEventNotFound() throws Exception {
                 // Arrange: Use a valid UUID format that doesn't exist in database
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act: Attempt to reprocess
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -324,7 +324,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                                 .reprocessingNotes("Missing user ID")
                                 .build();
 
-                UUID eventId = UUID.randomUUID();
+                UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act & Assert: Should return 400 Bad Request
                 mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
@@ -386,7 +386,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
         private UUID createProcessedEvent() {
                 AccountingEvent event = new AccountingEvent();
                 event.setEventType("INVOICE_RECEIVED");
-                event.setOrganizationId(UUID.randomUUID());
+                event.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 event.setSourceSystem("TEST_SYSTEM");
                 event.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 event.setPayload(Map.of(
@@ -395,7 +395,8 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                                 "description", "Already processed invoice"));
                 event.setStatus(AccountingEventStatus.PROCESSED);
                 event.setProcessedAt(Instant.now(TEST_CLOCK));
-                event.setJournalEntryId(UUID.randomUUID()); // Simulate JE was created
+                event.setJournalEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001")); // Simulate JE was
+                                                                                                  // created
 
                 AccountingEvent saved = accountingEventRepository.save(event);
                 return saved.getEventId();
@@ -403,7 +404,8 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
 
         private void createDefaultMappingForSuccessfulReprocessing() {
                 GLAccount debitAccount = new GLAccount();
-                debitAccount.setAccountCode("11" + UUID.randomUUID().toString().substring(0, 8));
+                debitAccount.setAccountCode("11"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
                 debitAccount.setAccountName("Suspense Test Debit");
                 debitAccount.setAccountType(AccountType.ASSET);
                 debitAccount.setActivationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
@@ -412,7 +414,8 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
                 debitAccount = glAccountRepository.save(debitAccount);
 
                 GLAccount creditAccount = new GLAccount();
-                creditAccount.setAccountCode("41" + UUID.randomUUID().toString().substring(0, 8));
+                creditAccount.setAccountCode("41"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
                 creditAccount.setAccountName("Suspense Test Credit");
                 creditAccount.setAccountType(AccountType.REVENUE);
                 creditAccount.setActivationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));

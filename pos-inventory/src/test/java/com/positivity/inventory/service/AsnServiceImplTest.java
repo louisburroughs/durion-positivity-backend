@@ -96,9 +96,9 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("createAsn emits ASNLoaded event and no GL-related events")
     void createAsn_emitsAsnLoadedEvent_butNoGlEvent() {
-        UUID poId = UUID.randomUUID();
-        UUID vendorId = UUID.randomUUID();
-        UUID asnId = UUID.randomUUID();
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         CreateAsnLineRequest lineRequest = new CreateAsnLineRequest();
         lineRequest.setPoId(poId);
@@ -184,9 +184,9 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("createAsn throws InvalidPoReferenceException for non-existent PO")
     void createAsn_throwsInvalidPoReferenceException_forNonExistentPO() {
-        UUID poId = UUID.randomUUID();
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CreateAsnRequest request = new CreateAsnRequest();
-        request.setVendorId(UUID.randomUUID());
+        request.setVendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setAsnReferenceNumber("ASN-INVALID-PO");
         request.setRelatedPoIds(List.of(poId));
         request.setLineItems(Collections.emptyList());
@@ -201,7 +201,7 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("createAsn throws DuplicateAsnException for existing ASN")
     void createAsn_throwsDuplicateAsnException_forExistingAsn() {
-        UUID vendorId = UUID.randomUUID();
+        UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String asnRef = "ASN-DUPLICATE";
         CreateAsnRequest request = new CreateAsnRequest();
         request.setVendorId(vendorId);
@@ -220,7 +220,7 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("getAsn returns AsnResponse when found")
     void getAsn_returnsAsnResponse_whenFound() {
-        UUID asnId = UUID.randomUUID();
+        UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AdvanceShippingNoticeEntity asnEntity = AdvanceShippingNoticeEntity.builder().asnId(asnId).build();
         when(asnRepository.findById(asnId)).thenReturn(Optional.of(asnEntity));
 
@@ -233,7 +233,7 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("getAsn throws ResourceNotFoundException when not found")
     void getAsn_throwsResourceNotFoundException_whenNotFound() {
-        UUID asnId = UUID.randomUUID();
+        UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(asnRepository.findById(asnId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> {
@@ -244,10 +244,10 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("createGoodsReceipt saves receipt and emits events")
     void createGoodsReceipt_savesReceiptAndEmitsEvents() {
-        UUID asnId = UUID.randomUUID();
-        UUID poId = UUID.randomUUID();
-        UUID locationId = UUID.randomUUID();
-        UUID actorId = UUID.randomUUID();
+        UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID actorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String actor = actorId.toString();
 
         CreateGoodsReceiptLineRequest line = new CreateGoodsReceiptLineRequest();
@@ -264,7 +264,7 @@ class AsnServiceImplTest {
         PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
                 .purchaseOrderId(poId)
                 .status(PurchaseOrderStatus.APPROVED)
-                .vendorId(UUID.randomUUID())
+                .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .poNumber("PO-UNIT-GR-001")
                 .currency("USD")
                 .subtotalMinor(10_000L)
@@ -292,7 +292,7 @@ class AsnServiceImplTest {
         when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(invocation -> {
             GoodsReceiptEntity entity = invocation.getArgument(0);
             if (entity.getReceiptId() == null) {
-                entity.setReceiptId(UUID.randomUUID());
+                entity.setReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
             }
             return entity;
         });
@@ -307,10 +307,10 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("createGoodsReceipt throws OverReceiptNotPermittedException")
     void createGoodsReceipt_throwsOverReceiptNotPermittedException() {
-        UUID asnId = UUID.randomUUID();
-        UUID poId = UUID.randomUUID();
-        UUID locationId = UUID.randomUUID();
-        UUID actorId = UUID.randomUUID();
+        UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID actorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String actor = actorId.toString();
 
         CreateGoodsReceiptLineRequest line = new CreateGoodsReceiptLineRequest();
@@ -327,7 +327,7 @@ class AsnServiceImplTest {
         PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
                 .purchaseOrderId(poId)
                 .status(PurchaseOrderStatus.APPROVED)
-                .vendorId(UUID.randomUUID())
+                .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .poNumber("PO-UNIT-GR-002")
                 .currency("USD")
                 .subtotalMinor(10L)
@@ -362,9 +362,9 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("createGoodsReceipt sets status to PARTIALLY_RECEIVED")
     void createGoodsReceipt_setsStatusToPartiallyReceived() {
-        UUID asnId = UUID.randomUUID();
-        UUID poId = UUID.randomUUID();
-        UUID locationId = UUID.randomUUID();
+        UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String actor = "test-user";
 
         CreateGoodsReceiptLineRequest line1 = new CreateGoodsReceiptLineRequest();
@@ -381,7 +381,7 @@ class AsnServiceImplTest {
         PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
                 .purchaseOrderId(poId)
                 .status(PurchaseOrderStatus.APPROVED)
-                .vendorId(UUID.randomUUID())
+                .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .poNumber("PO-UNIT-GR-003")
                 .currency("USD")
                 .subtotalMinor(10_000L)
@@ -417,7 +417,7 @@ class AsnServiceImplTest {
         when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(invocation -> {
             GoodsReceiptEntity entity = invocation.getArgument(0);
             if (entity.getReceiptId() == null) {
-                entity.setReceiptId(UUID.randomUUID());
+                entity.setReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
             }
             return entity;
         });
@@ -432,9 +432,9 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("createGoodsReceipt sets status to FULLY_RECEIVED")
     void createGoodsReceipt_setsStatusToFullyReceived() {
-        UUID asnId = UUID.randomUUID();
-        UUID poId = UUID.randomUUID();
-        UUID locationId = UUID.randomUUID();
+        UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String actor = "test-user";
 
         CreateGoodsReceiptLineRequest line1 = new CreateGoodsReceiptLineRequest();
@@ -451,7 +451,7 @@ class AsnServiceImplTest {
         PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
                 .purchaseOrderId(poId)
                 .status(PurchaseOrderStatus.APPROVED)
-                .vendorId(UUID.randomUUID())
+                .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .poNumber("PO-UNIT-GR-004")
                 .currency("USD")
                 .subtotalMinor(10_000L)
@@ -479,7 +479,7 @@ class AsnServiceImplTest {
         when(goodsReceiptRepository.save(any(GoodsReceiptEntity.class))).thenAnswer(invocation -> {
             GoodsReceiptEntity entity = invocation.getArgument(0);
             if (entity.getReceiptId() == null) {
-                entity.setReceiptId(UUID.randomUUID());
+                entity.setReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
             }
             return entity;
         });
@@ -494,7 +494,7 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("getGoodsReceipt returns GoodsReceiptResponse when found")
     void getGoodsReceipt_returnsGoodsReceiptResponse_whenFound() {
-        UUID receiptId = UUID.randomUUID();
+        UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         GoodsReceiptEntity receiptEntity = GoodsReceiptEntity.builder().receiptId(receiptId).build();
         when(goodsReceiptRepository.findById(receiptId)).thenReturn(Optional.of(receiptEntity));
 
@@ -507,7 +507,7 @@ class AsnServiceImplTest {
     @Test
     @DisplayName("getGoodsReceipt throws ResourceNotFoundException when not found")
     void getGoodsReceipt_throwsResourceNotFoundException_whenNotFound() {
-        UUID receiptId = UUID.randomUUID();
+        UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(goodsReceiptRepository.findById(receiptId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> {

@@ -44,7 +44,6 @@ import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
 class AppointmentsServiceImplRescheduleTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Mock
     private AppointmentRepository appointmentRepository;
     @Mock
@@ -71,7 +70,7 @@ class AppointmentsServiceImplRescheduleTest {
     private AppointmentsServiceImpl appointmentsService;
 
     private static final Instant FIXED_NOW = Instant.parse("2026-03-01T12:00:00Z");
-    private static final UUID APPOINTMENT_ID = UUID.randomUUID();
+    private static final UUID APPOINTMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @BeforeEach
     void setUp() {

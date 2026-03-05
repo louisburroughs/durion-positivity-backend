@@ -53,9 +53,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class PaymentApplicationServiceImpl implements com.positivity.accounting.service.PaymentApplicationService {
-    private final Clock clock;
+        private static final String PAYMENT_NOT_FOUND = "Payment not found: ";
 
-
+        private final Clock clock;
         private final ReceivablePaymentRepository receivablePaymentRepository;
         private final PaymentApplicationRepository paymentApplicationRepository;
         private final CustomerCreditRepository customerCreditRepository;
@@ -258,7 +258,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         public void voidPayment(@NonNull UUID paymentId) {
                 ReceivablePayment payment = receivablePaymentRepository.findById(paymentId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Payment not found: " + paymentId));
+                                                PAYMENT_NOT_FOUND + paymentId));
 
                 List<PaymentApplication> existingApplications = paymentApplicationRepository.findByPaymentId(paymentId);
                 if (!existingApplications.isEmpty()) {
@@ -297,7 +297,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         public void reversePayment(@NonNull UUID paymentId, @NonNull String reason) {
                 receivablePaymentRepository.findById(paymentId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Payment not found: " + paymentId));
+                                                PAYMENT_NOT_FOUND + paymentId));
 
                 List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(paymentId);
                 if (applications.isEmpty()) {
@@ -509,7 +509,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         private ReceivablePayment getAvailablePayment(UUID paymentId) {
                 ReceivablePayment payment = receivablePaymentRepository.findById(paymentId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Payment not found: " + paymentId));
+                                                PAYMENT_NOT_FOUND + paymentId));
                 if (payment.getStatus() != ReceivablePaymentStatus.AVAILABLE) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Payment " + paymentId + " is not available (status: " + payment.getStatus()

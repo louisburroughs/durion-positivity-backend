@@ -121,7 +121,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_withScheduledStatus_succeeds() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, false);
 
@@ -143,7 +143,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_withConfirmedStatus_succeeds() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.CHECKED_IN);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.SHOP_CAPACITY, null, false);
 
@@ -163,7 +163,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_withAwaitingPartsStatus_succeeds() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.WAITING_FOR_PARTS);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.PARTS_DELAY, null, false);
 
@@ -184,7 +184,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_withCancelledStatus_throwsAppointmentStateException() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.CANCELLED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, false);
 
@@ -201,7 +201,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_withInProgressStatus_throwsAppointmentStateException() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.WORK_IN_PROGRESS);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, false);
 
@@ -219,7 +219,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_withOtherReasonAndNullNotes_throwsAppointmentValidationException() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.OTHER, null, false);
 
@@ -235,7 +235,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_withOtherReasonAndBlankNotes_throwsAppointmentValidationException() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.OTHER, "   ", false);
 
@@ -251,7 +251,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_withOtherReasonAndValidNotes_succeeds() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         RescheduleAppointmentRequest request = buildRequest(
                 RescheduleReasonCode.OTHER, "Customer rescheduled due to work conflict", false);
@@ -275,7 +275,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_savesRescheduleHistory_withCorrectFields() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.WEATHER, "Storm warning", true);
 
@@ -312,7 +312,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_emitsEvent_withReasonAndRescheduledAt() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         appointment.setWorkorderLinkRef("wo-ref-001"); // event is conditional on non-null workorderLinkRef
 
@@ -346,7 +346,7 @@ class AppointmentsServiceImplStory11Test {
      */
     @Test
     void reschedule_doesNotEmitEvent_whenWorkorderLinkRefIsNull() {
-        UUID appointmentId = UUID.randomUUID();
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         // workorderLinkRef left null (default from buildAppointment)
 
@@ -367,10 +367,10 @@ class AppointmentsServiceImplStory11Test {
         Appointment appointment = new Appointment();
         appointment.setAppointmentId(appointmentId);
         appointment.setStatus(status);
-        appointment.setLocationId(UUID.randomUUID());
+        appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         appointment.setResourceId("tech-1");
-        appointment.setCrmCustomerId(UUID.randomUUID());
-        appointment.setCrmVehicleId(UUID.randomUUID());
+        appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         appointment.setStartAt(ORIGINAL_START);
         appointment.setEndAt(ORIGINAL_END);
         return appointment;

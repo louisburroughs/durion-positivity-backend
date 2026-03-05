@@ -93,7 +93,7 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
         void invalidPoReference_returns400() throws Exception {
                 // Issue #571 AC #1: service must reject invalid PO references with
                 // InvalidPoReferenceException
-                UUID invalidPoId = UUID.randomUUID();
+                UUID invalidPoId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(asnService.createAsn(any(CreateAsnRequest.class), anyString()))
                                 .thenThrow(new InvalidPoReferenceException(
                                                 "INVALID_PO_REFERENCE: PO " + invalidPoId
@@ -120,9 +120,9 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /asns (valid) → 201 Created, no ApplicationEvent published")
         void asnCreation_producesNoGlEntry() throws Exception {
                 // Issue #571 AC #2: no GL event on ASN creation
-                UUID asnId = UUID.randomUUID();
-                UUID vendorId = UUID.randomUUID();
-                UUID poId = UUID.randomUUID();
+                UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 AsnResponse asnResponse = buildAsnResponse(asnId, vendorId, AsnStatus.LOADED);
 
@@ -157,9 +157,9 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /goods-receipts → 201 Created, response contains totalAccruedAmountMinor")
         void receiptCompleted_emitsAccrualEvent() throws Exception {
                 // Issue #571 AC #3: GRNI accrual amount must be present in the receipt response
-                UUID receiptId = UUID.randomUUID();
-                UUID poId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 long expectedAccruedAmount = 75_000L;
 
                 GoodsReceiptResponse receiptResponse = buildGoodsReceiptResponse(receiptId, poId, locationId,
@@ -196,9 +196,9 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
         void receipt_updatesOnHandInventory() throws Exception {
                 // Issue #571 AC #4: valid goods receipt accepted with 201 and receipt ID
                 // returned
-                UUID receiptId = UUID.randomUUID();
-                UUID poId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 GoodsReceiptResponse receiptResponse = buildGoodsReceiptResponse(receiptId, poId, locationId, 50_000L);
 
@@ -230,8 +230,8 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /goods-receipts over-receive without override permission → 403 Forbidden")
         void overReceipt_withoutPermission_returns403() throws Exception {
                 // Issue #571 AC #5: over-receipt without permission must be 403
-                UUID poId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(asnService.createGoodsReceipt(any(CreateGoodsReceiptRequest.class), anyString()))
                                 .thenThrow(new OverReceiptNotPermittedException("OVER_RECEIPT_NOT_PERMITTED"));
@@ -258,9 +258,9 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("GET /goods-receipts/{receiptId} → 200 OK with GRNI balance fields")
         void grniBalance_availableForApMatching() throws Exception {
                 // Issue #571 AC #6: GRNI balance must be readable for AP matching
-                UUID receiptId = UUID.randomUUID();
-                UUID poId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 long grniBalance = 120_000L;
 
                 GoodsReceiptResponse receiptResponse = buildGoodsReceiptResponse(receiptId, poId, locationId,
@@ -290,8 +290,8 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("GET /asns/{asnId} after partial receipt → 200 OK, status PARTIALLY_RECEIVED")
         void partialReceipt_asnBecomesPartiallyReceived() throws Exception {
                 // Issue #571 AC #7: partial receipt must set ASN to PARTIALLY_RECEIVED
-                UUID asnId = UUID.randomUUID();
-                UUID vendorId = UUID.randomUUID();
+                UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 AsnResponse asnAfterPartialReceipt = buildAsnResponse(asnId, vendorId, AsnStatus.PARTIALLY_RECEIVED);
 
@@ -308,11 +308,11 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("POST /asns + POST /goods-receipts full qty then GET /asns/{asnId} → status FULLY_RECEIVED")
         void fullReceipt_asnBecomesFullyReceived() throws Exception {
-                UUID asnId = UUID.randomUUID();
-                UUID vendorId = UUID.randomUUID();
-                UUID poId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
-                UUID receiptId = UUID.randomUUID();
+                UUID asnId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 AsnResponse createdAsn = buildAsnResponse(asnId, vendorId, AsnStatus.LOADED);
                 GoodsReceiptResponse fullReceipt = buildGoodsReceiptResponse(receiptId, poId, locationId, 50_000L);
@@ -363,7 +363,7 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /asns with duplicate vendorId+asnReferenceNumber → 409 Conflict")
         void duplicateAsn_returns409() throws Exception {
                 // Issue #571 AC #8: duplicate ASN must return 409
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(asnService.createAsn(any(CreateAsnRequest.class), anyString()))
                                 .thenThrow(new DuplicateAsnException(
@@ -422,7 +422,7 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
                 line.setUnitCostMinor(5_000L);
 
                 CreateAsnRequest request = new CreateAsnRequest();
-                request.setVendorId(UUID.randomUUID());
+                request.setVendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 request.setAsnReferenceNumber("ASN-2026-TEST-001");
                 request.setRelatedPoIds(List.of(poId));
                 request.setShipDate(LocalDate.now(TEST_CLOCK));
@@ -456,7 +456,8 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
                                 .createdAt(Instant.now(TEST_CLOCK))
                                 .lineItems(List.of(
                                                 AsnLineResponse.builder()
-                                                                .asnLineId(UUID.randomUUID())
+                                                                .asnLineId(UUID.fromString(
+                                                                                "00000000-0000-0000-0000-000000000001"))
                                                                 .sku("SKU-TEST-001")
                                                                 .quantityShipped(new BigDecimal("10"))
                                                                 .build()))
@@ -475,7 +476,8 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
                                 .createdAt(Instant.now(TEST_CLOCK))
                                 .lines(List.of(
                                                 GoodsReceiptLineResponse.builder()
-                                                                .receiptLineId(UUID.randomUUID())
+                                                                .receiptLineId(UUID.fromString(
+                                                                                "00000000-0000-0000-0000-000000000001"))
                                                                 .sku("SKU-TEST-001")
                                                                 .quantityReceived(new BigDecimal("10"))
                                                                 .unitCostMinor(5_000L)

@@ -174,7 +174,7 @@ class ManufacturerFeedServiceImplTest {
 
         private ManufacturerFeedItemDto.ManufacturerFeedItemDtoBuilder baseItemBuilder() {
                 return ManufacturerFeedItemDto.builder()
-                                .productId(UUID.randomUUID())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .manufacturerId(UUID.fromString("11111111-1111-1111-1111-111111111111"))
                                 .manufacturerPartNumber("PART-1")
                                 .availableQty(10)

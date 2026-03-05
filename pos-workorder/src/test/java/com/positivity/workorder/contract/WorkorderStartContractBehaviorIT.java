@@ -53,8 +53,7 @@ import io.restassured.http.ContentType;
 @DisplayName("Workorder Start Contract Behavior Tests (CAP:005 Story #160)")
 @Import(ContractTestConfiguration.class)
 class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -282,7 +281,8 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Create and save estimate
                 Estimate estimate = Estimate.builder()
-                                .estimateNumber("EST-START-" + UUID.randomUUID().toString().substring(0, 8))
+                                .estimateNumber("EST-START-" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                .toString().substring(0, 8))
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
@@ -371,9 +371,9 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
         private void initTestIds() {
                 if (testCustomerId == null) {
-                        testCustomerId = UUID.randomUUID();
-                        testLocationId = UUID.randomUUID();
-                        testVehicleId = UUID.randomUUID();
+                        testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 }
         }
 }

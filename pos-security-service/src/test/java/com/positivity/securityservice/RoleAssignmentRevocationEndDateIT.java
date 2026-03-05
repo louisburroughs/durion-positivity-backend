@@ -41,7 +41,6 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     private static final String TEST_CORRELATION_ID = "test-correlation-id-revocation";
 
     @Autowired
@@ -155,7 +154,7 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
     @DisplayName("Should return 404 for non-existent role assignment")
     void testRevokeNonExistentAssignment() throws Exception {
         // Given: A non-existent assignment ID
-        UUID nonExistentId = UUID.randomUUID();
+        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then: Should return 404 Not Found
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/{assignmentId}", nonExistentId))

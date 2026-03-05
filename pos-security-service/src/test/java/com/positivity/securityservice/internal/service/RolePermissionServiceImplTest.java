@@ -98,7 +98,7 @@ class RolePermissionServiceImplTest {
         @Test
         @DisplayName("grants permission to role and publishes audit event")
         void grantPermission_success() {
-            UUID roleId = UUID.randomUUID();
+            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             String permissionKey = "security:role:grant";
 
             Role role = new Role();
@@ -121,7 +121,7 @@ class RolePermissionServiceImplTest {
         @Test
         @DisplayName("auto-registers permission when key does not exist")
         void grantPermission_missingPermission_registersAndGrants() {
-            UUID roleId = UUID.randomUUID();
+            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             String permissionKey = "security:role:grant";
 
             Role role = new Role();
@@ -143,7 +143,7 @@ class RolePermissionServiceImplTest {
         @Test
         @DisplayName("throws when role does not exist")
         void grantPermission_roleNotFound_throws() {
-            UUID roleId = UUID.randomUUID();
+            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(roleRepository.findById(roleId)).thenReturn(Optional.empty());
 
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.grantPermission(roleId, "security:role:grant"))
@@ -158,7 +158,7 @@ class RolePermissionServiceImplTest {
         @Test
         @DisplayName("removes permission from role")
         void revokePermission_success() {
-            UUID roleId = UUID.randomUUID();
+            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             String permissionKey = "security:role:grant";
 
             Permission permission = new Permission();
@@ -179,7 +179,7 @@ class RolePermissionServiceImplTest {
         @Test
         @DisplayName("throws when role does not exist")
         void revokePermission_roleNotFound_throws() {
-            UUID roleId = UUID.randomUUID();
+            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(roleRepository.findById(roleId)).thenReturn(Optional.empty());
 
             org.assertj.core.api.Assertions
@@ -195,7 +195,7 @@ class RolePermissionServiceImplTest {
         @Test
         @DisplayName("saves principal role when assignment does not exist")
         void assignRoleToPrincipal_createsAssignment() {
-            UUID roleId = UUID.randomUUID();
+            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             Role role = new Role();
             role.setId(roleId);
 
@@ -210,7 +210,7 @@ class RolePermissionServiceImplTest {
         @Test
         @DisplayName("does nothing when assignment already exists")
         void assignRoleToPrincipal_existingAssignment_noop() {
-            UUID roleId = UUID.randomUUID();
+            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId)).thenReturn(true);
 
             sut.assignRoleToPrincipal("principal-1", roleId);
@@ -222,7 +222,7 @@ class RolePermissionServiceImplTest {
         @Test
         @DisplayName("throws when role does not exist")
         void assignRoleToPrincipal_roleNotFound_throws() {
-            UUID roleId = UUID.randomUUID();
+            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId)).thenReturn(false);
             when(roleRepository.findById(roleId)).thenReturn(Optional.empty());
 

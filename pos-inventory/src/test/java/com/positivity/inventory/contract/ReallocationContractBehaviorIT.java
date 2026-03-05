@@ -30,7 +30,8 @@ import tools.jackson.databind.ObjectMapper;
  * per:
  * <ul>
  * <li>ADR-0011: gateway auth headers (X-User, X-Authorities) required</li>
- * <li>ADR-0013: UUIDv7 identifiers (UUID.randomUUID() used in tests)</li>
+ * <li>ADR-0013: UUIDv7 identifiers
+ * (UUID.fromString("00000000-0000-0000-0000-000000000001") used in tests)</li>
  * <li>ADR-0017: HTTP response codes — 200 for successful mutation, 400 for
  * missing required fields, 403 for missing authority</li>
  * <li>ADR-0018: actor sourced from X-User security context header, not request
@@ -91,7 +92,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_reallocate_withValidRequest_returns200WithResponseBody() throws Exception {
                 // Issue #24: AC1 — reallocate endpoint must return 200 with stockItemId,
                 // totalReallocated, auditRecordsCreated, atpAfterReallocation
-                UUID stockItemId = UUID.randomUUID();
+                UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReallocateResponse mockResponse = ReallocateResponse.builder()
                                 .stockItemId(stockItemId)
@@ -134,7 +135,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_reallocate_priorityChange_responseIncludesAuditCount() throws Exception {
                 // Issue #24: AC1 — audit record creation must be reflected in
                 // auditRecordsCreated field
-                UUID stockItemId = UUID.randomUUID();
+                UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReallocateResponse mockResponse = ReallocateResponse.builder()
                                 .stockItemId(stockItemId)
@@ -178,7 +179,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_reallocate_atpAndTotalReallocatedInResponse() throws Exception {
                 // Issue #24: AC2/AC3 — response must carry totalReallocated and
                 // atpAfterReallocation
-                UUID stockItemId = UUID.randomUUID();
+                UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReallocateResponse mockResponse = ReallocateResponse.builder()
                                 .stockItemId(stockItemId)
@@ -249,7 +250,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_reallocate_withoutAuthority_returns403() throws Exception {
                 // Issue #24: AC5 — missing inventory:allocations:reallocate authority must
                 // return 403
-                UUID stockItemId = UUID.randomUUID();
+                UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 ReallocateRequest request = ReallocateRequest.builder()
                                 .stockItemId(stockItemId)
                                 .triggerType("PRIORITY_CHANGE")

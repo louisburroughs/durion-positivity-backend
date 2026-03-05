@@ -63,8 +63,9 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC-176-1: create cycle count plan with valid future scheduledDate returns 201 with PLANNED status")
         void createCycleCountPlan_validRequest_returns201() throws Exception {
                 String body = buildCreatePlanRequestBody(
-                                UUID.randomUUID(),
-                                List.of(UUID.randomUUID(), UUID.randomUUID()),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001")),
                                 "Q1 Zone A Audit",
                                 LocalDate.now(FIXED_CLOCK).plusDays(7));
 
@@ -86,8 +87,8 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC-176-2: create plan with past scheduledDate returns 400")
         void createCycleCountPlan_pastScheduledDate_returns400() throws Exception {
                 String body = buildCreatePlanRequestBody(
-                                UUID.randomUUID(),
-                                List.of(UUID.randomUUID()),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")),
                                 "Past date plan",
                                 LocalDate.now(FIXED_CLOCK).minusDays(1));
 
@@ -108,7 +109,9 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #176: zoneIds=[] → IAE → 400
                 String body = objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
-                                                .put("locationId", UUID.randomUUID().toString())
+                                                .put("locationId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString())
                                                 .put("scheduledDate", LocalDate.now(FIXED_CLOCK).plusDays(7).toString())
                                                 .set("zoneIds", objectMapper.createArrayNode()));
 
@@ -131,7 +134,7 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
                 node.putNull("locationId");
                 node.put("scheduledDate", LocalDate.now(FIXED_CLOCK).plusDays(7).toString());
                 var zoneArray = objectMapper.createArrayNode();
-                zoneArray.add(UUID.randomUUID().toString());
+                zoneArray.add(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
                 node.set("zoneIds", zoneArray);
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountPlans"))
@@ -166,7 +169,8 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC-176-6: get non-existent cycle count plan returns 404")
         void getCycleCountPlan_nonExistentPlan_returns404() throws Exception {
                 mockMvc.perform(withGatewayAuth(
-                                get("/v1/inventory/cycleCountPlans/{planId}", UUID.randomUUID())))
+                                get("/v1/inventory/cycleCountPlans/{planId}",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isNotFound());
         }
 
@@ -206,8 +210,8 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
          */
         private UUID createPlan(String planName, LocalDate scheduledDate) throws Exception {
                 String body = buildCreatePlanRequestBody(
-                                UUID.randomUUID(),
-                                List.of(UUID.randomUUID()),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")),
                                 planName,
                                 scheduledDate);
 

@@ -1,6 +1,5 @@
 package com.positivity.people.service;
 
-
 import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.client.WorkexecJobTimeClient;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
@@ -61,10 +60,10 @@ class PeopleReportsServiceTest {
 
 	@Test
 	void getApprovedTimeForExport_onlyApprovedRowsReturned() {
-		UUID locationId = UUID.randomUUID();
-		UUID personUuid = UUID.randomUUID();
-		UUID approvedId = UUID.randomUUID();
-		UUID rejectedId = UUID.randomUUID();
+		UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID approvedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID rejectedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 		TimeEntry approved = new TimeEntry();
 		approved.setTimeEntryId(approvedId);
@@ -92,7 +91,7 @@ class PeopleReportsServiceTest {
 		when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
 		when(timeEntryRepository.findApprovedForExport(eq(TimeEntryStatus.APPROVED), any(), any(),
 				eq(List.of(locationId))))
-			.thenReturn(List.of(approved));
+				.thenReturn(List.of(approved));
 		when(personRepository.findAllById(any())).thenReturn(List.of(person));
 
 		List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(LocalDate.parse("2026-02-10"),
@@ -109,12 +108,12 @@ class PeopleReportsServiceTest {
 
 	@Test
 	void getApprovedTimeForExport_emptyResultReturns200EquivalentList() {
-		UUID locationId = UUID.randomUUID();
+		UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
 		when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
 		when(timeEntryRepository.findApprovedForExport(eq(TimeEntryStatus.APPROVED), any(), any(),
 				eq(List.of(locationId))))
-			.thenReturn(List.of());
+				.thenReturn(List.of());
 
 		List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(LocalDate.parse("2026-02-01"),
 				LocalDate.parse("2026-02-02"), List.of(locationId));
@@ -124,7 +123,7 @@ class PeopleReportsServiceTest {
 
 	@Test
 	void getApprovedTimeForExport_invalidDateRangeThrowsBadRequestError() {
-		UUID locationId = UUID.randomUUID();
+		UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		LocalDate startDate = LocalDate.parse("2026-02-11");
 		LocalDate endDate = LocalDate.parse("2026-02-10");
 		List<UUID> locations = List.of(locationId);
@@ -137,7 +136,7 @@ class PeopleReportsServiceTest {
 
 	@Test
 	void getApprovedTimeForExport_unknownLocationThrowsBadRequestError() {
-		UUID locationId = UUID.randomUUID();
+		UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		LocalDate startDate = LocalDate.parse("2026-02-10");
 		LocalDate endDate = LocalDate.parse("2026-02-11");
 		List<UUID> locations = List.of(locationId);

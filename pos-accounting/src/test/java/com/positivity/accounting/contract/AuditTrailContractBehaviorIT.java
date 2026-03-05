@@ -48,7 +48,6 @@ import com.positivity.accounting.internal.audit.repository.AuditTrailEntryReposi
 class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Autowired
     private AuditTrailEntryRepository auditTrailRepository;
 
@@ -64,8 +63,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
         auditTrailRepository.deleteAll();
 
         // Setup test IDs
-        testOrderId = UUID.randomUUID();
-        testInvoiceId = UUID.randomUUID();
+        testOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
     @AfterEach
@@ -90,7 +89,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "reason": "Customer loyalty discount",
                     "actorRole": "STORE_MANAGER"
                 }
-                """.formatted(testOrderId, UUID.randomUUID());
+                """.formatted(testOrderId, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_AUDIT + "/price-override"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -121,7 +120,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "reason": "Damaged goods returned",
                     "actorRole": "STORE_MANAGER"
                 }
-                """.formatted(testInvoiceId, UUID.randomUUID());
+                """.formatted(testInvoiceId, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_AUDIT + "/refund"))
@@ -304,7 +303,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "reason": "Large discount without approval",
                     "actorRole": "CASHIER"
                 }
-                """.formatted(testOrderId, UUID.randomUUID());
+                """.formatted(testOrderId, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then - should return 403 if authorization logic is implemented
         // For now, testing that endpoint is reachable
@@ -332,7 +331,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "reason": "Large refund requiring approval",
                     "actorRole": "CASHIER"
                 }
-                """.formatted(testInvoiceId, UUID.randomUUID());
+                """.formatted(testInvoiceId, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then - should return 403 if authorization logic is implemented
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_AUDIT + "/refund"))
@@ -353,7 +352,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get audit entries - empty result for non-existent order")
     void testGetByOrderId_NotFound() throws Exception {
         // Given - non-existent order ID
-        UUID nonExistentOrderId = UUID.randomUUID();
+        UUID nonExistentOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then - should return empty array, not 404
         mockMvc.perform(withAuth(get(API_V1_AUDIT + "/order/" + nonExistentOrderId)))
@@ -390,7 +389,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
      */
     private void createTestAuditEntry(UUID orderId, UUID invoiceId, ExceptionType type) {
         AuditTrailEntry entry = new AuditTrailEntry();
-        entry.setAuditId(UUID.randomUUID());
+        entry.setAuditId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         entry.setOrderId(orderId);
         entry.setInvoiceId(invoiceId);
         entry.setExceptionType(type);

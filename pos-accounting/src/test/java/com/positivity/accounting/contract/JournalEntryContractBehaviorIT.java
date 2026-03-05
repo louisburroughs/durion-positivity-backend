@@ -52,8 +52,7 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
  */
 @DisplayName("Journal Entry Backend Contract Behavioral Tests")
 class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private JournalEntryRepository journalEntryRepository;
@@ -122,7 +121,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
         void testCreateJournalEntry_Success() throws Exception {
                 // Given - balanced journal entry
                 JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
-                                .organizationId(UUID.randomUUID())
+                                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description("Test journal entry")
                                 .sourceEventType("SALE")
@@ -202,7 +201,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // When - update the entry
                 JournalEntryCreateRequest updateRequest = JournalEntryCreateRequest.builder()
-                                .organizationId(UUID.randomUUID())
+                                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description("Updated description")
                                 .sourceEventType("SALE")
@@ -282,7 +281,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
         void testCreateJournalEntry_Unbalanced() throws Exception {
                 // Given - unbalanced journal entry
                 JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
-                                .organizationId(UUID.randomUUID())
+                                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description("Unbalanced entry")
                                 .sourceEventType("SALE")
@@ -313,7 +312,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("Get non-existent journal entry - 400 bad request")
         void testGetJournalEntry_NotFound() throws Exception {
                 // Given - random UUID that doesn't exist
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When/Then - Service throws IllegalArgumentException which maps to 400 via
                 // APPaymentExceptionHandler
@@ -333,7 +332,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // When - try to update the posted entry
                 JournalEntryCreateRequest updateRequest = JournalEntryCreateRequest.builder()
-                                .organizationId(UUID.randomUUID())
+                                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description("Attempted update")
                                 .sourceEventType("SALE")
@@ -367,7 +366,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
          */
         private UUID createBalancedJournalEntry(String description) throws Exception {
                 JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
-                                .organizationId(UUID.randomUUID())
+                                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description(description)
                                 .sourceEventType("SALE")

@@ -83,8 +83,8 @@ abstract class AbstractWorkexecContractBehaviorIT {
     protected Workorder seedWorkorder(UUID locationId, WorkorderStatus status) {
         Workorder workorder = Workorder.builder()
                 .shopId(locationId)
-                .customerId(UUID.randomUUID())
-                .vehicleId(UUID.randomUUID())
+                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .status(status)
                 .isReopened(false)
                 .build();
@@ -92,6 +92,6 @@ abstract class AbstractWorkexecContractBehaviorIT {
     }
 
     protected Workorder seedWorkorderInProgress() {
-        return seedWorkorder(UUID.randomUUID(), WorkorderStatus.WORK_IN_PROGRESS);
+        return seedWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), WorkorderStatus.WORK_IN_PROGRESS);
     }
 }

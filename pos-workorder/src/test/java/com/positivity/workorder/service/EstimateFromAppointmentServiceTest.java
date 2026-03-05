@@ -153,7 +153,7 @@ class EstimateFromAppointmentServiceTest {
         void createEstimateFromAppointment_setsStatusToDraft() {
                 // Given
                 Estimate savedEstimate = Estimate.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(EstimateStatus.DRAFT)
                                 .appointmentId(APPOINTMENT_ID)
                                 .build();

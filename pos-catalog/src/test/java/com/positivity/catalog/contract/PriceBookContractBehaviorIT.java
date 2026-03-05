@@ -49,7 +49,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-167-013: Create CUSTOMER_TIER price book when scopeId is provided")
         void createCustomerTierPriceBookWithScopeId() throws Exception {
-                UUID tierId = UUID.randomUUID();
+                UUID tierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 mockMvc.perform(withAuth(post("/v1/products/price-books"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(Map.of(
@@ -78,7 +78,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "priority", 10,
                                                 "effectiveStartAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
@@ -108,7 +109,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "priority", 1,
                                                 "effectiveStartAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/{priceBookId}/rules", priceBookId))
@@ -122,7 +124,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "priority", 1,
                                                 "effectiveStartAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
@@ -155,7 +158,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
                                                 "effectiveEndAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).plusDays(5).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/{priceBookId}/rules", priceBookId))
@@ -170,7 +174,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "effectiveStartAt", OffsetDateTime.now(ZoneOffset.UTC).toString(),
                                                 "effectiveEndAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).plusDays(8).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isConflict());
         }
 
@@ -190,7 +195,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "priority", 10,
                                                 "effectiveStartAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
@@ -219,7 +225,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "currency", "USD",
                                                 "effectiveStartDate",
                                                 LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 MvcResult ruleResult = mockMvc
@@ -234,7 +241,9 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                                 "effectiveStartAt",
                                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1)
                                                                                 .toString(),
-                                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                                "createdByUserId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString()))))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 

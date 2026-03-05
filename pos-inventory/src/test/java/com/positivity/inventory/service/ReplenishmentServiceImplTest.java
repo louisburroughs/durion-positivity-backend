@@ -31,7 +31,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ReplenishmentServiceImplTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         private static final UUID SRC_01 = UUID.fromString("11111111-1111-1111-1111-111111111111");
         private static final UUID DST_01 = UUID.fromString("22222222-2222-2222-2222-222222222222");
@@ -53,8 +53,8 @@ class ReplenishmentServiceImplTest {
         @Test
         void getReplenishmentTasks_shouldReturnMappedTasks() {
                 // Given
-                UUID taskId1 = UUID.randomUUID();
-                UUID taskId2 = UUID.randomUUID();
+                UUID taskId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID taskId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Instant now = Instant.now(TEST_CLOCK);
 
                 ReplenishmentTask pendingTask = ReplenishmentTask.builder()
@@ -119,7 +119,7 @@ class ReplenishmentServiceImplTest {
         @Test
         void getReplenishmentPolicies_shouldReturnMappedPolicies() {
                 // Given
-                UUID policyId = UUID.randomUUID();
+                UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Instant now = Instant.now(TEST_CLOCK);
                 ReplenishmentPolicy policy = ReplenishmentPolicy.builder()
                                 .policyId(policyId)
@@ -150,7 +150,7 @@ class ReplenishmentServiceImplTest {
                 // Given
                 CreateReplenishmentPolicyRequest request = new CreateReplenishmentPolicyRequest(LOC_02, "SKUABC", 10,
                                 50);
-                UUID policyId = UUID.randomUUID();
+                UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Instant now = Instant.now(TEST_CLOCK);
 
                 ReplenishmentPolicy savedPolicy = ReplenishmentPolicy.builder()

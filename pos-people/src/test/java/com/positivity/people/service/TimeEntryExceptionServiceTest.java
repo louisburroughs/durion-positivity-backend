@@ -58,7 +58,7 @@ class TimeEntryExceptionServiceTest {
 
 	@Test
 	void resolveException_withPermission_succeeds() {
-		UUID id = UUID.randomUUID();
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryException ex = new TimeEntryException();
 		ex.setExceptionId(id);
 		ex.setTimeEntryId("TE-3");
@@ -80,7 +80,7 @@ class TimeEntryExceptionServiceTest {
 
 	@Test
 	void resolveException_withoutPermission_fails() {
-		UUID id = UUID.randomUUID();
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryException ex = new TimeEntryException();
 		ex.setExceptionId(id);
 		ex.setTimeEntryId("TE-4");
@@ -98,7 +98,7 @@ class TimeEntryExceptionServiceTest {
 
 	@Test
 	void actionException_acknowledge_succeeds() {
-		UUID id = UUID.randomUUID();
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryException ex = new TimeEntryException();
 		ex.setExceptionId(id);
 		ex.setTimeEntryId("TE-5");
@@ -116,7 +116,7 @@ class TimeEntryExceptionServiceTest {
 
 	@Test
 	void actionException_waive_withReason_succeeds() {
-		UUID id = UUID.randomUUID();
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryException ex = new TimeEntryException();
 		ex.setExceptionId(id);
 		ex.setTimeEntryId("TE-6");
@@ -136,7 +136,7 @@ class TimeEntryExceptionServiceTest {
 
 	@Test
 	void actionException_fromResolvedStatus_fails() {
-		UUID id = UUID.randomUUID();
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryException ex = new TimeEntryException();
 		ex.setExceptionId(id);
 		ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.RESOLVED);

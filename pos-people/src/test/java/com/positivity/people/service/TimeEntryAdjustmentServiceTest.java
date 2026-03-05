@@ -63,7 +63,7 @@ class TimeEntryAdjustmentServiceTest {
 
 	@Test
 	void approveAdjustment_withPermission_succeeds() {
-		UUID id = UUID.randomUUID();
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryAdjustment adj = new TimeEntryAdjustment();
 		adj.setAdjustmentId(id);
 		adj.setTimeEntryId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
@@ -86,7 +86,7 @@ class TimeEntryAdjustmentServiceTest {
 
 	@Test
 	void approveAdjustment_withoutPermission_fails() {
-		UUID id = UUID.randomUUID();
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryAdjustment adj = new TimeEntryAdjustment();
 		adj.setAdjustmentId(id);
 		adj.setTimeEntryId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
@@ -113,7 +113,7 @@ class TimeEntryAdjustmentServiceTest {
 
 	@Test
 	void createAdjustment_timeEntryNotFound_throwsNotFound() {
-		UUID timeEntryId = UUID.randomUUID();
+		UUID timeEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
 		request.setReasonCode("RC1");
 		request.setTimeEntryId(timeEntryId);
@@ -127,7 +127,7 @@ class TimeEntryAdjustmentServiceTest {
 
 	@Test
 	void createAdjustment_invalidState_throwsConflict() {
-		UUID timeEntryId = UUID.randomUUID();
+		UUID timeEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
 		request.setReasonCode("RC1");
 		request.setTimeEntryId(timeEntryId);
@@ -143,7 +143,7 @@ class TimeEntryAdjustmentServiceTest {
 
 	@Test
 	void approveAdjustment_notFound_throwsNotFound() {
-		UUID id = UUID.randomUUID();
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		when(adjustmentRepository.findById(id)).thenReturn(Optional.empty());
 		Set<String> permissions = Set.of("people:timeAdjustment:approve");
 

@@ -48,8 +48,7 @@ import com.positivity.workorder.internal.service.EstimateServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class EstimateSearchServiceTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Mock
         private EstimateRepository estimateRepository;
@@ -115,7 +114,7 @@ class EstimateSearchServiceTest {
          */
         @Test
         void searchEstimates_byCustomerId_returnsEstimatesForThatCustomer() {
-                UUID estimateId = UUID.randomUUID();
+                UUID estimateId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Estimate estimate = buildEstimate(estimateId, CUSTOMER_A, VEHICLE_B, EstimateStatus.OPEN);
                 Pageable pageable = PageRequest.of(0, 10);
 
@@ -142,7 +141,7 @@ class EstimateSearchServiceTest {
          */
         @Test
         void searchEstimates_byVehicleId_returnsEstimatesForThatVehicle() {
-                UUID estimateId = UUID.randomUUID();
+                UUID estimateId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Estimate estimate = buildEstimate(estimateId, CUSTOMER_A, VEHICLE_B, EstimateStatus.PENDING_CUSTOMER);
                 Pageable pageable = PageRequest.of(0, 10);
 
@@ -169,7 +168,7 @@ class EstimateSearchServiceTest {
          */
         @Test
         void searchEstimates_byBothCustomerAndVehicle_returnsMatchingEstimates() {
-                UUID estimateId = UUID.randomUUID();
+                UUID estimateId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Estimate estimate = buildEstimate(estimateId, CUSTOMER_A, VEHICLE_B, EstimateStatus.APPROVED);
                 Pageable pageable = PageRequest.of(0, 10);
 
@@ -194,7 +193,7 @@ class EstimateSearchServiceTest {
          */
         @Test
         void searchEstimates_resultContainsRequiredFields() {
-                UUID estimateId = UUID.randomUUID();
+                UUID estimateId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Estimate estimate = buildEstimate(estimateId, CUSTOMER_A, VEHICLE_B, EstimateStatus.DRAFT);
                 Pageable pageable = PageRequest.of(0, 10);
 
@@ -230,7 +229,7 @@ class EstimateSearchServiceTest {
          */
         @Test
         void searchEstimates_cancelledStatus_isIncluded() {
-                UUID estimateId = UUID.randomUUID();
+                UUID estimateId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Estimate cancelled = buildEstimate(estimateId, CUSTOMER_A, VEHICLE_B, EstimateStatus.CANCELLED);
                 Pageable pageable = PageRequest.of(0, 10);
 
@@ -257,8 +256,11 @@ class EstimateSearchServiceTest {
         @Test
         void searchEstimates_noFilters_returnsAllEstimates() {
                 List<Estimate> all = List.of(
-                                buildEstimate(UUID.randomUUID(), CUSTOMER_A, VEHICLE_B, EstimateStatus.OPEN),
-                                buildEstimate(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                                buildEstimate(UUID.fromString("00000000-0000-0000-0000-000000000001"), CUSTOMER_A,
+                                                VEHICLE_B, EstimateStatus.OPEN),
+                                buildEstimate(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                                 EstimateStatus.DRAFT));
                 Pageable pageable = PageRequest.of(0, 10);
 
@@ -285,12 +287,17 @@ class EstimateSearchServiceTest {
         @Test
         void searchEstimates_paginationRespected_pageSizeApplied() {
                 List<Estimate> fiveEstimates = List.of(
-                                buildEstimate(UUID.randomUUID(), CUSTOMER_A, VEHICLE_B, EstimateStatus.OPEN),
-                                buildEstimate(UUID.randomUUID(), CUSTOMER_A, VEHICLE_B, EstimateStatus.DRAFT),
-                                buildEstimate(UUID.randomUUID(), CUSTOMER_A, VEHICLE_B, EstimateStatus.APPROVED),
-                                buildEstimate(UUID.randomUUID(), CUSTOMER_A, VEHICLE_B,
+                                buildEstimate(UUID.fromString("00000000-0000-0000-0000-000000000001"), CUSTOMER_A,
+                                                VEHICLE_B, EstimateStatus.OPEN),
+                                buildEstimate(UUID.fromString("00000000-0000-0000-0000-000000000001"), CUSTOMER_A,
+                                                VEHICLE_B, EstimateStatus.DRAFT),
+                                buildEstimate(UUID.fromString("00000000-0000-0000-0000-000000000001"), CUSTOMER_A,
+                                                VEHICLE_B, EstimateStatus.APPROVED),
+                                buildEstimate(UUID.fromString("00000000-0000-0000-0000-000000000001"), CUSTOMER_A,
+                                                VEHICLE_B,
                                                 EstimateStatus.PENDING_CUSTOMER),
-                                buildEstimate(UUID.randomUUID(), CUSTOMER_A, VEHICLE_B, EstimateStatus.INVOICED));
+                                buildEstimate(UUID.fromString("00000000-0000-0000-0000-000000000001"), CUSTOMER_A,
+                                                VEHICLE_B, EstimateStatus.INVOICED));
                 Pageable pageable = PageRequest.of(0, 5);
 
                 when(estimateRepository.findByCustomerId(CUSTOMER_A, pageable))
@@ -315,7 +322,7 @@ class EstimateSearchServiceTest {
          */
         @Test
         void searchEstimates_noMatchingEstimates_returnsEmptyPage() {
-                UUID unknownCustomer = UUID.randomUUID();
+                UUID unknownCustomer = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Pageable pageable = PageRequest.of(0, 10);
 
                 when(estimateRepository.findByCustomerId(unknownCustomer, pageable))

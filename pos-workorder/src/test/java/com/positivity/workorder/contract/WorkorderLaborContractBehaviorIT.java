@@ -51,8 +51,7 @@ import io.restassured.response.Response;
 @DisplayName("Labor Tracking Contract Behavior Tests (CAP:005 Story #159)")
 @Import(ContractTestConfiguration.class)
 class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -91,7 +90,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given: A workorder in WORK_IN_PROGRESS status with a service line
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When: Start a labor session
                 Map<String, Object> startRequest = Map.of(
@@ -137,8 +136,8 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given: A workorder with an active labor session
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
-                String idempotencyKey = "test-start-labor-" + UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                String idempotencyKey = "test-start-labor-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> startRequest = Map.of(
                                 "technicianId", testTechnicianId.toString(),
@@ -182,7 +181,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given: A workorder in COMPLETED status
                 UUID workorderId = seedCompletedWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When: Attempt to start labor
                 Map<String, Object> startRequest = Map.of(
@@ -238,7 +237,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given: A workorder with an active labor session
                 UUID workorderId = seedWorkorderWithActiveLaborSession();
                 UUID entryId = laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorderId).get(0).getId();
-                String idempotencyKey = "test-stop-labor-" + UUID.randomUUID();
+                String idempotencyKey = "test-stop-labor-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When: First request stops the session
                 Number hoursWorkedValue = givenWithGatewayAuth()
@@ -336,9 +335,9 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
          * Seed a workorder in WORK_IN_PROGRESS status with a service line.
          */
         private UUID seedWorkInProgressWorkorder() {
-                testCustomerId = UUID.randomUUID();
-                testLocationId = UUID.randomUUID();
-                testVehicleId = UUID.randomUUID();
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Create an approved estimate
                 Estimate estimate = Estimate.builder()
@@ -402,7 +401,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         private UUID seedWorkorderWithActiveLaborSession() {
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
@@ -429,7 +428,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         private UUID seedWorkorderWithStoppedLaborSession() {
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
@@ -457,7 +456,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         private UUID seedWorkorderWithMultipleLaborEntries() {
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 

@@ -28,7 +28,7 @@ class BillingRuleRefTest {
     @Test
     void settersAndGetters_workCorrectly() {
         BillingRuleRef ref = new BillingRuleRef();
-        UUID addressId = UUID.randomUUID();
+        UUID addressId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         ref.setPoRequired(true);
         ref.setTaxExempt(true);

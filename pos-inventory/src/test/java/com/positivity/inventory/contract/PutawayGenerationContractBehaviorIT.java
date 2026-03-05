@@ -44,8 +44,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Putaway Generation Contract Behavior")
 class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -69,13 +68,13 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC1: generate putaway tasks for valid sourceReceiptId returns 201 with UNASSIGNED tasks")
         void generatePutawayTasks_validReceiptId_returns201WithUnassignedTasks() throws Exception {
                 // Issue #32: mock service to return a task with product/category rule match
-                String receiptId = UUID.randomUUID().toString();
-                UUID destinationId = UUID.randomUUID();
+                String receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                UUID destinationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PutawayTaskResponse task = PutawayTaskResponse.builder()
-                                .taskId(UUID.randomUUID().toString())
+                                .taskId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .sourceReceiptId(receiptId)
-                                .productId(UUID.randomUUID().toString())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .quantity(10)
                                 .suggestedDestinationLocationId(destinationId)
                                 .status("UNASSIGNED")
@@ -89,7 +88,9 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                 String requestBody = objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
                                                 .put("sourceReceiptId", receiptId)
-                                                .put("productId", UUID.randomUUID().toString())
+                                                .put("productId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString())
                                                 .put("quantity", 5));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
@@ -113,13 +114,13 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC2: no matching rule generates task with system-fallback suggestedDestinationLocationId")
         void generatePutawayTasks_noMatchingRule_returns201WithFallbackDestination() throws Exception {
                 // Issue #32: even with no specific rule, fallback destination must be non-null
-                String receiptId = UUID.randomUUID().toString();
-                UUID fallbackDestinationId = UUID.randomUUID();
+                String receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                UUID fallbackDestinationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PutawayTaskResponse task = PutawayTaskResponse.builder()
-                                .taskId(UUID.randomUUID().toString())
+                                .taskId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .sourceReceiptId(receiptId)
-                                .productId(UUID.randomUUID().toString())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .quantity(5)
                                 .suggestedDestinationLocationId(fallbackDestinationId)
                                 .status("UNASSIGNED")
@@ -133,7 +134,9 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                 String requestBody = objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
                                                 .put("sourceReceiptId", receiptId)
-                                                .put("productId", UUID.randomUUID().toString())
+                                                .put("productId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString())
                                                 .put("quantity", 5));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
@@ -158,14 +161,14 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         void generatePutawayTasks_destinationUnavailable_returns201WithFallbackFields() throws Exception {
                 // Issue #32: auto-fallback path must populate originalSuggestedLocationId,
                 // finalSuggestedLocationId (different), and fallbackReason
-                String receiptId = UUID.randomUUID().toString();
-                UUID originalLocationId = UUID.randomUUID();
-                UUID finalLocationId = UUID.randomUUID();
+                String receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                UUID originalLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID finalLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PutawayTaskResponse task = PutawayTaskResponse.builder()
-                                .taskId(UUID.randomUUID().toString())
+                                .taskId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .sourceReceiptId(receiptId)
-                                .productId(UUID.randomUUID().toString())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .quantity(8)
                                 .suggestedDestinationLocationId(finalLocationId)
                                 .originalSuggestedLocationId(originalLocationId)
@@ -182,7 +185,9 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                 String requestBody = objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
                                                 .put("sourceReceiptId", receiptId)
-                                                .put("productId", UUID.randomUUID().toString())
+                                                .put("productId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString())
                                                 .put("quantity", 5));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
@@ -208,12 +213,12 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         void generatePutawayTasks_noValidLocation_returns201WithRequiresLocationSelection() throws Exception {
                 // Issue #32: when no valid location exists, status must be
                 // REQUIRES_LOCATION_SELECTION
-                String receiptId = UUID.randomUUID().toString();
+                String receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 
                 PutawayTaskResponse task = PutawayTaskResponse.builder()
-                                .taskId(UUID.randomUUID().toString())
+                                .taskId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .sourceReceiptId(receiptId)
-                                .productId(UUID.randomUUID().toString())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .quantity(3)
                                 .status("REQUIRES_LOCATION_SELECTION")
                                 .createdAt(Instant.now(TEST_CLOCK))
@@ -226,7 +231,9 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                 String requestBody = objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
                                                 .put("sourceReceiptId", receiptId)
-                                                .put("productId", UUID.randomUUID().toString())
+                                                .put("productId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString())
                                                 .put("quantity", 5));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
@@ -249,16 +256,16 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         void getAvailablePutawayTasks_returns200WithList() throws Exception {
                 // Issue #32: available tasks endpoint must return 200 with list
                 PutawayTaskResponse task1 = PutawayTaskResponse.builder()
-                                .taskId(UUID.randomUUID().toString())
-                                .sourceReceiptId(UUID.randomUUID().toString())
+                                .taskId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                                .sourceReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .status("UNASSIGNED")
                                 .createdAt(Instant.now(TEST_CLOCK))
                                 .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 PutawayTaskResponse task2 = PutawayTaskResponse.builder()
-                                .taskId(UUID.randomUUID().toString())
-                                .sourceReceiptId(UUID.randomUUID().toString())
+                                .taskId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                                .sourceReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .status("UNASSIGNED")
                                 .createdAt(Instant.now(TEST_CLOCK))
                                 .updatedAt(Instant.now(TEST_CLOCK))
@@ -284,12 +291,12 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC6: claim putaway task returns 200 with status ASSIGNED")
         void claimPutawayTask_validTaskId_returns200WithAssignedStatus() throws Exception {
                 // Issue #32: claiming a task must return ASSIGNED status
-                String taskId = UUID.randomUUID().toString();
+                String taskId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 String userId = "warehouse-user-1";
 
                 PutawayTaskResponse claimedTask = PutawayTaskResponse.builder()
                                 .taskId(taskId)
-                                .sourceReceiptId(UUID.randomUUID().toString())
+                                .sourceReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .status("ASSIGNED")
                                 .assigneeId(userId)
                                 .createdAt(Instant.now(TEST_CLOCK))
@@ -319,8 +326,12 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #32: ADR-0011/ADR-0014 require authority check; absent header → 403
                 String requestBody = objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
-                                                .put("sourceReceiptId", UUID.randomUUID().toString())
-                                                .put("productId", UUID.randomUUID().toString())
+                                                .put("sourceReceiptId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString())
+                                                .put("productId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString())
                                                 .put("quantity", 5));
 
                 mockMvc.perform(post("/v1/inventory/putaway/tasks/generate")

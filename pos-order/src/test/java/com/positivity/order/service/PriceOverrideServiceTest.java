@@ -55,9 +55,9 @@ class PriceOverrideServiceTest {
     void testApplyPriceOverride_SmallDiscount_AutoApproved() {
         // Given: Small discount (5%) that doesn't require approval
         ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
-        request.setOrderId(UUID.randomUUID().toString());
-        request.setOrderLineId(UUID.randomUUID().toString());
-        request.setProductId(UUID.randomUUID().toString());
+        request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setOriginalPrice(BigDecimal.valueOf(100.00));
         request.setOverridePrice(BigDecimal.valueOf(95.00));
         request.setReasonCode(PriceOverrideReasonCode.CUSTOMER_LOYALTY);
@@ -65,7 +65,7 @@ class PriceOverrideServiceTest {
 
         // When
         ApplyPriceOverrideResponse response = priceOverrideService.applyPriceOverride(request,
-                UUID.randomUUID().toString());
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 
         // Then
         assertThat(response).isNotNull();
@@ -81,9 +81,9 @@ class PriceOverrideServiceTest {
     void testApplyPriceOverride_LargeDiscount_RequiresApproval() {
         // Given: Large discount (20%) that requires approval
         ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
-        request.setOrderId(UUID.randomUUID().toString());
-        request.setOrderLineId(UUID.randomUUID().toString());
-        request.setProductId(UUID.randomUUID().toString());
+        request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setOriginalPrice(BigDecimal.valueOf(1000.00));
         request.setOverridePrice(BigDecimal.valueOf(800.00));
         request.setReasonCode(PriceOverrideReasonCode.PRICE_MATCH);
@@ -91,7 +91,7 @@ class PriceOverrideServiceTest {
 
         // When
         ApplyPriceOverrideResponse response = priceOverrideService.applyPriceOverride(request,
-                UUID.randomUUID().toString());
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 
         // Then
         assertThat(response).isNotNull();
@@ -104,9 +104,9 @@ class PriceOverrideServiceTest {
     void testApplyPriceOverride_OverridePriceGreaterThanOriginal_ThrowsException() {
         // Given: Override price greater than original
         ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
-        request.setOrderId(UUID.randomUUID().toString());
-        request.setOrderLineId(UUID.randomUUID().toString());
-        request.setProductId(UUID.randomUUID().toString());
+        request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+        request.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setOriginalPrice(BigDecimal.valueOf(100.00));
         request.setOverridePrice(BigDecimal.valueOf(150.00));
         request.setReasonCode(PriceOverrideReasonCode.OTHER);
@@ -121,7 +121,7 @@ class PriceOverrideServiceTest {
     void testApprovePriceOverride_Success() {
         // Given: Pending override
         PriceOverride override = createPendingOverride();
-        UUID managerUserId = UUID.randomUUID();
+        UUID managerUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When
         ApprovePriceOverrideRequest approveRequest = new ApprovePriceOverrideRequest();
@@ -150,7 +150,7 @@ class PriceOverrideServiceTest {
     void testRejectPriceOverride_Success() {
         // Given: Pending override
         PriceOverride override = createPendingOverride();
-        UUID managerUserId = UUID.randomUUID();
+        UUID managerUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When
         RejectPriceOverrideRequest rejectRequest = new RejectPriceOverrideRequest();
@@ -191,18 +191,20 @@ class PriceOverrideServiceTest {
     @Test
     void testGetOverrideById_NotFound() {
         // When/Then
-        assertThatThrownBy(() -> priceOverrideService.getOverrideById(UUID.randomUUID()))
+        assertThatThrownBy(
+                () -> priceOverrideService.getOverrideById(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                 .isInstanceOf(PriceOverrideNotFoundException.class);
     }
 
     @Test
     void testGetOverridesByOrderId() {
         // Given: Multiple overrides for same order
-        UUID orderId1 = UUID.randomUUID();
-        UUID orderId2 = UUID.randomUUID();
-        createOverride(orderId1, UUID.randomUUID(), OverrideStatus.APPROVED);
-        createOverride(orderId1, UUID.randomUUID(), OverrideStatus.PENDING_APPROVAL);
-        createOverride(orderId2, UUID.randomUUID(), OverrideStatus.APPROVED);
+        UUID orderId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID orderId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        createOverride(orderId1, UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.APPROVED);
+        createOverride(orderId1, UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                OverrideStatus.PENDING_APPROVAL);
+        createOverride(orderId2, UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.APPROVED);
 
         // When
         List<PriceOverride> overrides = priceOverrideService.getOverridesByOrderId(orderId1);
@@ -214,10 +216,14 @@ class PriceOverrideServiceTest {
     @Test
     void testGetPendingApprovals() {
         // Given: Mixed status overrides
-        createOverride(UUID.randomUUID(), UUID.randomUUID(), OverrideStatus.APPROVED);
-        createOverride(UUID.randomUUID(), UUID.randomUUID(), OverrideStatus.PENDING_APPROVAL);
-        createOverride(UUID.randomUUID(), UUID.randomUUID(), OverrideStatus.PENDING_APPROVAL);
-        createOverride(UUID.randomUUID(), UUID.randomUUID(), OverrideStatus.REJECTED);
+        createOverride(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.APPROVED);
+        createOverride(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.PENDING_APPROVAL);
+        createOverride(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.PENDING_APPROVAL);
+        createOverride(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.REJECTED);
 
         // When
         List<PriceOverride> pending = priceOverrideService.getPendingApprovals();
@@ -230,9 +236,12 @@ class PriceOverrideServiceTest {
     @Test
     void testGetOverridesByStatus() {
         // Given: Mixed status overrides
-        createOverride(UUID.randomUUID(), UUID.randomUUID(), OverrideStatus.APPROVED);
-        createOverride(UUID.randomUUID(), UUID.randomUUID(), OverrideStatus.APPROVED);
-        createOverride(UUID.randomUUID(), UUID.randomUUID(), OverrideStatus.REJECTED);
+        createOverride(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.APPROVED);
+        createOverride(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.APPROVED);
+        createOverride(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.REJECTED);
 
         // When
         List<PriceOverride> approved = priceOverrideService.getOverridesByStatus(OverrideStatus.APPROVED);
@@ -244,21 +253,22 @@ class PriceOverrideServiceTest {
     // Helper methods
 
     private PriceOverride createPendingOverride() {
-        return createOverride(UUID.randomUUID(), UUID.randomUUID(), OverrideStatus.PENDING_APPROVAL);
+        return createOverride(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), OverrideStatus.PENDING_APPROVAL);
     }
 
     private PriceOverride createOverride(UUID orderId, UUID orderLineId, OverrideStatus status) {
         PriceOverride override = PriceOverride.builder()
                 .orderId(orderId)
                 .orderLineId(orderLineId)
-                .productId(UUID.randomUUID())
+                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .originalPrice(BigDecimal.valueOf(100.00))
                 .overridePrice(BigDecimal.valueOf(80.00))
                 .reasonCode(PriceOverrideReasonCode.CUSTOMER_LOYALTY)
                 .justification("Test override")
                 .status(status)
                 .requiresApproval(status == OverrideStatus.PENDING_APPROVAL)
-                .requestedByUserId(UUID.randomUUID())
+                .requestedByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .build();
 
         return priceOverrideRepository.save(override);

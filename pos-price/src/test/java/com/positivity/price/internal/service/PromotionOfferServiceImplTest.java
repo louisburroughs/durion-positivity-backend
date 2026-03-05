@@ -56,7 +56,7 @@ class PromotionOfferServiceImplTest {
         @BeforeEach
         void setUp() {
                 testPromo = new PromotionOffer();
-                testPromo.setPromotionOfferId(UUID.randomUUID());
+                testPromo.setPromotionOfferId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 testPromo.setPromoCode("TESTCODE");
                 testPromo.setStatus(PromotionStatus.ACTIVE);
                 testPromo.setStartDate(LocalDate.now(TEST_CLOCK).minusDays(1));
@@ -69,13 +69,15 @@ class PromotionOfferServiceImplTest {
 
         private EstimateContext validEstimateContext() {
                 LineItemContext line = new LineItemContext("SKU-001", BigDecimal.ONE, new BigDecimal("100.00"));
-                return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
+                return new EstimateContext(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"), null, List.of(line),
                                 new BigDecimal("100.00"), null);
         }
 
         private EstimateContext estimateContextWithPromos(List<String> applied) {
                 LineItemContext line = new LineItemContext("SKU-001", BigDecimal.ONE, new BigDecimal("100.00"));
-                return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
+                return new EstimateContext(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"), null, List.of(line),
                                 new BigDecimal("100.00"), applied);
         }
 

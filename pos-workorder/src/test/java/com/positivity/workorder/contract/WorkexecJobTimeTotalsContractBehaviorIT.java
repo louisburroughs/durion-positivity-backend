@@ -29,16 +29,15 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 @ActiveProfiles("test")
 @Import({ ContractTestConfiguration.class, TestSecurityConfig.class })
 class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBehaviorIT {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Test
         @DisplayName("AC1: GET job-time-totals with valid params returns grouped totals by technicianId, locationId, localDate")
         void getJobTimeTotalsWithValidParamsReturnsGroupedTotals() throws Exception {
-                UUID locationA = UUID.randomUUID();
-                UUID locationB = UUID.randomUUID();
-                UUID technicianA = UUID.randomUUID();
-                UUID technicianB = UUID.randomUUID();
+                UUID locationA = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationB = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID technicianA = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID technicianB = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder completedAtLocationA = seedWorkorder(locationA, WorkorderStatus.COMPLETED);
                 Workorder completedAtLocationB = seedWorkorder(locationB, WorkorderStatus.COMPLETED);
@@ -90,8 +89,8 @@ class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBe
         @Test
         @DisplayName("AC3: GET job-time-totals includes only finalized/completed labor and excludes in-progress work")
         void getJobTimeTotalsIncludesOnlyCompletedWorkorders() throws Exception {
-                UUID sharedLocation = UUID.randomUUID();
-                UUID sharedTechnician = UUID.randomUUID();
+                UUID sharedLocation = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID sharedTechnician = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder completedWorkorder = seedWorkorder(sharedLocation, WorkorderStatus.COMPLETED);
                 Workorder inProgressWorkorder = seedWorkorder(sharedLocation, WorkorderStatus.WORK_IN_PROGRESS);
@@ -134,7 +133,7 @@ class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBe
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
                                 .workorderId(workorder.getId())
-                                .workorderServiceId(UUID.randomUUID())
+                                .workorderServiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .technicianId(technicianId)
                                 .startTime(startTimeUtc)
                                 .endTime(endTimeUtc)

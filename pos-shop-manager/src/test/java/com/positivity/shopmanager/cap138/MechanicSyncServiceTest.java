@@ -296,7 +296,7 @@ class MechanicSyncServiceTest {
     void ac5_malformedEvent_nullVersion_throwsExceptionAndNoDbWrite() {
         // Arrange – version 0 signals "missing/unset" (caller should never send 0)
         HrMechanicEvent event = HrMechanicEvent.builder()
-                .eventId(UUID.randomUUID())
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_UPSERTED)
                 .personId("HR-5002")
                 .version(null)
@@ -437,7 +437,7 @@ class MechanicSyncServiceTest {
         String personId = "HR-NULLPAY-001";
         Mechanic saved = buildMechanic(personId, MechanicStatus.ACTIVE, 1);
         HrMechanicEvent event = HrMechanicEvent.builder()
-                .eventId(UUID.randomUUID())
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_UPSERTED)
                 .personId(personId)
                 .version(1)
@@ -505,7 +505,7 @@ class MechanicSyncServiceTest {
     void f07_nullEventType_throwsIllegalArgument() {
         // Arrange – valid identification fields, but eventType is null
         String personId = "HR-F07-001";
-        UUID eventId = UUID.randomUUID();
+        UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         HrMechanicEvent event = HrMechanicEvent.builder()
                 .eventId(eventId)
                 .eventType(null)
@@ -533,7 +533,7 @@ class MechanicSyncServiceTest {
     private HrMechanicEvent buildUpsertEvent(String personId, Integer version,
             List<SkillPayload> skills) {
         return HrMechanicEvent.builder()
-                .eventId(UUID.randomUUID())
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_UPSERTED)
                 .personId(personId)
                 .version(version)
@@ -544,7 +544,7 @@ class MechanicSyncServiceTest {
 
     private HrMechanicEvent buildDeactivateEvent(String personId, Integer version) {
         return HrMechanicEvent.builder()
-                .eventId(UUID.randomUUID())
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_DEACTIVATED)
                 .personId(personId)
                 .version(version)
@@ -555,7 +555,7 @@ class MechanicSyncServiceTest {
     private HrMechanicEvent buildSkillsUpdatedEvent(String personId, Integer version,
             List<SkillPayload> skills) {
         return HrMechanicEvent.builder()
-                .eventId(UUID.randomUUID())
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_SKILLS_UPDATED)
                 .personId(personId)
                 .version(version)
@@ -566,7 +566,7 @@ class MechanicSyncServiceTest {
 
     private Mechanic buildMechanic(String personId, MechanicStatus status, int version) {
         return Mechanic.builder()
-                .mechanicId(UUID.randomUUID())
+                .mechanicId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .personId(personId)
                 .firstName("Test")
                 .lastName("Mechanic")

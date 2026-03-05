@@ -26,7 +26,6 @@ import static org.mockito.Mockito.*;
 class InvoiceFinalizedEventHandlerTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Mock
     private InvoiceRepository invoiceRepository;
 
@@ -39,14 +38,14 @@ class InvoiceFinalizedEventHandlerTest {
 
     @BeforeEach
     void setUp() {
-        invoiceId = UUID.randomUUID();
+        invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         invoice = new Invoice();
         invoice.setId(invoiceId);
         invoice.setStatus(InvoiceStatus.FINALIZED);
 
         event = new InvoiceFinalizedEvent(
                 invoiceId,
-                UUID.randomUUID(),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 "test-actor",
                 Instant.now(TEST_CLOCK),
                 BigDecimal.valueOf(100.00));

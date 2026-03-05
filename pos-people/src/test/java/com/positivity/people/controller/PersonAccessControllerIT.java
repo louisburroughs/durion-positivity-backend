@@ -31,76 +31,76 @@ class PersonAccessControllerIT extends BaseIntegrationTest {
 
 	@Test
 	void getRoles_returns200() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		when(peopleAccessControlService.getAvailableRolesForPerson(personUuid))
-			.thenReturn(List.of(RoleDto.builder().code("MANAGER").name("Manager role").build()));
+				.thenReturn(List.of(RoleDto.builder().code("MANAGER").name("Manager role").build()));
 
 		mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/roles", personUuid)))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].code").value("MANAGER"));
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].code").value("MANAGER"));
 	}
 
 	@Test
 	void getRoles_returns404WhenPersonNotFound() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		when(peopleAccessControlService.getAvailableRolesForPerson(personUuid))
-			.thenThrow(new PersonNotFoundException(personUuid));
+				.thenThrow(new PersonNotFoundException(personUuid));
 
 		mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/roles", personUuid)))
-			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.status").value(404))
-			.andExpect(jsonPath("$.detail").value("Person not found with id: " + personUuid))
-			.andExpect(jsonPath("$.timestamp").exists());
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.status").value(404))
+				.andExpect(jsonPath("$.detail").value("Person not found with id: " + personUuid))
+				.andExpect(jsonPath("$.timestamp").exists());
 	}
 
 	@Test
 	void getAssignments_returns200() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		UserRoleDto assignment = UserRoleDto.builder().userId("user-1").roleCode("MANAGER").build();
 
 		when(peopleAccessControlService.getPersonRoleAssignments(personUuid, false, null))
-			.thenReturn(List.of(assignment));
+				.thenReturn(List.of(assignment));
 
 		mockMvc
-			.perform(withAuth(
-					get("/v1/people/{personUuid}/access/assignments", personUuid).param("includeHistory", "false")))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].roleCode").value("MANAGER"));
+				.perform(withAuth(
+						get("/v1/people/{personUuid}/access/assignments", personUuid).param("includeHistory", "false")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].roleCode").value("MANAGER"));
 	}
 
 	@Test
 	void getAssignments_defaultsToFalseWhenIncludeHistoryOmitted() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		UserRoleDto assignment = UserRoleDto.builder().userId("user-1").roleCode("MANAGER").build();
 
 		// Should default to false when includeHistory is not provided
 		when(peopleAccessControlService.getPersonRoleAssignments(personUuid, false, null))
-			.thenReturn(List.of(assignment));
+				.thenReturn(List.of(assignment));
 
 		mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/assignments", personUuid)))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].roleCode").value("MANAGER"));
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].roleCode").value("MANAGER"));
 	}
 
 	@Test
 	void getAssignments_returns404WhenPersonLinkMissing() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		when(peopleAccessControlService.getPersonRoleAssignments(personUuid, true, null))
-			.thenThrow(new EntityNotFoundException("No user link found"));
+				.thenThrow(new EntityNotFoundException("No user link found"));
 
 		mockMvc
-			.perform(withAuth(
-					get("/v1/people/{personUuid}/access/assignments", personUuid).param("includeHistory", "true")))
-			.andExpect(status().isNotFound());
+				.perform(withAuth(
+						get("/v1/people/{personUuid}/access/assignments", personUuid).param("includeHistory", "true")))
+				.andExpect(status().isNotFound());
 	}
 
 	@Test
 	void createAssignment_returns201() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		UserRoleDto created = UserRoleDto.builder().roleCode("MANAGER").build();
 
 		when(peopleAccessControlService.assignRoleToPerson(eq(personUuid), eq("MANAGER"), any(), any(), any()))
-			.thenReturn(created);
+				.thenReturn(created);
 
 		String payload = """
 				{
@@ -109,24 +109,24 @@ class PersonAccessControllerIT extends BaseIntegrationTest {
 				""";
 
 		mockMvc
-			.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(payload)))
-			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.roleCode").value("MANAGER"));
+				.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(payload)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.roleCode").value("MANAGER"));
 	}
 
 	@Test
 	void revokeAssignment_returns204() throws Exception {
-		UUID personUuid = UUID.randomUUID();
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		String roleCode = "MANAGER";
 		doNothing().when(peopleAccessControlService)
-			.revokeRoleFromPerson(personUuid, roleCode, LocalDateTime.parse("2026-02-16T00:00:00"));
+				.revokeRoleFromPerson(personUuid, roleCode, LocalDateTime.parse("2026-02-16T00:00:00"));
 
 		mockMvc
-			.perform(withAuth(delete("/v1/people/{personUuid}/access/assignments/{roleCode}", personUuid, roleCode)
-				.param("endDate", "2026-02-16T00:00:00")))
-			.andExpect(status().isNoContent());
+				.perform(withAuth(delete("/v1/people/{personUuid}/access/assignments/{roleCode}", personUuid, roleCode)
+						.param("endDate", "2026-02-16T00:00:00")))
+				.andExpect(status().isNoContent());
 	}
 
 }

@@ -176,7 +176,8 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
         @Test
         @DisplayName("POC-006: GET /v1/promotions/offers/{id} not-found → 404 PROMOTION_OFFER_NOT_FOUND")
         void givenNonExistentId_whenGetOfferById_thenReturns404() throws Exception {
-                mockMvc.perform(withGatewayAuth(get("/v1/promotions/offers/{id}", UUID.randomUUID())))
+                mockMvc.perform(withGatewayAuth(get("/v1/promotions/offers/{id}",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isNotFound())
                                 .andExpect(jsonPath("$.code").value("PROMOTION_OFFER_NOT_FOUND"));
         }
@@ -382,7 +383,7 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
         @Test
         @DisplayName("POC-403A: GET /v1/promotions/offers/{id} without gateway auth \u2192 403 Forbidden")
         void getOfferById_withoutAuth_returns403() throws Exception {
-                UUID id = UUID.randomUUID();
+                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 mockMvc.perform(get("/v1/promotions/offers/{id}", id))
                                 .andExpect(status().isForbidden());
         }

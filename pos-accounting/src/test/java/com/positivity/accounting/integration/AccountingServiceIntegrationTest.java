@@ -33,8 +33,7 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 @Transactional
 @DisplayName("Phase 3 Integration Tests - Accounting Service Wrappers")
 class AccountingServiceIntegrationTest extends BaseIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+  private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
   @Autowired
   private GLAccountRepository glAccountRepository;
@@ -97,7 +96,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   void testActivateGLAccount() throws Exception {
     // Create account first with activation date in future
     GLAccount account = new GLAccount();
-    account.setGlAccountId(UUID.randomUUID());
+    account.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     account.setAccountCode("2000");
     account.setAccountName("Test Liability");
     account.setAccountType(AccountType.LIABILITY);
@@ -122,7 +121,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   @DisplayName("Should return 400 when activating without effective date")
   void testActivateGLAccountMissingDate() throws Exception {
     GLAccount account = new GLAccount();
-    account.setGlAccountId(UUID.randomUUID());
+    account.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     account.setAccountCode("3000");
     account.setAccountName("Test Account");
     account.setAccountType(AccountType.ASSET);
@@ -168,7 +167,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   void testCreateBalancedJournalEntry() throws Exception {
     // Setup GL accounts
     GLAccount cashAccount = new GLAccount();
-    cashAccount.setGlAccountId(UUID.randomUUID());
+    cashAccount.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     cashAccount.setAccountCode("1000");
     cashAccount.setAccountName("Cash");
     cashAccount.setAccountType(AccountType.ASSET);
@@ -176,7 +175,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     cashAccount = glAccountRepository.save(cashAccount);
 
     GLAccount revenueAccount = new GLAccount();
-    revenueAccount.setGlAccountId(UUID.randomUUID());
+    revenueAccount.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     revenueAccount.setAccountCode("4000");
     revenueAccount.setAccountName("Revenue");
     revenueAccount.setAccountType(AccountType.REVENUE);
@@ -214,7 +213,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   @DisplayName("Should return 422 when journal entry is unbalanced")
   void testCreateUnbalancedJournalEntry() throws Exception {
     GLAccount account1 = new GLAccount();
-    account1.setGlAccountId(UUID.randomUUID());
+    account1.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     account1.setAccountCode("1000");
     account1.setAccountName("Test Account");
     account1.setAccountType(AccountType.ASSET);
@@ -250,7 +249,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   void testPostJournalEntry() throws Exception {
     // Create GL accounts
     GLAccount account1 = new GLAccount();
-    account1.setGlAccountId(UUID.randomUUID());
+    account1.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     account1.setAccountCode("1000");
     account1.setAccountName("Account 1");
     account1.setAccountType(AccountType.ASSET);
@@ -258,7 +257,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     account1 = glAccountRepository.save(account1);
 
     GLAccount account2 = new GLAccount();
-    account2.setGlAccountId(UUID.randomUUID());
+    account2.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     account2.setAccountCode("2000");
     account2.setAccountName("Account 2");
     account2.setAccountType(AccountType.LIABILITY);
@@ -297,7 +296,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   void testPostAlreadyPostedEntry() throws Exception {
     // Create and post entry
     GLAccount account = new GLAccount();
-    account.setGlAccountId(UUID.randomUUID());
+    account.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     account.setAccountCode("1000");
     account.setAccountName("Test Account");
     account.setAccountType(AccountType.ASSET);
@@ -442,7 +441,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   @DisplayName("Should create GL mapping with dimension matching")
   void testCreateGLMappingWithDimensions() throws Exception {
     GLAccount account = new GLAccount();
-    account.setGlAccountId(UUID.randomUUID());
+    account.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     account.setAccountCode("1000");
     account.setAccountName("Test Account");
     account.setAccountType(AccountType.ASSET);
@@ -481,7 +480,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   void testResolveGLMapping() throws Exception {
     // Create GL account with audit fields
     GLAccount account = new GLAccount();
-    account.setGlAccountId(UUID.randomUUID());
+    account.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     account.setAccountCode("1000");
     account.setAccountName("Test Account");
     account.setAccountType(AccountType.ASSET);
@@ -590,10 +589,10 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   @Test
   @DisplayName("Should create vendor bill from goods received event and complete three-way match workflow")
   void testVendorBillWorkflow() throws Exception {
-    UUID eventId = UUID.randomUUID();
+    UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     UUID vendorId = VENDOR_ID;
-    UUID purchaseOrderId = UUID.randomUUID();
-    UUID productId = UUID.randomUUID();
+    UUID purchaseOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     // Step 1: POST GoodsReceivedEvent → create bill in PENDING_RECEIPT_MATCH
     String goodsReceivedPayload = """
@@ -656,7 +655,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
             }
           ]
         }
-        """.formatted(UUID.randomUUID(), ORG_ID, vendorId, productId);
+        """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"), ORG_ID, vendorId, productId);
 
     mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
         .contentType(MediaType.APPLICATION_JSON)
@@ -667,8 +666,8 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         .andExpect(jsonPath("$.billNumber").value("INV-98765"));
 
     // Step 4: Create a second bill for the discrepancy scenario
-    UUID eventId2 = UUID.randomUUID();
-    UUID purchaseOrderId2 = UUID.randomUUID();
+    UUID eventId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    UUID purchaseOrderId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     String goodsReceivedPayload2 = """
         {
@@ -719,7 +718,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
             }
           ]
         }
-        """.formatted(UUID.randomUUID(), ORG_ID, vendorId, productId);
+        """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"), ORG_ID, vendorId, productId);
 
     mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
         .contentType(MediaType.APPLICATION_JSON)

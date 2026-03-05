@@ -36,9 +36,9 @@ class WorkorderKafkaCommandListenerTest {
     @Test
     @DisplayName("Publishes AssignmentUpdatedEvent when ASSIGNMENT_UPDATED command is received")
     void publishesAssignmentUpdatedEventFromEnvelope() {
-        UUID workorderId = UUID.randomUUID();
-        UUID locationId = UUID.randomUUID();
-        UUID resourceId = UUID.randomUUID();
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID resourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         String message = """
                 {
@@ -70,10 +70,10 @@ class WorkorderKafkaCommandListenerTest {
     @DisplayName("Publishes AssignmentUpdatedEvent when payload is direct AssignmentUpdatedEvent JSON")
     void publishesAssignmentUpdatedEventFromDirectPayload() throws Exception {
         AssignmentUpdatedEvent direct = AssignmentUpdatedEvent.builder()
-                .workorderId(UUID.randomUUID())
+                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .payload(AssignmentUpdatePayload.builder()
-                        .locationId(UUID.randomUUID())
-                        .resourceId(UUID.randomUUID())
+                        .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                        .resourceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                         .build())
                 .build();
 

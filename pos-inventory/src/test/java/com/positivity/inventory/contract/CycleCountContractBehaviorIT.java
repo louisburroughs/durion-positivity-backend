@@ -40,8 +40,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Cycle Count Contract Behavior")
 class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -326,7 +325,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("AC-27-7: submitting a count for a non-existent taskId returns 404 Not Found")
         void submitCount_unknownTaskId_returns404() throws Exception {
-                UUID randomTaskId = UUID.randomUUID();
+                UUID randomTaskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 String body = objectMapper.writeValueAsString(
                                 new SubmitCountBody(randomTaskId, "auditor-7", 50));
@@ -367,7 +366,8 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC-27-9: getTask for non-existent taskId returns 404 Not Found")
         void getTask_unknownTaskId_returns404() throws Exception {
                 mockMvc.perform(withGatewayAuth(
-                                get("/api/inventory/cycleCount/task/{taskId}", UUID.randomUUID())))
+                                get("/api/inventory/cycleCount/task/{taskId}",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isNotFound());
         }
 

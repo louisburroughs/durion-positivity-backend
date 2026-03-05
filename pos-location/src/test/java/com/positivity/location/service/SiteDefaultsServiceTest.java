@@ -65,9 +65,9 @@ class SiteDefaultsServiceTest {
     @Test
     @DisplayName("#38 - valid configure returns SiteDefaultsResponse")
     void configureDefaults_success_returnsResponse() {
-        UUID siteId = UUID.randomUUID();
-        UUID stagingId = UUID.randomUUID();
-        UUID quarantineId = UUID.randomUUID();
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID stagingId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID quarantineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
         when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId))
@@ -91,8 +91,8 @@ class SiteDefaultsServiceTest {
     @Test
     @DisplayName("#38 - same staging and quarantine ID throws 400 DEFAULT_LOCATION_ROLE_CONFLICT")
     void configureDefaults_sameLocation_throwsConflict() {
-        UUID siteId = UUID.randomUUID();
-        UUID sharedId = UUID.randomUUID();
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID sharedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
 
@@ -113,9 +113,9 @@ class SiteDefaultsServiceTest {
     @Test
     @DisplayName("#38 - site not found throws 404")
     void configureDefaults_siteNotFound_throwsNotFound() {
-        UUID siteId = UUID.randomUUID();
-        UUID stagingId = UUID.randomUUID();
-        UUID quarantineId = UUID.randomUUID();
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID stagingId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID quarantineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(locationRepository.findById(siteId)).thenReturn(Optional.empty());
 
@@ -136,9 +136,9 @@ class SiteDefaultsServiceTest {
     @Test
     @DisplayName("#38 - staging location not belonging to site throws 422")
     void configureDefaults_stagingLocationNotBelongsToSite_throwsValidationError() {
-        UUID siteId = UUID.randomUUID();
-        UUID stagingId = UUID.randomUUID();
-        UUID quarantineId = UUID.randomUUID();
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID stagingId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID quarantineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
         when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId))
@@ -163,9 +163,9 @@ class SiteDefaultsServiceTest {
     @Test
     @DisplayName("#38 - quarantine location not belonging to site throws 422")
     void configureDefaults_quarantineLocationNotBelongsToSite_throwsValidationError() {
-        UUID siteId = UUID.randomUUID();
-        UUID stagingId = UUID.randomUUID();
-        UUID quarantineId = UUID.randomUUID();
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID stagingId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID quarantineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
         when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId))
@@ -193,11 +193,11 @@ class SiteDefaultsServiceTest {
     @Test
     @DisplayName("#38 - getDefaults with existing defaults returns populated response")
     void getDefaults_success_returnsResponse() {
-        UUID siteId = UUID.randomUUID();
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         Location location = site(siteId);
-        location.setDefaultStagingLocationId(UUID.randomUUID());
-        location.setDefaultQuarantineLocationId(UUID.randomUUID());
+        location.setDefaultStagingLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        location.setDefaultQuarantineLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(location));
 
         SiteDefaultsResponse response = siteDefaultsService.getDefaults(siteId);
@@ -212,7 +212,7 @@ class SiteDefaultsServiceTest {
     @Test
     @DisplayName("#38 - getDefaults site not found throws 404")
     void getDefaults_siteNotFound_throwsNotFound() {
-        UUID siteId = UUID.randomUUID();
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(locationRepository.findById(siteId)).thenReturn(Optional.empty());
 
@@ -231,7 +231,7 @@ class SiteDefaultsServiceTest {
     @Test
     @DisplayName("#38 - getDefaults with no defaults configured returns response with nulls")
     void getDefaults_noDefaultsConfigured_returnsEmptyDefaults() {
-        UUID siteId = UUID.randomUUID();
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
 

@@ -26,13 +26,13 @@ import java.util.UUID;
 public class ArchitectureTest {
 
         private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
-                        "call UUID.randomUUID()") {
-                @Override
-                public boolean test(JavaCall<?> input) {
-                        return input.getTargetOwner().isEquivalentTo(UUID.class)
-                                        && "randomUUID".equals(input.getName());
-                }
-        };
+                        "call UUID.fromString("00000000-0000-0000-0000-000000000001")") {
+
+        @Override
+        public boolean test(JavaCall<?> input) {
+                return input.getTargetOwner().isEquivalentTo(UUID.class)
+                                && "randomUUID".equals(input.getName());
+        }};
 
         @ArchTest
         static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
@@ -102,7 +102,8 @@ public class ArchitectureTest {
         static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
                         .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
                         .and().areAnnotatedWith("jakarta.persistence.Entity")
-                        .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
+                        .should().dependOnClassesThat()
+                        .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
                         .allowEmptyShould(true)
                         .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
 
@@ -120,6 +121,6 @@ public class ArchitectureTest {
         static final ArchRule packages_should_be_free_of_cycles = slices()
                         .matching("com.positivity.price.internal.(*)..")
                         .should().beFreeOfCycles()
-            .allowEmptyShould(true)
+                        .allowEmptyShould(true)
                         .because("cyclic dependencies make modules harder to maintain and evolve");
 }

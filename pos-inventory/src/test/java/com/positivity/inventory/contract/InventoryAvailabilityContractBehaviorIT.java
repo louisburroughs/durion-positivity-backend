@@ -47,7 +47,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     @Test
     @DisplayName("AC-1: getAvailability_returnsPerLocationList_whenProductHasStock")
     void getAvailability_returnsPerLocationList_whenProductHasStock() throws Exception {
-        UUID productId = UUID.randomUUID();
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         seedOnHand(productId, LOC_1, 40);
         seedOnHand(productId, LOC_2, 60);
@@ -69,7 +69,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     @Test
     @DisplayName("AC-2: getAvailability_returnsEmptyList_whenProductHasNoStock")
     void getAvailability_returnsEmptyList_whenProductHasNoStock() throws Exception {
-        UUID productId = UUID.randomUUID();
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", productId)))
                 .andExpect(status().isOk())
@@ -98,7 +98,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     @Test
     @DisplayName("AC-5: getAvailability_calculatesAtp_excludingInactiveReservations")
     void getAvailability_calculatesAtp_excludingInactiveReservations() throws Exception {
-        UUID productId = UUID.randomUUID();
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         seedOnHand(productId, LOC_ATP, 100);
 

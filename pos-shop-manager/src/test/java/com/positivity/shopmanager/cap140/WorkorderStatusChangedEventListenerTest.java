@@ -30,7 +30,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class WorkorderStatusChangedEventListenerTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Mock
     WorkorderStatusEventService service;
 
@@ -45,11 +44,11 @@ class WorkorderStatusChangedEventListenerTest {
     void onWorkorderStatusChanged_delegatesToServiceWithSameEventExactlyOnce() {
         // Arrange
         WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 "DRAFT",
                 Instant.now(TEST_CLOCK),
-                UUID.randomUUID());
+                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // Act
         listener.onWorkorderStatusChanged(event);

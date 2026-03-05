@@ -302,7 +302,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void approveAdjustmentRequest_whenRequestNotFound_throwsIllegalArgumentException() {
-        UUID requestId = UUID.randomUUID();
+        UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(adjustmentRepository.findById(requestId)).thenReturn(Optional.empty());
 
         Throwable exception = catchThrowable(() -> service.approveAdjustmentRequest(requestId, "approver-1"));
@@ -369,7 +369,7 @@ class StockMovementServiceImplTest {
 
     private InventoryAdjustmentRequest pendingAdjustmentRequest(int quantity) {
         return InventoryAdjustmentRequest.builder()
-                .adjustmentRequestId(UUID.randomUUID())
+                .adjustmentRequestId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .productSku("SKU-123")
                 .locationId(LOC_1)
                 .quantity(quantity)

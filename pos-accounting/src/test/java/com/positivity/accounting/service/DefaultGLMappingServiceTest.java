@@ -63,7 +63,6 @@ import com.positivity.accounting.internal.service.DefaultGLMappingServiceImpl;
 class DefaultGLMappingServiceTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Mock
     private DefaultGLMappingRepository repository;
 
@@ -77,10 +76,10 @@ class DefaultGLMappingServiceTest {
     private DefaultGLMappingServiceImpl service;
 
     // Test fixtures
-    private static final UUID MAPPING_ID = UUID.randomUUID();
-    private static final UUID DEBIT_ACCOUNT_ID = UUID.randomUUID();
-    private static final UUID CREDIT_ACCOUNT_ID = UUID.randomUUID();
-    private static final UUID ORG_ID = UUID.randomUUID();
+    private static final UUID MAPPING_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID DEBIT_ACCOUNT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID CREDIT_ACCOUNT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID ORG_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String EVENT_TYPE = "INVOICE_CREATED";
 
     private DefaultGLMappingRequest validRequest;
@@ -309,7 +308,7 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should throw when mapping not found for update")
         void shouldThrowWhenMappingNotFoundForUpdate() {
             // Arrange
-            UUID unknownId = UUID.randomUUID();
+            UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(repository.findById(unknownId)).thenReturn(Optional.empty());
 
             // Act & Assert
@@ -360,7 +359,7 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should throw when mapping not found for deactivation")
         void shouldThrowWhenMappingNotFoundForDeactivation() {
             // Arrange
-            UUID unknownId = UUID.randomUUID();
+            UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(repository.findById(unknownId)).thenReturn(Optional.empty());
 
             // Act & Assert
@@ -397,7 +396,7 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should throw when mapping not found")
         void shouldThrowWhenMappingNotFound() {
             // Arrange
-            UUID unknownId = UUID.randomUUID();
+            UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(repository.findById(unknownId)).thenReturn(Optional.empty());
 
             // Act & Assert
@@ -594,7 +593,7 @@ class DefaultGLMappingServiceTest {
         @DisplayName("should return empty list for organization with no mappings")
         void shouldReturnEmptyForOrgWithNoMappings() {
             // Arrange
-            UUID emptyOrg = UUID.randomUUID();
+            UUID emptyOrg = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(repository.findByOrganizationIdAndActiveTrue(emptyOrg))
                     .thenReturn(List.of());
 
@@ -615,7 +614,7 @@ class DefaultGLMappingServiceTest {
         void shouldReturnAllGlobalDefaults() {
             // Arrange
             DefaultGLMapping globalMapping = new DefaultGLMapping();
-            globalMapping.setMappingId(UUID.randomUUID());
+            globalMapping.setMappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
             globalMapping.setEventType("REFUND_ISSUED");
             globalMapping.setOrganizationId(null);
             globalMapping.setDebitAccountId(DEBIT_ACCOUNT_ID);

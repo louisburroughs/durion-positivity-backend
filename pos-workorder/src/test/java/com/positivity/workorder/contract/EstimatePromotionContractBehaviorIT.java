@@ -43,8 +43,7 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 @DisplayName("Estimate Promotion Contract Behavior Tests (CAP:004 Story #26)")
 @Import(ContractTestConfiguration.class)
 class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -97,7 +96,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("PR-002: Idempotent promotion with Idempotency-Key returns same workorder")
         void testPromoteEstimate_IdempotencyWithHeader() {
                 UUID estimateId = seedApprovedEstimateWithItems();
-                String idempotencyKey = "test-key-" + UUID.randomUUID();
+                String idempotencyKey = "test-key-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // First promotion with idempotency key
                 String workorderId = givenWithGatewayAuth()
@@ -153,7 +152,8 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // First promotion with first idempotency key
                 String workorderId = givenWithGatewayAuth()
-                                .header("Idempotency-Key", "test-key-1-" + UUID.randomUUID())
+                                .header("Idempotency-Key",
+                                                "test-key-1-" + UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .when()
                                 .post("/v1/workorders/estimates/{id}/promote", estimateId)
                                 .then()
@@ -164,7 +164,8 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                 // Second promotion with different idempotency key but same estimate
                 // Should return same workorder (business logic idempotency takes precedence)
                 givenWithGatewayAuth()
-                                .header("Idempotency-Key", "test-key-2-" + UUID.randomUUID())
+                                .header("Idempotency-Key",
+                                                "test-key-2-" + UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .when()
                                 .post("/v1/workorders/estimates/{id}/promote", estimateId)
                                 .then()
@@ -178,7 +179,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("PR-005: Reject promotion - estimate not found")
         void testPromoteEstimate_NotFound() {
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 givenWithGatewayAuth()
                                 .when()
@@ -233,7 +234,8 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                 initTestIds();
 
                 Estimate estimate = Estimate.builder()
-                                .estimateNumber("EST-TEST-" + UUID.randomUUID().toString().substring(0, 8))
+                                .estimateNumber("EST-TEST-" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                .toString().substring(0, 8))
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
@@ -282,7 +284,8 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                 initTestIds();
 
                 Estimate estimate = Estimate.builder()
-                                .estimateNumber("EST-TEST-" + UUID.randomUUID().toString().substring(0, 8))
+                                .estimateNumber("EST-TEST-" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                .toString().substring(0, 8))
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
@@ -315,7 +318,8 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                 initTestIds();
 
                 Estimate estimate = Estimate.builder()
-                                .estimateNumber("EST-TEST-" + UUID.randomUUID().toString().substring(0, 8))
+                                .estimateNumber("EST-TEST-" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                .toString().substring(0, 8))
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
@@ -352,7 +356,8 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                 initTestIds();
 
                 Estimate estimate = Estimate.builder()
-                                .estimateNumber("EST-TEST-" + UUID.randomUUID().toString().substring(0, 8))
+                                .estimateNumber("EST-TEST-" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                .toString().substring(0, 8))
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
@@ -387,9 +392,9 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
 
         private void initTestIds() {
                 if (testCustomerId == null) {
-                        testCustomerId = UUID.randomUUID();
-                        testLocationId = UUID.randomUUID();
-                        testVehicleId = UUID.randomUUID();
+                        testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 }
         }
 }

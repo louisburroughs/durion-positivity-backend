@@ -44,7 +44,8 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         void testCreatePostingCategoryHappyPath() throws Exception {
                 // Arrange: Prepare valid payload
                 PostingCategoryCreateRequest request = new PostingCategoryCreateRequest();
-                request.setCategoryName("Sales_" + UUID.randomUUID().toString().substring(0, 8));
+                request.setCategoryName("Sales_"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
                 request.setDescription("Sales transactions");
                 request.setCreatedBy("test-user");
 
@@ -66,7 +67,9 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         @DisplayName("PC-002: Get Posting Category by ID")
         void testGetPostingCategory() throws Exception {
                 // Arrange: Create a posting category first
-                UUID categoryId = createPostingCategory("Revenue_" + UUID.randomUUID().toString().substring(0, 8),
+                UUID categoryId = createPostingCategory(
+                                "Revenue_" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString()
+                                                .substring(0, 8),
                                 "Revenue transactions", "test-user");
 
                 // Act & Assert: GET the category by ID
@@ -80,7 +83,8 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         @DisplayName("PC-VE-001: Reject duplicate Posting Category name")
         void testCreatePostingCategoryDuplicate() throws Exception {
                 // Arrange: Create first posting category with unique name
-                String uniqueName = "Inventory_" + UUID.randomUUID().toString().substring(0, 8);
+                String uniqueName = "Inventory_"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8);
                 createPostingCategory(uniqueName, "Inventory transactions", "test-user");
 
                 // Prepare duplicate
@@ -101,7 +105,8 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         @DisplayName("PC-VE-002: Reject duplicate with different whitespace")
         void testCreatePostingCategoryDuplicateWithWhitespace() throws Exception {
                 // Arrange: Create first posting category
-                String uniqueName = "Assets_" + UUID.randomUUID().toString().substring(0, 8);
+                String uniqueName = "Assets_"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8);
                 createPostingCategory(uniqueName, "Asset transactions", "test-user");
 
                 // Prepare duplicate with leading/trailing whitespace
@@ -122,7 +127,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         @DisplayName("PC-VE-003: Reject Get with non-existent ID")
         void testGetNonExistentPostingCategory() throws Exception {
                 // Arrange: Generate a random UUID that doesn't exist
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act & Assert: Expect NOT_FOUND error
                 mockMvc.perform(withAuth(get(API_V1 + "/posting-categories/" + nonExistentId)))
@@ -138,7 +143,9 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         @DisplayName("MK-001: Create Mapping Key with valid fields")
         void testCreateMappingKeyHappyPath() throws Exception {
                 // Arrange: Create a posting category first
-                UUID categoryId = createPostingCategory("Services_" + UUID.randomUUID().toString().substring(0, 8),
+                UUID categoryId = createPostingCategory(
+                                "Services_" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString()
+                                                .substring(0, 8),
                                 "Service transactions", "test-user");
 
                 // Prepare mapping key request
@@ -166,7 +173,9 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         @DisplayName("MK-002: Get Mapping Key by ID")
         void testGetMappingKey() throws Exception {
                 // Arrange: Create category and mapping key
-                UUID categoryId = createPostingCategory("Materials_" + UUID.randomUUID().toString().substring(0, 8),
+                UUID categoryId = createPostingCategory(
+                                "Materials_" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString()
+                                                .substring(0, 8),
                                 "Material transactions", "test-user");
                 UUID keyId = createMappingKey(categoryId, "Steel", "Steel materials", "test-user");
 
@@ -184,7 +193,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         @DisplayName("MK-VE-001: Reject Mapping Key with non-existent Posting Category")
         void testCreateMappingKeyNonExistentCategory() throws Exception {
                 // Arrange: Generate a random UUID that doesn't exist
-                UUID nonExistentCategoryId = UUID.randomUUID();
+                UUID nonExistentCategoryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 MappingKeyCreateRequest request = new MappingKeyCreateRequest();
                 request.setPostingCategoryId(nonExistentCategoryId);
@@ -204,7 +213,9 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         @DisplayName("MK-VE-002: Reject duplicate Mapping Key name within same category")
         void testCreateMappingKeyDuplicateWithinCategory() throws Exception {
                 // Arrange: Create category and first mapping key
-                UUID categoryId = createPostingCategory("Supplies_" + UUID.randomUUID().toString().substring(0, 8),
+                UUID categoryId = createPostingCategory(
+                                "Supplies_" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString()
+                                                .substring(0, 8),
                                 "Supply transactions", "test-user");
                 createMappingKey(categoryId, "Paper", "Paper supplies", "test-user");
 
@@ -227,9 +238,13 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
         @DisplayName("MK-VE-003: Allow same Mapping Key name in different categories")
         void testCreateMappingKeySameNameDifferentCategory() throws Exception {
                 // Arrange: Create two different categories
-                UUID category1 = createPostingCategory("CategoryX_" + UUID.randomUUID().toString().substring(0, 8),
+                UUID category1 = createPostingCategory(
+                                "CategoryX_" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString()
+                                                .substring(0, 8),
                                 "Description X", "test-user");
-                UUID category2 = createPostingCategory("CategoryY_" + UUID.randomUUID().toString().substring(0, 8),
+                UUID category2 = createPostingCategory(
+                                "CategoryY_" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString()
+                                                .substring(0, 8),
                                 "Description Y", "test-user");
 
                 // Create same key name in first category

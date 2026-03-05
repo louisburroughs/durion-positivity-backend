@@ -104,7 +104,7 @@ class SiteDefaultsContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("#38 - PUT /defaults with non-existent site returns 404")
         void putDefaults_siteNotFound_returns404() throws Exception {
-                UUID unknownSiteId = UUID.randomUUID();
+                UUID unknownSiteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(siteDefaultsService.configureDefaults(eq(unknownSiteId), any()))
                                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
@@ -123,7 +123,7 @@ class SiteDefaultsContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("#38 - PUT /defaults with storage location not belonging to site returns 422")
         void putDefaults_invalidStorageLocation_returns422() throws Exception {
-                UUID foreignStorageId = UUID.randomUUID();
+                UUID foreignStorageId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(siteDefaultsService.configureDefaults(eq(SITE_ID), any()))
                                 .thenThrow(new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT));
@@ -168,7 +168,7 @@ class SiteDefaultsContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("#38 - GET /defaults with non-existent site returns 404")
         void getDefaults_siteNotFound_returns404() throws Exception {
-                UUID unknownSiteId = UUID.randomUUID();
+                UUID unknownSiteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(siteDefaultsService.getDefaults(unknownSiteId))
                                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));

@@ -47,8 +47,7 @@ import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("EventIngestionService Unit Tests")
 class EventIngestionServiceTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Mock
         private AccountingEventRepository accountingEventRepository;
@@ -75,8 +74,8 @@ class EventIngestionServiceTest {
 
         @BeforeEach
         void setUp() {
-                testOrganizationId = UUID.randomUUID();
-                testEventId = UUID.randomUUID();
+                testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testEventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 testEvent = new AccountingEvent();
                 testEvent.setEventId(testEventId);

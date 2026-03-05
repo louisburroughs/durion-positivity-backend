@@ -50,7 +50,6 @@ import com.positivity.accounting.internal.repository.PaymentAppliedEventReposito
 class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     private static final String API_V1_INVOICES = "/v1/accounting/invoices";
     private static final String API_V1_INVOICE = "/v1/accounting/invoice";
 
@@ -65,9 +64,9 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @BeforeEach
     void setUp() {
         // Setup test IDs
-        testInvoiceId = UUID.randomUUID();
-        testPaymentId = UUID.randomUUID();
-        testIdempotencyKey = UUID.randomUUID().toString();
+        testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testPaymentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testIdempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
     }
 
     @AfterEach
@@ -171,7 +170,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get invoice status - invoice not found returns 404")
     void testGetInvoiceStatus_NotFound() throws Exception {
         // Given - non-existent invoice ID
-        UUID nonExistentInvoiceId = UUID.randomUUID();
+        UUID nonExistentInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(get(API_V1_INVOICE + "/" + nonExistentInvoiceId + "/status")))
@@ -190,7 +189,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Apply payment - path parameter mismatch with body")
     void testApplyPayment_PathBodyMismatch() throws Exception {
         // Given - invoice ID in path doesn't match body
-        UUID pathInvoiceId = UUID.randomUUID();
+        UUID pathInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String payload = """
                 {
                     "invoiceId": "%s",
@@ -270,7 +269,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 {
                     "workorderId": "%s"
                 }
-                """.formatted(UUID.randomUUID());
+                """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"))
@@ -295,7 +294,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 {
                     "idempotencyKey": "%s"
                 }
-                """.formatted(UUID.randomUUID());
+                """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"))
@@ -308,7 +307,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get billing rules - implemented endpoint")
     void testGetBillingRules() throws Exception {
         // Given
-        UUID customerId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(get(API_V1_INVOICE + "/rules/" + customerId)))
@@ -364,7 +363,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 {
                     "workorderId": "%s"
                 }
-                """.formatted(UUID.randomUUID());
+                """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then - should return 403 Forbidden
         mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"), "accounting:je:view")
@@ -392,7 +391,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     "paymentDate": "%s",
                     "idempotencyKey": "%s"
                 }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now(TEST_CLOCK).toString(), UUID.randomUUID().toString());
+                """.formatted(testInvoiceId, testPaymentId, Instant.now(TEST_CLOCK).toString(),
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 
         MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -415,7 +415,8 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     "paymentDate": "%s",
                     "idempotencyKey": "%s"
                 }
-                """.formatted(testInvoiceId, UUID.randomUUID(), Instant.now(TEST_CLOCK).toString(), UUID.randomUUID().toString());
+                """.formatted(testInvoiceId, UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                Instant.now(TEST_CLOCK).toString(), UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 
         MvcResult secondResult = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -447,11 +448,11 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
             BigDecimal amount, BigDecimal invoiceTotal) {
         var event = new PaymentAppliedEvent(
                 invoiceId,
-                "TXN-" + UUID.randomUUID(),
+                "TXN-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 amount,
                 invoiceTotal,
                 status,
-                UUID.randomUUID().toString());
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         paymentAppliedEventRepository.save(event);
     }
 }

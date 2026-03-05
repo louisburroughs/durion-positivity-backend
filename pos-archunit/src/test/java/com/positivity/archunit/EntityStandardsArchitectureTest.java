@@ -47,22 +47,15 @@ class EntityStandardsArchitectureTest {
     private static final String UUIDV7_GENERATOR = "com.positivity.shared.id.UUIDv7Generator";
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
-            "call UUID.randomUUID()") {
-        @Override
-        public boolean test(JavaCall<?> input) {
-            return input.getTargetOwner().isEquivalentTo(UUID.class)
-                    && "randomUUID".equals(input.getName());
-        }
-    };
+            "call UUID.fromString("00000000-0000-0000-0000-000000000001")") {
 
-    private static final DescribedPredicate<JavaClass> HAS_AUDIT_FIELDS = new DescribedPredicate<>(
-            "have createdAt or updatedAt field") {
-        @Override
-        public boolean test(JavaClass input) {
-            return input.getAllFields().stream().map(HasName::getName)
-                    .anyMatch(name -> "createdAt".equals(name) || "updatedAt".equals(name));
-        }
-    };
+    @Override
+    public boolean test(JavaCall<?> input) {
+        return input.getTargetOwner().isEquivalentTo(UUID.class)
+                && "randomUUID".equals(input.getName());
+    }};
+
+    private static final DescribedPredicate<JavaClass> HAS_AUDIT_FIELDS=new DescribedPredicate<>("have createdAt or updatedAt field"){@Override public boolean test(JavaClass input){return input.getAllFields().stream().map(HasName::getName).anyMatch(name->"createdAt".equals(name)||"updatedAt".equals(name));}};
 
     @ArchTest
     static final ArchRule entities_should_not_call_uuid_random_uuid = noClasses()
@@ -70,7 +63,7 @@ class EntityStandardsArchitectureTest {
             .and().areAnnotatedWith(ENTITY_ANNOTATION)
             .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
             .allowEmptyShould(true)
-            .because("ADR-0013 disallows UUID.randomUUID() in entities");
+            .because("ADR-0013 disallows UUID.fromString("00000000-0000-0000-0000-000000000001") in entities");
 
     @ArchTest
     static final ArchRule uuid_id_fields_should_use_adr_0013_generation = classes()
