@@ -147,9 +147,9 @@ class WorkorderCompletionTest {
 
         // Re-inject mocks for WorkorderService since it has WorkorderStateMachine as
         // dependency
-        workOrderService = new WorkorderServiceImpl(workOrderRepository, estimateRepository, estimateItemRepository,
-                workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
-                auditEventRepository, idempotencyService, promotionValidationService, shopmgrClient, TEST_CLOCK);
+        workOrderService = new WorkorderServiceImpl(TEST_CLOCK, workOrderRepository, estimateRepository,
+                estimateItemRepository, workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
+                auditEventRepository, idempotencyService, promotionValidationService, shopmgrClient);
     }
 
     @AfterEach
