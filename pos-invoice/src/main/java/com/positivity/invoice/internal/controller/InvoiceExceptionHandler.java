@@ -1,20 +1,20 @@
 package com.positivity.invoice.internal.controller;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
-import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
-import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.shared.id.UUIDv7Generator;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @RestControllerAdvice(assignableTypes = InvoiceController.class)
@@ -102,6 +102,6 @@ public class InvoiceExceptionHandler {
 
         private static String correlationId(HttpServletRequest request) {
                 String header = request.getHeader(X_CORRELATION_ID);
-                return (header != null && !header.isBlank()) ? header : UUID.randomUUID().toString();
+                return (header != null && !header.isBlank()) ? header : UUIDv7Generator.generate().toString();
         }
 }

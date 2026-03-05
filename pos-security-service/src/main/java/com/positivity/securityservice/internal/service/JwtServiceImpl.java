@@ -1,26 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
-import java.time.Clock;
-
-import com.positivity.securityservice.internal.entity.JwtToken;
-import com.positivity.securityservice.internal.repository.JwtTokenRepository;
-import com.positivity.securityservice.service.JwtService;
-import com.positivity.securityservice.service.RoleAuthorityService;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
@@ -29,7 +10,27 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
+
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.securityservice.internal.entity.JwtToken;
+import com.positivity.securityservice.internal.repository.JwtTokenRepository;
+import com.positivity.securityservice.service.JwtService;
+import com.positivity.securityservice.service.RoleAuthorityService;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for handling JWT token operations such as generation, validation,
@@ -91,7 +92,7 @@ public class JwtServiceImpl implements JwtService {
 
         Instant now = Instant.now(clock);
         Instant expiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
-        String jti = UUID.randomUUID().toString();
+        String jti = UUIDv7Generator.generate().toString();
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(roles);
 
         String token = Jwts.builder()
@@ -282,8 +283,8 @@ public class JwtServiceImpl implements JwtService {
         Instant accessExpiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
         Instant refreshExpiry = now.plusSeconds(REFRESH_TOKEN_EXPIRATION_SECONDS);
 
-        String accessJti = UUID.randomUUID().toString();
-        String refreshJti = UUID.randomUUID().toString();
+        String accessJti = UUIDv7Generator.generate().toString();
+        String refreshJti = UUIDv7Generator.generate().toString();
 
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(roles);
 

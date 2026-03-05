@@ -1,6 +1,14 @@
 package com.positivity.customer.internal.service;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -13,15 +21,10 @@ import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.CrmVehicleService;
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
+import com.positivity.shared.id.UUIDv7Generator;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Service for managing customer-vehicle associations.
@@ -33,7 +36,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CrmVehicleServiceImpl implements CrmVehicleService {
     private final Clock clock;
-
 
     private final VehicleInventoryClient vehicleInventoryClient;
     private final PersonPartyRepository personPartyRepository;
@@ -317,8 +319,8 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
     @Override
     public CrmSnapshotDTO buildSnapshotForOwnerParty(CommercialParty party) {
         com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
-                java.util.UUID.randomUUID(),
-                java.time.Instant.now(clock),
+                UUIDv7Generator.generate(),
+                Instant.now(clock),
                 "1.0.0");
 
         com.positivity.customer.internal.dto.snapshot.AccountSummary acct = new com.positivity.customer.internal.dto.snapshot.AccountSummary(

@@ -1,53 +1,5 @@
 package com.positivity.shopmanager.internal.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
-import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
-import com.positivity.shopmanager.internal.dto.AppointmentResponse;
-import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
-import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
-import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
-import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
-import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
-import com.positivity.shopmanager.internal.entity.Appointment;
-import com.positivity.shopmanager.internal.entity.AppointmentAudit;
-import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
-import com.positivity.shopmanager.internal.entity.Shop;
-import com.positivity.shopmanager.internal.entity.RescheduleHistory;
-import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
-import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
-import com.positivity.shopmanager.internal.event.AppointmentCancelledEvent;
-import com.positivity.shopmanager.internal.event.AppointmentCreatedEvent;
-import com.positivity.shopmanager.internal.event.AppointmentCreatedFromEstimateEvent;
-import com.positivity.shopmanager.internal.event.AppointmentCreatedFromWorkOrderEvent;
-import com.positivity.shopmanager.internal.event.AppointmentRescheduledEvent;
-import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
-import com.positivity.shopmanager.internal.enums.AppointmentAction;
-import com.positivity.shopmanager.internal.enums.AppointmentStatus;
-import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
-import com.positivity.shopmanager.internal.exception.AppointmentStateException;
-import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
-import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
-import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
-import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
-import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
-import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
-import com.positivity.shopmanager.internal.repository.AppointmentRepository;
-import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
-import com.positivity.shopmanager.internal.repository.ShopRepository;
-import com.positivity.security.common.SecurityContextHelper;
-import com.positivity.shopmanager.service.AppointmentLoadService;
-import com.positivity.shopmanager.service.AppointmentsService;
-import com.positivity.shopmanager.service.SourceEligibilityService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -66,10 +18,61 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shopmanager.internal.client.CrmCustomerClient;
+import com.positivity.shopmanager.internal.client.CrmVehicleClient;
+import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
+import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
+import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
+import com.positivity.shopmanager.internal.dto.AppointmentResponse;
+import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
+import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
+import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
+import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
+import com.positivity.shopmanager.internal.entity.Appointment;
+import com.positivity.shopmanager.internal.entity.AppointmentAudit;
+import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
+import com.positivity.shopmanager.internal.entity.RescheduleHistory;
+import com.positivity.shopmanager.internal.entity.Shop;
+import com.positivity.shopmanager.internal.enums.AppointmentAction;
+import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
+import com.positivity.shopmanager.internal.enums.AppointmentStatus;
+import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
+import com.positivity.shopmanager.internal.event.AppointmentCancelledEvent;
+import com.positivity.shopmanager.internal.event.AppointmentCreatedEvent;
+import com.positivity.shopmanager.internal.event.AppointmentCreatedFromEstimateEvent;
+import com.positivity.shopmanager.internal.event.AppointmentCreatedFromWorkOrderEvent;
+import com.positivity.shopmanager.internal.event.AppointmentRescheduledEvent;
+import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
+import com.positivity.shopmanager.internal.exception.AppointmentStateException;
+import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
+import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
+import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
+import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
+import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
+import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
+import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
+import com.positivity.shopmanager.internal.repository.ShopRepository;
+import com.positivity.shopmanager.service.AppointmentLoadService;
+import com.positivity.shopmanager.service.AppointmentsService;
+import com.positivity.shopmanager.service.SourceEligibilityService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Orchestration service for appointment operations.
@@ -592,7 +595,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         if (correlationId != null) {
             return correlationId;
         }
-        return UUID.randomUUID();
+        return UUIDv7Generator.generate();
     }
 
     private String normalizeIdempotencyKey(String idempotencyKey) {

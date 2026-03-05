@@ -21,6 +21,7 @@ import com.positivity.customer.internal.event.VehicleUpdatedPayload;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,7 +50,6 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.customer.kafka", name = "enabled", havingValue = "true")
 public class WorkorderEventHandler {
     private final Clock clock;
-
 
     private static final String UNKNOWN_EVENT_TYPE = "UNKNOWN";
     private static final String DUPLICATE_EVENT_MESSAGE = "Skipping duplicate event eventId={} eventType={} status=already_processed";
@@ -83,7 +83,7 @@ public class WorkorderEventHandler {
             log.warn("Unsupported workorder event type eventId={} eventType={}", envelope.getEventId(), safeEventType);
             processingLogRepository.save(ProcessingLog.builder()
                     .eventId((envelope.getEventId() == null || envelope.getEventId().isBlank())
-                            ? UUID.randomUUID().toString()
+                            ? UUIDv7Generator.generate().toString()
                             : envelope.getEventId())
                     .eventType(safeEventType)
                     .correlationId(envelope.getCorrelationId())
@@ -94,7 +94,7 @@ public class WorkorderEventHandler {
         } catch (JacksonException ex) {
             log.error("Failed to deserialize workorder event payload", ex);
             processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(UUID.randomUUID().toString())
+                    .eventId(UUIDv7Generator.generate().toString())
                     .eventType(UNKNOWN_EVENT_TYPE)
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
                     .failureReason(truncateFailureReason("SCHEMA validation failed: " + ex.getMessage()))
@@ -103,7 +103,7 @@ public class WorkorderEventHandler {
         } catch (Exception ex) {
             log.error("Unhandled exception while processing workorder event", ex);
             processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(UUID.randomUUID().toString())
+                    .eventId(UUIDv7Generator.generate().toString())
                     .eventType(UNKNOWN_EVENT_TYPE)
                     .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
                     .failureReason("Unhandled exception: " + (ex.getMessage() != null
@@ -124,7 +124,7 @@ public class WorkorderEventHandler {
             log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId(), envelope.getEventType());
             try {
                 processingLogRepository.save(ProcessingLog.builder()
-                        .eventId(UUID.randomUUID().toString())
+                        .eventId(UUIDv7Generator.generate().toString())
                         .eventType(envelope.getEventType())
                         .correlationId(envelope.getCorrelationId())
                         .status(ProcessingStatus.SKIPPED_DUPLICATE)
@@ -140,11 +140,13 @@ public class WorkorderEventHandler {
         try {
             final Map<String, Object> payloadMap = envelope.getPayload() == null ? Map.of() : envelope.getPayload();
             final VehicleUpdatedPayload payload = objectMapper.convertValue(payloadMap, VehicleUpdatedPayload.class);
-                // TODO F-01: Implement vehicle entity update when VehicleRepository is available // NOSONAR
-            log.warn("handleVehicleUpdated: No vehicle repository available — CRM vehicle data not updated for vehicleId={}",
+            // TODO F-01: Implement vehicle entity update when VehicleRepository is
+            // available // NOSONAR
+            log.warn(
+                    "handleVehicleUpdated: No vehicle repository available — CRM vehicle data not updated for vehicleId={}",
                     payload.getVehicleId());
 
-                processingLogRepository.save(ProcessingLog.builder()
+            processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
                     .correlationId(envelope.getCorrelationId())
@@ -177,7 +179,7 @@ public class WorkorderEventHandler {
             log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId(), envelope.getEventType());
             try {
                 processingLogRepository.save(ProcessingLog.builder()
-                        .eventId(UUID.randomUUID().toString())
+                        .eventId(UUIDv7Generator.generate().toString())
                         .eventType(envelope.getEventType())
                         .correlationId(envelope.getCorrelationId())
                         .status(ProcessingStatus.SKIPPED_DUPLICATE)
@@ -210,7 +212,7 @@ public class WorkorderEventHandler {
             preference.setMarketingPreference(payload.getMarketingPreference());
             communicationPreferenceRepository.save(preference);
 
-                processingLogRepository.save(ProcessingLog.builder()
+            processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
                     .correlationId(envelope.getCorrelationId())
@@ -243,7 +245,7 @@ public class WorkorderEventHandler {
             log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId(), envelope.getEventType());
             try {
                 processingLogRepository.save(ProcessingLog.builder()
-                        .eventId(UUID.randomUUID().toString())
+                        .eventId(UUIDv7Generator.generate().toString())
                         .eventType(envelope.getEventType())
                         .correlationId(envelope.getCorrelationId())
                         .status(ProcessingStatus.SKIPPED_DUPLICATE)
@@ -276,14 +278,15 @@ public class WorkorderEventHandler {
                 return;
             }
 
-                // TODO F-05: Implement party note persistence when PartyNoteRepository is available // NOSONAR
+            // TODO F-05: Implement party note persistence when PartyNoteRepository is
+            // available // NOSONAR
             log.info("PartyNoteAdded accepted eventId={} eventType={} partyId={} noteType={}",
                     envelope.getEventId(),
                     envelope.getEventType(),
                     payload.getPartyId(),
                     payload.getNoteType());
 
-                processingLogRepository.save(ProcessingLog.builder()
+            processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
                     .eventType(envelope.getEventType())
                     .correlationId(envelope.getCorrelationId())

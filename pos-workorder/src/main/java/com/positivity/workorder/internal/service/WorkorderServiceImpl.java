@@ -1,7 +1,6 @@
 package com.positivity.workorder.internal.service;
 
 import java.time.Clock;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -21,6 +20,7 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.client.RestClient;
 
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
@@ -446,7 +446,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         Map<String, Object> finalBillableScope = buildFinalBillableScope(workorder);
 
         // Create and return the event
-        String eventId = UUID.randomUUID().toString();
+        String eventId = UUIDv7Generator.generate().toString();
         String idempotencyKey = String.format("%s:completion_%s", workorderId,
                 workorder.getCompletedAt().toEpochMilli());
 
@@ -676,7 +676,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         stateMachine.startWorkorder(workorderId, actorUserId, transitionReason);
 
-        String version = UUID.randomUUID().toString();
+        String version = UUIDv7Generator.generate().toString();
         Instant startedAt = Instant.now(clock);
         workorder.setOperationalContextVersion(version);
         workorder.setWorkStartedAt(startedAt);

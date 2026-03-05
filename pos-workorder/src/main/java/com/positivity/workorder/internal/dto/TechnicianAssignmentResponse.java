@@ -150,7 +150,7 @@ public class TechnicianAssignmentResponse {
             @NonNull String currentWorkorderStatus) {
         List<AssignmentHistoryEntry> historyEntries = history.stream()
                 .map(AssignmentHistoryEntry::fromEntity)
-                .collect(Collectors.toList());
+                .toList();
 
         return TechnicianAssignmentResponse.builder()
                 .workorderId(currentAssignment.getWorkorderId().toString())

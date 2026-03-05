@@ -30,7 +30,6 @@ import lombok.RequiredArgsConstructor;
 public class PromotionRedemptionServiceImpl implements PromotionRedemptionService {
     private final Clock clock;
 
-
     private final PromotionRedemptionRepository promotionRedemptionRepository;
     private final PromotionCounterRepository promotionCounterRepository;
 
@@ -78,7 +77,7 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
         return promotionRedemptionRepository.findByCustomerId(customerId)
                 .stream()
                 .map(PromotionRedemptionMapper::toResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private void incrementPromotionCounter(@NonNull UUID promotionId) {
@@ -94,7 +93,8 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
             promotionCounterRepository.saveAndFlush(createdCounter);
             return;
         } catch (DataIntegrityViolationException ex) {
-            // Counter was concurrently created after our update miss; fall through to retry update.
+            // Counter was concurrently created after our update miss; fall through to retry
+            // update.
         }
 
         if (promotionCounterRepository.incrementTotalUsageCount(promotionId) == 0) {
