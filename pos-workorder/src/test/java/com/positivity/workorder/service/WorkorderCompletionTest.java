@@ -13,6 +13,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,6 +32,7 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -38,7 +41,6 @@ import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -55,6 +57,9 @@ import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class WorkorderCompletionTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T12:00:00Z"),
+            java.time.ZoneOffset.UTC);
 
     @Mock
     private WorkorderRepository workOrderRepository;
@@ -144,7 +149,7 @@ class WorkorderCompletionTest {
         // dependency
         workOrderService = new WorkorderServiceImpl(workOrderRepository, estimateRepository, estimateItemRepository,
                 workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
-                auditEventRepository, idempotencyService, promotionValidationService, shopmgrClient);
+                auditEventRepository, idempotencyService, promotionValidationService, shopmgrClient, TEST_CLOCK);
     }
 
     @AfterEach
@@ -273,7 +278,7 @@ class WorkorderCompletionTest {
         assertEquals("Workorder", auditEvent.getEntityType());
         assertEquals(testWorkorderId, auditEvent.getEntityId());
         assertEquals("StateTransition", auditEvent.getEventType());
-        assertEquals(userId.toString(), auditEvent.getUserId());
+        assertEquals(userId, auditEvent.getUserId());
         assertTrue(auditEvent.getDetails().contains("WORK_IN_PROGRESS"));
         assertTrue(auditEvent.getDetails().contains("COMPLETED"));
     }
