@@ -158,7 +158,7 @@ class DashboardControllerTest {
 
     // -----------------------------------------------------------------------
     // F1: non-UUID locationId → 400 Bad Request (GlobalExceptionHandler maps
-    //     IllegalArgumentException → 400)
+    // IllegalArgumentException → 400)
     // -----------------------------------------------------------------------
 
     @Test
@@ -170,8 +170,8 @@ class DashboardControllerTest {
 
         // Act & Assert
         mockMvc.perform(get("/v1/workexec/dashboard/today")
-                        .param("locationId", "not-a-uuid")
-                        .with(user("user").authorities(new SimpleGrantedAuthority("workorder:dashboard:view"))))
+                .param("locationId", "not-a-uuid")
+                .with(user("user").authorities(new SimpleGrantedAuthority("workorder:dashboard:view"))))
                 .andExpect(status().isBadRequest());
     }
 }
