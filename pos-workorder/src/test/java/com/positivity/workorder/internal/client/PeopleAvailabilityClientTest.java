@@ -120,13 +120,15 @@ class PeopleAvailabilityClientTest {
     }
 
     // -----------------------------------------------------------------------
-    // F2: Jackson deserialization works for PeopleAvailabilityResponse (@Jacksonized)
+    // F2: Jackson deserialization works for PeopleAvailabilityResponse
+    // (@Jacksonized)
     // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("F2: PeopleAvailabilityResponse deserializes from JSON without error")
     void peopleAvailabilityResponse_deserializesFromJson() throws Exception {
-        // This test validates that @Jacksonized is present and Jackson can construct the DTO
+        // This test validates that @Jacksonized is present and Jackson can construct
+        // the DTO
         String json = """
                 {
                   "asOf": "2026-01-01T08:00:00Z",
@@ -139,7 +141,7 @@ class PeopleAvailabilityClientTest {
                       "currentStatus": "AVAILABLE",
                       "currentLocationId": "LOC-001",
                       "certifications": ["BRAKE_CERT"],
-                      "clock": { "clockedIn": true, "clockedInAt": "2026-01-01T08:00:00Z" },
+                      "clock": { "clockInTime": "2026-01-01T08:00:00Z" },
                       "breakInfo": null,
                       "pto": [],
                       "scheduledAvailability": []
@@ -154,6 +156,8 @@ class PeopleAvailabilityClientTest {
         assertThat(response.getPeople()).hasSize(1);
         assertThat(response.getPeople().get(0).getPersonId()).isEqualTo("MECH-001");
         assertThat(response.getPeople().get(0).getCertifications()).containsExactly("BRAKE_CERT");
+        assertThat(response.getPeople().get(0).getClock()).isNotNull();
+        assertThat(response.getPeople().get(0).getClock().getClockInTime()).isNotNull();
     }
 
     // -----------------------------------------------------------------------

@@ -64,8 +64,8 @@ public class DashboardServiceImpl implements DashboardService {
                 ? availability.getPeople()
                 : List.of();
 
-        List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays =
-            shopmgrOperationalContextClient.getBayStatusForLocation(locationUuid);
+        List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays = shopmgrOperationalContextClient
+                .getBayStatusForLocation(locationUuid);
 
         List<WorkorderSummary> workorderSummaries = workorders.stream()
                 .map(wo -> WorkorderSummary.builder()
@@ -213,8 +213,7 @@ public class DashboardServiceImpl implements DashboardService {
             List<Workorder> workorders,
             List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays,
             List<ConflictEntry> conflicts) {
-        List<ShopmgrOperationalContextClient.BayAvailabilityDto> bayStatuses = shopmgrBays;
-        Map<UUID, String> statusByBayId = bayStatuses.stream()
+        Map<UUID, String> statusByBayId = shopmgrBays.stream()
                 .collect(Collectors.toMap(
                         ShopmgrOperationalContextClient.BayAvailabilityDto::bayId,
                         ShopmgrOperationalContextClient.BayAvailabilityDto::status,
@@ -302,7 +301,8 @@ public class DashboardServiceImpl implements DashboardService {
 
             BreakInfo breakInfo = personAvailability.getBreakInfo();
             // AC-6: Break overlap — expects return within 15 min of query time.
-            // Note: workorder scheduled start time is not yet in the data model (scheduledDate only).
+            // Note: workorder scheduled start time is not yet in the data model
+            // (scheduledDate only).
             // This uses query-time proximity as a proxy until scheduled start is added.
             if (breakInfo != null && breakInfo.isOnBreak()
                     && breakInfo.getExpectedReturn() != null
