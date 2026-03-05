@@ -81,7 +81,9 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("workorder:start"),
             new SimpleGrantedAuthority("workorder:operationalContext:override"),
             // Issue CAP-140: Story #59 — operational context override authority
-            new SimpleGrantedAuthority("workorder.operationalContext.override"));
+            new SimpleGrantedAuthority("workorder.operationalContext.override"),
+            // Issue CAP-142: Story #60 — daily dispatch board dashboard view authority
+            new SimpleGrantedAuthority("workorder:dashboard:view"));
 
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary
