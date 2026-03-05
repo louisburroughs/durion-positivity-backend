@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.DisplayName;
@@ -114,6 +117,43 @@ class PeopleAvailabilityClientTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // F2: Jackson deserialization works for PeopleAvailabilityResponse (@Jacksonized)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("F2: PeopleAvailabilityResponse deserializes from JSON without error")
+    void peopleAvailabilityResponse_deserializesFromJson() throws Exception {
+        // This test validates that @Jacksonized is present and Jackson can construct the DTO
+        String json = """
+                {
+                  "asOf": "2026-01-01T08:00:00Z",
+                  "location": "LOC-001",
+                  "people": [
+                    {
+                      "personId": "MECH-001",
+                      "firstName": "Jane",
+                      "lastName": "Smith",
+                      "currentStatus": "AVAILABLE",
+                      "currentLocationId": "LOC-001",
+                      "certifications": ["BRAKE_CERT"],
+                      "clock": { "clockedIn": true, "clockedInAt": "2026-01-01T08:00:00Z" },
+                      "breakInfo": null,
+                      "pto": [],
+                      "scheduledAvailability": []
+                    }
+                  ]
+                }
+                """;
+        ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule())
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        PeopleAvailabilityResponse response = mapper.readValue(json, PeopleAvailabilityResponse.class);
+
+        assertThat(response.getPeople()).hasSize(1);
+        assertThat(response.getPeople().get(0).getPersonId()).isEqualTo("MECH-001");
+        assertThat(response.getPeople().get(0).getCertifications()).containsExactly("BRAKE_CERT");
     }
 
     // -----------------------------------------------------------------------

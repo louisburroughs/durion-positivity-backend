@@ -3,12 +3,14 @@ package com.positivity.workorder.internal.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 
 import java.time.Instant;
 import java.util.List;
 
 @Value
 @Builder
+@Jacksonized
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PeopleAvailabilityResponse {
     Instant asOf;
@@ -17,6 +19,7 @@ public class PeopleAvailabilityResponse {
 
     @Value
     @Builder
+    @Jacksonized
     public static class PersonAvailability {
         String personId;
         String firstName;
@@ -32,6 +35,7 @@ public class PeopleAvailabilityResponse {
 
     @Value
     @Builder
+    @Jacksonized
     public static class ClockInfo {
         Instant clockInTime;
         Instant clockOutTime;
@@ -39,6 +43,7 @@ public class PeopleAvailabilityResponse {
 
     @Value
     @Builder
+    @Jacksonized
     public static class BreakInfo {
         boolean onBreak;
         Instant expectedReturn;
@@ -46,6 +51,7 @@ public class PeopleAvailabilityResponse {
 
     @Value
     @Builder
+    @Jacksonized
     public static class PtoBlock {
         String ptoId;
         Instant start;
@@ -55,6 +61,7 @@ public class PeopleAvailabilityResponse {
 
     @Value
     @Builder
+    @Jacksonized
     public static class ScheduleSlot {
         Instant start;
         Instant end;

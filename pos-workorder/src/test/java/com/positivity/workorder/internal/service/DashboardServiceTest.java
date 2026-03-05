@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.client.PeopleAvailabilityClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.DashboardResponse;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
@@ -46,8 +48,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class DashboardServiceTest {
 
     private static final LocalDate TEST_DATE = LocalDate.of(2026, 3, 1);
-    private static final String LOCATION_ID = "LOC-123";
     private static final UUID LOCATION_UUID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final String LOCATION_ID = LOCATION_UUID.toString();
 
     @Mock
     private WorkorderRepository workorderRepository;
@@ -58,6 +60,10 @@ class DashboardServiceTest {
     @Mock
     @SuppressWarnings("unused")
     private ShopmgrOperationalContextClient shopmgrOperationalContextClient;
+
+    @Spy
+    @SuppressWarnings("unused")
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private DashboardServiceImpl dashboardService;
@@ -594,6 +600,115 @@ class DashboardServiceTest {
      * @param resourceId bay/resource UUID, or {@code null} if not bay-assigned
      * @return constructed Workorder entity
      */
+    // -----------------------------------------------------------------------
+    // F4: Bay status list is populated with bayName and status from Shopmgr
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("F4: Bay status list is populated with bayName and status from Shopmgr")
+    void getDashboard_shopmgrBayData_populatesBayNameAndStatus() {
+        // Arrange
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000BAY".replace("BAY", "BA9"));
+        Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-020", bayId);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(wo));
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(emptyAvailability());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
+                .thenReturn(List.of(new ShopmgrOperationalContextClient.BayAvailabilityDto(
+                        bayId, "Bay A1", "OPEN")));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert: bay populated from Shopmgr
+        assertThat(response.getBays())
+                .anySatisfy(bay -> {
+                    assertThat(bay.getBayId()).isEqualTo(bayId.toString());
+                    assertThat(bay.getBayName()).isEqualTo("Bay A1");
+                    assertThat(bay.getStatus()).isEqualTo("OPEN");
+                    assertThat(bay.isAvailable()).isFalse(); // workorder assigned → not available
+                    assertThat(bay.getAssignedWorkorderId()).isEqualTo(wo.getId().toString());
+                });
+    }
+
+    // -----------------------------------------------------------------------
+    // F5: MechanicStatus.assignedWorkorderId populated for assigned mechanic
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("F5: MechanicStatus.assignedWorkorderId is populated for assigned mechanic")
+    void getDashboard_assignedMechanic_populatesAssignedWorkorderId() {
+        // Arrange
+        UUID workorderId = UUID.randomUUID();
+        Workorder wo = Workorder.builder()
+                .id(workorderId)
+                .locationId(LOCATION_UUID)
+                .mechanicIds("[\"MECH-030\"]")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(wo));
+        PersonAvailability mech = PersonAvailability.builder()
+                .personId("MECH-030")
+                .firstName("Dana")
+                .lastName("White")
+                .currentStatus("ON_JOB")
+                .build();
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mech))
+                        .build());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getMechanics())
+                .anySatisfy(m -> {
+                    assertThat(m.getPersonId()).isEqualTo("MECH-030");
+                    assertThat(m.getAssignedWorkorderId()).isEqualTo(workorderId.toString());
+                });
+    }
+
+    // -----------------------------------------------------------------------
+    // F6: Break expected far in future (>15 min) does not raise BREAK_OVERLAP
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("F6: Mechanic on break returning more than 15 min from now does not raise BREAK_OVERLAP")
+    void getDashboard_breakReturnFarAway_noBreakOverlapConflict() {
+        // Arrange
+        // Break expected to return 1 hour from now — outside the 15-min window
+        Instant oneHourFromNow = Instant.now().plusSeconds(3600);
+        Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-040", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(wo));
+        PersonAvailability mechOnLongBreak = PersonAvailability.builder()
+                .personId("MECH-040")
+                .firstName("Hiro")
+                .lastName("Tanaka")
+                .currentStatus("ON_BREAK")
+                .breakInfo(BreakInfo.builder()
+                        .onBreak(true)
+                        .expectedReturn(oneHourFromNow)
+                        .build())
+                .build();
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechOnLongBreak))
+                        .build());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert: no MECHANIC_BREAK_OVERLAP (break too far away)
+        assertThat(response.getConflicts())
+                .noneMatch(c -> "MECHANIC_BREAK_OVERLAP".equals(c.getConflictType()));
+    }
+
     private Workorder buildWorkorder(UUID id, String mechanicId, UUID resourceId) {
         return Workorder.builder()
                 .id(id)
