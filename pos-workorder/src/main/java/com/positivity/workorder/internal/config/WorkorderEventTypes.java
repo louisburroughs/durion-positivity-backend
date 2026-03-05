@@ -446,6 +446,21 @@ public final class WorkorderEventTypes {
                         .approval("WORKORDER_TIME_ENTRY_REJECTED", "Reject a submitted time entry")
                         .apiVersion("1").build();
 
+        // ==================== DASHBOARD EVENTS (CAP-142) ====================
+
+        /**
+         * Daily dispatch board dashboard — custom SLA: P50<1.0s, P95<2.0s, P99<3.5s
+         * (issue #60)
+         */
+        public static final EventTypeRegistration WORKEXEC_DASHBOARD_TODAY_GET = EventTypeRegistration.builder()
+                        .typeCode("WORKEXEC_DASHBOARD_TODAY_GET")
+                        .description("Get daily dispatch board dashboard")
+                        .apiVersion("1")
+                        .p50Micros(1_000_000L)
+                        .p95Micros(2_000_000L)
+                        .p99Micros(3_500_000L)
+                        .build();
+
         // ==================== ALL EVENT TYPES ====================
 
         /** All event types for registration at startup */
@@ -526,5 +541,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT,
                         // Time entry events (Story #66)
                         WORKORDER_TIME_ENTRY_APPROVED,
-                        WORKORDER_TIME_ENTRY_REJECTED);
+                        WORKORDER_TIME_ENTRY_REJECTED,
+                        // Dashboard events (CAP-142)
+                        WORKEXEC_DASHBOARD_TODAY_GET);
 }

@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -51,4 +52,16 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     @NonNull
     Page<Workorder> findByStatusIn(@NonNull Collection<WorkorderStatus> statuses,
             @NonNull Pageable pageable);
+
+    /**
+     * Find all workorders for a given scheduled date and location.
+     * Used by the Daily Dispatch Board Dashboard (CAP-142) to populate the day
+     * view.
+     *
+     * @param scheduledDate the date to query
+     * @param locationId    the location identifier
+     * @return list of matching workorders
+     */
+    @NonNull
+    List<Workorder> findByScheduledDateAndLocationId(@NonNull LocalDate scheduledDate, @NonNull UUID locationId);
 }

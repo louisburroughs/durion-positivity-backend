@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -49,12 +50,15 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
     private final JournalEntryRepository journalEntryRepository;
     private final StatementLineMappingRepository statementLineMappingRepository;
+    private final Clock clock;
 
     public FinancialReportingServiceImpl(
             JournalEntryRepository journalEntryRepository,
-            StatementLineMappingRepository statementLineMappingRepository) {
+            StatementLineMappingRepository statementLineMappingRepository,
+            Clock clock) {
         this.journalEntryRepository = journalEntryRepository;
         this.statementLineMappingRepository = statementLineMappingRepository;
+        this.clock = clock;
     }
 
     @Override
@@ -84,7 +88,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                     .totalRevenue(BigDecimal.ZERO)
                     .totalExpenses(BigDecimal.ZERO)
                     .netIncome(BigDecimal.ZERO)
-                    .generatedAt(Instant.now())
+                    .generatedAt(Instant.now(clock))
                     .build();
         }
 
@@ -141,7 +145,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .totalRevenue(totalRevenue)
                 .totalExpenses(totalExpenses)
                 .netIncome(netIncome)
-                .generatedAt(Instant.now())
+                .generatedAt(Instant.now(clock))
                 .build();
     }
 
@@ -165,7 +169,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                     .totalLiabilities(BigDecimal.ZERO)
                     .totalEquity(BigDecimal.ZERO)
                     .balanced(true)
-                    .generatedAt(Instant.now())
+                    .generatedAt(Instant.now(clock))
                     .build();
         }
 
@@ -231,7 +235,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .totalLiabilities(totalLiabilities)
                 .totalEquity(totalEquity)
                 .balanced(balanced)
-                .generatedAt(Instant.now())
+                .generatedAt(Instant.now(clock))
                 .build();
     }
 

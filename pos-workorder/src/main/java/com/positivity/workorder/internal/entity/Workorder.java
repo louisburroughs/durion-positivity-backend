@@ -23,6 +23,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -91,8 +92,14 @@ public class Workorder {
     private UUID locationId;
     private UUID resourceId;
 
+    @Column(name = "scheduled_date", nullable = true)
+    private LocalDate scheduledDate;
+
     @Column(columnDefinition = "TEXT")
     private String mechanicIds; // JSON array of mechanic UUIDs e.g. ["uuid1","uuid2"]
+
+    @Column(columnDefinition = "TEXT")
+    private String requiredCertifications; // JSON array of certification codes e.g. ["BRAKE_CERT","ALIGNMENT_CERT"]
 
     // Operational context fields (CAP:140 Story #59)
     private String operationalContextVersion;
