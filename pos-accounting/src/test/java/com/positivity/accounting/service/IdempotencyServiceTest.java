@@ -1,14 +1,13 @@
 package com.positivity.accounting.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.entity.IdempotencyKey;
@@ -35,6 +35,9 @@ import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
 @DisplayName("IdempotencyService Unit Tests")
 class IdempotencyServiceTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    private Clock clock = TEST_CLOCK;
 
     @Mock
     private IdempotencyKeyRepository repository;

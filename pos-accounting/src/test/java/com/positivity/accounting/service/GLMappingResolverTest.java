@@ -1,16 +1,15 @@
 package com.positivity.accounting.service;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -25,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.entity.GLMapping;
@@ -44,6 +44,8 @@ import com.positivity.accounting.internal.service.GLMappingResolverImpl;
 @DisplayName("GLMappingResolver Unit Tests")
 class GLMappingResolverTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        @Spy
+        Clock clock = TEST_CLOCK;
 
         @Mock
         private GLMappingRepository mappingRepository;

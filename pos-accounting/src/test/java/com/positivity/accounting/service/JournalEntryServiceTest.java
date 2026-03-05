@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -52,6 +53,9 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
 class JournalEntryServiceTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
+    @Spy
+    Clock clock = TEST_CLOCK;
+
     @Mock
     private JournalEntryRepository journalEntryRepository;
 
@@ -69,10 +73,10 @@ class JournalEntryServiceTest {
 
     @BeforeEach
     void setUp() {
-        testJournalEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testGLAccountId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testGLAccountId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testSourceEventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testJournalEntryId = UUID.randomUUID();
+        testGLAccountId1 = UUID.randomUUID();
+        testGLAccountId2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        testSourceEventId = UUID.randomUUID();
         testTransactionDate = LocalDateTime.now(TEST_CLOCK);
     }
 
@@ -192,7 +196,7 @@ class JournalEntryServiceTest {
     void getJournalTraceability_withSourceEvent_success() {
         // Arrange
         JournalEntry entry = createBalancedEntry();
-        UUID relatedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID relatedId = UUID.randomUUID();
         JournalEntry related = createBalancedEntry();
         related.setJournalEntryId(relatedId);
 
@@ -218,7 +222,7 @@ class JournalEntryServiceTest {
     void getJournalTraceability_resolvesOriginalViaReference() {
         // Arrange
         JournalEntry reversalEntry = createBalancedEntry();
-        UUID originalId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID originalId = UUID.randomUUID();
         JournalEntry originalEntry = createBalancedEntry();
         originalEntry.setJournalEntryId(originalId);
 
@@ -432,7 +436,7 @@ class JournalEntryServiceTest {
         List<JournalEntryLine> lines = new ArrayList<>();
 
         JournalEntryLine line1 = new JournalEntryLine();
-        line1.setLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        line1.setLineId(UUID.randomUUID());
         line1.setJournalEntryId(testJournalEntryId);
         line1.setGlAccountId(testGLAccountId1);
         line1.setDebitAmount(new BigDecimal("100.00"));
@@ -441,7 +445,7 @@ class JournalEntryServiceTest {
         lines.add(line1);
 
         JournalEntryLine line2 = new JournalEntryLine();
-        line2.setLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        line2.setLineId(UUID.randomUUID());
         line2.setJournalEntryId(testJournalEntryId);
         line2.setGlAccountId(testGLAccountId2);
         line2.setDebitAmount(BigDecimal.ZERO);
@@ -460,14 +464,14 @@ class JournalEntryServiceTest {
 
         List<JournalEntryLine> lines = new ArrayList<>();
         JournalEntryLine line1 = new JournalEntryLine();
-        line1.setLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        line1.setLineId(UUID.randomUUID());
         line1.setGlAccountId(testGLAccountId1);
         line1.setDebitAmount(new BigDecimal("100.00"));
         line1.setCreditAmount(BigDecimal.ZERO);
         lines.add(line1);
 
         JournalEntryLine line2 = new JournalEntryLine();
-        line2.setLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        line2.setLineId(UUID.randomUUID());
         line2.setGlAccountId(testGLAccountId2);
         line2.setDebitAmount(BigDecimal.ZERO);
         line2.setCreditAmount(new BigDecimal("50.00")); // Unbalanced!

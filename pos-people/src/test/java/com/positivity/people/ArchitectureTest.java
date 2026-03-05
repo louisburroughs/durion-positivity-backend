@@ -24,11 +24,12 @@ import java.util.UUID;
 public class ArchitectureTest {
 
 	private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
-			"call UUID.fromString("00000000-0000-0000-0000-000000000001")") {
+			"call UUID.randomUUID()") {
 
-	public boolean test(JavaCall<?> input) {
-		return input.getTargetOwner().isEquivalentTo(UUID.class) && "randomUUID".equals(input.getName());
-	}};
+		public boolean test(JavaCall<?> input) {
+			return input.getTargetOwner().isEquivalentTo(UUID.class) && "randomUUID".equals(input.getName());
+		}
+	};
 
 	@ArchTest
 	static final ArchRule controllers_should_not_access_repositories_directly = noClasses().that()

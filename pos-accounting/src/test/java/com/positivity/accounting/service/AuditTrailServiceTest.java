@@ -63,6 +63,8 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("AuditTrailService Unit Tests")
 class AuditTrailServiceTest {
 
+    private static final UUID _DEFAULT_UUID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Spy
@@ -94,11 +96,11 @@ class AuditTrailServiceTest {
 
     @BeforeEach
     void setUp() {
-        testActorId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-        testOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testPaymentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testLineItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testActorId = "system";
+        testOrderId = _DEFAULT_UUID;
+        testInvoiceId = _DEFAULT_UUID;
+        testPaymentId = _DEFAULT_UUID;
+        testLineItemId = _DEFAULT_UUID;
 
         TestingAuthenticationToken authentication = new TestingAuthenticationToken("test-user", null);
         authentication.setAuthenticated(true);
@@ -127,7 +129,7 @@ class AuditTrailServiceTest {
         when(overrideAuthService.validate(any(), any(), any(), any())).thenReturn(authResult);
         when(auditRepository.save(any(AuditTrailEntry.class))).thenAnswer(inv -> {
             AuditTrailEntry entry = inv.getArgument(0);
-            entry.setAuditId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+            entry.setAuditId(_DEFAULT_UUID);
             return entry;
         });
 
@@ -206,7 +208,7 @@ class AuditTrailServiceTest {
         when(objectMapper.writeValueAsString(any())).thenReturn("{\"invoiceId\":\"test\"}");
         when(auditRepository.save(any(AuditTrailEntry.class))).thenAnswer(inv -> {
             AuditTrailEntry entry = inv.getArgument(0);
-            entry.setAuditId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+            entry.setAuditId(_DEFAULT_UUID);
             return entry;
         });
 
@@ -334,7 +336,7 @@ class AuditTrailServiceTest {
 
         when(auditRepository.save(any(AuditTrailEntry.class))).thenAnswer(inv -> {
             AuditTrailEntry entry = inv.getArgument(0);
-            entry.setAuditId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+            entry.setAuditId(_DEFAULT_UUID);
             return entry;
         });
 
