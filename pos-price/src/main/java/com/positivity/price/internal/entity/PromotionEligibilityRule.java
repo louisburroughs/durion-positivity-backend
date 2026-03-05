@@ -21,6 +21,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /** Promotion eligibility rule entity. Issue: #96 */
 @Getter
 @Setter
@@ -31,6 +33,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class PromotionEligibilityRule {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID ruleId;
 
@@ -66,8 +70,5 @@ public class PromotionEligibilityRule {
 
     @PrePersist
     void initId() {
-        if (this.ruleId == null) {
-            this.ruleId = UUIDv7Generator.generate();
-        }
     }
 }

@@ -13,6 +13,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Entity representing a link between a user and a person.
  * Enforces a unique constraint on userId to ensure one-to-one mapping between
@@ -29,6 +30,8 @@ import java.util.UUID;
 public class UserPersonLink {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -64,9 +67,6 @@ public class UserPersonLink {
 
     @PrePersist
     protected void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
         if (status == null) {
             status = UserLinkStatus.ACTIVE;
         }

@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -41,6 +44,8 @@ import com.positivity.workorder.internal.service.WorkorderInvoiceServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WorkorderInvoiceService Unit Tests")
 class WorkorderInvoiceServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         private static final String INV_KEY_1 = "inv-key-1";
 
@@ -96,7 +101,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("170.0000"))
                                 .taxAmount(new BigDecimal("10.0000"))
                                 .totalAmount(new BigDecimal("180.0000"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
@@ -223,7 +228,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("120.00"))
                                 .taxAmount(new BigDecimal("10.00"))
                                 .totalAmount(new BigDecimal("130.00"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
@@ -343,7 +348,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("170.0000"))
                                 .taxAmount(new BigDecimal("10.0000"))
                                 .totalAmount(new BigDecimal("180.0000"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
@@ -370,7 +375,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("170.0000"))
                                 .taxAmount(new BigDecimal("10.0000"))
                                 .totalAmount(new BigDecimal("180.0000"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
                 when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoice);
 
@@ -490,7 +495,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("150.00"))
                                 .taxAmount(new BigDecimal("12.00"))
                                 .totalAmount(new BigDecimal("162.00"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
@@ -521,8 +526,8 @@ class WorkorderInvoiceServiceTest {
                                 .estimateId(estimateId)
                                 .approvalId(approvalId)
                                 .status(WorkorderStatus.COMPLETED)
-                                .updatedAt(LocalDateTime.now())
-                                .completedAt(Instant.now())
+                                .updatedAt(LocalDateTime.now(TEST_CLOCK))
+                                .completedAt(Instant.now(TEST_CLOCK))
                                 .build();
         }
 

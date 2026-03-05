@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Generator;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -13,6 +15,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * ReceivablePayment - tracks cleared payments available for application to AR
  * invoices.
@@ -54,18 +57,14 @@ public class ReceivablePayment {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "payment_id", nullable = false, columnDefinition = "UUID")
     private UUID paymentId; // From Payment domain
 
     @PrePersist
     public void onPrePersist() {
-        if (paymentId == null) {
-            paymentId = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (status == null) {
+if (status == null) {
             status = ReceivablePaymentStatus.AVAILABLE;
         }
     }
@@ -106,12 +105,6 @@ public class ReceivablePayment {
 
     @Column(name = "modified_by", length = 50)
     private String modifiedBy;
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
-    }
-
     /**
      * Check if this payment has sufficient funds for an application.
      * 

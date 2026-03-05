@@ -1,5 +1,8 @@
 package com.positivity.customer.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.customer.internal.config.CustomerCacheConfig;
 import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
@@ -52,6 +55,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PartyServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private CommercialPartyRepository partyRepository;
@@ -68,7 +73,7 @@ class PartyServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new PartyServiceImpl(partyRepository, contactRepository, cacheManager, peopleClient);
+        service = new PartyServiceImpl(TEST_CLOCK, partyRepository, contactRepository, cacheManager, peopleClient);
     }
 
     private CommercialParty party(UUID id) {
@@ -79,8 +84,8 @@ class PartyServiceImplTest {
         p.setDisplayName("Acme");
         p.setPartyType(PartyType.COMMERCIAL);
         p.setStatus(AccountStatus.ACTIVE);
-        p.setCreatedAt(Instant.now());
-        p.setModifiedAt(Instant.now());
+        p.setCreatedAt(Instant.now(TEST_CLOCK));
+        p.setModifiedAt(Instant.now(TEST_CLOCK));
         p.setContacts(new HashSet<>());
         p.setVehicleVins(new HashSet<>());
         p.setExternalIdentifiers(new HashMap<>());
@@ -272,7 +277,7 @@ class PartyServiceImplTest {
 
         CommercialParty saved = party(partyId);
         saved.setLegalName("Acme Legal");
-        saved.setCreatedAt(Instant.now());
+        saved.setCreatedAt(Instant.now(TEST_CLOCK));
         when(partyRepository.save(any(CommercialParty.class))).thenReturn(saved);
 
         var response = service.createCommercialAccount(request);

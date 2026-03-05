@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.ManualJEReasonCode;
@@ -59,13 +61,10 @@ public class JournalEntry {
 
     @PrePersist
     public void onPrePersist() {
-        Instant now = Instant.now();
         String currentUser = SecurityContextHelper.isAuthenticated() 
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";
-        this.createdAt = now;
-        this.updatedAt = now;
-        this.createdBy = currentUser;
+this.createdBy = currentUser;
         this.modifiedBy = currentUser;
         
         // Initialize line relationships: set journalEntryId and lineNumber
@@ -172,7 +171,6 @@ public class JournalEntry {
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = Instant.now();
         this.modifiedBy = SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";

@@ -1,5 +1,7 @@
 package com.positivity.workorder.contract;
 
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -27,6 +29,8 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 @ActiveProfiles("test")
 @Import({ ContractTestConfiguration.class, TestSecurityConfig.class })
 class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBehaviorIT {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Test
         @DisplayName("AC1: GET job-time-totals with valid params returns grouped totals by technicianId, locationId, localDate")
@@ -137,7 +141,7 @@ class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBe
                                 .hoursWorked(hoursWorked)
                                 .notes("contract-test")
                                 .createdBy("system")
-                                .createdAt(Instant.now().atOffset(ZoneOffset.UTC).toInstant())
+                                .createdAt(Instant.now(TEST_CLOCK).atOffset(ZoneOffset.UTC).toInstant())
                                 .build();
                 return laborEntryRepository.save(entry);
         }

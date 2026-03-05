@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -63,6 +65,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Transactional
 public class EventIngestionServiceImpl implements EventIngestionService {
+    private final Clock clock;
+
 
     private static final String EVENT_SPACE = "Event ";
     private static final String EVENT_TYPE = "eventType";
@@ -117,7 +121,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             mutableEvent.put(SOURCE_SYSTEM, sourceSystem);
         }
         if (transactionDate == null) {
-            transactionDate = LocalDateTime.now();
+            transactionDate = LocalDateTime.now(clock);
             mutableEvent.put(TRANSACTION_DATE, transactionDate);
         }
 

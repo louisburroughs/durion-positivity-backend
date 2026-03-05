@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -53,14 +55,6 @@ public class VendorBill {
     @UUIDv7Id
     @Column(name = "vendor_bill_id", nullable = false, columnDefinition = "UUID")
     private UUID vendorBillId;
-
-    @PrePersist
-    public void onPrePersist() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-    }
-
     @Column(name = "vendor_id", nullable = false)
     private UUID vendorId;
 
@@ -142,9 +136,4 @@ public class VendorBill {
 
     @Column(name = "paid_by", length = 50)
     private String paidBy;
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
-    }
 }

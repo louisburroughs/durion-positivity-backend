@@ -1,5 +1,7 @@
 package com.positivity.vehiclefitment.internal.entity;
 
+import java.time.Clock;
+
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import lombok.AllArgsConstructor;
@@ -14,6 +16,7 @@ import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Represents a vehicle applicability hint for a product/SKU.
  * Contains a collection of fitment tags that describe vehicle compatibility.
@@ -27,6 +30,8 @@ import java.util.List;
 public class VehicleApplicabilityHint {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID hintId;
 
@@ -49,25 +54,6 @@ public class VehicleApplicabilityHint {
 
     @Column
     private String updatedBy;
-
-    @PrePersist
-    protected void onCreate() {
-        if (hintId == null) {
-            hintId = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
-
     /**
      * Helper method to add a fitment tag to this hint.
      */

@@ -1,5 +1,8 @@
 package com.positivity.invoice.internal.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
@@ -21,6 +24,8 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class InvoiceFinalizedEventHandlerTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private InvoiceRepository invoiceRepository;
@@ -43,7 +48,7 @@ class InvoiceFinalizedEventHandlerTest {
                 invoiceId,
                 UUID.randomUUID(),
                 "test-actor",
-                Instant.now(),
+                Instant.now(TEST_CLOCK),
                 BigDecimal.valueOf(100.00));
     }
 

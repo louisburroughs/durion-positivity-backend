@@ -42,6 +42,8 @@ import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
 class AppointmentsServiceImplRescheduleTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private AppointmentRepository appointmentRepository;
@@ -100,8 +102,8 @@ class AppointmentsServiceImplRescheduleTest {
     @Test
     void rescheduleAppointment_withStartAfterEndTime_throwsValidationException() {
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
-        request.setNewStartAt(Instant.now().plusSeconds(3600));
-        request.setNewEndAt(Instant.now());
+        request.setNewStartAt(Instant.now(TEST_CLOCK).plusSeconds(3600));
+        request.setNewEndAt(Instant.now(TEST_CLOCK));
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(APPOINTMENT_ID, request))
                 .isInstanceOf(AppointmentValidationException.class)
                 .hasMessageContaining("newStartAt must be before newEndAt");
@@ -114,8 +116,8 @@ class AppointmentsServiceImplRescheduleTest {
         when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
-        request.setNewStartAt(Instant.now());
-        request.setNewEndAt(Instant.now().plusSeconds(3600));
+        request.setNewStartAt(Instant.now(TEST_CLOCK));
+        request.setNewEndAt(Instant.now(TEST_CLOCK).plusSeconds(3600));
 
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(APPOINTMENT_ID, request))
                 .isInstanceOf(AppointmentStateException.class)
@@ -129,8 +131,8 @@ class AppointmentsServiceImplRescheduleTest {
         when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
-        request.setNewStartAt(Instant.now());
-        request.setNewEndAt(Instant.now().plusSeconds(3600));
+        request.setNewStartAt(Instant.now(TEST_CLOCK));
+        request.setNewEndAt(Instant.now(TEST_CLOCK).plusSeconds(3600));
         request.setReason(RescheduleReasonCode.OTHER);
         request.setRescheduleReasonNotes(" ");
 
@@ -146,8 +148,8 @@ class AppointmentsServiceImplRescheduleTest {
         when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
-        request.setNewStartAt(Instant.now());
-        request.setNewEndAt(Instant.now().plusSeconds(3600));
+        request.setNewStartAt(Instant.now(TEST_CLOCK));
+        request.setNewEndAt(Instant.now(TEST_CLOCK).plusSeconds(3600));
         request.setReason(null);
 
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(APPOINTMENT_ID, request))
@@ -159,8 +161,8 @@ class AppointmentsServiceImplRescheduleTest {
     void rescheduleAppointment_withNonExistentAppointment_throwsNotFoundException() {
         when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.empty());
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
-        request.setNewStartAt(Instant.now());
-        request.setNewEndAt(Instant.now().plusSeconds(3600));
+        request.setNewStartAt(Instant.now(TEST_CLOCK));
+        request.setNewEndAt(Instant.now(TEST_CLOCK).plusSeconds(3600));
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(APPOINTMENT_ID, request))
                 .isInstanceOf(AppointmentNotFoundException.class);
     }

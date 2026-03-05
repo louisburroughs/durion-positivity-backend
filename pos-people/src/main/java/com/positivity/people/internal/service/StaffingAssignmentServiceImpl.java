@@ -1,5 +1,17 @@
 package com.positivity.people.internal.service;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
@@ -13,16 +25,6 @@ import com.positivity.people.service.StaffingAssignmentService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +34,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     private final PersonLocationAssignmentRepository repository;
     private final PersonRepository personRepository;
     private final LocationReferenceClient locationReferenceClient;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -169,7 +172,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                         "Assignment not found: " + assignmentId));
         assignment.setStatus(AssignmentStatus.ENDED);
         if (assignment.getEffectiveTo() == null) {
-            assignment.setEffectiveTo(LocalDate.now());
+            assignment.setEffectiveTo(LocalDate.now(clock));
         }
         repository.save(assignment);
     }

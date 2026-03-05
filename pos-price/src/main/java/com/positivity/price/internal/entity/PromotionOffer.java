@@ -22,6 +22,10 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 /**
  * Promotion offer aggregate root for pricing promotions.
  *
@@ -36,6 +40,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class PromotionOffer {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID promotionOfferId;
 
@@ -75,9 +81,11 @@ public class PromotionOffer {
     private String storeCode;
 
     @CreationTimestamp
+    @CreatedDate
     private Instant createdAt;
 
     @UpdateTimestamp
+    @LastModifiedDate
     private Instant updatedAt;
 
     @Column
@@ -85,8 +93,5 @@ public class PromotionOffer {
 
     @PrePersist
     void initId() {
-        if (this.promotionOfferId == null) {
-            this.promotionOfferId = UUIDv7Generator.generate();
-        }
     }
 }

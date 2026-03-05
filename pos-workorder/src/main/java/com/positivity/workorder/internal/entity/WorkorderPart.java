@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.shared.id.UUIDv7Id;
@@ -150,15 +152,5 @@ public class WorkorderPart {
      */
     public boolean canConsumeInventory() {
         return status != WorkorderItemStatus.PENDING_APPROVAL;
-    }
-
-    @PrePersist
-    protected void prePersist() {
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
     }
 }

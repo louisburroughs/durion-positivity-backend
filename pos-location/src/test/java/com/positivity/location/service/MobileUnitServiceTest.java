@@ -1,5 +1,8 @@
 package com.positivity.location.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,6 +52,8 @@ import org.springframework.data.domain.PageRequest;
  */
 @ExtendWith(MockitoExtension.class)
 class MobileUnitServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private MobileUnitRepository mobileUnitRepository;
@@ -189,8 +194,8 @@ class MobileUnitServiceTest {
                 .status("ACTIVE")
                 .travelBufferPolicyId(policyId)
                 .notes("ready")
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
+                .createdAt(Instant.now(TEST_CLOCK))
+                .updatedAt(Instant.now(TEST_CLOCK))
                 .build();
         when(mobileUnitRepository.save(any(MobileUnitEntity.class))).thenReturn(savedEntity);
         when(mobileUnitRepository.findById(savedId)).thenReturn(java.util.Optional.of(savedEntity));
@@ -394,7 +399,7 @@ class MobileUnitServiceTest {
     void shouldFindEligibleMobileUnitsWithActiveDeduplication() {
         UUID activeId = UUID.randomUUID();
         UUID inactiveId = UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant now = Instant.now(TEST_CLOCK);
 
         MobileUnitEntity activeUnit = MobileUnitEntity.builder()
                 .id(activeId)

@@ -1,5 +1,8 @@
 package com.positivity.inventory.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,6 +55,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PickListServiceImpl — Story #28 unit tests (RED phase)")
 class PickListServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Mock
         private PickListRepository pickListRepository;
@@ -81,7 +86,7 @@ class PickListServiceImplTest {
                 // pickListId
                 // Arrange
                 UUID workorderId = UUID.randomUUID();
-                CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now().plusSeconds(3600),
+                CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now(TEST_CLOCK).plusSeconds(3600),
                                 1,
                                 UUID.randomUUID());
 
@@ -110,7 +115,7 @@ class PickListServiceImplTest {
                 // Arrange
                 UUID workorderId = UUID.randomUUID();
                 UUID reservationId = UUID.randomUUID();
-                CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now().plusSeconds(3600),
+                CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now(TEST_CLOCK).plusSeconds(3600),
                                 1,
                                 reservationId);
 
@@ -163,8 +168,8 @@ class PickListServiceImplTest {
                                 .workorderId(UUID.randomUUID())
                                 .status(PickListStatus.DRAFT)
                                 .priority(0)
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
                 when(pickListRepository.findById(validId)).thenReturn(Optional.of(entity));
 
@@ -292,8 +297,8 @@ class PickListServiceImplTest {
                                 .workorderId(UUID.randomUUID())
                                 .status(PickListStatus.DRAFT)
                                 .priority(0)
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
                 when(pickListRepository.findById(pickListId)).thenReturn(Optional.of(entity));
                 when(pickListRepository.save(entity)).thenReturn(entity);

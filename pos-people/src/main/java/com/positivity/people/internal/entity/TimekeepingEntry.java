@@ -16,6 +16,8 @@ import java.util.UUID;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "timekeeping_entry", uniqueConstraints = {
@@ -24,6 +26,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class TimekeepingEntry {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "timekeeping_entry_id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID timekeepingEntryId;
 
@@ -64,14 +68,6 @@ public class TimekeepingEntry {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
-
-    @PrePersist
-    public void generateId() {
-        if (timekeepingEntryId == null) {
-            timekeepingEntryId = UUIDv7Generator.generate();
-        }
-    }
-
     public UUID getTimekeepingEntryId() {
         return timekeepingEntryId;
     }
@@ -173,6 +169,5 @@ public class TimekeepingEntry {
     }
 
     public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+}
 }

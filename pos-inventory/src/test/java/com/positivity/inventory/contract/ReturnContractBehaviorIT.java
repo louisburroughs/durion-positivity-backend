@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -65,6 +68,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Return Contract Behavior — Story #177")
 class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private MockMvc mockMvc;
@@ -105,7 +110,7 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
                                 workorderId,
                                 "Leftover brake pads",
                                 1,
-                                Instant.now(),
+                                Instant.now(TEST_CLOCK),
                                 List.of(UUID.randomUUID()));
                 when(returnService.returnItemsToStock(any(ReturnItemsRequest.class)))
                                 .thenReturn(expectedReturnResponse);

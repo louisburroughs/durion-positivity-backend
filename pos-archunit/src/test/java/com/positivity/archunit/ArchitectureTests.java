@@ -3,10 +3,14 @@ package com.positivity.archunit;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +27,18 @@ import org.junit.jupiter.api.Test;
 class ArchitectureTests {
 
     private static JavaClasses allClasses;
+    private static final DescribedPredicate<JavaCall<?>> NO_ARG_NOW_CALLS = new DescribedPredicate<>(
+            "call no-arg Instant/LocalDateTime now methods") {
+        @Override
+        public boolean test(JavaCall<?> input) {
+            if (!"now".equals(input.getName())) {
+                return false;
+            }
+            boolean supportedOwner = input.getTargetOwner().isEquivalentTo(Instant.class)
+                    || input.getTargetOwner().isEquivalentTo(LocalDateTime.class);
+            return supportedOwner && input.getTarget().getRawParameterTypes().isEmpty();
+        }
+    };
 
     @BeforeAll
     static void setup() {
@@ -141,6 +157,15 @@ class ArchitectureTests {
                 .should().resideInAPackage("com.positivity.(*)")
                 .andShould().resideOutsideOfPackages("..internal..", "..service..")
                 .because("@SpringBootApplication classes must be at root package for proper component scanning");
+
+        rule.check(allClasses);
+    }
+
+    @Test
+    void productionCodeShouldNotUseNoArgNowCalls() {
+        ArchRule rule = noClasses()
+                .should().callMethodWhere(NO_ARG_NOW_CALLS)
+                .because("time access must use explicit Clock injection or explicit Clock argument");
 
         rule.check(allClasses);
     }

@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Id;
 import java.time.Instant;
@@ -74,17 +76,6 @@ public class IdempotencyKey {
 
     @Column(nullable = false)
     private Instant expiresAt;
-
-    @PrePersist
-    public void prePersist() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
-
     public IdempotencyKey(String keyValue, UUID workorderId, Instant expiresAt) {
         this.keyValue = keyValue;
         this.workorderId = workorderId;

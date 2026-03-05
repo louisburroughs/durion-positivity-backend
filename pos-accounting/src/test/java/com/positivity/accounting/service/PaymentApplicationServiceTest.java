@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,6 +61,8 @@ import com.positivity.accounting.internal.service.PaymentApplicationServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PaymentApplicationService Unit Tests")
 class PaymentApplicationServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Mock
         private ReceivablePaymentRepository receivablePaymentRepository;
@@ -108,9 +113,9 @@ class PaymentApplicationServiceTest {
                 testPayment.setUnappliedAmount(new BigDecimal("1000.00"));
                 testPayment.setCurrency("USD");
                 testPayment.setStatus(ReceivablePaymentStatus.AVAILABLE);
-                testPayment.setClearedAt(Instant.now());
+                testPayment.setClearedAt(Instant.now(TEST_CLOCK));
                 testPayment.setSourceEventId(testSourceEventId);
-                testPayment.setCreatedAt(Instant.now());
+                testPayment.setCreatedAt(Instant.now(TEST_CLOCK));
         }
 
         // ========================================
@@ -130,7 +135,7 @@ class PaymentApplicationServiceTest {
                                 testCustomerId,
                                 "USD",
                                 new BigDecimal("1000.00"),
-                                Instant.now(),
+                                Instant.now(TEST_CLOCK),
                                 testSourceEventId);
 
                 // Assert
@@ -159,7 +164,7 @@ class PaymentApplicationServiceTest {
                                 testCustomerId,
                                 "USD",
                                 new BigDecimal("1000.00"),
-                                Instant.now(),
+                                Instant.now(TEST_CLOCK),
                                 testSourceEventId);
 
                 // Assert
@@ -314,7 +319,7 @@ class PaymentApplicationServiceTest {
                 existingApplication.setAppliedAmount(new BigDecimal("500.00"));
                 existingApplication.setCurrency("USD");
                 existingApplication.setApplicationRequestId(testApplicationRequestId);
-                existingApplication.setApplicationTimestamp(Instant.now());
+                existingApplication.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 // Balance snapshot persisted from original application
                 existingApplication.setInvoiceBalanceBefore(new BigDecimal("1000.00"));
                 existingApplication.setInvoiceBalanceAfter(new BigDecimal("500.00"));
@@ -446,7 +451,7 @@ class PaymentApplicationServiceTest {
                 existingApplication.setAppliedAmount(new BigDecimal("500.00"));
                 existingApplication.setCurrency("USD");
                 existingApplication.setApplicationRequestId(testApplicationRequestId);
-                existingApplication.setApplicationTimestamp(Instant.now());
+                existingApplication.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 existingApplication.setInvoiceBalanceBefore(new BigDecimal("2000.00"));
                 existingApplication.setInvoiceBalanceAfter(new BigDecimal("1500.00"));
                 existingApplication.setInvoiceStatus(InvoiceStatus.PARTIALLY_PAID);
@@ -615,7 +620,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
@@ -717,7 +722,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00")); // Already had some applied
 
@@ -774,7 +779,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
@@ -850,7 +855,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 // Note: No isReversed field - check via repository
 
                 when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
@@ -879,7 +884,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
                                 .thenReturn(true); // Already reversed
@@ -909,7 +914,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
@@ -958,7 +963,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 

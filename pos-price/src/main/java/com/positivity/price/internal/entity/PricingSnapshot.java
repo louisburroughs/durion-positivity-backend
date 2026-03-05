@@ -1,5 +1,7 @@
 package com.positivity.price.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,6 +16,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Immutable pricing snapshot persisted for pricing audit and replay.
  *
@@ -25,6 +29,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class PricingSnapshot {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     private UUID snapshotId;
 
     @CreatedDate
@@ -54,20 +60,6 @@ public class PricingSnapshot {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    @PrePersist
-    public void prePersist() {
-        if (snapshotId == null) {
-            snapshotId = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
-
     public UUID getSnapshotId() {
         return snapshotId;
     }
@@ -81,8 +73,7 @@ public class PricingSnapshot {
     }
 
     public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+}
 
     public String getSourceContext() {
         return sourceContext;
@@ -137,6 +128,5 @@ public class PricingSnapshot {
     }
 
     public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+}
 }

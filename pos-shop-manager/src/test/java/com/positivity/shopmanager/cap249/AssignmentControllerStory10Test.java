@@ -10,6 +10,8 @@ import com.positivity.shopmanager.internal.controller.AssignmentController;
 import com.positivity.shopmanager.service.AssignmentService;
 import com.positivity.shopmanager.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.service.enums.AssignmentStatus;
+import java.time.ZoneOffset;
+import java.time.Instant;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
@@ -51,6 +53,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  */
 @WebMvcTest(AssignmentController.class)
 class AssignmentControllerStory10Test {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Autowired
     private MockMvc mockMvc;
@@ -154,7 +158,7 @@ class AssignmentControllerStory10Test {
 
         @Bean
         Clock clock() {
-            return Clock.systemUTC();
+            return TEST_CLOCK;
         }
 
         @Bean

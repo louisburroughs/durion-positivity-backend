@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -34,6 +37,8 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
  */
 @DisplayName("Inventory Availability Query Contract Behavior")
 class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
     private static final UUID LOC_ALPHA = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID LOC_OTHER = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID LOC_ZERO = UUID.fromString("33333333-3333-3333-3333-333333333333");
@@ -161,7 +166,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .changeInQuantity(quantity)
                 .quantityAfter(quantity)
                 .transactionUserId("contract-seed")
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed goods receipt for " + locationId)
                 .build());
     }
@@ -174,7 +179,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .changeInQuantity(quantity)
                 .quantityAfter(0)
                 .transactionUserId("contract-seed")
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed allocation created")
                 .build());
     }
@@ -187,7 +192,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .changeInQuantity(quantity)
                 .quantityAfter(0)
                 .transactionUserId("contract-seed")
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed allocation released")
                 .build());
     }
@@ -200,7 +205,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .changeInQuantity(quantity)
                 .quantityAfter(0)
                 .transactionUserId("contract-seed")
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed reservation (must not affect allocated qty per ADR-0001)")
                 .build());
     }

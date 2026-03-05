@@ -1,5 +1,6 @@
 package com.positivity.people.internal.client;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -29,10 +30,12 @@ public class SecurityServiceClient {
 
         private static final Logger log = LoggerFactory.getLogger(SecurityServiceClient.class);
 
+        private final Clock clock;
         private final RestClient restClient;
 
-        public SecurityServiceClient(@Qualifier("securityServiceRestClient") RestClient restClient) {
+        public SecurityServiceClient(@Qualifier("securityServiceRestClient") RestClient restClient, Clock clock) {
                 this.restClient = restClient;
+                this.clock = clock;
         }
 
         @NonNull
@@ -288,7 +291,7 @@ public class SecurityServiceClient {
                         throw new IllegalStateException("Security service returned null response");
                 }
 
-                java.time.LocalDate today = java.time.LocalDate.now();
+                java.time.LocalDate today = java.time.LocalDate.now(clock);
                 List<RoleAssignment> currentAndFutureAssignments = fullAssignments.stream()
                                 .filter(assignment -> assignment.getEffectiveEndDate() == null
                                                 || !assignment.getEffectiveEndDate().isBefore(today))
@@ -304,7 +307,7 @@ public class SecurityServiceClient {
                                                                 + roleCode));
 
                 java.time.LocalDate revocationDate = endDate != null ? endDate.toLocalDate()
-                                : java.time.LocalDate.now();
+                                : java.time.LocalDate.now(clock);
 
                 restClient.delete()
                                 .uri(uriBuilder -> uriBuilder
@@ -379,7 +382,7 @@ public class SecurityServiceClient {
          * Helper method to determine if an assignment is currently active
          */
         private boolean isAssignmentActive(RoleAssignment assignment) {
-                java.time.LocalDate today = java.time.LocalDate.now();
+                java.time.LocalDate today = java.time.LocalDate.now(clock);
                 java.time.LocalDate startDate = assignment.getEffectiveStartDate();
                 java.time.LocalDate endDate = assignment.getEffectiveEndDate();
 

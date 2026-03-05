@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +43,8 @@ import com.positivity.workorder.internal.service.WorkorderStateMachine;
  */
 @ExtendWith(MockitoExtension.class)
 class OperationalContextServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Mock
         private WorkorderRepository workorderRepository;
@@ -167,7 +172,7 @@ class OperationalContextServiceTest {
                 var workorder = Workorder.builder()
                                 .id(WORKORDER_ID)
                                 .status(WorkorderStatus.WORK_IN_PROGRESS)
-                                .workStartedAt(Instant.now())
+                                .workStartedAt(Instant.now(TEST_CLOCK))
                                 .build();
                 when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
@@ -188,7 +193,7 @@ class OperationalContextServiceTest {
                 var workorder = Workorder.builder()
                                 .id(WORKORDER_ID)
                                 .status(WorkorderStatus.WORK_IN_PROGRESS)
-                                .workStartedAt(Instant.now())
+                                .workStartedAt(Instant.now(TEST_CLOCK))
                                 .build();
                 when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 

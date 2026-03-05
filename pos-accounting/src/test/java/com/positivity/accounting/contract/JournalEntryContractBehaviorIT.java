@@ -1,5 +1,9 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -48,6 +52,8 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
  */
 @DisplayName("Journal Entry Backend Contract Behavioral Tests")
 class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private JournalEntryRepository journalEntryRepository;
@@ -91,7 +97,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
                                 .accountCode(code)
                                 .accountName(name)
                                 .accountType(type)
-                                .activationDate(LocalDateTime.now())
+                                .activationDate(LocalDateTime.now(TEST_CLOCK))
                                 .build();
 
                 MvcResult result = mockMvc.perform(withAuth(post(API_V1_GL_ACCOUNTS))
@@ -117,7 +123,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given - balanced journal entry
                 JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
                                 .organizationId(UUID.randomUUID())
-                                .transactionDate(LocalDateTime.now())
+                                .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description("Test journal entry")
                                 .sourceEventType("SALE")
                                 .lines(List.of(
@@ -197,7 +203,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 // When - update the entry
                 JournalEntryCreateRequest updateRequest = JournalEntryCreateRequest.builder()
                                 .organizationId(UUID.randomUUID())
-                                .transactionDate(LocalDateTime.now())
+                                .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description("Updated description")
                                 .sourceEventType("SALE")
                                 .lines(List.of(
@@ -277,7 +283,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given - unbalanced journal entry
                 JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
                                 .organizationId(UUID.randomUUID())
-                                .transactionDate(LocalDateTime.now())
+                                .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description("Unbalanced entry")
                                 .sourceEventType("SALE")
                                 .lines(List.of(
@@ -328,7 +334,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
                 // When - try to update the posted entry
                 JournalEntryCreateRequest updateRequest = JournalEntryCreateRequest.builder()
                                 .organizationId(UUID.randomUUID())
-                                .transactionDate(LocalDateTime.now())
+                                .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description("Attempted update")
                                 .sourceEventType("SALE")
                                 .lines(List.of(
@@ -362,7 +368,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
         private UUID createBalancedJournalEntry(String description) throws Exception {
                 JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
                                 .organizationId(UUID.randomUUID())
-                                .transactionDate(LocalDateTime.now())
+                                .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description(description)
                                 .sourceEventType("SALE")
                                 .lines(List.of(

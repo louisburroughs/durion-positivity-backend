@@ -127,6 +127,5 @@ public abstract class AbstractParty implements Party {
     }
 
     public void setModifiedAt(Instant modifiedAt) {
-        this.updatedAt = modifiedAt;
-    }
+}
 }

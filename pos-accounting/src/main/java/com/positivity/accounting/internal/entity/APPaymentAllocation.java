@@ -67,11 +67,6 @@ public class APPaymentAllocation {
     @UUIDv7Id
     @Column(name = "allocation_id", nullable = false, columnDefinition = "UUID")
     private UUID allocationId;
-
-    @PrePersist
-    public void onPrePersist() {
-    }
-
     @Column(name = "payment_id", nullable = false)
     private UUID paymentId;
 

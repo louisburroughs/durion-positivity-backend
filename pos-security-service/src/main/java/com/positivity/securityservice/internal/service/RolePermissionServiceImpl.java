@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.entity.Permission;
@@ -30,6 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class RolePermissionServiceImpl implements RolePermissionService {
+    private final Clock clock;
+
 
     private static final String ROLE_NOT_FOUND_PREFIX = "Role not found: ";
 
@@ -75,7 +79,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                 getCurrentActor(),
                 roleId,
                 permissionKey,
-                Instant.now()));
+                Instant.now(clock)));
 
         return toRoleDto(savedRole);
     }

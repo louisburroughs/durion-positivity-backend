@@ -1,0 +1,54 @@
+[[1;34mINFO[m] Scanning for projects...
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m---------------------< [0;36mcom.positivity:pos-invoice[0;1m >---------------------[m
+[[1;34mINFO[m] [1mBuilding pos-invoice 0.1.0-SNAPSHOT[m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-enforcer-plugin:3.4.1:enforce[m [1m(enforce-java)[m @ [36mpos-invoice[0;1m ---[m
+[[1;34mINFO[m] Rule 0: org.apache.maven.enforcer.rules.version.RequireJavaVersion passed
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.3.1:resources[m [1m(default-resources)[m @ [36mpos-invoice[0;1m ---[m
+[[1;34mINFO[m] Copying 1 resource from src/main/resources to target/classes
+[[1;34mINFO[m] Copying 2 resources from src/main/resources to target/classes
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.13.0:compile[m [1m(default-compile)[m @ [36mpos-invoice[0;1m ---[m
+[[1;34mINFO[m] Recompiling the module because of [1mchanged source code[m.
+[[1;34mINFO[m] Compiling 42 source files with javac [debug parameters release 21] to target/classes
+[[1;34mINFO[m] Annotation processing is enabled because one or more processors were found
+  on the class path. A future release of javac may disable annotation processing
+  unless at least one processor is specified by name (-processor), or a search
+  path is specified (--processor-path, --processor-module-path), or annotation
+  processing is enabled explicitly (-proc:only, -proc:full).
+  Use -Xlint:-options to suppress this message.
+  Use -proc:none to disable annotation processing.
+[[1;34mINFO[m] -------------------------------------------------------------
+[[1;31mERROR[m] COMPILATION ERROR : 
+[[1;34mINFO[m] -------------------------------------------------------------
+[[1;31mERROR[m] /home/louisb/Projects/durion-positivity-backend/pos-invoice/src/main/java/com/positivity/invoice/internal/entity/Invoice.java:[149,26] cannot find symbol
+  symbol:   class NonNull
+  location: class com.positivity.invoice.internal.entity.Invoice
+[[1;31mERROR[m] /home/louisb/Projects/durion-positivity-backend/pos-invoice/src/main/java/com/positivity/invoice/internal/entity/Invoice.java:[154,32] cannot find symbol
+  symbol:   class NonNull
+  location: class com.positivity.invoice.internal.entity.Invoice
+[[1;34mINFO[m] 2 errors 
+[[1;34mINFO[m] -------------------------------------------------------------
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1;31mBUILD FAILURE[m
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] Total time:  10.764 s
+[[1;34mINFO[m] Finished at: 2026-03-04T23:31:31-05:00
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;31mERROR[m] Failed to execute goal [32morg.apache.maven.plugins:maven-compiler-plugin:3.13.0:compile[m [1m(default-compile)[m on project [36mpos-invoice[m: [1;31mCompilation failure[m: Compilation failure: 
+[[1;31mERROR[m] /home/louisb/Projects/durion-positivity-backend/pos-invoice/src/main/java/com/positivity/invoice/internal/entity/Invoice.java:[149,26] cannot find symbol
+[[1;31mERROR[m]   symbol:   class NonNull
+[[1;31mERROR[m]   location: class com.positivity.invoice.internal.entity.Invoice
+[[1;31mERROR[m] /home/louisb/Projects/durion-positivity-backend/pos-invoice/src/main/java/com/positivity/invoice/internal/entity/Invoice.java:[154,32] cannot find symbol
+[[1;31mERROR[m]   symbol:   class NonNull
+[[1;31mERROR[m]   location: class com.positivity.invoice.internal.entity.Invoice
+[[1;31mERROR[m] -> [1m[Help 1][m
+[[1;31mERROR[m] 
+[[1;31mERROR[m] To see the full stack trace of the errors, re-run Maven with the [1m-e[m switch.
+[[1;31mERROR[m] Re-run Maven using the [1m-X[m switch to enable full debug logging.
+[[1;31mERROR[m] 
+[[1;31mERROR[m] For more information about the errors and possible solutions, please read the following articles:
+[[1;31mERROR[m] [1m[Help 1][m http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

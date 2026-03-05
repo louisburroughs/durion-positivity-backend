@@ -6,22 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
-import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
-import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
-import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.entity.PickTaskEntity;
-import com.positivity.inventory.internal.enums.PickTaskStatus;
-import com.positivity.inventory.internal.exception.ResourceNotFoundException;
-import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
-import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
-import com.positivity.inventory.internal.repository.PickTaskRepository;
-import com.positivity.inventory.internal.service.ConsumptionServiceImpl;
-
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,10 +19,25 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
+import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
+import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.PickTaskEntity;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.PickTaskStatus;
+import com.positivity.inventory.internal.exception.ResourceNotFoundException;
+import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
+import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.PickTaskRepository;
+import com.positivity.inventory.internal.service.ConsumptionServiceImpl;
+
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ConsumptionServiceImpl")
 class ConsumptionServiceImplTest {
 
+        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+                        java.time.ZoneOffset.UTC);
         @Mock
         private PickTaskRepository pickTaskRepository;
 
@@ -48,7 +52,7 @@ class ConsumptionServiceImplTest {
         }
 
         private ConsumptionServiceImpl persistentService() {
-                return new ConsumptionServiceImpl(pickTaskRepository, inventoryLedgerEntryRepository);
+                return new ConsumptionServiceImpl(pickTaskRepository, inventoryLedgerEntryRepository, FIXED_CLOCK);
         }
 
         // ─── CS1: consumePickedItems — valid picks → ConsumptionResponse fields ─────

@@ -1,5 +1,7 @@
 package com.positivity.location.internal.controller;
 
+import java.time.Clock;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -42,6 +44,8 @@ import java.util.concurrent.atomic.AtomicLong;
 @RestController
 @RequestMapping("/v1/locations/{locationId}/bays")
 public class BayController {
+    private final Clock clock;
+
 
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final AtomicLong TEST_SEQUENCE = new AtomicLong(200L);
@@ -50,7 +54,8 @@ public class BayController {
 
     private final BayService bayService;
 
-    public BayController(BayService bayService) {
+    public BayController(BayService bayService, Clock clock) {
+        this.clock = clock;
         this.bayService = bayService;
     }
 
@@ -93,8 +98,8 @@ public class BayController {
                             .bayType("GENERAL_SERVICE")
                             .status(STATUS_ACTIVE)
                             .maxConcurrentVehicles(1)
-                            .createdAt(Instant.now())
-                            .lastModifiedAt(Instant.now())
+                            .createdAt(Instant.now(clock))
+                            .lastModifiedAt(Instant.now(clock))
                             .serviceCapabilityIds(List.of())
                             .skillRequirementIds(List.of())
                             .build());
@@ -132,8 +137,8 @@ public class BayController {
                             request.getServiceCapabilityIds() == null ? List.of() : request.getServiceCapabilityIds())
                     .skillRequirementIds(
                             request.getSkillRequirementIds() == null ? List.of() : request.getSkillRequirementIds())
-                    .createdAt(Instant.now())
-                    .lastModifiedAt(Instant.now())
+                    .createdAt(Instant.now(clock))
+                    .lastModifiedAt(Instant.now(clock))
                     .build();
             TEST_BAYS_BY_ID.put(generatedId, response);
             TEST_BAY_ID_BY_LOCATION_AND_NAME.put(locationNameKey, generatedId);
@@ -163,8 +168,8 @@ public class BayController {
                             .maxConcurrentVehicles(1)
                             .serviceCapabilityIds(List.of())
                             .skillRequirementIds(List.of())
-                            .createdAt(Instant.now())
-                            .lastModifiedAt(Instant.now())
+                            .createdAt(Instant.now(clock))
+                            .lastModifiedAt(Instant.now(clock))
                             .build());
             BayResponse patched = BayResponse.builder()
                     .id(existing.getId())
@@ -180,7 +185,7 @@ public class BayController {
                             ? patchRequest.getSkillRequirementIds()
                             : existing.getSkillRequirementIds())
                     .createdAt(existing.getCreatedAt())
-                    .lastModifiedAt(Instant.now())
+                    .lastModifiedAt(Instant.now(clock))
                     .build();
             TEST_BAYS_BY_ID.put(bayId, patched);
             return ResponseEntity.ok(patched);

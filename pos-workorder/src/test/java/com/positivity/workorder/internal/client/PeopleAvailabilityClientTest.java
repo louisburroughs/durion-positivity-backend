@@ -1,5 +1,8 @@
 package com.positivity.workorder.internal.client;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +39,8 @@ import java.util.function.Function;
  * RestClient HTTP-level error handling.
  */
 class PeopleAvailabilityClientTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     private static final LocalDate TEST_DATE = LocalDate.of(2026, 3, 1);
     private static final String LOCATION_ID = "LOC-001";
@@ -50,7 +55,7 @@ class PeopleAvailabilityClientTest {
     @DisplayName("fetchAvailability returns populated response on success")
     void fetchAvailability_returnsPopulatedResponse_onSuccess() {
         PeopleAvailabilityResponse expected = PeopleAvailabilityResponse.builder()
-                .asOf(Instant.now())
+                .asOf(Instant.now(TEST_CLOCK))
                 .location(LOCATION_ID)
                 .people(List.of(
                         PeopleAvailabilityResponse.PersonAvailability.builder()

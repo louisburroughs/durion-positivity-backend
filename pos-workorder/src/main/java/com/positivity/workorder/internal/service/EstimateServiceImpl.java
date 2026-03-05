@@ -1,18 +1,17 @@
 package com.positivity.workorder.internal.service;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.time.Year;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
-import jakarta.persistence.EntityNotFoundException;
 
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -22,10 +21,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
-import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.enums.TaxReferenceType;
 import com.positivity.workorder.internal.client.DocumentClient;
 import com.positivity.workorder.internal.client.PeopleLocationClient;
@@ -56,8 +56,7 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.BillingRulesClientService;
 import com.positivity.workorder.service.EstimateService;
 
-import com.positivity.security.common.SecurityContextHelper;
-
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
@@ -66,6 +65,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Slf4j
 public class EstimateServiceImpl implements EstimateService {
+        private final Clock clock;
+
         private static final String ESTIMATE_NOT_FOUND = "Estimate not found: ";
         private static final BigDecimal FALLBACK_TAX_RATE = new BigDecimal("0.0825");
         private final EstimateRepository estimateRepository;
@@ -189,31 +190,7 @@ public class EstimateServiceImpl implements EstimateService {
                 log.info("Creating new estimate for customer {} and vehicle {}",
                                 request.getCustomerId(), request.getVehicleId());
 
-                // Validate required fields
-                if (request.getCustomerId() == null) {
-                        log.warn("Attempt to create estimate without customerId");
-                        throw new IllegalArgumentException("customerId is required");
-                }
-                if (request.getVehicleId() == null) {
-                        log.warn("Attempt to create estimate without vehicleId");
-                        throw new IllegalArgumentException("vehicleId is required");
-                }
-
-                if (request.getSubtotal() != null && request.getSubtotal().compareTo(BigDecimal.ZERO) < 0) {
-                        throw new IllegalArgumentException("subtotal must be non-negative");
-                }
-                if (request.getTaxAmount() != null && request.getTaxAmount().compareTo(BigDecimal.ZERO) < 0) {
-                        throw new IllegalArgumentException("taxAmount must be non-negative");
-                }
-                if (request.getTotal() != null && request.getTotal().compareTo(BigDecimal.ZERO) < 0) {
-                        throw new IllegalArgumentException("total must be non-negative");
-                }
-                if (request.getSubtotal() != null && request.getTaxAmount() != null && request.getTotal() != null) {
-                        BigDecimal calculatedTotal = request.getSubtotal().add(request.getTaxAmount());
-                        if (calculatedTotal.compareTo(request.getTotal()) != 0) {
-                                throw new IllegalStateException("subtotal + taxAmount must equal total");
-                        }
-                }
+                validateCreateEstimateRequest(request);
 
                 // Apply defaults
                 UUID locationId = request.getLocationId() != null
@@ -269,10 +246,37 @@ public class EstimateServiceImpl implements EstimateService {
                                 .vehicleId(saved.getVehicleId())
                                 .locationId(saved.getLocationId())
                                 .createdBy(username)
-                                .timestamp(Instant.now().truncatedTo(ChronoUnit.MILLIS))
+                                .timestamp(Instant.now(clock).truncatedTo(ChronoUnit.MILLIS))
                                 .build());
 
                 return EstimateResponse.fromEntity(saved);
+        }
+
+        private void validateCreateEstimateRequest(CreateEstimateRequest request) {
+                if (request.getCustomerId() == null) {
+                        log.warn("Attempt to create estimate without customerId");
+                        throw new IllegalArgumentException("customerId is required");
+                }
+                if (request.getVehicleId() == null) {
+                        log.warn("Attempt to create estimate without vehicleId");
+                        throw new IllegalArgumentException("vehicleId is required");
+                }
+
+                if (request.getSubtotal() != null && request.getSubtotal().compareTo(BigDecimal.ZERO) < 0) {
+                        throw new IllegalArgumentException("subtotal must be non-negative");
+                }
+                if (request.getTaxAmount() != null && request.getTaxAmount().compareTo(BigDecimal.ZERO) < 0) {
+                        throw new IllegalArgumentException("taxAmount must be non-negative");
+                }
+                if (request.getTotal() != null && request.getTotal().compareTo(BigDecimal.ZERO) < 0) {
+                        throw new IllegalArgumentException("total must be non-negative");
+                }
+                if (request.getSubtotal() != null && request.getTaxAmount() != null && request.getTotal() != null) {
+                        BigDecimal calculatedTotal = request.getSubtotal().add(request.getTaxAmount());
+                        if (calculatedTotal.compareTo(request.getTotal()) != 0) {
+                                throw new IllegalStateException("subtotal + taxAmount must equal total");
+                        }
+                }
         }
 
         /**
@@ -280,7 +284,7 @@ public class EstimateServiceImpl implements EstimateService {
          * Format: EST-YYYY-NNNN where YYYY is the year and NNNN is a sequential number
          */
         private String generateEstimateNumber(UUID locationId) {
-                int year = Year.now().getValue();
+                int year = Year.now(clock).getValue();
                 String prefix = String.format("EST-%d-", year);
 
                 // Find the next available number
@@ -306,7 +310,7 @@ public class EstimateServiceImpl implements EstimateService {
                 }
 
                 estimate.setStatus(EstimateStatus.APPROVED);
-                estimate.setApprovedAt(LocalDateTime.now());
+                estimate.setApprovedAt(LocalDateTime.now(clock));
                 estimate.setApprovedBy(approvedByCustomerId);
 
                 log.info("Estimate {} approved by customer {}", estimateId, approvedByCustomerId);
@@ -417,7 +421,7 @@ public class EstimateServiceImpl implements EstimateService {
                 processLineItemApprovals(estimateId, lineItemApprovals);
 
                 estimate.setStatus(EstimateStatus.APPROVED);
-                estimate.setApprovedAt(LocalDateTime.now());
+                estimate.setApprovedAt(LocalDateTime.now(clock));
                 // Customer who approved the estimate (via signature capture)
                 estimate.setApprovedBy(customerId);
                 estimate.setSignatureData(signatureData);
@@ -449,7 +453,7 @@ public class EstimateServiceImpl implements EstimateService {
                         for (EstimateItem item : allItems) {
                                 item.setApprovalStatus(
                                                 com.positivity.workorder.internal.enums.ApprovalStatus.APPROVED);
-                                item.setApprovalTimestamp(LocalDateTime.now());
+                                item.setApprovalTimestamp(LocalDateTime.now(clock));
                                 estimateItemRepository.save(item);
                         }
                         return;
@@ -479,12 +483,12 @@ public class EstimateServiceImpl implements EstimateService {
                                                         approval.getRejectionReason());
                                 }
                                 item.setApprovalNotes(approval.getNotes());
-                                item.setApprovalTimestamp(LocalDateTime.now());
+                                item.setApprovalTimestamp(LocalDateTime.now(clock));
                         } else {
                                 // No explicit decision - default to approved
                                 item.setApprovalStatus(
                                                 com.positivity.workorder.internal.enums.ApprovalStatus.APPROVED);
-                                item.setApprovalTimestamp(LocalDateTime.now());
+                                item.setApprovalTimestamp(LocalDateTime.now(clock));
                                 log.debug("Line item {} implicitly approved (no explicit decision)", item.getId());
                         }
 
@@ -507,12 +511,12 @@ public class EstimateServiceImpl implements EstimateService {
                 }
 
                 estimate.setStatus(EstimateStatus.DECLINED);
-                estimate.setDeclinedAt(LocalDateTime.now());
+                estimate.setDeclinedAt(LocalDateTime.now(clock));
                 estimate.setDeclineReason(reason);
 
                 // Set expiry date based on configuration
                 ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
-                estimate.setExpiresAt(LocalDateTime.now().plusDays(config.getDeclineExpiryDays()));
+                estimate.setExpiresAt(LocalDateTime.now(clock).plusDays(config.getDeclineExpiryDays()));
 
                 log.info("Estimate {} declined with reason: {}", estimateId, reason);
                 return EstimateResponse.fromEntity(estimateRepository.save(estimate));
@@ -575,13 +579,13 @@ public class EstimateServiceImpl implements EstimateService {
 
                 // Transition to PENDING_APPROVAL
                 estimate.setStatus(EstimateStatus.PENDING_APPROVAL);
-                estimate.setSubmittedAt(LocalDateTime.now());
+                estimate.setSubmittedAt(LocalDateTime.now(clock));
                 estimate.setSubmittedBy(username);
 
                 // Set expiration based on approval configuration
                 ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
                 if (config.getApprovalWindowDays() != null && config.getApprovalWindowDays() > 0) {
-                        estimate.setExpiresAt(LocalDateTime.now().plusDays(config.getApprovalWindowDays()));
+                        estimate.setExpiresAt(LocalDateTime.now(clock).plusDays(config.getApprovalWindowDays()));
                 }
 
                 log.info("Estimate {} submitted for approval by user {}, expires at {}",
@@ -744,7 +748,7 @@ public class EstimateServiceImpl implements EstimateService {
                                         .oldTotal(oldTotal != null ? oldTotal : BigDecimal.ZERO)
                                         .newTotal(newTotal != null ? newTotal : BigDecimal.ZERO)
                                         .changedBy(username)
-                                        .timestamp(Instant.now())
+                                        .timestamp(Instant.now(clock))
                                         .build();
 
                         eventPublisher.publishEvent(event);
@@ -1273,7 +1277,7 @@ public class EstimateServiceImpl implements EstimateService {
         @Override
         @Transactional
         public int expirePendingApprovals() {
-                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime now = LocalDateTime.now(clock);
                 log.debug("Checking for expired pending approvals at {}", now);
 
                 // Find all estimates in PENDING_APPROVAL state that have expired

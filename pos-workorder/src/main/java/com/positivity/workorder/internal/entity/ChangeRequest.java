@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -110,16 +112,10 @@ public class ChangeRequest {
     @PrePersist
     protected void prePersist() {
         if (requestedAt == null) {
-            requestedAt = LocalDateTime.now();
+            requestedAt = LocalDateTime.now(Clock.systemUTC());
         }
         if (status == null) {
             status = ChangeRequestStatus.AWAITING_ADVISOR_REVIEW;
         }
-        if (createdAt == null) {
-            createdAt = requestedAt;
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 }

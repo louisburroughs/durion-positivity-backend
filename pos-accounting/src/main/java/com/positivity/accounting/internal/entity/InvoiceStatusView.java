@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import jakarta.persistence.*;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.shared.id.UUIDv7Id;
@@ -13,6 +15,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * Entity representing the current payment status of an invoice.
  * This is a denormalized view for quick status lookups.
@@ -23,6 +26,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "invoice_status_views")
 public class InvoiceStatusView {
 
@@ -32,11 +36,6 @@ public class InvoiceStatusView {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-    }
-
     @Column(nullable = false, unique = true)
     private UUID invoiceId;
 
@@ -62,6 +61,6 @@ public class InvoiceStatusView {
         this.currentStatus = currentStatus;
         this.totalPaid = totalPaid;
         this.invoiceTotal = invoiceTotal;
-        this.lastUpdated = Instant.now();
+        this.lastUpdated = Instant.now(Clock.systemUTC());
     }
 }

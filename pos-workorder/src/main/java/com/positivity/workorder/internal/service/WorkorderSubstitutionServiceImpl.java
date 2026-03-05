@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventResponse;
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.SubstitutionStatus;
@@ -34,6 +36,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionService {
+    private final Clock clock;
+
     private static final Logger log = LoggerFactory.getLogger(WorkorderSubstitutionServiceImpl.class);
 
     private final WorkorderPartRepository workorderPartRepository;
@@ -47,7 +51,9 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             WorkOrderPartSubstitutionRepository substitutionRepository,
             WorkorderPartAdjustmentEventRepository adjustmentEventRepository,
             IdempotencyService idempotencyService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            Clock clock) {
+        this.clock = clock;
         this.workorderPartRepository = workorderPartRepository;
         this.substitutionRepository = substitutionRepository;
         this.adjustmentEventRepository = adjustmentEventRepository;
@@ -140,7 +146,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
                 .substituteProductId(substitutePartId)
                 .substitutePartNumberSnapshot(substitutePart.getDescription())
                 .selectedBy(actorId)
-                .selectedAt(Instant.now())
+                .selectedAt(Instant.now(clock))
                 .reasonCode(reason)
                 .pricingSnapshot(buildPricingSnapshot(originalPart))
                 .status(SubstitutionStatus.APPLIED)
@@ -155,7 +161,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
                 .quantityAdjustment(BigDecimal.ZERO)
                 .reason(reason)
                 .performedBy(actorId)
-                .performedAt(Instant.now())
+                .performedAt(Instant.now(clock))
                 .notes(notes)
                 .build();
 

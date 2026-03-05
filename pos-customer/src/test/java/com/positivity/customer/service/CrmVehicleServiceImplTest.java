@@ -19,6 +19,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +37,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CrmVehicleServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private VehicleInventoryClient vehicleInventoryClient;
@@ -46,7 +50,8 @@ class CrmVehicleServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CrmVehicleServiceImpl(vehicleInventoryClient, personPartyRepository, commercialPartyRepository);
+        service = new CrmVehicleServiceImpl(TEST_CLOCK, vehicleInventoryClient, personPartyRepository,
+                commercialPartyRepository);
     }
 
     private CommercialParty commercialParty(UUID id) {

@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -94,15 +96,9 @@ public class Permission {
     @PrePersist
     protected void onCreate() {
         if (registeredAt == null) {
-            registeredAt = Instant.now();
+            registeredAt = Instant.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = registeredAt;
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 
     /**
      * Parse domain:resource:action format and set individual fields

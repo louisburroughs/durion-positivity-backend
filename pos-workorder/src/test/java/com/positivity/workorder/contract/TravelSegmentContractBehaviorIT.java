@@ -1,5 +1,8 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -57,6 +60,8 @@ import static org.hamcrest.Matchers.notNullValue;
 @DisplayName("TravelSegment Contract Behavior Tests — GREEN phase (CAP-139 Story #67)")
 @Import(ContractTestConfiguration.class)
 class TravelSegmentContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Autowired
     private TravelSegmentRepository travelSegmentRepository;
@@ -283,7 +288,7 @@ class TravelSegmentContractBehaviorIT extends BaseContractIntegrationTest {
                 .mobileWorkAssignmentId(freshAssignmentId)
                 .technicianId(technicianId)
                 .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(300))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(300))
                 .status(TravelSegmentStatus.COMPLETED)
                 .createdBy(SYSTEM_USER_ID)
                 .build();

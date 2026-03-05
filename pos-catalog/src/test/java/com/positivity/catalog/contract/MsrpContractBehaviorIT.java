@@ -6,21 +6,26 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseContractIntegrationTest;
-import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
-import com.positivity.catalog.internal.service.CatalogServiceImpl;
-
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.positivity.catalog.BaseContractIntegrationTest;
+import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
+import com.positivity.catalog.internal.service.CatalogServiceImpl;
+
 @DisplayName("MSRP Contract Behavioral Tests")
 class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
+
+        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+                        java.time.ZoneOffset.UTC);
 
         @Autowired
         private CatalogServiceImpl catalogService;
@@ -35,14 +40,15 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "199.9900",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now().minusDays(1).toString(),
+                                                "effectiveStartDate",
+                                                LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
                                                 "createdByUserId", UUID.randomUUID().toString()))))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.productId").value(productId.toString()))
                                 .andExpect(jsonPath("$.amount").value("199.9900"));
 
                 mockMvc.perform(withAuth(get("/v1/products/{productId}/msrp/active", productId)
-                                .param("asOf", LocalDate.now().toString())))
+                                .param("asOf", LocalDate.now(FIXED_CLOCK).toString())))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.productId").value(productId.toString()))
                                 .andExpect(jsonPath("$.amount").value("199.9900"));
@@ -58,8 +64,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "149.9900",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now().toString(),
-                                                "effectiveEndDate", LocalDate.now().minusDays(1).toString(),
+                                                "effectiveStartDate", LocalDate.now(FIXED_CLOCK).toString(),
+                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
                                                 "createdByUserId", UUID.randomUUID().toString()))))
                                 .andExpect(status().isBadRequest());
         }
@@ -74,8 +80,9 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "99.9900",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now().minusDays(2).toString(),
-                                                "effectiveEndDate", LocalDate.now().plusDays(2).toString(),
+                                                "effectiveStartDate",
+                                                LocalDate.now(FIXED_CLOCK).minusDays(2).toString(),
+                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(2).toString(),
                                                 "createdByUserId", UUID.randomUUID().toString()))))
                                 .andExpect(status().isCreated());
 
@@ -84,8 +91,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "109.9900",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now().plusDays(1).toString(),
-                                                "effectiveEndDate", LocalDate.now().plusDays(4).toString(),
+                                                "effectiveStartDate", LocalDate.now(FIXED_CLOCK).plusDays(1).toString(),
+                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(4).toString(),
                                                 "createdByUserId", UUID.randomUUID().toString()))))
                                 .andExpect(status().isConflict());
         }
@@ -100,8 +107,9 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "79.9900",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now().minusDays(1).toString(),
-                                                "effectiveEndDate", LocalDate.now().plusDays(10).toString(),
+                                                "effectiveStartDate",
+                                                LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
+                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(10).toString(),
                                                 "createdByUserId", UUID.randomUUID().toString()))))
                                 .andExpect(status().isCreated())
                                 .andReturn();
@@ -115,14 +123,15 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "84.9900",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now().minusDays(1).toString(),
-                                                "effectiveEndDate", LocalDate.now().plusDays(10).toString(),
+                                                "effectiveStartDate",
+                                                LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
+                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(10).toString(),
                                                 "createdByUserId", UUID.randomUUID().toString()))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.amount").value("84.9900"));
 
                 mockMvc.perform(withAuth(get("/v1/products/{productId}/msrp/active", productId)
-                                .param("asOf", LocalDate.now().toString())))
+                                .param("asOf", LocalDate.now(FIXED_CLOCK).toString())))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.amount").value("84.9900"));
         }

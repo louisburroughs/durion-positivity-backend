@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.audit.entity;
 
+import java.time.Clock;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -25,6 +27,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Immutable audit trail entry for financial exceptions.
  * 
@@ -36,6 +42,7 @@ import lombok.NoArgsConstructor;
  * Entries are never updated or deleted - only appended with corrections.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "audit_trail_entry", indexes = {
         @Index(name = "idx_exception_type", columnList = "exception_type"),
         @Index(name = "idx_order_id", columnList = "order_id"),
@@ -50,16 +57,15 @@ import lombok.NoArgsConstructor;
 public class AuditTrailEntry {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "audit_id", updatable = false, nullable = false, columnDefinition = "UUID")
     private UUID auditId;
 
     @PrePersist
     public void onPrePersist() {
-        if (auditId == null) {
-            auditId = UUIDv7Generator.generate();
-        }
         if (timestamp == null) {
-            timestamp = Instant.now();
+            timestamp = Instant.now(Clock.systemUTC());
         }
         if (accountingStatus == null) {
             accountingStatus = AccountingStatus.PENDING_POSTING;

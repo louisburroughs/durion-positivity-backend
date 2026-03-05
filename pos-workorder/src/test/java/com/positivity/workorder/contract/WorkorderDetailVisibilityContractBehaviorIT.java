@@ -1,5 +1,9 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasSize;
@@ -59,6 +63,8 @@ import io.restassured.specification.RequestSpecification;
 @DisplayName("Workorder Detail Visibility Contract Behavior Tests (CAP:005 Story #155)")
 @Import(ContractTestConfiguration.class)
 class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -430,8 +436,8 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                                 .workorderId(workorder.getId())
                                 .workorderServiceId(service.getId())
                                 .technicianId(UUID.randomUUID())
-                                .startTime(LocalDateTime.now().minusHours(2))
-                                .endTime(LocalDateTime.now())
+                                .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(2))
+                                .endTime(LocalDateTime.now(TEST_CLOCK))
                                 .hoursWorked(new BigDecimal("2.0"))
                                 .createdBy(SYSTEM_USER_ID)
                                 .notes("Completed brake pad replacement")

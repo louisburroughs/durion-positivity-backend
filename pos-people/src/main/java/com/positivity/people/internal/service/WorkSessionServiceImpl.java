@@ -1,5 +1,7 @@
 package com.positivity.people.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.people.internal.dto.BreakDto;
 import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.entity.WorkSession;
@@ -20,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class WorkSessionServiceImpl implements WorkSessionService {
+    private final Clock clock;
+
 
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_ENDED = "ENDED";
@@ -30,7 +34,9 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     public WorkSessionServiceImpl(
             WorkSessionRepository workSessionRepository,
-            WorkSessionBreakRepository workSessionBreakRepository) {
+            WorkSessionBreakRepository workSessionBreakRepository,
+            Clock clock) {
+        this.clock = clock;
         this.workSessionRepository = Objects.requireNonNull(workSessionRepository,
                 "workSessionRepository must not be null");
         this.workSessionBreakRepository = Objects.requireNonNull(
@@ -49,7 +55,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         WorkSession session = new WorkSession();
         session.setPersonId(personId);
         session.setStatus(STATUS_ACTIVE);
-        session.setStartedAt(Instant.now());
+        session.setStartedAt(Instant.now(clock));
         session.setEndedAt(null);
         session.setActor(resolvedActor);
 
@@ -71,7 +77,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 .orElseThrow(
                         () -> new WorkSessionNotFoundException("No active session found for personId=" + personId));
 
-        Instant endedAt = Instant.now();
+        Instant endedAt = Instant.now(clock);
         session.setStatus(STATUS_ENDED);
         session.setEndedAt(endedAt);
         session.setActor(resolvedActor);
@@ -102,7 +108,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
         WorkSessionBreak breakRecord = new WorkSessionBreak();
         breakRecord.setSessionId(sessionId);
-        breakRecord.setStartedAt(Instant.now());
+        breakRecord.setStartedAt(Instant.now(clock));
         breakRecord.setEndedAt(null);
         breakRecord.setActor(resolvedActor);
 
@@ -123,7 +129,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         WorkSessionBreak activeBreak = workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId)
                 .orElseThrow(() -> new IllegalStateException("No active break found for sessionId=" + sessionId));
 
-        activeBreak.setEndedAt(Instant.now());
+        activeBreak.setEndedAt(Instant.now(clock));
         activeBreak.setActor(resolvedActor);
         WorkSessionBreak saved = workSessionBreakRepository.save(activeBreak);
         return toBreakDto(saved);

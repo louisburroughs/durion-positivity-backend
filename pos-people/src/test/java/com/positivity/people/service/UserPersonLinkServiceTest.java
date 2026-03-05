@@ -1,5 +1,8 @@
 package com.positivity.people.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.people.internal.dto.LinkUserToPersonRequest;
 import com.positivity.people.internal.dto.PersonResponse;
 import com.positivity.people.internal.dto.UserPersonLinkResponse;
@@ -34,6 +37,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class UserPersonLinkServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private UserPersonLinkRepository linkRepository;
@@ -72,7 +77,7 @@ class UserPersonLinkServiceTest {
         when(linkRepository.save(any(UserPersonLink.class))).thenAnswer(invocation -> {
             UserPersonLink link = invocation.getArgument(0);
             link.setId(UUID.randomUUID());
-            link.setCreatedAt(Instant.now());
+            link.setCreatedAt(Instant.now(TEST_CLOCK));
             return link;
         });
 

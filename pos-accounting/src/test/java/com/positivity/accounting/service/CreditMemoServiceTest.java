@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,6 +61,8 @@ import com.positivity.accounting.internal.service.GLPostingServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CreditMemoService Unit Tests")
 class CreditMemoServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Mock
         private CreditMemoRepository creditMemoRepository;
@@ -125,7 +130,7 @@ class CreditMemoServiceTest {
                                 .totalAmount(new BigDecimal("110.00"))
                                 .balanceDue(new BigDecimal("110.00"))
                                 .currency("USD")
-                                .invoiceDate(Instant.now().minusSeconds(86400)) // Yesterday
+                                .invoiceDate(Instant.now(TEST_CLOCK).minusSeconds(86400)) // Yesterday
                                 .build();
 
                 // Mock invoice response after CM applied
@@ -332,7 +337,7 @@ class CreditMemoServiceTest {
         @DisplayName("Should detect and flag prior period adjustment")
         void testCreateCreditMemo_PriorPeriodAdjustment() {
                 // Given - invoice from prior period
-                Instant priorPeriodDate = Instant.now().minusSeconds(2592000); // 30 days ago
+                Instant priorPeriodDate = Instant.now(TEST_CLOCK).minusSeconds(2592000); // 30 days ago
                 testInvoice = InvoiceDetails.builder()
                                 .invoiceId(testInvoiceId)
                                 .customerId(testCustomerId)

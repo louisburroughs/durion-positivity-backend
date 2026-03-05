@@ -1,5 +1,8 @@
 package com.positivity.location.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,6 +41,8 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @ExtendWith(MockitoExtension.class)
 class ServiceAreaServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         private static final String DOWNTOWN_AREA = "Downtown Area";
 
@@ -60,8 +65,8 @@ class ServiceAreaServiceTest {
                                                                 .countryCode("US").build(),
                                                 ServiceAreaPostalCodeValue.builder().postalCode("94110")
                                                                 .countryCode("US").build()))
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
                 when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenReturn(persisted);
 

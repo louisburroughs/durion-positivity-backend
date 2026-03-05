@@ -6,19 +6,17 @@ import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Data
 public class CarApiMake {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
     private String makeId;
     private String makeName;
     private LocalDateTime cacheTimestamp;

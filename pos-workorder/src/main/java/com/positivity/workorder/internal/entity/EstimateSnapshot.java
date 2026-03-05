@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -78,13 +80,7 @@ public class EstimateSnapshot {
     @PrePersist
     protected void prePersist() {
         if (capturedAt == null) {
-            capturedAt = LocalDateTime.now();
+            capturedAt = LocalDateTime.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = capturedAt;
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 }

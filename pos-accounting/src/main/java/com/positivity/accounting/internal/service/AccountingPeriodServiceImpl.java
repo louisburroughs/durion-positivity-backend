@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import com.positivity.accounting.service.AccountingPeriodService;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -35,6 +36,8 @@ import java.time.YearMonth;
 @RequiredArgsConstructor
 public class AccountingPeriodServiceImpl implements AccountingPeriodService {
 
+    private final Clock clock;
+
     /**
      * Get the current open accounting period ID.
      * 
@@ -42,7 +45,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
      */
     @Override
     public String getCurrentPeriodId() {
-        YearMonth currentMonth = YearMonth.now();
+        YearMonth currentMonth = YearMonth.now(clock);
         String periodId = currentMonth.toString(); // Format: YYYY-MM
         log.debug("Current accounting period: {}", periodId);
         return periodId;

@@ -1,5 +1,7 @@
 package com.positivity.people.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.internal.entity.TimeEntryAudit;
@@ -21,13 +23,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentService {
+    private final Clock clock;
+
     private final TimeEntryAdjustmentRepository adjustmentRepository;
     private final TimeEntryAuditRepository auditRepository;
     private final TimeEntryRepository timeEntryRepository;
 
     public TimeEntryAdjustmentServiceImpl(TimeEntryAdjustmentRepository adjustmentRepository,
             TimeEntryAuditRepository auditRepository,
-            TimeEntryRepository timeEntryRepository) {
+            TimeEntryRepository timeEntryRepository,
+            Clock clock) {
+        this.clock = clock;
         this.adjustmentRepository = adjustmentRepository;
         this.auditRepository = auditRepository;
         this.timeEntryRepository = timeEntryRepository;
@@ -81,7 +87,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
         adjustment.setMinutesDelta(request.getMinutesDelta());
         adjustment.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
         adjustment.setCreatedBy(request.getCreatedBy());
-        adjustment.setCreatedAt(Instant.now());
+        adjustment.setCreatedAt(Instant.now(clock));
 
         com.positivity.people.internal.entity.TimeEntryAdjustment saved = adjustmentRepository.save(adjustment);
         return new TimeEntryAdjustmentResponse(saved.getAdjustmentId(), true, "created");
@@ -126,7 +132,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 
         adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.APPROVED);
         adj.setDecidedBy(approverUserId);
-        adj.setDecidedAt(Instant.now());
+        adj.setDecidedAt(Instant.now(clock));
         adjustmentRepository.save(adj);
 
         try {

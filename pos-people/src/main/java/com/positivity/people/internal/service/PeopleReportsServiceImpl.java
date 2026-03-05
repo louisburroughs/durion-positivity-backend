@@ -1,5 +1,7 @@
 package com.positivity.people.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.client.WorkexecJobTimeClient;
 import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
@@ -32,6 +34,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class PeopleReportsServiceImpl implements PeopleReportsService {
+    private final Clock clock;
+
 
     private final TimeEntryRepository timeEntryRepository;
     private final PersonRepository personRepository;
@@ -44,7 +48,9 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
             PersonRepository personRepository,
             WorkexecJobTimeClient workexecJobTimeClient,
             LocationReferenceClient locationReferenceClient,
-            TimekeepingThresholdCache timekeepingThresholdCache) {
+            TimekeepingThresholdCache timekeepingThresholdCache,
+            Clock clock) {
+        this.clock = clock;
         this.timeEntryRepository = timeEntryRepository;
         this.personRepository = personRepository;
         this.workexecJobTimeClient = workexecJobTimeClient;
@@ -218,7 +224,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
             Instant windowEndExclusive,
             ZoneId zoneId) {
         Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
 
         for (TimeEntry entry : entries) {
             Instant rawStart = entry.getAttendanceStartAt();

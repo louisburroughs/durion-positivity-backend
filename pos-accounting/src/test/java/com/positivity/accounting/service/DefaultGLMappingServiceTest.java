@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -58,6 +61,8 @@ import com.positivity.accounting.internal.service.DefaultGLMappingServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("DefaultGLMappingServiceImpl Unit Tests")
 class DefaultGLMappingServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private DefaultGLMappingRepository repository;
@@ -102,9 +107,9 @@ class DefaultGLMappingServiceTest {
         savedMapping.setCreditAccountId(CREDIT_ACCOUNT_ID);
         savedMapping.setDescription("Default mapping for invoice creation");
         savedMapping.setActive(true);
-        savedMapping.setCreatedAt(Instant.now());
+        savedMapping.setCreatedAt(Instant.now(TEST_CLOCK));
         savedMapping.setCreatedBy("test-user");
-        savedMapping.setUpdatedAt(Instant.now());
+        savedMapping.setUpdatedAt(Instant.now(TEST_CLOCK));
         savedMapping.setModifiedBy("test-user");
 
         debitAccount = new GLAccount();
@@ -234,9 +239,9 @@ class DefaultGLMappingServiceTest {
             globalMapping.setDebitAccountId(DEBIT_ACCOUNT_ID);
             globalMapping.setCreditAccountId(CREDIT_ACCOUNT_ID);
             globalMapping.setActive(true);
-            globalMapping.setCreatedAt(Instant.now());
+            globalMapping.setCreatedAt(Instant.now(TEST_CLOCK));
             globalMapping.setCreatedBy("system");
-            globalMapping.setUpdatedAt(Instant.now());
+            globalMapping.setUpdatedAt(Instant.now(TEST_CLOCK));
             globalMapping.setModifiedBy("system");
 
             doNothing().when(glAccountService).validateAccountForPosting(any(), any());
@@ -277,9 +282,9 @@ class DefaultGLMappingServiceTest {
             updatedMapping.setCreditAccountId(CREDIT_ACCOUNT_ID);
             updatedMapping.setDescription("Updated description");
             updatedMapping.setActive(true);
-            updatedMapping.setCreatedAt(Instant.now());
+            updatedMapping.setCreatedAt(Instant.now(TEST_CLOCK));
             updatedMapping.setCreatedBy("test-user");
-            updatedMapping.setUpdatedAt(Instant.now());
+            updatedMapping.setUpdatedAt(Instant.now(TEST_CLOCK));
             updatedMapping.setModifiedBy("test-user");
 
             when(repository.findById(MAPPING_ID)).thenReturn(Optional.of(savedMapping));
@@ -511,9 +516,9 @@ class DefaultGLMappingServiceTest {
             globalMapping.setDebitAccountId(DEBIT_ACCOUNT_ID);
             globalMapping.setCreditAccountId(CREDIT_ACCOUNT_ID);
             globalMapping.setActive(true);
-            globalMapping.setCreatedAt(Instant.now());
+            globalMapping.setCreatedAt(Instant.now(TEST_CLOCK));
             globalMapping.setCreatedBy("system");
-            globalMapping.setUpdatedAt(Instant.now());
+            globalMapping.setUpdatedAt(Instant.now(TEST_CLOCK));
             globalMapping.setModifiedBy("system");
 
             when(repository.findActiveDefaultForEvent(EVENT_TYPE, null))
@@ -616,9 +621,9 @@ class DefaultGLMappingServiceTest {
             globalMapping.setDebitAccountId(DEBIT_ACCOUNT_ID);
             globalMapping.setCreditAccountId(CREDIT_ACCOUNT_ID);
             globalMapping.setActive(true);
-            globalMapping.setCreatedAt(Instant.now());
+            globalMapping.setCreatedAt(Instant.now(TEST_CLOCK));
             globalMapping.setCreatedBy("system");
-            globalMapping.setUpdatedAt(Instant.now());
+            globalMapping.setUpdatedAt(Instant.now(TEST_CLOCK));
             globalMapping.setModifiedBy("system");
 
             when(repository.findAllGlobalDefaults())

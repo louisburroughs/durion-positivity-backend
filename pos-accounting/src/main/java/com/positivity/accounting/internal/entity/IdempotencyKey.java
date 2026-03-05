@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -21,6 +23,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import org.springframework.data.annotation.CreatedDate;
 /**
  * Entity for tracking idempotency keys to prevent duplicate payment processing.
  */
@@ -42,11 +45,6 @@ public class IdempotencyKey {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-    }
-
     @Column(nullable = false, unique = true)
     private String keyValue;
 
@@ -54,6 +52,7 @@ public class IdempotencyKey {
     private UUID invoiceId;
 
     @Column(nullable = false)
+    @CreatedDate
     private Instant createdAt;
 
     @Column(nullable = false)
@@ -62,7 +61,6 @@ public class IdempotencyKey {
     public IdempotencyKey(String keyValue, UUID invoiceId, Instant expiresAt) {
         this.keyValue = keyValue;
         this.invoiceId = invoiceId;
-        this.createdAt = Instant.now();
         this.expiresAt = expiresAt;
     }
 }

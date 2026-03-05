@@ -1,22 +1,33 @@
 package com.positivity.mcp.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import org.jspecify.annotations.NonNull;
-
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.positivity.shared.id.UUIDv7Id;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "system_prompt")
 public class SystemPrompt {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(nullable = false, updatable = false)
     private UUID id;
 
@@ -27,63 +38,11 @@ public class SystemPrompt {
     private String content;
 
     @Column(nullable = false)
+    @CreatedDate
     private OffsetDateTime createdAt;
 
     @Column(nullable = false)
+    @LastModifiedDate
     private OffsetDateTime updatedAt;
 
-    @PrePersist
-    void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-        var now = OffsetDateTime.now();
-        createdAt = now;
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    void onUpdate() {
-        updatedAt = OffsetDateTime.now();
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(@NonNull UUID id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(@NonNull String name) {
-        this.name = name;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public void setContent(@NonNull String content) {
-        this.content = content;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(@NonNull OffsetDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public OffsetDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(@NonNull OffsetDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
 }

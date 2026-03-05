@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,6 +55,8 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @Slf4j
 public class WorkorderServiceImpl implements WorkorderService {
+    private final Clock clock;
+
     private static final String SYSTEM_ACTOR = "system";
 
     private final WorkorderRepository workorderRepository;
@@ -83,7 +87,9 @@ public class WorkorderServiceImpl implements WorkorderService {
             AuditEventRepository auditEventRepository,
             IdempotencyService idempotencyService,
             PromotionValidationService promotionValidationService,
-            ShopmgrOperationalContextClient shopmgrClient) {
+            ShopmgrOperationalContextClient shopmgrClient,
+            Clock clock) {
+        this.clock = clock;
         this.workorderRepository = workorderRepository;
         this.estimateRepository = estimateRepository;
         this.estimateItemRepository = estimateItemRepository;
@@ -431,7 +437,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         // Transition to APPROVED status
         workorder.setStatus(WorkorderStatus.APPROVED);
-        workorder.setApprovedAt(Instant.now());
+        workorder.setApprovedAt(Instant.now(clock));
         workorder.setApprovalId(customerId);
         workorder.setSignatureData(signatureData);
         workorder.setSignatureMimeType(signatureMimeType);
@@ -507,7 +513,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         WorkCompletedEvent event = WorkCompletedEvent.builder()
                 .eventId(eventId)
                 .eventType("WorkCompleted")
-                .eventTimestamp(Instant.now())
+                .eventTimestamp(Instant.now(clock))
                 .sourceDomain("workexec")
                 .idempotencyKey(idempotencyKey)
                 .payload(payload)
@@ -657,7 +663,7 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .eventType("AssignmentContextUpdated")
                 .userId("System:ShopManagementService")
                 .details(details)
-                .eventTimestamp(Instant.now())
+                .eventTimestamp(Instant.now(clock))
                 .build();
         auditEventRepository.save(auditEvent);
 
@@ -724,7 +730,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         stateMachine.startWorkorder(workorderId, actorUserId, transitionReason);
 
         String version = UUID.randomUUID().toString();
-        Instant startedAt = Instant.now();
+        Instant startedAt = Instant.now(clock);
         workorder.setOperationalContextVersion(version);
         workorder.setWorkStartedAt(startedAt);
         Workorder saved = workorderRepository.save(workorder);

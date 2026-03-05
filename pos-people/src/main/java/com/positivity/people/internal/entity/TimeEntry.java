@@ -18,6 +18,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry", indexes = {
@@ -28,16 +30,10 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class TimeEntry {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "time_entry_id", columnDefinition = "UUID", nullable = false)
     private UUID timeEntryId;
-
-    @PrePersist
-    public void generateId() {
-        if (timeEntryId == null) {
-            timeEntryId = UUIDv7Generator.generate();
-        }
-    }
-
     @Column(name = "person_id")
     private String personId;
 
@@ -181,14 +177,12 @@ public class TimeEntry {
     }
 
     public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+}
 
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+}
 }

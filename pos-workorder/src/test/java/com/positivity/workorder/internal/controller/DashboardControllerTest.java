@@ -1,5 +1,8 @@
 package com.positivity.workorder.internal.controller;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -43,135 +46,136 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
 class DashboardControllerTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    private static final String DASHBOARD_URL = "/v1/workexec/dashboard/today";
+        private static final String DASHBOARD_URL = "/v1/workexec/dashboard/today";
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @Autowired
-    @SuppressWarnings("unused")
-    private ObjectMapper objectMapper;
+        @Autowired
+        @SuppressWarnings("unused")
+        private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private DashboardService dashboardService;
+        @MockitoBean
+        private DashboardService dashboardService;
 
-    // -----------------------------------------------------------------------
-    // AC-1 (controller): GET with locationId returns 200 OK with DashboardResponse
-    // body
-    // -----------------------------------------------------------------------
+        // -----------------------------------------------------------------------
+        // AC-1 (controller): GET with locationId returns 200 OK with DashboardResponse
+        // body
+        // -----------------------------------------------------------------------
 
-    @Test
-    @DisplayName("AC-1: GET /today?locationId=LOC-123 returns 200 OK with non-null response body")
-    void getDashboard_withLocationId_returns200() throws Exception {
-        // Arrange
-        // Issue CAP-142: AC-1 — happy path, mock service returns structured response
-        DashboardResponse expectedResponse = DashboardResponse.builder()
-                .locationId("LOC-123")
-                .date(LocalDate.now())
-                .workorders(List.of())
-                .mechanics(List.of())
-                .bays(List.of())
-                .conflicts(List.of())
-                .lastRefreshed(Instant.now())
-                .build();
-        when(dashboardService.getDashboard(eq("LOC-123"), any(LocalDate.class)))
-                .thenReturn(expectedResponse);
+        @Test
+        @DisplayName("AC-1: GET /today?locationId=LOC-123 returns 200 OK with non-null response body")
+        void getDashboard_withLocationId_returns200() throws Exception {
+                // Arrange
+                // Issue CAP-142: AC-1 — happy path, mock service returns structured response
+                DashboardResponse expectedResponse = DashboardResponse.builder()
+                                .locationId("LOC-123")
+                                .date(LocalDate.now(TE
+                                .workorders(List.of())
+                                .mechanics(List.of())
+                                .bays(List.of())
+                                .conflicts(List.of())
+                                .lastRefreshed(Instant.now(TEST_CLOCK))
+                                .build();
+                when(dashboardService.getDashboard(eq("LOC-123"), any(LocalDate.class)))
+                                .thenReturn(expectedResponse);
 
-        // Act + Assert
-        mockMvc.perform(get(DASHBOARD_URL).param("locationId", "LOC-123"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.locationId").value("LOC-123"))
-                .andExpect(jsonPath("$.lastRefreshed").exists());
-    }
+                // Act + Assert
+                mockMvc.perform(get(DASHBOARD_URL).param("locationId", "LOC-123"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.locationId").value("LOC-123"))
+                                .andExpect(jsonPath("$.lastRefreshed").exists());
+        }
 
-    // -----------------------------------------------------------------------
-    // Validation: missing locationId → 400 Bad Request
-    // -----------------------------------------------------------------------
+        // -----------------------------------------------------------------------
+        // Validation: missing locationId → 400 Bad Request
+        // -----------------------------------------------------------------------
 
-    @Test
-    @DisplayName("Validation: GET /today without locationId returns 400 Bad Request")
-    void getDashboard_missingLocationId_returns400() throws Exception {
-        // Issue CAP-142: missing required @RequestParam → Spring MVC 400
-        mockMvc.perform(get(DASHBOARD_URL))
-                .andExpect(status().isBadRequest());
-    }
+        @Test
+        @DisplayName("Validation: GET /today without locationId returns 400 Bad Request")
+        void getDashboard_missingLocationId_returns400() throws Exception {
+                // Issue CAP-142: missing required @RequestParam → Spring MVC 400
+                mockMvc.perform(get(DASHBOARD_URL))
+                                .andExpect(status().isBadRequest());
+        }
 
-    // -----------------------------------------------------------------------
-    // AC-5 (controller): explicit date param is forwarded to service
-    // -----------------------------------------------------------------------
+        // -----------------------------------------------------------------------
+        // AC-5 (controller): explicit date param is forwarded to service
+        // -----------------------------------------------------------------------
 
-    @Test
-    @DisplayName("AC-5: ?date=2026-03-01 is parsed and forwarded to DashboardService")
-    void getDashboard_withDateParam_passesDateToService() throws Exception {
-        // Arrange
-        // Issue CAP-142: AC-5 — explicit date is forwarded correctly
-        DashboardResponse stub = DashboardResponse.builder()
-                .locationId("LOC-123")
-                .date(LocalDate.of(2026, 3, 1))
-                .workorders(List.of())
-                .mechanics(List.of())
-                .bays(List.of())
-                .conflicts(List.of())
-                .lastRefreshed(Instant.now())
-                .build();
-        when(dashboardService.getDashboard(any(), any(LocalDate.class))).thenReturn(stub);
+        @Test
+        @DisplayName("AC-5: ?date=2026-03-01 is parsed and forwarded to DashboardService")
+        void getDashboard_withDateParam_passesDateToService() throws Exception {
+                // Arrange
+                // Issue CAP-142: AC-5 — explicit date is forwarded correctly
+                DashboardResponse stub = DashboardResponse.builder()
+                                .locationId("LOC-123")
+                                .date(LocalDate.of(2026, 3, 1))
+                                .workorders(List.of())
+                                .mechanics(List.of())
+                                .bays(List.of())
+                                .conflicts(List.of())
+                                .lastRefreshed(Instant.now(TEST_CLOCK))
+                                .build();
+                when(dashboardService.getDashboard(any(), any(LocalDate.class))).thenReturn(stub);
 
-        // Act
-        mockMvc.perform(get(DASHBOARD_URL)
-                .param("locationId", "LOC-123")
-                .param("date", "2026-03-01"))
-                .andExpect(status().isOk());
+                // Act
+                mockMvc.perform(get(DASHBOARD_URL)
+                                .param("locationId", "LOC-123")
+                                .param("date", "2026-03-01"))
+                                .andExpect(status().isOk());
 
-        // Assert: service received the exact parsed date
-        verify(dashboardService).getDashboard(eq("LOC-123"), eq(LocalDate.of(2026, 3, 1)));
-    }
+                // Assert: service received the exact parsed date
+                verify(dashboardService).getDashboard(eq("LOC-123"), eq(LocalDate.of(2026, 3, 1)));
+        }
 
-    // -----------------------------------------------------------------------
-    // AC-5 (controller): no date param → service receives LocalDate.now()
-    // -----------------------------------------------------------------------
+        // -----------------------------------------------------------------------
+        // AC-5 (controller): no date param → service receives LocalDate.now(T
+        // -----------------------------------------------------------------------
 
-    @Test
-    @DisplayName("AC-5: No date param defaults to today (LocalDate.now()) when calling DashboardService")
-    void getDashboard_withDefaultDate_usesToday() throws Exception {
-        // Arrange
-        // Issue CAP-142: AC-5 — default date is today
-        LocalDate today = LocalDate.now();
-        DashboardResponse stub = DashboardResponse.builder()
-                .locationId("LOC-123")
-                .date(today)
-                .workorders(List.of())
-                .mechanics(List.of())
-                .bays(List.of())
-                .conflicts(List.of())
-                .lastRefreshed(Instant.now())
-                .build();
-        when(dashboardService.getDashboard(any(), any(LocalDate.class))).thenReturn(stub);
+        @Test
+        @DisplayName("AC-5: No date param defaults to today (LocalDate.now(TEST_CLOCK)) when calling Dashboar
+        void getDashboard_withDefaultDate_usesToday() throws Exception {
+                // Arrange
+                // Issue CAP-142: AC-5 — default date is today
+                LocalDate today = LocalDate.now(TE
+                DashboardResponse stub = DashboardResponse.builder()
+                                .locationId("LOC-123")
+                                .date(today)
+                                .workorders(List.of())
+                                .mechanics(List.of())
+                                .bays(List.of())
+                                .conflicts(List.of())
+                                .lastRefreshed(Instant.now(TEST_CLOCK))
+                                .build();
+                when(dashboardService.getDashboard(any(), any(LocalDate.class))).thenReturn(stub);
 
-        // Act
-        mockMvc.perform(get(DASHBOARD_URL).param("locationId", "LOC-123"))
-                .andExpect(status().isOk());
+                // Act
+                mockMvc.perform(get(DASHBOARD_URL).param("locationId", "LOC-123"))
+                                .andExpect(status().isOk());
 
-        // Assert: service receives today's date (no date param → LocalDate.now())
-        verify(dashboardService).getDashboard(eq("LOC-123"), eq(today));
-    }
+                // Assert: service receives today's date (no date param → LocalDate.now(TE
+                verify(dashboardService).getDashboard(eq("LOC-123"), eq(today));
+        }
 
-    // -----------------------------------------------------------------------
-    // F1: non-UUID locationId → 400 Bad Request (GlobalExceptionHandler maps
-    // IllegalArgumentException → 400)
-    // -----------------------------------------------------------------------
+        // -----------------------------------------------------------------------
+        // F1: non-UUID locationId → 400 Bad Request (GlobalExceptionHandler maps
+        // IllegalArgumentException → 400)
+        // -----------------------------------------------------------------------
 
-    @Test
-    @DisplayName("GET /today with non-UUID locationId returns 400 Bad Request")
-    void getDashboard_nonUuidLocationId_returns400() throws Exception {
-        // Arrange — service throws IllegalArgumentException for non-UUID locationId
-        when(dashboardService.getDashboard(eq("not-a-uuid"), any()))
-                .thenThrow(new IllegalArgumentException("locationId is not a valid UUID: not-a-uuid"));
+        @Test
+        @DisplayName("GET /today with non-UUID locationId returns 400 Bad Request")
+        void getDashboard_nonUuidLocationId_returns400() throws Exception {
+                // Arrange — service throws IllegalArgumentException for non-UUID locationId
+                when(dashboardService.getDashboard(eq("not-a-uuid"), any()))
+                                .thenThrow(new IllegalArgumentException("locationId is not a valid UUID: not-a-uuid"));
 
-        // Act & Assert
-        mockMvc.perform(get("/v1/workexec/dashboard/today")
-                .param("locationId", "not-a-uuid")
-                .with(user("user").authorities(new SimpleGrantedAuthority("workorder:dashboard:view"))))
-                .andExpect(status().isBadRequest());
-    }
+                // Act & Assert
+                mockMvc.perform(get("/v1/workexec/dashboard/today")
+                                .param("locationId", "not-a-uuid")
+                                .with(user("user").authorities(new SimpleGrantedAuthority("workorder:dashboard:view"))))
+                                .andExpect(status().isBadRequest());
+        }
 }

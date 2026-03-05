@@ -2,6 +2,8 @@ package com.positivity.accounting.internal.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -44,6 +46,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 public class AuditTrailServiceImpl implements AuditTrailService {
 
+        private final Clock clock;
         private final AuditTrailEntryRepository auditRepository;
         private final PriceOverrideAuthorizationService overrideAuthService;
         private final RefundAuthorizationService refundAuthService;
@@ -81,6 +84,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
                                         .actorRole(request.getActorRole())
                                         .reasonDenied(authResult.getMessage())
                                         .policyVersion(authResult.getPolicyVersion())
+                                        .timestamp(Instant.now(clock))
                                         .build());
 
                         throw new AuditTrailAuthorizationException(authResult.getMessage());
@@ -170,6 +174,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
                                         .actorRole(request.getActorRole())
                                         .reasonDenied(authResult.getMessage())
                                         .policyVersion(authResult.getPolicyVersion())
+                                        .timestamp(Instant.now(clock))
                                         .build());
 
                         throw new AuditTrailAuthorizationException(authResult.getMessage());

@@ -1,5 +1,8 @@
 package com.positivity.shopmanager.cap140;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.Mockito.verify;
 
 import com.positivity.shopmanager.internal.config.WorkorderStatusChangedEventListener;
@@ -25,6 +28,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
  */
 @ExtendWith(MockitoExtension.class)
 class WorkorderStatusChangedEventListenerTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     WorkorderStatusEventService service;
@@ -43,7 +48,7 @@ class WorkorderStatusChangedEventListenerTest {
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 "DRAFT",
-                Instant.now(),
+                Instant.now(TEST_CLOCK),
                 UUID.randomUUID());
 
         // Act

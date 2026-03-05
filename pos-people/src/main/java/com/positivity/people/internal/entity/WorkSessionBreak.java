@@ -13,12 +13,16 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "work_session_break")
 public class WorkSessionBreak {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "break_id", nullable = false, updatable = false, columnDefinition = "uuid")
     private UUID breakId;
 
@@ -44,9 +48,6 @@ public class WorkSessionBreak {
 
     @PrePersist
     void ensureId() {
-        if (breakId == null) {
-            breakId = UUIDv7Generator.generate();
-        }
     }
 
     public UUID getBreakId() {
@@ -94,14 +95,12 @@ public class WorkSessionBreak {
     }
 
     public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+}
 
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+}
 }

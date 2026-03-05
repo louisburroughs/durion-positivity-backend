@@ -1,5 +1,9 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 
@@ -47,6 +51,8 @@ import io.restassured.response.Response;
 @DisplayName("Labor Tracking Contract Behavior Tests (CAP:005 Story #159)")
 @Import(ContractTestConfiguration.class)
 class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -406,11 +412,11 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                                 .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
-                                .startTime(LocalDateTime.now().minusHours(1))
+                                .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .hoursWorked(BigDecimal.ZERO)
                                 .notes("Test active session")
                                 .createdBy(SYSTEM_USER_ID)
-                                .createdAt(java.time.Instant.now())
+                                .createdAt(java.time.Instant.now(TEST_CLOCK))
                                 .build();
                 laborEntryRepository.save(entry);
 
@@ -433,12 +439,12 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                                 .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
-                                .startTime(LocalDateTime.now().minusHours(3))
-                                .endTime(LocalDateTime.now().minusHours(1))
+                                .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(3))
+                                .endTime(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .hoursWorked(BigDecimal.valueOf(2.0))
                                 .notes("Test stopped session")
                                 .createdBy(SYSTEM_USER_ID)
-                                .createdAt(java.time.Instant.now())
+                                .createdAt(java.time.Instant.now(TEST_CLOCK))
                                 .build();
                 laborEntryRepository.save(entry);
 
@@ -461,12 +467,12 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                                 .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
-                                .startTime(LocalDateTime.now().minusDays(2))
-                                .endTime(LocalDateTime.now().minusDays(2).plusHours(2))
+                                .startTime(LocalDateTime.now(TEST_CLOCK).minusDays(2))
+                                .endTime(LocalDateTime.now(TEST_CLOCK).minusDays(2).plusHours(2))
                                 .hoursWorked(BigDecimal.valueOf(2.0))
                                 .notes("First session")
                                 .createdBy(SYSTEM_USER_ID)
-                                .createdAt(java.time.Instant.now())
+                                .createdAt(java.time.Instant.now(TEST_CLOCK))
                                 .build();
                 laborEntryRepository.save(entry1);
 
@@ -476,12 +482,12 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                                 .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
-                                .startTime(LocalDateTime.now().minusDays(1))
-                                .endTime(LocalDateTime.now().minusDays(1).plusHours(3))
+                                .startTime(LocalDateTime.now(TEST_CLOCK).minusDays(1))
+                                .endTime(LocalDateTime.now(TEST_CLOCK).minusDays(1).plusHours(3))
                                 .hoursWorked(BigDecimal.valueOf(3.0))
                                 .notes("Second session")
                                 .createdBy(SYSTEM_USER_ID)
-                                .createdAt(java.time.Instant.now())
+                                .createdAt(java.time.Instant.now(TEST_CLOCK))
                                 .build();
                 laborEntryRepository.save(entry2);
 

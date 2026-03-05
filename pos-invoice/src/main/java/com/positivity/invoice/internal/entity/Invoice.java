@@ -6,6 +6,7 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import org.jspecify.annotations.NonNull;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -19,8 +20,7 @@ import jakarta.persistence.Version;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
+import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -30,6 +30,7 @@ import java.util.UUID;
 
 @Entity
 @EntityListeners(AuditingEntityListener.class)
+@Data
 @Table(name = "invoices")
 public class Invoice {
 
@@ -156,210 +157,4 @@ public class Invoice {
         adjustment.setInvoice(this);
     }
 
-    @Nullable
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(@Nullable UUID id) {
-        this.id = id;
-    }
-
-    @Nullable
-    public String getInvoiceNumber() {
-        return invoiceNumber;
-    }
-
-    public void setInvoiceNumber(@Nullable String invoiceNumber) {
-        this.invoiceNumber = invoiceNumber;
-    }
-
-    @NonNull
-    public UUID getWorkorderId() {
-        return workorderId;
-    }
-
-    public void setWorkorderId(@NonNull UUID workorderId) {
-        this.workorderId = workorderId;
-    }
-
-    @Nullable
-    public UUID getEstimateId() {
-        return estimateId;
-    }
-
-    public void setEstimateId(@Nullable UUID estimateId) {
-        this.estimateId = estimateId;
-    }
-
-    @Nullable
-    public UUID getApprovalId() {
-        return approvalId;
-    }
-
-    public void setApprovalId(@Nullable UUID approvalId) {
-        this.approvalId = approvalId;
-    }
-
-    @Nullable
-    public String getPartyId() {
-        return partyId;
-    }
-
-    public void setPartyId(@Nullable String partyId) {
-        this.partyId = partyId;
-    }
-
-    @NonNull
-    public InvoiceStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(@NonNull InvoiceStatus status) {
-        this.status = status;
-    }
-
-    @NonNull
-    public BigDecimal getSubtotal() {
-        return subtotal;
-    }
-
-    public void setSubtotal(@NonNull BigDecimal subtotal) {
-        this.subtotal = subtotal;
-    }
-
-    @NonNull
-    public BigDecimal getTax() {
-        return tax;
-    }
-
-    public void setTax(@NonNull BigDecimal tax) {
-        this.tax = tax;
-    }
-
-    @NonNull
-    public BigDecimal getTotal() {
-        return total;
-    }
-
-    public void setTotal(@NonNull BigDecimal total) {
-        this.total = total;
-    }
-
-    @NonNull
-    public BigDecimal getAdjustmentsAmount() {
-        return adjustmentsAmount;
-    }
-
-    public void setAdjustmentsAmount(@NonNull BigDecimal adjustmentsAmount) {
-        this.adjustmentsAmount = adjustmentsAmount;
-    }
-
-    @NonNull
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(@NonNull Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    @NonNull
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(@NonNull Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    @Nullable
-    public Instant getFinalizedAt() {
-        return finalizedAt;
-    }
-
-    public void setFinalizedAt(@Nullable Instant finalizedAt) {
-        this.finalizedAt = finalizedAt;
-    }
-
-    @Nullable
-    public String getFinalizedBy() {
-        return finalizedBy;
-    }
-
-    public void setFinalizedBy(@Nullable String finalizedBy) {
-        this.finalizedBy = finalizedBy;
-    }
-
-    @Nullable
-    public UUID getGlEntryId() {
-        return glEntryId;
-    }
-
-    public void setGlEntryId(@Nullable UUID glEntryId) {
-        this.glEntryId = glEntryId;
-    }
-
-    @Nullable
-    public Instant getRevertedAt() {
-        return revertedAt;
-    }
-
-    public void setRevertedAt(@Nullable Instant revertedAt) {
-        this.revertedAt = revertedAt;
-    }
-
-    @Nullable
-    public String getReversionReason() {
-        return reversionReason;
-    }
-
-    public void setReversionReason(@Nullable String reversionReason) {
-        this.reversionReason = reversionReason;
-    }
-
-    @Nullable
-    public String getRevertedBy() {
-        return revertedBy;
-    }
-
-    public void setRevertedBy(@Nullable String revertedBy) {
-        this.revertedBy = revertedBy;
-    }
-
-    @NonNull
-    public Integer getVersion() {
-        return version;
-    }
-
-    public void setVersion(@NonNull Integer version) {
-        this.version = version;
-    }
-
-    @NonNull
-    public List<InvoiceItem> getItems() {
-        return items;
-    }
-
-    public void setItems(@NonNull List<InvoiceItem> items) {
-        this.items = items;
-    }
-
-    @NonNull
-    public List<InvoiceAdjustment> getAdjustmentEntries() {
-        return adjustmentEntries;
-    }
-
-    public void setAdjustmentEntries(@NonNull List<InvoiceAdjustment> adjustments) {
-        this.adjustmentEntries = adjustments;
-    }
-
-    @NonNull
-    public BigDecimal getAdjustments() {
-        return adjustments;
-    }
-
-    public void setAdjustments(@NonNull BigDecimal adjustments) {
-        this.adjustments = adjustments;
-    }
 }

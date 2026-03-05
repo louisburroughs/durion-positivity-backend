@@ -1,5 +1,7 @@
 package com.positivity.people.internal.service;
 
+import java.time.Clock;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.people.internal.dto.CreateEmployeeRequest;
@@ -33,6 +35,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class EmployeeServiceImpl implements EmployeeService {
+    private final Clock clock;
+
     private static final String SYSTEM_ACTOR = "system";
 
     private final PersonRepository personRepository;
@@ -95,7 +99,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getContactInfo()));
 
         if (previousStatus != request.getStatus()) {
-            entity.setStatusEffectiveAt(Instant.now());
+            entity.setStatusEffectiveAt(Instant.now(clock));
         }
 
         Person saved = personRepository.save(entity);
@@ -118,7 +122,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
 
         entity.setStatus(EmployeeStatus.DISABLED);
-        entity.setStatusEffectiveAt(Instant.now());
+        entity.setStatusEffectiveAt(Instant.now(clock));
         Person saved = personRepository.save(entity);
 
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
@@ -216,7 +220,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         entity.setTerminationDate(terminationDate);
 
         if (entity.getStatusEffectiveAt() == null) {
-            entity.setStatusEffectiveAt(Instant.now());
+            entity.setStatusEffectiveAt(Instant.now(clock));
         }
 
         if (contactInfo != null) {
@@ -317,7 +321,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         retry.setActorId(actorId);
         retry.setFailureReason(failureReason != null ? failureReason : "unknown");
         retry.setAttempts(0);
-        retry.setNextAttemptAt(Instant.now().plusSeconds(300));
+        retry.setNextAttemptAt(Instant.now(clock).plusSeconds(300));
         offboardingRetryRepository.save(retry);
     }
 

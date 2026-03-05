@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -58,6 +61,8 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("WipService Unit Tests")
 class WipServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         private static final String LOCATION_1 = "11111111-1111-1111-1111-111111111111";
         private static final String LOCATION_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -118,7 +123,7 @@ class WipServiceImplTest {
                                                                 .workorderId(invocation.getArgument(0))
                                                                 .fromStatus(WorkorderStatus.ASSIGNED)
                                                                 .toStatus(WorkorderStatus.AWAITING_PARTS)
-                                                                .transitionedAt(Instant.now())
+                                                                .transitionedAt(Instant.now(TEST_CLOCK))
                                                                 .transitionedBy("system")
                                                                 .reason("parts delayed")
                                                                 .build()));
@@ -460,7 +465,7 @@ class WipServiceImplTest {
                                 .customerId(UUID.randomUUID())
                                 .vehicleId(UUID.randomUUID())
                                 .status(status)
-                                .updatedAt(LocalDateTime.now())
+                                .updatedAt(LocalDateTime.now(TEST_CLOCK))
                                 .build();
         }
 
@@ -471,7 +476,7 @@ class WipServiceImplTest {
                                 .customerId(UUID.randomUUID())
                                 .vehicleId(UUID.randomUUID())
                                 .status(WorkorderStatus.AWAITING_PARTS)
-                                .updatedAt(LocalDateTime.now())
+                                .updatedAt(LocalDateTime.now(TEST_CLOCK))
                                 .build();
         }
 

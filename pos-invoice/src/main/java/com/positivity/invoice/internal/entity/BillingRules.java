@@ -7,8 +7,7 @@ import jakarta.persistence.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
+import lombok.Data;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -20,6 +19,7 @@ import java.util.UUID;
  */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
+@Data
 @Table(name = "billing_rules", indexes = {
         @Index(name = "idx_billing_rules_party_id", columnList = "party_id", unique = true)
 })
@@ -63,94 +63,5 @@ public class BillingRules {
     @Column(name = "updated_by", nullable = false, length = 36)
     private String updatedBy;
 
-    // Getters and Setters
-
-    @Nullable
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(@Nullable UUID id) {
-        this.id = id;
-    }
-
-    @NonNull
-    public String getPartyId() {
-        return partyId;
-    }
-
-    public void setPartyId(@NonNull String partyId) {
-        this.partyId = partyId;
-    }
-
-    public boolean isPurchaseOrderRequired() {
-        return purchaseOrderRequired;
-    }
-
-    public void setPurchaseOrderRequired(boolean purchaseOrderRequired) {
-        this.purchaseOrderRequired = purchaseOrderRequired;
-    }
-
-    @NonNull
-    public String getPaymentTermsCode() {
-        return paymentTermsCode;
-    }
-
-    public void setPaymentTermsCode(@NonNull String paymentTermsCode) {
-        this.paymentTermsCode = paymentTermsCode;
-    }
-
-    @NonNull
-    public InvoiceDeliveryMethod getInvoiceDeliveryMethod() {
-        return invoiceDeliveryMethod;
-    }
-
-    public void setInvoiceDeliveryMethod(@NonNull InvoiceDeliveryMethod invoiceDeliveryMethod) {
-        this.invoiceDeliveryMethod = invoiceDeliveryMethod;
-    }
-
-    @NonNull
-    public InvoiceGroupingStrategy getInvoiceGroupingStrategy() {
-        return invoiceGroupingStrategy;
-    }
-
-    public void setInvoiceGroupingStrategy(@NonNull InvoiceGroupingStrategy invoiceGroupingStrategy) {
-        this.invoiceGroupingStrategy = invoiceGroupingStrategy;
-    }
-
-    @NonNull
-    public Integer getVersion() {
-        return version;
-    }
-
-    public void setVersion(@NonNull Integer version) {
-        this.version = version;
-    }
-
-    @NonNull
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(@NonNull Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    @NonNull
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(@NonNull Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    @NonNull
-    public String getUpdatedBy() {
-        return updatedBy;
-    }
-
-    public void setUpdatedBy(@NonNull String updatedBy) {
-        this.updatedBy = updatedBy;
-    }
 }
+

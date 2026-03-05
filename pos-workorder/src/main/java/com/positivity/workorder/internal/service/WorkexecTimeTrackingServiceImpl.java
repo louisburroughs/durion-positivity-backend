@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkexecJobTimeTotalResponse;
 import com.positivity.workorder.internal.dto.WorkexecLaborPerformedRequest;
@@ -42,6 +44,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingService {
+    private final Clock clock;
+
 
         private static final String SYSTEM_USER_ID = "system";
         private static final UUID UNSPECIFIED_WORKORDER_ITEM_ID = UUID
@@ -181,7 +185,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                 .hoursWorked(quantity.setScale(2, RoundingMode.HALF_UP))
                                 .notes(notes)
                                 .createdBy(SYSTEM_USER_ID)
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(clock))
                                 .build();
 
                 WorkorderLaborEntry saved = laborEntryRepository.save(entry);
@@ -256,7 +260,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                 .hoursWorked(BigDecimal.ZERO)
                                 .notes(request.getLaborCode())
                                 .createdBy(SecurityContextHelper.getCurrentUsername().orElse(SYSTEM_USER_ID))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(clock))
                                 .build();
 
                 WorkorderLaborEntry saved = laborEntryRepository.save(entry);

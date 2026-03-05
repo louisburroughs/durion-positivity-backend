@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -64,19 +66,15 @@ public class DefaultGLMapping {
 
     @PrePersist
     public void onPrePersist() {
-        Instant now = Instant.now();
         String currentUser = SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";
-        this.createdAt = now;
-        this.updatedAt = now;
-        this.createdBy = currentUser;
+this.createdBy = currentUser;
         this.modifiedBy = currentUser;
     }
 
     @PreUpdate
     public void onPreUpdate() {
-        this.updatedAt = Instant.now();
         String currentUser = SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";

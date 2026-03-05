@@ -12,12 +12,15 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.util.UUID;
 
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_adjustment")
 public class TimeEntryAdjustment {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "adjustment_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID adjustmentId;
 
@@ -59,14 +62,6 @@ public class TimeEntryAdjustment {
 
     @Column(name = "decided_at")
     private Instant decidedAt;
-
-    @PrePersist
-    public void generateIdAndTimestamp() {
-        if (adjustmentId == null) {
-            adjustmentId = UUIDv7Generator.generate();
-        }
-    }
-
     // Getters and setters
     public UUID getAdjustmentId() {
         return adjustmentId;
@@ -145,16 +140,14 @@ public class TimeEntryAdjustment {
     }
 
     public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+}
 
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+}
 
     public String getDecidedBy() {
         return decidedBy;

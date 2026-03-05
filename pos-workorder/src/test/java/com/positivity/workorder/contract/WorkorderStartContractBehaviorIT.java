@@ -1,5 +1,9 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
@@ -49,6 +53,8 @@ import io.restassured.http.ContentType;
 @DisplayName("Workorder Start Contract Behavior Tests (CAP:005 Story #160)")
 @Import(ContractTestConfiguration.class)
 class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -281,9 +287,9 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now().minusHours(1))
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .approvedBy(testCustomerId)
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .subtotal(new BigDecimal("100.00"))
                                 .taxAmount(new BigDecimal("8.00"))
                                 .total(new BigDecimal("108.00"))
@@ -303,7 +309,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
                                 .lineTotal(new BigDecimal("100.00"))
                                 .taxCode("LABOR_TAX")
                                 .approvalStatus(ApprovalStatus.APPROVED)
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .createdById("test-user")
                                 .build();
                 estimateItemRepository.save(item);
@@ -351,8 +357,8 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
                 ChangeRequest changeRequest = ChangeRequest.builder()
                                 .workorderId(workorderId)
                                 .requestedByUserId(SYSTEM_USER_ID)
-                                .requestedAt(LocalDateTime.now())
-                                .updatedAt(LocalDateTime.now())
+                                .requestedAt(LocalDateTime.now(TEST_CLOCK))
+                                .updatedAt(LocalDateTime.now(TEST_CLOCK))
                                 .status(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
                                 .description("Additional brake work required")
                                 .isEmergencyException(false)

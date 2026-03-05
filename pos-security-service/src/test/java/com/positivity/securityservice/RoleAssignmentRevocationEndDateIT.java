@@ -1,5 +1,9 @@
 package com.positivity.securityservice;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,6 +39,8 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 @DisplayName("Role Assignment Revocation EndDate Parameter Tests")
 @Transactional
 public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     private static final String TEST_CORRELATION_ID = "test-correlation-id-revocation";
 
@@ -71,7 +77,7 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
         testAssignment.setUser(testUser);
         testAssignment.setRole(testRole);
         testAssignment.setScopeType(ScopeType.GLOBAL);
-        testAssignment.setEffectiveStartDate(LocalDateTime.now().minusDays(1));
+        testAssignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
         testAssignment.setCreatedBy(TEST_USER);
         testAssignment = roleAssignmentRepository.save(testAssignment);
     }
@@ -86,7 +92,7 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
 
         // Then: Assignment should have effectiveEndDate set to approximately now
         RoleAssignment revoked = roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(TEST_CLOCK);
 
         // Verify endDate is set and is within last minute (allowing for test execution
         // time)
@@ -132,7 +138,7 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
     @DisplayName("Should return 400 for endDate in the future")
     void testRevokeWithFutureEndDate() throws Exception {
         // Given: A future end date
-        LocalDateTime futureDate = LocalDateTime.now().plusDays(1);
+        LocalDateTime futureDate = LocalDateTime.now(TEST_CLOCK).plusDays(1);
         String endDateParam = futureDate.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
         // When/Then: Should return 400 Bad Request (as per service validation)

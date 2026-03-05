@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
 import com.positivity.accounting.internal.audit.entity.RefundPolicyConfig;
 import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
@@ -22,6 +24,8 @@ import java.time.Instant;
 @RequiredArgsConstructor
 @Slf4j
 public class DataInitializationServiceImpl implements CommandLineRunner, DataInitializationService {
+    private final Clock clock;
+
 
     private final OverridePolicyThresholdRepository policyRepository;
     private final RefundPolicyConfigRepository refundPolicyRepository;
@@ -48,7 +52,7 @@ public class DataInitializationServiceImpl implements CommandLineRunner, DataIni
                 .maxAbsoluteAmount(BigDecimal.valueOf(50.00))
                 .maxPercentOff(BigDecimal.valueOf(10.00))
                 .version("1.0")
-                .effectiveDate(Instant.now())
+                .effectiveDate(Instant.now(clock))
                 .active(true)
                 .build();
         policyRepository.save(serviceWriterPolicy);
@@ -59,7 +63,7 @@ public class DataInitializationServiceImpl implements CommandLineRunner, DataIni
                 .maxAbsoluteAmount(BigDecimal.valueOf(500.00))
                 .maxPercentOff(BigDecimal.valueOf(25.00))
                 .version("1.0")
-                .effectiveDate(Instant.now())
+                .effectiveDate(Instant.now(clock))
                 .active(true)
                 .build();
         policyRepository.save(managerPolicy);
@@ -70,7 +74,7 @@ public class DataInitializationServiceImpl implements CommandLineRunner, DataIni
                 .maxAbsoluteAmount(BigDecimal.valueOf(10000.00))
                 .maxPercentOff(BigDecimal.valueOf(100.00))
                 .version("1.0")
-                .effectiveDate(Instant.now())
+                .effectiveDate(Instant.now(clock))
                 .active(true)
                 .build();
         policyRepository.save(adminPolicy);

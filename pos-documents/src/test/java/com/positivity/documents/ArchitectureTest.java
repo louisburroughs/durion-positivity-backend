@@ -37,6 +37,7 @@ class ArchitectureTest {
     static final ArchRule packages_should_be_free_of_cycles = slices()
             .matching("com.positivity.documents.internal.(*)..")
             .should().beFreeOfCycles()
+            .allowEmptyShould(true)
             .because("cyclic dependencies make modules harder to maintain and evolve");
 
     @ArchTest

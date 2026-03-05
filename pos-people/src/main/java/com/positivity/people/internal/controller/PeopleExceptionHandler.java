@@ -1,5 +1,8 @@
 package com.positivity.people.internal.controller;
 
+import java.time.Clock;
+import java.time.Instant;
+
 import com.positivity.people.internal.client.SecurityServiceException;
 import com.positivity.people.internal.client.WorkexecClientException;
 import com.positivity.people.internal.exception.NotFoundException;
@@ -18,10 +21,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
+import lombok.RequiredArgsConstructor;
 
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class PeopleExceptionHandler {
+    private final Clock clock;
 
     private static final String TIMESTAMP_PROPERTY = "timestamp";
 
@@ -30,7 +35,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -39,7 +44,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -48,7 +53,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -57,7 +62,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -66,7 +71,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -75,7 +80,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -84,7 +89,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -93,7 +98,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -102,7 +107,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -111,7 +116,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.FORBIDDEN,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -120,7 +125,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST,
                 "Validation failed");
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -130,7 +135,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 status,
                 ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -139,7 +144,7 @@ public class PeopleExceptionHandler {
         HttpStatus status = determineHttpStatus(ex.getHttpStatus());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
         problem.setProperty("errorCode", ex.getErrorCode());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 
@@ -148,7 +153,7 @@ public class PeopleExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.valueOf(ex.getStatusCode().value()),
                 ex.getReason() == null ? ex.getMessage() : ex.getReason());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
 

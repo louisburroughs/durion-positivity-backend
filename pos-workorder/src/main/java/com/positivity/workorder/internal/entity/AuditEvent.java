@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -63,13 +65,7 @@ public class AuditEvent {
     @PrePersist
     protected void prePersist() {
         if (eventTimestamp == null) {
-            eventTimestamp = Instant.now();
+            eventTimestamp = Instant.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 }

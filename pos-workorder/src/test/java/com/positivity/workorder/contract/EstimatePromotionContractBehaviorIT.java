@@ -1,5 +1,9 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
@@ -39,6 +43,8 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 @DisplayName("Estimate Promotion Contract Behavior Tests (CAP:004 Story #26)")
 @Import(ContractTestConfiguration.class)
 class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -232,12 +238,12 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now())
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK))
                                 .approvedBy(testCustomerId)
                                 .subtotal(new BigDecimal("100.00"))
                                 .taxAmount(new BigDecimal("8.25"))
                                 .total(new BigDecimal("108.25"))
-                                .expiresAt(LocalDateTime.now().plusDays(30)) // Not expired
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30)) // Not expired
                                 .currencyUomId("USD")
                                 .createdByUserId("test-user")
                                 .createdById("test-user")
@@ -314,12 +320,12 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now().minusDays(40))
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK).minusDays(40))
                                 .approvedBy(testCustomerId)
                                 .subtotal(new BigDecimal("100.00"))
                                 .taxAmount(new BigDecimal("8.25"))
                                 .total(new BigDecimal("108.25"))
-                                .expiresAt(LocalDateTime.now().minusDays(1)) // Expired yesterday
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).minusDays(1)) // Expired yesterday
                                 .currencyUomId("USD")
                                 .createdByUserId("test-user")
                                 .createdById("test-user")
@@ -351,12 +357,12 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now())
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK))
                                 .approvedBy(testCustomerId)
                                 .subtotal(new BigDecimal("100.00"))
                                 .taxAmount(new BigDecimal("8.25"))
                                 .total(new BigDecimal("108.25"))
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .currencyUomId("USD")
                                 .createdByUserId("test-user")
                                 .createdById("test-user")

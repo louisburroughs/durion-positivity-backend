@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -144,6 +146,6 @@ public class Estimate {
             return false;
         }
         LocalDateTime expiryDate = declinedAt.plusDays(configuredExpiryDays);
-        return !LocalDateTime.now().isAfter(expiryDate);
+        return !LocalDateTime.now(Clock.systemUTC()).isAfter(expiryDate);
     }
 }

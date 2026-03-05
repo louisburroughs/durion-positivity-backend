@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +40,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PromotionValidationServiceImpl implements PromotionValidationService {
+    private final Clock clock;
+
 
         private final EstimateRepository estimateRepository;
         private final EstimateItemRepository estimateItemRepository;
@@ -92,7 +96,7 @@ public class PromotionValidationServiceImpl implements PromotionValidationServic
                 }
 
                 // 4. Approval Expiration Check
-                if (estimate.getExpiresAt() != null && LocalDateTime.now().isAfter(estimate.getExpiresAt())) {
+                if (estimate.getExpiresAt() != null && LocalDateTime.now(clock).isAfter(estimate.getExpiresAt())) {
                         log.warn("Estimate {} approval has expired at {}", estimateId, estimate.getExpiresAt());
                         throw new PromotionValidationException(
                                         PromotionErrorCode.APPROVAL_EXPIRED,

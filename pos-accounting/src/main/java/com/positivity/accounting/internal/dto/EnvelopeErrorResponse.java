@@ -5,8 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
-
 /**
  * Envelope error response matching the contract
  * {@code {"error": {"code": "...", "message": "..."}}}.
@@ -26,13 +24,16 @@ public class EnvelopeErrorResponse {
     public static class Error {
         private String code;
         private String message;
-        @Builder.Default
-        private Long timestamp = Instant.now().toEpochMilli();
+        private Long timestamp;
     }
 
     public static EnvelopeErrorResponse of(String code, String message) {
+        return of(code, message, null);
+    }
+
+    public static EnvelopeErrorResponse of(String code, String message, Long timestamp) {
         return EnvelopeErrorResponse.builder()
-                .error(Error.builder().code(code).message(message).build())
+                .error(Error.builder().code(code).message(message).timestamp(timestamp).build())
                 .build();
     }
 }

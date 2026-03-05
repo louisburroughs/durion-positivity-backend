@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -61,6 +64,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ExtendWith(MockitoExtension.class)
 class PostingRuleEvaluatorDefaultMappingTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private PostingRuleVersionRepository versionRepository;
@@ -111,7 +116,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
         event.setEventType(eventType);
         event.setTransactionDate(LocalDateTime.of(2026, 1, 15, 10, 30));
         event.setPayload(payload != null ? payload : new HashMap<>());
-        event.setReceivedAt(Instant.now());
+        event.setReceivedAt(Instant.now(TEST_CLOCK));
         event.setSourceSystem("TEST_SYSTEM");
         return event;
     }

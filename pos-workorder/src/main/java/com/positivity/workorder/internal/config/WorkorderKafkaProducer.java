@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.config;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,6 +29,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class WorkorderKafkaProducer {
+    private final Clock clock;
+
 
     private static final String SOURCE_SERVICE = "pos-workorder";
 
@@ -59,7 +62,7 @@ public class WorkorderKafkaProducer {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", UUID.randomUUID().toString());
         envelope.put("eventType", eventType);
-        envelope.put("occurredAtUtc", Instant.now());
+        envelope.put("occurredAtUtc", Instant.now(clock));
         envelope.put("sourceService", SOURCE_SERVICE);
         envelope.put("payload", payload);
 

@@ -1,5 +1,16 @@
 package com.positivity.people.internal.service;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.PersonLocationAssignment;
@@ -8,17 +19,9 @@ import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.service.PeopleAvailabilityService;
 import com.positivity.people.service.UserPersonTranslationService;
 import com.positivity.security.common.SecurityContextHelper;
+
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,11 +31,12 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
     private final PersonLocationAssignmentRepository assignmentRepository;
     private final PersonRepository personRepository;
     private final UserPersonTranslationService userPersonTranslationService;
+    private final Clock clock;
 
     @Override
     @NonNull
     public List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date) {
-        LocalDate targetDate = date != null ? date : LocalDate.now();
+        LocalDate targetDate = date != null ? date : LocalDate.now(clock);
         UUID resolvedLocationId = locationId != null ? locationId : resolveRequesterLocationId(targetDate);
 
         List<PersonLocationAssignment> assignments = assignmentRepository.findActiveByDateAndOptionalLocation(
@@ -67,7 +71,7 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
     @Override
     @NonNull
     public UUID resolveCurrentUserPrimaryLocationId() {
-        return resolveRequesterLocationId(LocalDate.now());
+        return resolveRequesterLocationId(LocalDate.now(clock));
     }
 
     @NonNull

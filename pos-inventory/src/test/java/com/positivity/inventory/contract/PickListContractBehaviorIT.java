@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -50,6 +53,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("PickList Contract Behavior — Story #28")
 class PickListContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private MockMvc mockMvc;
@@ -84,15 +89,15 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
                                 workorderId,
                                 PickListStatus.DRAFT,
                                 1,
-                                Instant.now().plusSeconds(3600),
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK).plusSeconds(3600),
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 when(pickListService.createPickList(any(CreatePickListRequest.class)))
                                 .thenReturn(mockResponse);
 
                 String requestBody = objectMapper.writeValueAsString(
-                                new CreatePickListRequest(workorderId, Instant.now().plusSeconds(3600), 1,
+                                new CreatePickListRequest(workorderId, Instant.now(TEST_CLOCK).plusSeconds(3600), 1,
                                                 UUID.randomUUID()));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/pick-lists"))
@@ -152,8 +157,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
                                 PickListStatus.DRAFT,
                                 0,
                                 null,
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 when(pickListService.getPickList(eq(pickListId))).thenReturn(mockResponse);
 
@@ -188,8 +193,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
                                 PickListStatus.DRAFT,
                                 0,
                                 null,
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 when(pickListService.getPickListsForWorkorder(eq(workorderId))).thenReturn(List.of(mockEntry));
 
@@ -228,8 +233,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
                                 PickListStatus.READY_TO_PICK,
                                 0,
                                 null,
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 when(pickListService.updatePickListStatus(eq(pickListId), eq(PickListStatus.READY_TO_PICK)))
                                 .thenReturn(mockResponse);

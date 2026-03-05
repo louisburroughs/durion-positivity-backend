@@ -50,6 +50,9 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-maven-
+
+      - name: Enforce no-arg now() policy
+        run: ./scripts/check-noarg-now.sh
       
       - name: Build with Maven
         run: ./mvnw clean install -DskipTests -B -V

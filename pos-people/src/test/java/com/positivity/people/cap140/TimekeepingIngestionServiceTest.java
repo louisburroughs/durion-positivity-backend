@@ -1,5 +1,8 @@
 package com.positivity.people.cap140;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.people.internal.dto.WorkSessionCompletedEvent;
 import com.positivity.people.internal.dto.WorkSessionCorrectedEvent;
 import com.positivity.people.internal.entity.TimekeepingEntry;
@@ -32,6 +35,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S100")
 class TimekeepingIngestionServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     TimekeepingEntryRepository timekeepingEntryRepository;
@@ -51,8 +56,8 @@ class TimekeepingIngestionServiceTest {
         UUID sessionId = UUID.randomUUID();
         UUID employeeId = UUID.randomUUID();
         UUID workOrderId = UUID.randomUUID();
-        Instant start = Instant.now().minusSeconds(3600);
-        Instant end = Instant.now();
+        Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
+        Instant end = Instant.now(TEST_CLOCK);
 
         WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
                 tenantId, sessionId, employeeId, start, end, workOrderId);
@@ -91,7 +96,7 @@ class TimekeepingIngestionServiceTest {
 
         WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
                 tenantId, sessionId, UUID.randomUUID(),
-                Instant.now().minusSeconds(100), Instant.now(), null);
+                Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
         when(timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(
                 tenantId, "shopmgr", sessionId)).thenReturn(true);
@@ -110,7 +115,7 @@ class TimekeepingIngestionServiceTest {
         // Issue #58: AC3 — null tenantId simulates DLQ rejection
         WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
                 null, UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now().minusSeconds(100), Instant.now(), null);
+                Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
         assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -127,7 +132,7 @@ class TimekeepingIngestionServiceTest {
         // Issue #58: AC4 — null sessionId simulates DLQ rejection
         WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
                 UUID.randomUUID(), null, UUID.randomUUID(),
-                Instant.now().minusSeconds(100), Instant.now(), null);
+                Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
         assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -149,8 +154,8 @@ class TimekeepingIngestionServiceTest {
         UUID employeeId = UUID.randomUUID();
         UUID workOrderId = UUID.randomUUID();
         String correctionReason = "Clock error correction";
-        Instant start = Instant.now().minusSeconds(3600);
-        Instant end = Instant.now();
+        Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
+        Instant end = Instant.now(TEST_CLOCK);
 
         WorkSessionCorrectedEvent event = new WorkSessionCorrectedEvent(
                 tenantId, originalSessionId, correctionId, employeeId,

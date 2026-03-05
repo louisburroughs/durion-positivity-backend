@@ -30,6 +30,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Vehicle record entity for CAP:091 - Vehicle Registry.
  * Supports VIN normalization, global uniqueness, and vehicle-account
@@ -50,16 +52,10 @@ import lombok.NoArgsConstructor;
 public class VehicleRecord {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "vehicle_id", updatable = false, nullable = false)
     private UUID vehicleId;
-
-    @PrePersist
-    public void generateId() {
-        if (vehicleId == null) {
-            vehicleId = UUIDv7Generator.generate();
-        }
-    }
-
     @NonNull
     @Column(name = "account_id", nullable = false)
     private UUID accountId;

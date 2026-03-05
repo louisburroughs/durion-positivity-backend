@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.service;
 
+import java.time.Clock;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +47,8 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class PartyServiceImpl implements PartyService {
+    private final Clock clock;
+
 
     private final CommercialPartyRepository partyRepository;
     private final ContactRepository contactRepository;
@@ -456,7 +459,7 @@ public class PartyServiceImpl implements PartyService {
     private com.positivity.customer.internal.dto.snapshot.SnapshotMetadata createMetadata() {
         com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
                 java.util.UUID.randomUUID(),
-                java.time.Instant.now(),
+                java.time.Instant.now(clock),
                 "1.0.0");
         meta.setSource("CRM_API");
         return meta;

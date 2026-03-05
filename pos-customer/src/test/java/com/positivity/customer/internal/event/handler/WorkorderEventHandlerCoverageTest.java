@@ -6,6 +6,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,6 +45,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ExtendWith(MockitoExtension.class)
 class WorkorderEventHandlerCoverageTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private ProcessingLogRepository processingLogRepository;
@@ -60,6 +64,7 @@ class WorkorderEventHandlerCoverageTest {
     @BeforeEach
     void setUp() {
         handler = new WorkorderEventHandler(
+                TEST_CLOCK,
                 processingLogRepository,
                 communicationPreferenceRepository,
                 personPartyRepository,

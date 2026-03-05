@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +41,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Slf4j
 public class ChangeRequestServiceImpl implements ChangeRequestService {
+    private final Clock clock;
+
     private final ChangeRequestRepository changeRequestRepository;
     private final WorkorderRepository workOrderRepository;
     private final WorkorderServiceRepository workOrderServiceRepository;
@@ -93,7 +96,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 .isEmergencyException(Boolean.TRUE.equals(dto.getIsEmergencyException()))
                 .exceptionReason(dto.getExceptionReason())
                 .status(ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
-                .requestedAt(LocalDateTime.now())
+                .requestedAt(LocalDateTime.now(clock))
                 .build();
 
         changeRequest = changeRequestRepository.save(changeRequest);
@@ -224,7 +227,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         }
 
         changeRequest.setStatus(ChangeRequestStatus.APPROVED);
-        changeRequest.setApprovedAt(LocalDateTime.now());
+        changeRequest.setApprovedAt(LocalDateTime.now(clock));
         changeRequest.setApprovedBy(resolvedActorId);
         changeRequest.setApprovalNote(approvalNote);
 
@@ -235,7 +238,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 .changeRequestId(changeRequestId)
                 .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED)
-                .resolvedAt(LocalDateTime.now())
+                .resolvedAt(LocalDateTime.now(clock))
                 .resolvedBy(resolvedActorId)
                 .approvalNote(approvalNote)
                 .build();
@@ -270,7 +273,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         }
 
         changeRequest.setStatus(ChangeRequestStatus.DECLINED);
-        changeRequest.setDeclinedAt(LocalDateTime.now());
+        changeRequest.setDeclinedAt(LocalDateTime.now(clock));
         changeRequest.setApprovalNote(approvalNote);
 
         changeRequest = changeRequestRepository.save(changeRequest);
@@ -280,7 +283,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 .changeRequestId(changeRequestId)
                 .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.REJECTED)
-                .resolvedAt(LocalDateTime.now())
+                .resolvedAt(LocalDateTime.now(clock))
                 .resolvedBy(resolvedActorId)
                 .approvalNote(approvalNote)
                 .build();
@@ -316,7 +319,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         }
 
         changeRequest.setStatus(ChangeRequestStatus.APPROVED_WITH_EXCEPTION);
-        changeRequest.setApprovedAt(LocalDateTime.now());
+        changeRequest.setApprovedAt(LocalDateTime.now(clock));
         changeRequest.setApprovedBy(managerActorId);
         changeRequest.setIsEmergencyException(true);
         changeRequest.setExceptionReason(exceptionReason);
@@ -328,7 +331,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 .changeRequestId(changeRequestId)
                 .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED_WITH_EXCEPTION)
-                .resolvedAt(LocalDateTime.now())
+                .resolvedAt(LocalDateTime.now(clock))
                 .resolvedBy(managerActorId)
                 .exceptionReason(exceptionReason)
                 .build();

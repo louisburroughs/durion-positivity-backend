@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.client.InvoiceServiceException;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceRequest;
@@ -51,6 +53,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class PaymentApplicationServiceImpl implements com.positivity.accounting.service.PaymentApplicationService {
+    private final Clock clock;
+
 
         private final ReceivablePaymentRepository receivablePaymentRepository;
         private final PaymentApplicationRepository paymentApplicationRepository;
@@ -178,7 +182,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
                 // Capture current user early to avoid issues in exception handler
                 String currentUser = getCurrentUser();
-                Instant applicationTimestamp = Instant.now();
+                Instant applicationTimestamp = Instant.now(clock);
 
                 List<PaymentApplicationResponse.ApplicationDetail> applicationDetails = createApplicationsAndUpdateInvoices(
                                 paymentId,
@@ -273,7 +277,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
                 payment.setUnappliedAmount(BigDecimal.ZERO);
                 payment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
-                payment.setUpdatedAt(Instant.now());
+                payment.setUpdatedAt(Instant.now(clock));
                 payment.setModifiedBy(getCurrentUser());
 
                 receivablePaymentRepository.save(payment);
@@ -360,7 +364,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                 reversal.setAmount(original.getAppliedAmount());
                 reversal.setReason(reason);
                 reversal.setReversedBy(reversedBy);
-                reversal.setReversedAt(Instant.now());
+                reversal.setReversedAt(Instant.now(clock));
 
                 PaymentApplicationReversal saved = reversalRepository.save(reversal);
 
@@ -373,7 +377,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                                                                 + " not found"));
 
                 payment.reverseAmount(original.getAppliedAmount());
-                payment.setUpdatedAt(Instant.now());
+                payment.setUpdatedAt(Instant.now(clock));
                 payment.setModifiedBy(reversedBy);
                 receivablePaymentRepository.save(payment);
 

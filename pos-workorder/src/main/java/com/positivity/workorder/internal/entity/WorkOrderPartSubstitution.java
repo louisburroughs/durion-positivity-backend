@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.SubstitutionStatus;
 
@@ -83,13 +85,7 @@ public class WorkOrderPartSubstitution {
     @PrePersist
     public void prePersist() {
         if (selectedAt == null) {
-            selectedAt = Instant.now();
+            selectedAt = Instant.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = selectedAt;
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 }

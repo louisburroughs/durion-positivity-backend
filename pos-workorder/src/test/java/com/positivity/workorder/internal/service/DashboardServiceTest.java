@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -46,6 +48,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
  */
 @ExtendWith(MockitoExtension.class)
 class DashboardServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     private static final LocalDate TEST_DATE = LocalDate.of(2026, 3, 1);
     private static final UUID LOCATION_UUID = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -81,7 +85,7 @@ class DashboardServiceTest {
                 .thenReturn(List.of());
         when(peopleAvailabilityClient.fetchAvailability(any(), any()))
                 .thenReturn(PeopleAvailabilityResponse.builder()
-                        .asOf(Instant.now())
+                        .asOf(Instant.now(TEST_CLOCK))
                         .location(LOCATION_ID)
                         .people(List.of())
                         .build());
@@ -208,7 +212,7 @@ class DashboardServiceTest {
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
                 .thenReturn(List.of(wo));
 
-        Instant nearFuture = Instant.now().plusSeconds(600); // 10 min expected return → <15 min overlap
+        Instant nearFuture = Instant.now(TEST_CLOCK).plusSeconds(600); // 10 min expected return → <15 min overlap
         PersonAvailability mechanicOnBreak = PersonAvailability.builder()
                 .personId("MECH-004")
                 .firstName("Dave")
@@ -309,7 +313,7 @@ class DashboardServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC-1: lastRefreshed is non-null and within 1 second of Instant.now()")
+    @DisplayName("AC-1: lastRefreshed is non-null and within 1 second of Instant.now(TEST_CLOCK)")
     void getDashboard_lastRefreshedIsSetToNow() {
         // Arrange
         // Issue CAP-142: AC-1 — timestamp freshness assertion
@@ -318,14 +322,14 @@ class DashboardServiceTest {
         when(peopleAvailabilityClient.fetchAvailability(any(), any()))
                 .thenReturn(emptyAvailability());
         when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
-        Instant before = Instant.now();
+        Instant before = Instant.now(TEST_CLOCK);
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
 
         // Assert
         assertThat(response.getLastRefreshed()).isNotNull();
-        assertThat(response.getLastRefreshed()).isBetween(before, Instant.now().plusSeconds(1));
+        assertThat(response.getLastRefreshed()).isBetween(before, Instant.now(TEST_CLOCK).plusSeconds(1));
     }
 
     // -----------------------------------------------------------------------
@@ -681,7 +685,7 @@ class DashboardServiceTest {
     void getDashboard_breakReturnFarAway_noBreakOverlapConflict() {
         // Arrange
         // Break expected to return 1 hour from now — outside the 15-min window
-        Instant oneHourFromNow = Instant.now().plusSeconds(3600);
+        Instant oneHourFromNow = Instant.now(TEST_CLOCK).plusSeconds(3600);
         Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-040", null);
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
                 .thenReturn(List.of(wo));
@@ -730,7 +734,7 @@ class DashboardServiceTest {
 
     private PeopleAvailabilityResponse emptyAvailability() {
         return PeopleAvailabilityResponse.builder()
-                .asOf(Instant.now())
+                .asOf(Instant.now(TEST_CLOCK))
                 .location(LOCATION_ID)
                 .people(List.of())
                 .build();

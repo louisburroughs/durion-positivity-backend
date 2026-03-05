@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
@@ -21,6 +23,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
 /**
  * Credit Memo entity for reversing invoice charges.
  * 
@@ -45,6 +49,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "credit_memo", indexes = {
         @Index(name = "idx_credit_memo_original_invoice", columnList = "original_invoice_id"),
         @Index(name = "idx_credit_memo_customer", columnList = "customer_id"),
@@ -103,10 +108,10 @@ public class CreditMemo {
     @PrePersist
     protected void onCreate() {
         if (creationTimestamp == null) {
-            creationTimestamp = Instant.now();
+            creationTimestamp = Instant.now(Clock.systemUTC());
         }
         if (status == CreditMemoStatus.POSTED && postedTimestamp == null) {
-            postedTimestamp = Instant.now();
+            postedTimestamp = Instant.now(Clock.systemUTC());
         }
     }
 

@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -45,13 +47,7 @@ public class ApprovalConfiguration {
     @PrePersist
     protected void prePersist() {
         calculatePriority();
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 
     // Location ID - if null, applies to all locations
     private UUID locationId;

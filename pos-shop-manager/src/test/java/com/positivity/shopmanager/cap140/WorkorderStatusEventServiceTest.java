@@ -1,5 +1,8 @@
 package com.positivity.shopmanager.cap140;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -47,6 +50,8 @@ import org.mockito.quality.Strictness;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class WorkorderStatusEventServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private AppointmentRepository appointmentRepository;
@@ -62,7 +67,7 @@ class WorkorderStatusEventServiceTest {
     // -------------------------------------------------------------------------
 
     private Appointment buildAppointment(UUID appointmentId, AppointmentStatus status) {
-        Instant now = Instant.now();
+        Instant now = Instant.now(TEST_CLOCK);
         return Appointment.builder()
                 .appointmentId(appointmentId)
                 .status(status)
@@ -93,7 +98,7 @@ class WorkorderStatusEventServiceTest {
         UUID workOrderId = UUID.randomUUID();
         UUID appointmentId = UUID.randomUUID();
         UUID eventId = UUID.randomUUID();
-        Instant eventTimestamp = Instant.now();
+        Instant eventTimestamp = Instant.now(TEST_CLOCK);
 
         WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
                 eventId, workOrderId, "DRAFT", eventTimestamp, UUID.randomUUID());
@@ -129,7 +134,7 @@ class WorkorderStatusEventServiceTest {
         UUID workOrderId = UUID.randomUUID();
         UUID appointmentId = UUID.randomUUID();
         UUID eventId = UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant now = Instant.now(TEST_CLOCK);
 
         StatusTimelineEntry existingEntry = StatusTimelineEntry.builder()
                 .status(AppointmentStatus.SCHEDULED)
@@ -173,7 +178,7 @@ class WorkorderStatusEventServiceTest {
         UUID eventId = UUID.randomUUID();
 
         WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                eventId, workOrderId, "DRAFT", Instant.now(), UUID.randomUUID());
+                eventId, workOrderId, "DRAFT", Instant.now(TEST_CLOCK), UUID.randomUUID());
 
         when(mappingRepository.findByWorkOrderId(workOrderId)).thenReturn(Optional.empty());
 
@@ -196,7 +201,7 @@ class WorkorderStatusEventServiceTest {
         UUID eventId = UUID.randomUUID();
 
         WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
-                eventId, workOrderId, "TOTALLY_UNKNOWN_STATUS", Instant.now(), UUID.randomUUID());
+                eventId, workOrderId, "TOTALLY_UNKNOWN_STATUS", Instant.now(TEST_CLOCK), UUID.randomUUID());
 
         // Act
         service.handleWorkorderStatusChanged(event);
@@ -216,7 +221,7 @@ class WorkorderStatusEventServiceTest {
         UUID workOrderId = UUID.randomUUID();
         UUID appointmentId = UUID.randomUUID();
         UUID eventId = UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant now = Instant.now(TEST_CLOCK);
 
         WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
                 eventId, workOrderId, "COMPLETED", now, UUID.randomUUID());
@@ -245,7 +250,7 @@ class WorkorderStatusEventServiceTest {
         UUID workOrderId = UUID.randomUUID();
         UUID appointmentId = UUID.randomUUID();
         UUID eventId = UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant now = Instant.now(TEST_CLOCK);
 
         WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
                 eventId, workOrderId, "INVOICED", now, UUID.randomUUID());
@@ -274,7 +279,7 @@ class WorkorderStatusEventServiceTest {
         UUID workOrderId = UUID.randomUUID();
         UUID appointmentId = UUID.randomUUID();
         UUID eventId = UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant now = Instant.now(TEST_CLOCK);
 
         Appointment appointment = Appointment.builder()
                 .appointmentId(appointmentId)

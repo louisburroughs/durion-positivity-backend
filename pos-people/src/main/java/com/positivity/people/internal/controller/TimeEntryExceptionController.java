@@ -5,6 +5,8 @@ import com.positivity.people.internal.dto.TimeEntryException;
 import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.service.TimeEntryExceptionService;
+import java.time.Clock;
+import java.time.Instant;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -25,10 +27,12 @@ public class TimeEntryExceptionController {
     private static final String EXCEPTION_NOT_FOUND = "exception not found";
     private static final String NOT_FOUND = "NOT_FOUND";
     private static final String SYSTEM = "system";
+    private final Clock clock;
     private final TimeEntryExceptionService exceptionService;
 
-    public TimeEntryExceptionController(TimeEntryExceptionService exceptionService) {
+    public TimeEntryExceptionController(TimeEntryExceptionService exceptionService, Clock clock) {
         this.exceptionService = exceptionService;
+        this.clock = clock;
     }
 
     @Operation(summary = "Create a time entry exception", description = "Create a new time entry exception record with validation of required fields.")
@@ -69,7 +73,7 @@ public class TimeEntryExceptionController {
             return ResponseEntity.ok().build();
         com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
                 NOT_FOUND,
-                EXCEPTION_NOT_FOUND, correlationId);
+                EXCEPTION_NOT_FOUND, correlationId, Instant.now(clock));
         return ResponseEntity.status(404).body(err);
     }
 
@@ -97,7 +101,7 @@ public class TimeEntryExceptionController {
             return ResponseEntity.ok().build();
         com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
                 NOT_FOUND,
-                EXCEPTION_NOT_FOUND, correlationId);
+                EXCEPTION_NOT_FOUND, correlationId, Instant.now(clock));
         return ResponseEntity.status(404).body(err);
     }
 
@@ -118,7 +122,7 @@ public class TimeEntryExceptionController {
                 || body.get(WAIVE_REASON).isBlank()) {
             com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
                     "INVALID_INPUT",
-                    "waiveReason is required and cannot be blank", correlationId);
+                    "waiveReason is required and cannot be blank", correlationId, Instant.now(clock));
             return ResponseEntity.status(400).body(err);
         }
 
@@ -132,7 +136,7 @@ public class TimeEntryExceptionController {
             return ResponseEntity.ok().build();
         com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
                 NOT_FOUND,
-                EXCEPTION_NOT_FOUND, correlationId);
+                EXCEPTION_NOT_FOUND, correlationId, Instant.now(clock));
         return ResponseEntity.status(404).body(err);
     }
 }

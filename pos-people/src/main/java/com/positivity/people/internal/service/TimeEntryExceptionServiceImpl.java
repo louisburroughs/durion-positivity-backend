@@ -1,5 +1,7 @@
 package com.positivity.people.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.people.internal.dto.TimeEntryException;
 import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
@@ -20,11 +22,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService {
+    private final Clock clock;
+
     private final TimeEntryExceptionRepository exceptionRepository;
     private final TimeEntryAuditRepository auditRepository;
 
     public TimeEntryExceptionServiceImpl(TimeEntryExceptionRepository exceptionRepository,
-            TimeEntryAuditRepository auditRepository) {
+            TimeEntryAuditRepository auditRepository,
+            Clock clock) {
+        this.clock = clock;
         this.exceptionRepository = exceptionRepository;
         this.auditRepository = auditRepository;
     }
@@ -49,7 +55,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
         if (request.getDetectedAt() != null) {
             exception.setDetectedAt(request.getDetectedAt().toInstant());
         } else {
-            exception.setDetectedAt(Instant.now());
+            exception.setDetectedAt(Instant.now(clock));
         }
         exception.setStatus(com.positivity.people.internal.enums.ExceptionStatus.OPEN);
 
@@ -91,7 +97,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
         // Apply action
         ex.setStatus(targetStatus);
         ex.setResolvedBy(actionUserId);
-        ex.setResolvedAt(Instant.now());
+        ex.setResolvedAt(Instant.now(clock));
         if (actionNotes != null) {
             ex.setResolutionNotes(actionNotes);
         }
@@ -153,7 +159,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
             ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.RESOLVED);
         }
         ex.setResolvedBy(resolverUserId);
-        ex.setResolvedAt(Instant.now());
+        ex.setResolvedAt(Instant.now(clock));
         if (resolutionNotes != null) {
             ex.setResolutionNotes(resolutionNotes);
         }

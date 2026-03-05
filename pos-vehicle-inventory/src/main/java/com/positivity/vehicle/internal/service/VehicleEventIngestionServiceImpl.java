@@ -1,5 +1,6 @@
 package com.positivity.vehicle.internal.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -41,6 +42,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Service
 public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionService {
+    private final Clock clock;
+
 
     private final VehicleRecordRepository vehicleRepository;
     private final EventProcessingLogRepository eventProcessingLogRepository;
@@ -125,7 +128,7 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
         try {
             applyUpdate(vehicle, event);
             var eventLog = createEventProcessingLog(eventId, workorderId, vehicleId, ProcessingStatus.SUCCESS);
-            eventLog.setDetails(Map.of("updateType", "mileage_and_metadata", "appliedAt", Instant.now().toString()));
+            eventLog.setDetails(Map.of("updateType", "mileage_and_metadata", "appliedAt", Instant.now(clock).toString()));
             eventProcessingLogRepository.save(eventLog);
             log.info("Successfully processed event: id={}", eventId);
         } catch (Exception e) {
@@ -144,7 +147,7 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
             OdometerReading reading = OdometerReading.builder()
                     .value(event.getCurrentMileage())
                     .unit(OdometerUnit.MILES)
-                    .asOfDateTime(Instant.now())
+                    .asOfDateTime(Instant.now(clock))
                     .build();
             vehicle.setOdometer(reading);
             vehicleRepository.save(vehicle);
@@ -185,7 +188,7 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
                 .workorderId(workorderId)
                 .vehicleId(vehicleId)
                 .status(status)
-                .processedAt(Instant.now())
+                .processedAt(Instant.now(clock))
                 .build();
     }
 
@@ -203,7 +206,7 @@ public class VehicleEventIngestionServiceImpl implements VehicleEventIngestionSe
             details.put("note", note);
             log.setDetails(details);
         }
-        log.setProcessedAt(Instant.now());
+        log.setProcessedAt(Instant.now(clock));
         eventProcessingLogRepository.save(log);
     }
 

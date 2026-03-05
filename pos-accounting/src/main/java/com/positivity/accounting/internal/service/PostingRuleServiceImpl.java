@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.dto.PostingRuleMapper;
 import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
 import com.positivity.accounting.internal.dto.PostingRuleSetListResponse;
@@ -40,6 +42,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class PostingRuleServiceImpl implements PostingRuleService {
+    private final Clock clock;
+
 
     private final PostingRuleSetRepository ruleSetRepository;
     private final PostingRuleVersionRepository versionRepository;
@@ -165,7 +169,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         ruleSet.setName(updates.getName());
         ruleSet.setEventType(updates.getEventType());
         ruleSet.setDescription(updates.getDescription());
-        ruleSet.setUpdatedAt(Instant.now());
+        ruleSet.setUpdatedAt(Instant.now(clock));
         PostingRuleSet saved = ruleSetRepository.save(ruleSet);
         log.info("Updated rule set: {}", saved.getName());
         return saved;
@@ -184,8 +188,8 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         version.setPostingRuleSet(ruleSet); // Set child -> parent (owning side)
         version.setVersionNumber(maxVersion + 1);
         version.setState(PostingRuleSetState.DRAFT);
-        version.setCreatedAt(Instant.now());
-        version.setUpdatedAt(Instant.now());
+        version.setCreatedAt(Instant.now(clock));
+        version.setUpdatedAt(Instant.now(clock));
 
         PostingRuleVersion saved = versionRepository.save(version);
         log.info("Created version {} for rule set: {}",
@@ -203,7 +207,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         }
 
         version.setRulesDefinition(updates.getRulesDefinition());
-        version.setUpdatedAt(Instant.now());
+        version.setUpdatedAt(Instant.now(clock));
         PostingRuleVersion saved = versionRepository.save(version);
         log.info("Updated version: {}", saved.getVersionId());
         return saved;
@@ -228,16 +232,16 @@ public class PostingRuleServiceImpl implements PostingRuleService {
                 PostingRuleSetState.PUBLISHED);
         for (PostingRuleVersion oldVersion : published) {
             oldVersion.setState(PostingRuleSetState.ARCHIVED);
-            oldVersion.setArchivedAt(Instant.now());
-            oldVersion.setUpdatedAt(Instant.now());
+            oldVersion.setArchivedAt(Instant.now(clock));
+            oldVersion.setUpdatedAt(Instant.now(clock));
             versionRepository.save(oldVersion);
             log.info("Archived version: {}", oldVersion.getVersionId());
         }
 
         // Publish new version
         version.setState(PostingRuleSetState.PUBLISHED);
-        version.setPublishedAt(Instant.now());
-        version.setUpdatedAt(Instant.now());
+        version.setPublishedAt(Instant.now(clock));
+        version.setUpdatedAt(Instant.now(clock));
         PostingRuleVersion saved = versionRepository.save(version);
         log.info("Published version: {}", saved.getVersionId());
         return saved;
@@ -253,8 +257,8 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         }
 
         version.setState(PostingRuleSetState.ARCHIVED);
-        version.setArchivedAt(Instant.now());
-        version.setUpdatedAt(Instant.now());
+        version.setArchivedAt(Instant.now(clock));
+        version.setUpdatedAt(Instant.now(clock));
         PostingRuleVersion saved = versionRepository.save(version);
         log.info("Archived version: {}", saved.getVersionId());
         return saved;

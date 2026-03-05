@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.*;
@@ -8,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * PaymentApplicationReversal - compensating transaction to reverse a payment
  * application.
@@ -30,6 +33,7 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "payment_application_reversal", 
     indexes = {
         @Index(name = "idx_reversal_reversed_at", columnList = "reversed_at")
@@ -51,7 +55,7 @@ public class PaymentApplicationReversal {
     @PrePersist
     public void onPrePersist() {
         if (reversedAt == null) {
-            reversedAt = Instant.now();
+            reversedAt = Instant.now(Clock.systemUTC());
         }
     }
 

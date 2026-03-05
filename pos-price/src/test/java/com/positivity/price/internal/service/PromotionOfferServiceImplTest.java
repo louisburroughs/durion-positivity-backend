@@ -40,169 +40,169 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PromotionOfferServiceImplTest {
 
-    @Mock
-    private PromotionOfferRepository promotionOfferRepository;
+        @Mock
+        private PromotionOfferRepository promotionOfferRepository;
 
-    @Mock
-    private EligibilityEvaluationService eligibilityEvaluationService;
+        @Mock
+        private EligibilityEvaluationService eligibilityEvaluationService;
 
-    @Mock
-    private Clock clock;
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-01-15T00:00:00Z"), ZoneOffset.UTC);
 
-    @InjectMocks
-    private PromotionOfferServiceImpl promotionOfferService;
+        @InjectMocks
+        private PromotionOfferServiceImpl promotionOfferService;
 
-    private PromotionOffer testPromo;
+        private PromotionOffer testPromo;
 
-    @BeforeEach
-    void setUp() {
-        when(clock.getZone()).thenReturn(ZoneOffset.UTC);
-        when(clock.instant()).thenReturn(Instant.parse("2026-01-15T00:00:00Z"));
-        testPromo = new PromotionOffer();
-        testPromo.setPromotionOfferId(UUID.randomUUID());
-        testPromo.setPromoCode("TESTCODE");
-        testPromo.setStatus(PromotionStatus.ACTIVE);
-        testPromo.setStartDate(LocalDate.now(clock).minusDays(1));
-        testPromo.setEndDate(LocalDate.now(clock).plusDays(1));
-        testPromo.setDiscountType(DiscountType.PERCENT_LABOR);
-        testPromo.setDiscountValue(BigDecimal.TEN);
-        testPromo.setUsageCount(0);
-        testPromo.setUsageLimit(100);
-    }
+        @BeforeEach
+        void setUp() {
+                testPromo = new PromotionOffer();
+                testPromo.setPromotionOfferId(UUID.randomUUID());
+                testPromo.setPromoCode("TESTCODE");
+                testPromo.setStatus(PromotionStatus.ACTIVE);
+                testPromo.setStartDate(LocalDate.now(TEST_CLOCK).minusDays(1));
+                testPromo.setEndDate(LocalDate.now(TEST_CLOCK).plusDays(1));
+                testPromo.setDiscountType(DiscountType.PERCENT_LABOR);
+                testPromo.setDiscountValue(BigDecimal.TEN);
+                testPromo.setUsageCount(0);
+                testPromo.setUsageLimit(100);
+        }
 
-    private EstimateContext validEstimateContext() {
-        LineItemContext line = new LineItemContext("SKU-001", BigDecimal.ONE, new BigDecimal("100.00"));
-        return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
-                new BigDecimal("100.00"), null);
-    }
+        private EstimateContext validEstimateContext() {
+                LineItemContext line = new LineItemContext("SKU-001", BigDecimal.ONE, new BigDecimal("100.00"));
+                return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
+                                new BigDecimal("100.00"), null);
+        }
 
-    private EstimateContext estimateContextWithPromos(List<String> applied) {
-        LineItemContext line = new LineItemContext("SKU-001", BigDecimal.ONE, new BigDecimal("100.00"));
-        return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
-                new BigDecimal("100.00"), applied);
-    }
+        private EstimateContext estimateContextWithPromos(List<String> applied) {
+                LineItemContext line = new LineItemContext("SKU-001", BigDecimal.ONE, new BigDecimal("100.00"));
+                return new EstimateContext(UUID.randomUUID(), UUID.randomUUID(), null, List.of(line),
+                                new BigDecimal("100.00"), applied);
+        }
 
-    @Test
-    @DisplayName("applyPromotion: Happy path with PERCENT_LABOR returns negative discount")
-    void applyPromotion_happyPath_percentLabor() {
-        when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
-        when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
-                .thenReturn(new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE));
-        when(promotionOfferRepository.incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId())).thenReturn(1);
+        @Test
+        @DisplayName("applyPromotion: Happy path with PERCENT_LABOR returns negative discount")
+        void applyPromotion_happyPath_percentLabor() {
+                when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
+                when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
+                                .thenReturn(new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE));
+                when(promotionOfferRepository.incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId()))
+                                .thenReturn(1);
 
-        ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
-        ApplyPromotionResponse response = promotionOfferService.applyPromotion(request);
+                ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
+                ApplyPromotionResponse response = promotionOfferService.applyPromotion(request);
 
-        assertThat(response).isNotNull();
-        assertThat(response.getTotal()).isEqualByComparingTo(new BigDecimal("90.00"));
-        assertThat(response.getAppliedAdjustments()).hasSize(1);
-        assertThat(response.getAppliedAdjustments().get(0).getAmount())
-                .isEqualByComparingTo(BigDecimal.TEN.negate());
-        verify(promotionOfferRepository).incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId());
-    }
+                assertThat(response).isNotNull();
+                assertThat(response.getTotal()).isEqualByComparingTo(new BigDecimal("90.00"));
+                assertThat(response.getAppliedAdjustments()).hasSize(1);
+                assertThat(response.getAppliedAdjustments().get(0).getAmount())
+                                .isEqualByComparingTo(BigDecimal.TEN.negate());
+                verify(promotionOfferRepository).incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId());
+        }
 
-    @Test
-    @DisplayName("applyPromotion: FIXED_INVOICE discount returns exact negative discount value")
-    void applyPromotion_fixedInvoice_returnsExactDiscount() {
-        testPromo.setDiscountType(DiscountType.FIXED_INVOICE);
-        testPromo.setDiscountValue(new BigDecimal("50.00"));
-        when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
-        when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
-                .thenReturn(new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE));
-        when(promotionOfferRepository.incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId())).thenReturn(1);
+        @Test
+        @DisplayName("applyPromotion: FIXED_INVOICE discount returns exact negative discount value")
+        void applyPromotion_fixedInvoice_returnsExactDiscount() {
+                testPromo.setDiscountType(DiscountType.FIXED_INVOICE);
+                testPromo.setDiscountValue(new BigDecimal("50.00"));
+                when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
+                when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
+                                .thenReturn(new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE));
+                when(promotionOfferRepository.incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId()))
+                                .thenReturn(1);
 
-        ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
-        ApplyPromotionResponse response = promotionOfferService.applyPromotion(request);
+                ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
+                ApplyPromotionResponse response = promotionOfferService.applyPromotion(request);
 
-        assertThat(response).isNotNull();
-        assertThat(response.getTotal()).isEqualByComparingTo(new BigDecimal("50.00"));
-    }
+                assertThat(response).isNotNull();
+                assertThat(response.getTotal()).isEqualByComparingTo(new BigDecimal("50.00"));
+        }
 
-    @Test
-    @DisplayName("applyPromotion: Throws PromotionCodeNotFoundException when promo code does not exist")
-    void applyPromotion_throwsPromotionCodeNotFoundException() {
-        when(promotionOfferRepository.findByPromoCode(anyString())).thenReturn(Optional.empty());
-        ApplyPromotionRequest request = new ApplyPromotionRequest("NOTFOUND", validEstimateContext());
+        @Test
+        @DisplayName("applyPromotion: Throws PromotionCodeNotFoundException when promo code does not exist")
+        void applyPromotion_throwsPromotionCodeNotFoundException() {
+                when(promotionOfferRepository.findByPromoCode(anyString())).thenReturn(Optional.empty());
+                ApplyPromotionRequest request = new ApplyPromotionRequest("NOTFOUND", validEstimateContext());
 
-        assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-                .isInstanceOf(PromotionCodeNotFoundException.class)
-                .hasMessage("Promotion code not found: NOTFOUND");
-    }
+                assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
+                                .isInstanceOf(PromotionCodeNotFoundException.class)
+                                .hasMessage("Promotion code not found: NOTFOUND");
+        }
 
-    @Test
-    @DisplayName("applyPromotion: Throws PromotionNotApplicableException for INACTIVE offer")
-    void applyPromotion_throwsNotApplicable_forInactiveOffer() {
-        testPromo.setStatus(PromotionStatus.INACTIVE);
-        when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
-        ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
+        @Test
+        @DisplayName("applyPromotion: Throws PromotionNotApplicableException for INACTIVE offer")
+        void applyPromotion_throwsNotApplicable_forInactiveOffer() {
+                testPromo.setStatus(PromotionStatus.INACTIVE);
+                when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
+                ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
 
-        assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-                .isInstanceOf(PromotionNotApplicableException.class)
-                .hasMessage("Promotion 'TESTCODE' is not active");
-    }
+                assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
+                                .isInstanceOf(PromotionNotApplicableException.class)
+                                .hasMessage("Promotion 'TESTCODE' is not active");
+        }
 
-    @Test
-    @DisplayName("applyPromotion: Throws PromotionNotApplicableException for past end date")
-    void applyPromotion_throwsNotApplicable_forPastEndDate() {
-        testPromo.setEndDate(LocalDate.now(clock).minusDays(1));
-        when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
-        ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
+        @Test
+        @DisplayName("applyPromotion: Throws PromotionNotApplicableException for past end date")
+        void applyPromotion_throwsNotApplicable_forPastEndDate() {
+                testPromo.setEndDate(LocalDate.now(TEST_CLOCK).minusDays(1));
+                when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
+                ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
 
-        assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-                .isInstanceOf(PromotionNotApplicableException.class)
-                .hasMessage("Promotion 'TESTCODE' is outside its valid date range");
-    }
+                assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
+                                .isInstanceOf(PromotionNotApplicableException.class)
+                                .hasMessage("Promotion 'TESTCODE' is outside its valid date range");
+        }
 
-    @Test
-    @DisplayName("applyPromotion: Throws PromotionNotApplicableException for future start date")
-    void applyPromotion_throwsNotApplicable_forFutureStartDate() {
-        testPromo.setStartDate(LocalDate.now(clock).plusDays(1));
-        when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
-        ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
+        @Test
+        @DisplayName("applyPromotion: Throws PromotionNotApplicableException for future start date")
+        void applyPromotion_throwsNotApplicable_forFutureStartDate() {
+                testPromo.setStartDate(LocalDate.now(TEST_CLOCK).plusDays(1));
+                when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
+                ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
 
-        assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-                .isInstanceOf(PromotionNotApplicableException.class)
-                .hasMessage("Promotion 'TESTCODE' is outside its valid date range");
-    }
+                assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
+                                .isInstanceOf(PromotionNotApplicableException.class)
+                                .hasMessage("Promotion 'TESTCODE' is outside its valid date range");
+        }
 
-    @Test
-    @DisplayName("applyPromotion: Throws PromotionNotApplicableException when not eligible")
-    void applyPromotion_throwsNotApplicable_whenNotEligible() {
-        when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
-        when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
-                .thenReturn(new EligibilityDecision(false, EligibilityReasonCode.ACCOUNT_NOT_IN_LIST));
-        ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
+        @Test
+        @DisplayName("applyPromotion: Throws PromotionNotApplicableException when not eligible")
+        void applyPromotion_throwsNotApplicable_whenNotEligible() {
+                when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
+                when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
+                                .thenReturn(new EligibilityDecision(false, EligibilityReasonCode.ACCOUNT_NOT_IN_LIST));
+                ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
 
-        assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-                .isInstanceOf(PromotionNotApplicableException.class)
-                .hasMessage("Promotion 'TESTCODE' is not applicable: ACCOUNT_NOT_IN_LIST");
-    }
+                assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
+                                .isInstanceOf(PromotionNotApplicableException.class)
+                                .hasMessage("Promotion 'TESTCODE' is not applicable: ACCOUNT_NOT_IN_LIST");
+        }
 
-    @Test
-    @DisplayName("applyPromotion: Throws PromotionNotApplicableException when usage limit is reached")
-    void applyPromotion_throwsNotApplicable_whenUsageLimitReached() {
-        testPromo.setUsageLimit(1);
-        testPromo.setUsageCount(1);
-        when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
-        when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
-                .thenReturn(new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE));
-        when(promotionOfferRepository.incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId())).thenReturn(0);
+        @Test
+        @DisplayName("applyPromotion: Throws PromotionNotApplicableException when usage limit is reached")
+        void applyPromotion_throwsNotApplicable_whenUsageLimitReached() {
+                testPromo.setUsageLimit(1);
+                testPromo.setUsageCount(1);
+                when(promotionOfferRepository.findByPromoCode("TESTCODE")).thenReturn(Optional.of(testPromo));
+                when(eligibilityEvaluationService.evaluateEligibility(any(), any(), any()))
+                                .thenReturn(new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE));
+                when(promotionOfferRepository.incrementUsageCountIfUnderLimit(testPromo.getPromotionOfferId()))
+                                .thenReturn(0);
 
-        ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
+                ApplyPromotionRequest request = new ApplyPromotionRequest("TESTCODE", validEstimateContext());
 
-        assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-                .isInstanceOf(PromotionNotApplicableException.class)
-                .hasMessage("Promotion 'TESTCODE' has reached its usage limit");
-    }
+                assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
+                                .isInstanceOf(PromotionNotApplicableException.class)
+                                .hasMessage("Promotion 'TESTCODE' has reached its usage limit");
+        }
 
-    @Test
-    @DisplayName("applyPromotion: Throws PromotionMultipleNotAllowedException for multiple promos")
-    void applyPromotion_throwsMultipleNotAllowed() {
-        ApplyPromotionRequest request = new ApplyPromotionRequest(
-                "TESTCODE", estimateContextWithPromos(List.of("OTHERPROMO")));
+        @Test
+        @DisplayName("applyPromotion: Throws PromotionMultipleNotAllowedException for multiple promos")
+        void applyPromotion_throwsMultipleNotAllowed() {
+                ApplyPromotionRequest request = new ApplyPromotionRequest(
+                                "TESTCODE", estimateContextWithPromos(List.of("OTHERPROMO")));
 
-        assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
-                .isInstanceOf(PromotionMultipleNotAllowedException.class)
-                .hasMessage("Only one promotion may be applied per estimate");
-    }
+                assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
+                                .isInstanceOf(PromotionMultipleNotAllowedException.class)
+                                .hasMessage("Only one promotion may be applied per estimate");
+        }
 }

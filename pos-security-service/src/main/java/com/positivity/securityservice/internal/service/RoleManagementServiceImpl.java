@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
@@ -44,6 +46,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class RoleManagementServiceImpl implements RoleManagementService {
+    private final Clock clock;
+
 
     private static final String ROLE_NOT_FOUND_PREFIX = "Role not found: ";
     private static final String USER_NOT_FOUND_PREFIX = "User not found: ";
@@ -67,7 +71,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         role.setName(name);
         role.setDescription(description);
         role.setCreatedBy(getCurrentUsername());
-        role.setCreatedAt(Instant.now());
+        role.setCreatedAt(Instant.now(clock));
 
         return toRoleDto(roleRepository.save(role));
     }
@@ -91,7 +95,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
 
         role.setPermissions(permissions);
         role.setLastModifiedBy(getCurrentUsername());
-        role.setLastModifiedAt(Instant.now());
+        role.setLastModifiedAt(Instant.now(clock));
 
         log.info("Updated permissions for role {}: {} permissions assigned",
                 role.getName(), permissions.size());
@@ -124,7 +128,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
 
         LocalDateTime requestStart = request.getEffectiveStartDate() != null
                 ? request.getEffectiveStartDate()
-                : LocalDateTime.now();
+                : LocalDateTime.now(clock);
         LocalDateTime requestEnd = request.getEffectiveEndDate();
 
         validateNoOverlappingAssignment(user.getId(), role.getId(), request, requestStart, requestEnd);
@@ -138,7 +142,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         assignment.setEffectiveStartDate(requestStart);
         assignment.setEffectiveEndDate(request.getEffectiveEndDate());
         assignment.setCreatedBy(getCurrentUsername());
-        assignment.setCreatedAt(Instant.now());
+        assignment.setCreatedAt(Instant.now(clock));
 
         log.info("Created role assignment: user={}, role={}, scope={}, locations={}",
                 user.getUsername(), role.getName(), assignment.getScopeType(),
@@ -261,7 +265,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
 
         assignment.setEffectiveEndDate(endDate); // This automatically sets revokedAt
         assignment.setLastModifiedBy(getCurrentUsername());
-        assignment.setLastModifiedAt(Instant.now());
+        assignment.setLastModifiedAt(Instant.now(clock));
 
         roleAssignmentRepository.save(assignment);
 

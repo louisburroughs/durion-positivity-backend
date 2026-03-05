@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
@@ -25,13 +27,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class ConsumptionServiceImpl implements ConsumptionService {
+    private final Clock clock;
+
 
     private final PickTaskRepository pickTaskRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     public ConsumptionServiceImpl(
             PickTaskRepository pickTaskRepository,
-            InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            Clock clock) {
+        this.clock = clock;
         this.pickTaskRepository = pickTaskRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
     }
@@ -74,7 +80,7 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                 request.getWorkorderId(),
                 request.getPickListId(),
                 totalItemsConsumed,
-                Instant.now(),
+                Instant.now(clock),
                 ledgerEntryIds);
     }
 

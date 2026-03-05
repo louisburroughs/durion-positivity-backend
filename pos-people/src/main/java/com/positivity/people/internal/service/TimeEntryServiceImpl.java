@@ -1,5 +1,7 @@
 package com.positivity.people.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.TimeEntryAudit;
@@ -19,10 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimeEntryServiceImpl implements TimeEntryService {
+    private final Clock clock;
+
     private final TimeEntryRepository repository;
     private final TimeEntryAuditRepository auditRepository;
 
-    public TimeEntryServiceImpl(TimeEntryRepository repository, TimeEntryAuditRepository auditRepository) {
+    public TimeEntryServiceImpl(TimeEntryRepository repository, TimeEntryAuditRepository auditRepository, Clock clock) {
+        this.clock = clock;
         this.repository = repository;
         this.auditRepository = auditRepository;
     }
@@ -103,7 +108,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
             // perform approval
             e.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.APPROVED);
             e.setApprovedBy(approverUserId);
-            e.setApprovedAt(Instant.now());
+            e.setApprovedAt(Instant.now(clock));
             repository.save(e);
 
             // record audit success
@@ -200,7 +205,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
             // perform rejection
             e.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.REJECTED);
             e.setRejectedBy(rejectorUserId);
-            e.setRejectedAt(Instant.now());
+            e.setRejectedAt(Instant.now(clock));
             String rejectionReason = rejectionReasons.get(id);
             e.setRejectionReason(rejectionReason != null ? rejectionReason : "");
             repository.save(e);

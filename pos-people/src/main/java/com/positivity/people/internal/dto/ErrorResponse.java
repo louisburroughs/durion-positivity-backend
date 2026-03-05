@@ -13,11 +13,11 @@ public class ErrorResponse {
     public ErrorResponse() {
     }
 
-    public ErrorResponse(String errorCode, String message, String correlationId) {
+    public ErrorResponse(String errorCode, String message, String correlationId, Instant timestamp) {
         this.errorCode = errorCode;
         this.message = message;
         this.correlationId = correlationId;
-        this.timestamp = Instant.now();
+        this.timestamp = timestamp;
     }
 
     public String getErrorCode() {

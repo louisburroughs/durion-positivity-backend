@@ -4,7 +4,10 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "preregistered_event")
 public class PreregisteredEvent {
     @Id

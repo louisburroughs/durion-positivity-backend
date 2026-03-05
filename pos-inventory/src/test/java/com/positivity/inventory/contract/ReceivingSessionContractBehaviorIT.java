@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -52,6 +55,8 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @DisplayName("Receiving Session Contract Behavior")
 class ReceivingSessionContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private MockMvc mockMvc;
@@ -100,7 +105,7 @@ class ReceivingSessionContractBehaviorIT extends BaseContractIntegrationTest {
                                                                 .receivedQuantity(BigDecimal.ZERO)
                                                                 .status("EXPECTED")
                                                                 .build()))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(receivingService.createReceivingSession(any(), any())).thenReturn(response);
@@ -142,7 +147,7 @@ class ReceivingSessionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .entryMethod("SCAN")
                                 .createdByUserId("contract-test-user")
                                 .lines(List.of())
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(receivingService.createReceivingSession(any(), any())).thenReturn(response);

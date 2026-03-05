@@ -1,5 +1,7 @@
 package com.positivity.documents.internal.service;
 
+import java.time.Clock;
+
 import com.itextpdf.html2pdf.HtmlConverter;
 import com.positivity.documents.internal.config.PdfConfiguration;
 import com.positivity.documents.internal.dto.RenderRequest;
@@ -23,6 +25,8 @@ import java.util.Map;
 
 @Service
 public class PdfRenderingServiceImpl implements PdfRenderingService {
+    private final Clock clock;
+
 
     private static final Logger log = LoggerFactory.getLogger(PdfRenderingServiceImpl.class);
 
@@ -33,7 +37,9 @@ public class PdfRenderingServiceImpl implements PdfRenderingService {
     public PdfRenderingServiceImpl(
             List<FormatHandler> formatHandlers,
             TemplateService templateService,
-            PdfConfiguration pdfConfiguration) {
+            PdfConfiguration pdfConfiguration,
+            Clock clock) {
+        this.clock = clock;
         this.templateService = templateService;
         this.pdfConfiguration = pdfConfiguration;
         this.handlerByFormat = new EnumMap<>(DocumentFormat.class);
@@ -63,7 +69,7 @@ public class PdfRenderingServiceImpl implements PdfRenderingService {
         long startedAt = System.nanoTime();
         try {
             Map<String, Object> templateContext = new HashMap<>();
-            templateContext.put("generatedAt", Instant.now().toString());
+            templateContext.put("generatedAt", Instant.now(clock).toString());
             templateContext.put("format", request.getFormat().name());
             templateContext.put("title", "Rendered Document");
 

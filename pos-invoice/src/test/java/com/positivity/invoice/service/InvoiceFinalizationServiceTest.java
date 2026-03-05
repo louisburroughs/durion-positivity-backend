@@ -1,5 +1,8 @@
 package com.positivity.invoice.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
@@ -54,6 +57,8 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 class InvoiceFinalizationServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private InvoiceRepository invoiceRepository;
@@ -313,7 +318,7 @@ class InvoiceFinalizationServiceTest {
         UUID invoiceId = UUID.randomUUID();
         UUID workorderId = UUID.randomUUID();
         Invoice invoice = finalizedInvoice(workorderId);
-        invoice.setFinalizedAt(Instant.now().minusSeconds(3600)); // 1h ago — within 24h window
+        invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600)); // 1h ago — within 24h window
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(invoice));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -366,7 +371,7 @@ class InvoiceFinalizationServiceTest {
         UUID invoiceId = UUID.randomUUID();
         Invoice expiredInvoice = finalizedInvoice(UUID.randomUUID());
         // finalizedAt 25h ago — outside the 24h reversion window
-        expiredInvoice.setFinalizedAt(Instant.now().minusSeconds(25 * 3600));
+        expiredInvoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(25 * 3600));
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(expiredInvoice));
 
         assertThatThrownBy(() -> service.revert(invoiceId, "MGR-APPROVAL-001", "Late revert attempt"))
@@ -421,7 +426,7 @@ class InvoiceFinalizationServiceTest {
         invoice.setWorkorderId(workorderId);
         invoice.setStatus(InvoiceStatus.FINALIZED);
         invoice.setTotal(BigDecimal.ZERO);
-        invoice.setFinalizedAt(Instant.now().minusSeconds(3600));
+        invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600));
         invoice.setFinalizedBy("manager-001");
         return invoice;
     }
