@@ -4,24 +4,23 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
-import com.positivity.customer.internal.dto.PromotionRedemptionMapper;
-import com.positivity.customer.internal.entity.PromotionCounter;
-import com.positivity.customer.internal.enums.RedemptionStatus;
 import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.customer.internal.dto.PromotionRedemptionMapper;
 import com.positivity.customer.internal.dto.PromotionRedemptionResponse;
-import com.positivity.customer.internal.entity.PromotionRedemption;
 import com.positivity.customer.internal.dto.RecordRedemptionRequest;
+import com.positivity.customer.internal.entity.PromotionCounter;
+import com.positivity.customer.internal.entity.PromotionRedemption;
+import com.positivity.customer.internal.enums.RedemptionStatus;
 import com.positivity.customer.internal.exception.DuplicateRedemptionException;
 import com.positivity.customer.internal.repository.PromotionCounterRepository;
 import com.positivity.customer.internal.repository.PromotionRedemptionRepository;
-import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.customer.service.PromotionRedemptionService;
+import com.positivity.security.common.SecurityContextHelper;
 
 import lombok.RequiredArgsConstructor;
 

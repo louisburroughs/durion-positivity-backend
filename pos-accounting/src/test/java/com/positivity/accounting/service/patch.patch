@@ -1,0 +1,7 @@
+--- pos-accounting/src/test/java/com/positivity/accounting/service/AccountingPeriodServiceTest.java
++++ pos-accounting/src/test/java/com/positivity/accounting/service/AccountingPeriodServiceTest.java
+@@ -46,3 +46,3 @@
+         now = TEST_CLOCK.instant();
+-        currentPeriod = YearMonth.now(TEST_CLOCK).toString();
++        currentPeriod = YearMonth.now(TEST_CLOCK.withZone(ZoneId.systemDefault())).toString();
+     }

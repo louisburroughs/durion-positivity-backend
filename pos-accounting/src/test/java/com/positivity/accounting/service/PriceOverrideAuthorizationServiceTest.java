@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
@@ -31,11 +32,13 @@ import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServ
 @DisplayName("PriceOverrideAuthorizationService Unit Tests")
 class PriceOverrideAuthorizationServiceTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+            java.time.ZoneOffset.UTC);
     @Mock
     private OverridePolicyThresholdRepository policyRepository;
 
-    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-            java.time.ZoneOffset.UTC);
+    @Spy
+    Clock clock = FIXED_CLOCK;
 
     @InjectMocks
     private PriceOverrideAuthorizationServiceImpl service;

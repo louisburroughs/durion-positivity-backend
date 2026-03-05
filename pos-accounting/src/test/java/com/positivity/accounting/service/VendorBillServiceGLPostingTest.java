@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -36,6 +38,11 @@ import com.positivity.accounting.internal.service.VendorBillServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("VendorBillService - GL Posting Event Emission")
 class VendorBillServiceGLPostingTest {
+
+    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+            java.time.ZoneOffset.UTC);
+    @Spy
+    Clock clock = FIXED_CLOCK;
 
     @Mock
     private VendorBillRepository billRepository;

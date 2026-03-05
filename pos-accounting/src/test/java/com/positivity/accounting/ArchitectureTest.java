@@ -17,122 +17,123 @@ import com.tngtech.archunit.lang.ArchRule;
 @AnalyzeClasses(packages = "com.positivity.accounting", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
 
-    private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL =
-            new DescribedPredicate<>("call UUID.fromString("00000000-0000-0000-0000-000000000001")") {
+        private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
+                        "call UUID.randomUUID()") {
                 @Override
                 public boolean test(JavaCall<?> input) {
-                    return input.getTargetOwner().isEquivalentTo(UUID.class)
-                            && "randomUUID".equals(input.getName());
+                        return input.getTargetOwner().isEquivalentTo(UUID.class)
+                                        && "randomUUID".equals(input.getName());
                 }
-            };
+        };
 
-    @ArchTest
-    static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
-            .that().resideInAPackage("..internal.controller..")
-            .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
-            .allowEmptyShould(true)
-            .because("controllers must go through service layer");
+        @ArchTest
+        static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
+                        .that().resideInAPackage("..internal.controller..")
+                        .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
+                        .allowEmptyShould(true)
+                        .because("controllers must go through service layer");
 
-    @ArchTest
-    static final ArchRule controllers_should_not_access_entities_directly = noClasses()
-            .that().resideInAPackage("..internal.controller..")
-            .should().dependOnClassesThat().resideInAPackage("..internal.entity..")
-            .allowEmptyShould(true)
-            .because("controllers should work with DTOs, not entities");
+        @ArchTest
+        static final ArchRule controllers_should_not_access_entities_directly = noClasses()
+                        .that().resideInAPackage("..internal.controller..")
+                        .should().dependOnClassesThat().resideInAPackage("..internal.entity..")
+                        .allowEmptyShould(true)
+                        .because("controllers should work with DTOs, not entities");
 
-    @ArchTest
-    static final ArchRule services_should_not_depend_on_controllers = noClasses()
-            .that().resideInAPackage("..service..")
-            .should().dependOnClassesThat().resideInAPackage("..internal.controller..")
-            .allowEmptyShould(true)
-            .because("services should not depend on web layer");
+        @ArchTest
+        static final ArchRule services_should_not_depend_on_controllers = noClasses()
+                        .that().resideInAPackage("..service..")
+                        .should().dependOnClassesThat().resideInAPackage("..internal.controller..")
+                        .allowEmptyShould(true)
+                        .because("services should not depend on web layer");
 
-    @ArchTest
-    static final ArchRule entities_should_not_depend_on_services = noClasses()
-            .that().resideInAPackage("..internal.entity..")
-            .should().dependOnClassesThat().resideInAPackage("..service..")
-            .allowEmptyShould(true)
-            .because("entities should be independent of business logic");
+        @ArchTest
+        static final ArchRule entities_should_not_depend_on_services = noClasses()
+                        .that().resideInAPackage("..internal.entity..")
+                        .should().dependOnClassesThat().resideInAPackage("..service..")
+                        .allowEmptyShould(true)
+                        .because("entities should be independent of business logic");
 
-    @ArchTest
-    static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
-            .that().resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
-            .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
-            .allowEmptyShould(true)
-            .because("repositories should only be accessed from service layer");
+        @ArchTest
+        static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
+                        .that().resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
+                        .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
+                        .allowEmptyShould(true)
+                        .because("repositories should only be accessed from service layer");
 
-    @ArchTest
-    static final ArchRule config_should_not_depend_on_internal_service_implementations = noClasses()
-            .that().resideInAPackage("..internal.config..")
-            .should().dependOnClassesThat().resideInAPackage("..internal.service..")
-            .allowEmptyShould(true)
-            .because("config should depend on service interfaces, not internal service implementations");
+        @ArchTest
+        static final ArchRule config_should_not_depend_on_internal_service_implementations = noClasses()
+                        .that().resideInAPackage("..internal.config..")
+                        .should().dependOnClassesThat().resideInAPackage("..internal.service..")
+                        .allowEmptyShould(true)
+                        .because("config should depend on service interfaces, not internal service implementations");
 
-    @ArchTest
-    static final ArchRule spring_boot_application_should_be_in_root_package = classes()
-            .that().areAnnotatedWith("org.springframework.boot.autoconfigure.SpringBootApplication")
-            .should().resideInAPackage("com.positivity.accounting")
-            .andShould().resideOutsideOfPackages("..internal..", "..service..")
-            .allowEmptyShould(true)
-            .because("@SpringBootApplication must be at root for component scanning");
+        @ArchTest
+        static final ArchRule spring_boot_application_should_be_in_root_package = classes()
+                        .that().areAnnotatedWith("org.springframework.boot.autoconfigure.SpringBootApplication")
+                        .should().resideInAPackage("com.positivity.accounting")
+                        .andShould().resideOutsideOfPackages("..internal..", "..service..")
+                        .allowEmptyShould(true)
+                        .because("@SpringBootApplication must be at root for component scanning");
 
-    @ArchTest
-    static final ArchRule only_service_layer_should_be_public_api = classes()
-            .that().resideInAPackage("com.positivity.accounting.service..")
-            .and().areNotAnonymousClasses()
-            .and().areNotInnerClasses()
-            .should().bePublic()
-            .allowEmptyShould(true)
-            .because("service layer is the public API of this module");
+        @ArchTest
+        static final ArchRule only_service_layer_should_be_public_api = classes()
+                        .that().resideInAPackage("com.positivity.accounting.service..")
+                        .and().areNotAnonymousClasses()
+                        .and().areNotInnerClasses()
+                        .should().bePublic()
+                        .allowEmptyShould(true)
+                        .because("service layer is the public API of this module");
 
-    @ArchTest
-    static final ArchRule service_package_should_only_contain_interfaces = classes()
-            .that().resideInAPackage("com.positivity.accounting.service..")
-            .and().areNotInterfaces()
-            .and().areNotEnums()
-            .and().areNotAnnotations()
-            .and().areNotAnonymousClasses()
-            .and().areNotInnerClasses()
-            .should().beInterfaces()
-            .allowEmptyShould(true)
-            .because("only interfaces are allowed in com.positivity.accounting.service");
+        @ArchTest
+        static final ArchRule service_package_should_only_contain_interfaces = classes()
+                        .that().resideInAPackage("com.positivity.accounting.service..")
+                        .and().areNotInterfaces()
+                        .and().areNotEnums()
+                        .and().areNotAnnotations()
+                        .and().areNotAnonymousClasses()
+                        .and().areNotInnerClasses()
+                        .should().beInterfaces()
+                        .allowEmptyShould(true)
+                        .because("only interfaces are allowed in com.positivity.accounting.service");
 
-    @ArchTest
-    static final ArchRule mapped_controller_methods_should_require_authorization = methods()
-            .that().areAnnotatedWith("org.springframework.web.bind.annotation.RequestMapping")
-            .or().areAnnotatedWith("org.springframework.web.bind.annotation.GetMapping")
-            .or().areAnnotatedWith("org.springframework.web.bind.annotation.PostMapping")
-            .or().areAnnotatedWith("org.springframework.web.bind.annotation.PutMapping")
-            .or().areAnnotatedWith("org.springframework.web.bind.annotation.DeleteMapping")
-            .or().areAnnotatedWith("org.springframework.web.bind.annotation.PatchMapping")
-            .should().beAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
-            .orShould().beDeclaredInClassesThat()
-            .areAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
-            .allowEmptyShould(true)
-            .because("all HTTP endpoints must declare authorization guards");
+        @ArchTest
+        static final ArchRule mapped_controller_methods_should_require_authorization = methods()
+                        .that().areAnnotatedWith("org.springframework.web.bind.annotation.RequestMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.GetMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.PostMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.PutMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.DeleteMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.PatchMapping")
+                        .should().beAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
+                        .orShould().beDeclaredInClassesThat()
+                        .areAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
+                        .allowEmptyShould(true)
+                        .because("all HTTP endpoints must declare authorization guards");
 
-    @ArchTest
-    static final ArchRule packages_should_be_free_of_cycles = slices()
-            .matching("com.positivity.accounting.internal.service.(*)..")
-            .should().beFreeOfCycles()
-            .allowEmptyShould(true)
-            
-            .because("service package cycles make the module harder to maintain and evolve");
+        @ArchTest
+        static final ArchRule packages_should_be_free_of_cycles = slices()
+                        .matching("com.positivity.accounting.internal.service.(*)..")
+                        .should().beFreeOfCycles()
+                        .allowEmptyShould(true)
 
-    @ArchTest
-    static final ArchRule entities_should_use_uuidv7_id_annotation = classes()
-            .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
-            .and().areAnnotatedWith("jakarta.persistence.Entity")
-            .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
-            .orShould().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
-            .allowEmptyShould(true)
-            .because("ADR-0013 mandates UUID v7 IDs via shared generator strategy");
+                        .because("service package cycles make the module harder to maintain and evolve");
 
-    @ArchTest
-    static final ArchRule entities_should_not_call_uuid_random_uuid = noClasses()
-            .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
-            .and().areAnnotatedWith("jakarta.persistence.Entity")
-            .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
-            .allowEmptyShould(true)
-            .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
+        @ArchTest
+        static final ArchRule entities_should_use_uuidv7_id_annotation = classes()
+                        .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
+                        .and().areAnnotatedWith("jakarta.persistence.Entity")
+                        .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
+                        .orShould().dependOnClassesThat()
+                        .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
+                        .allowEmptyShould(true)
+                        .because("ADR-0013 mandates UUID v7 IDs via shared generator strategy");
+
+        @ArchTest
+        static final ArchRule entities_should_not_call_uuid_random_uuid = noClasses()
+                        .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
+                        .and().areAnnotatedWith("jakarta.persistence.Entity")
+                        .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
+                        .allowEmptyShould(true)
+                        .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
 }

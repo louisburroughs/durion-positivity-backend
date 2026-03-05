@@ -1,17 +1,18 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.config.TestSecurityConfig;
-import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
-import com.positivity.accounting.internal.entity.InvoiceStatusView;
-import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
-import com.positivity.accounting.internal.enums.PaymentStatus;
-import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
-import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
-import com.positivity.accounting.internal.service.InvoicePaymentStatusServiceImpl;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Spy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
@@ -19,10 +20,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.*;
+import com.positivity.accounting.config.TestSecurityConfig;
+import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
+import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
+import com.positivity.accounting.internal.entity.InvoiceStatusView;
+import com.positivity.accounting.internal.enums.PaymentStatus;
+import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
+import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
+import com.positivity.accounting.internal.service.InvoicePaymentStatusServiceImpl;
 
 /**
  * Integration tests for InvoicePaymentStatusService.
@@ -33,6 +38,11 @@ import static org.junit.jupiter.api.Assertions.*;
 @Import(TestSecurityConfig.class)
 @DisplayName("Phase 3 Integration Tests - Invoice Payment Status Service Wrappers")
 class InvoicePaymentStatusServiceTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    private Clock clock = TEST_CLOCK;
 
     @Autowired
     private InvoicePaymentStatusServiceImpl paymentStatusService;

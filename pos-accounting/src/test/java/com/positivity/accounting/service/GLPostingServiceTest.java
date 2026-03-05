@@ -6,6 +6,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -33,6 +37,11 @@ import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 @DisplayName("GLPostingService Unit Tests")
 class GLPostingServiceTest {
 
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    private Clock clock = TEST_CLOCK;
+
     @Mock
     private JournalEntryServiceImpl journalEntryService;
 
@@ -49,13 +58,13 @@ class GLPostingServiceTest {
 
     @BeforeEach
     void setUp() {
-        testCreditMemoId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testPaymentApplicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testRevenueAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testTaxAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testArAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testCashAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testJournalEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testCreditMemoId = UUID.randomUUID();
+        testPaymentApplicationId = UUID.randomUUID();
+        testRevenueAccountId = UUID.randomUUID();
+        testTaxAccountId = UUID.randomUUID();
+        testArAccountId = UUID.randomUUID();
+        testCashAccountId = UUID.randomUUID();
+        testJournalEntryId = UUID.randomUUID();
     }
 
     // ===== CREDIT MEMO POSTING TESTS =====
