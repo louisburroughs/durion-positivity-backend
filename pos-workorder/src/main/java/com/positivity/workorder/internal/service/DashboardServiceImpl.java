@@ -17,7 +17,6 @@ import com.positivity.workorder.internal.dto.WorkorderSummary;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.DashboardService;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -55,7 +54,7 @@ public class DashboardServiceImpl implements DashboardService {
         try {
             locationUuid = UUID.fromString(locationId);
         } catch (IllegalArgumentException e) {
-            locationUuid = UUID.nameUUIDFromBytes(locationId.getBytes(StandardCharsets.UTF_8));
+            throw new IllegalArgumentException("locationId is not a valid UUID: " + locationId, e);
         }
 
         List<Workorder> workorders = workorderRepository.findByScheduledDateAndLocationId(date, locationUuid);
@@ -64,6 +63,9 @@ public class DashboardServiceImpl implements DashboardService {
         List<PersonAvailability> people = availability != null && availability.getPeople() != null
                 ? availability.getPeople()
                 : List.of();
+
+        List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays =
+            shopmgrOperationalContextClient.getBayStatusForLocation(locationUuid);
 
         List<WorkorderSummary> workorderSummaries = workorders.stream()
                 .map(wo -> WorkorderSummary.builder()
@@ -75,6 +77,13 @@ public class DashboardServiceImpl implements DashboardService {
                         .build())
                 .collect(Collectors.toList());
 
+        Map<String, String> workorderByMechanicId = new LinkedHashMap<>();
+        for (Workorder wo : workorders) {
+            for (String mId : parseMechanicIds(wo.getMechanicIds())) {
+                workorderByMechanicId.putIfAbsent(mId, wo.getId() != null ? wo.getId().toString() : null);
+            }
+        }
+
         List<MechanicStatus> mechanicStatuses = people.stream()
                 .map(pa -> MechanicStatus.builder()
                         .personId(pa.getPersonId())
@@ -83,6 +92,7 @@ public class DashboardServiceImpl implements DashboardService {
                         .currentStatus(pa.getCurrentStatus())
                         .onBreak(pa.getBreakInfo() != null && pa.getBreakInfo().isOnBreak())
                         .breakExpectedReturn(pa.getBreakInfo() != null ? pa.getBreakInfo().getExpectedReturn() : null)
+                        .assignedWorkorderId(workorderByMechanicId.get(pa.getPersonId()))
                         .ptoEntries(pa.getPto() != null
                                 ? pa.getPto().stream()
                                         .map(p -> PtoEntry.builder()
@@ -97,20 +107,43 @@ public class DashboardServiceImpl implements DashboardService {
                 .collect(Collectors.toList());
 
         Map<UUID, BayStatus> bayMap = new LinkedHashMap<>();
+        for (ShopmgrOperationalContextClient.BayAvailabilityDto bayDto : shopmgrBays) {
+            bayMap.put(bayDto.bayId(), BayStatus.builder()
+                    .bayId(bayDto.bayId().toString())
+                    .bayName(bayDto.bayName())
+                    .status(bayDto.status())
+                    .available(!"CLOSED".equals(bayDto.status())
+                            && !"RESERVED".equals(bayDto.status())
+                            && !"UNDER_MAINTENANCE".equals(bayDto.status()))
+                    .build());
+        }
         for (Workorder workorder : workorders) {
-            if (workorder.getResourceId() != null && !bayMap.containsKey(workorder.getResourceId())) {
-                bayMap.put(workorder.getResourceId(), BayStatus.builder()
-                        .bayId(workorder.getResourceId().toString())
-                        .available(false)
-                        .assignedWorkorderId(workorder.getId() != null ? workorder.getId().toString() : null)
-                        .build());
+            if (workorder.getResourceId() != null) {
+                UUID bayUuid = workorder.getResourceId();
+                String assignedId = workorder.getId() != null ? workorder.getId().toString() : null;
+                BayStatus existing = bayMap.get(bayUuid);
+                if (existing != null) {
+                    bayMap.put(bayUuid, BayStatus.builder()
+                            .bayId(existing.getBayId())
+                            .bayName(existing.getBayName())
+                            .status(existing.getStatus())
+                            .available(false)
+                            .assignedWorkorderId(assignedId)
+                            .build());
+                } else {
+                    bayMap.put(bayUuid, BayStatus.builder()
+                            .bayId(bayUuid.toString())
+                            .available(false)
+                            .assignedWorkorderId(assignedId)
+                            .build());
+                }
             }
         }
         List<BayStatus> bayStatuses = new ArrayList<>(bayMap.values());
 
         List<ConflictEntry> conflicts = new ArrayList<>();
         detectBayDoubleBooking(workorders, conflicts);
-        detectBayUnavailable(workorders, locationUuid, conflicts);
+        detectBayUnavailable(workorders, shopmgrBays, conflicts);
         detectMechanicDoubleBookingFromWorkorders(workorders, conflicts);
         detectMechanicStatusConflicts(workorders, people, date, conflicts);
         detectLocationMismatch(workorders, people, conflicts);
@@ -132,7 +165,7 @@ public class DashboardServiceImpl implements DashboardService {
             return Collections.emptyList();
         }
         try {
-            ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+            ObjectMapper mapper = objectMapper;
             return mapper.readValue(mechanicIds, new TypeReference<List<String>>() {
             });
         } catch (Exception e) {
@@ -151,7 +184,7 @@ public class DashboardServiceImpl implements DashboardService {
             return Collections.emptyList();
         }
         try {
-            ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+            ObjectMapper mapper = objectMapper;
             return mapper.readValue(certifications, new TypeReference<List<String>>() {
             });
         } catch (Exception e) {
@@ -178,10 +211,9 @@ public class DashboardServiceImpl implements DashboardService {
 
     private void detectBayUnavailable(
             List<Workorder> workorders,
-            UUID locationId,
+            List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays,
             List<ConflictEntry> conflicts) {
-        List<ShopmgrOperationalContextClient.BayAvailabilityDto> bayStatuses = shopmgrOperationalContextClient
-                .getBayStatusForLocation(locationId);
+        List<ShopmgrOperationalContextClient.BayAvailabilityDto> bayStatuses = shopmgrBays;
         Map<UUID, String> statusByBayId = bayStatuses.stream()
                 .collect(Collectors.toMap(
                         ShopmgrOperationalContextClient.BayAvailabilityDto::bayId,
@@ -234,7 +266,8 @@ public class DashboardServiceImpl implements DashboardService {
 
         Instant dayStart = date.atStartOfDay().toInstant(ZoneOffset.UTC);
         Instant dayEnd = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant fifteenMinFromNow = Instant.now().plusSeconds(900);
+        Instant now = Instant.now();
+        Instant fifteenMinFromNow = now.plusSeconds(900);
 
         for (String mechanicId : assignedMechanicIds) {
             PersonAvailability personAvailability = availabilityByPersonId.get(mechanicId);
@@ -268,9 +301,12 @@ public class DashboardServiceImpl implements DashboardService {
             }
 
             BreakInfo breakInfo = personAvailability.getBreakInfo();
+            // AC-6: Break overlap — expects return within 15 min of query time.
+            // Note: workorder scheduled start time is not yet in the data model (scheduledDate only).
+            // This uses query-time proximity as a proxy until scheduled start is added.
             if (breakInfo != null && breakInfo.isOnBreak()
                     && breakInfo.getExpectedReturn() != null
-                    && breakInfo.getExpectedReturn().isAfter(Instant.now())
+                    && breakInfo.getExpectedReturn().isAfter(now)
                     && breakInfo.getExpectedReturn().isBefore(fifteenMinFromNow)) {
                 conflicts.add(ConflictEntry.builder()
                         .conflictType("MECHANIC_BREAK_OVERLAP")
