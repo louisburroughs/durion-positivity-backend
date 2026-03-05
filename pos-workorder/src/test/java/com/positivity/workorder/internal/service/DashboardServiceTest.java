@@ -29,12 +29,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for CAP-142 Story #60: Daily Dispatch Board Dashboard service layer.
+ * Unit tests for CAP-142 Story #60: Daily Dispatch Board Dashboard service
+ * layer.
  *
- * <p>Validates that {@link DashboardServiceImpl} correctly aggregates workorders,
+ * <p>
+ * Validates that {@link DashboardServiceImpl} correctly aggregates workorders,
  * mechanics, bays, and conflict entries for the dispatch board view, including
  * double-booked mechanic (AC-4a), PTO overlap (AC-4b), break overlap (AC-6),
- * clock-out mismatch (AC-4d), bay double-booking (AC-2a), bay unavailable (AC-2b),
+ * clock-out mismatch (AC-4d), bay double-booking (AC-2a), bay unavailable
+ * (AC-2b),
  * location mismatch (AC-3a), and skill mismatch (AC-3b).
  *
  * Issue: CAP-142
@@ -113,7 +116,8 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-4a: Double-booked mechanic → ConflictEntry BLOCKING / DOUBLE_BOOKED_MECHANIC
+    // AC-4a: Double-booked mechanic → ConflictEntry BLOCKING /
+    // DOUBLE_BOOKED_MECHANIC
     // -----------------------------------------------------------------------
 
     @Test
@@ -148,7 +152,8 @@ class DashboardServiceTest {
     @DisplayName("AC-4b: Workorder on date where mechanic has PTO generates MECHANIC_PTO_OVERLAP BLOCKING conflict")
     void getDashboard_mechanicPtoOverlap_returnsBlockingConflict() {
         // Arrange
-        // Issue CAP-142: AC-4b — mechanic has PTO that covers the workorder's scheduledDate
+        // Issue CAP-142: AC-4b — mechanic has PTO that covers the workorder's
+        // scheduledDate
         Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-003", null);
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
                 .thenReturn(List.of(wo));
@@ -226,14 +231,16 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-4d: Mechanic clocked in for a different job → BLOCKING / DOUBLE_BOOKED_MECHANIC
+    // AC-4d: Mechanic clocked in for a different job → BLOCKING /
+    // DOUBLE_BOOKED_MECHANIC
     // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("AC-4d: Mechanic clocked in for another job without clock-out generates CLOCK_OUT_MISMATCH WARNING conflict")
     void getDashboard_mechanicClockedInForDifferentJob_returnsWarning() {
         // Arrange
-        // Issue CAP-142: AC-4d — mechanic is ON_JOB (clocked in elsewhere, not clocked out) → CLOCK_OUT_MISMATCH WARNING
+        // Issue CAP-142: AC-4d — mechanic is ON_JOB (clocked in elsewhere, not clocked
+        // out) → CLOCK_OUT_MISMATCH WARNING
         Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-005", null);
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
                 .thenReturn(List.of(wo));
@@ -316,7 +323,8 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-2b: Bay marked CLOSED/RESERVED/UNDER_MAINTENANCE → BAY_UNAVAILABLE BLOCKING
+    // AC-2b: Bay marked CLOSED/RESERVED/UNDER_MAINTENANCE → BAY_UNAVAILABLE
+    // BLOCKING
     // -----------------------------------------------------------------------
 
     @Test
@@ -354,7 +362,8 @@ class DashboardServiceTest {
     @DisplayName("AC-3a: Mechanic at different location than workorder generates LOCATION_MISMATCH WARNING")
     void getDashboard_mechanicAtDifferentLocation_returnsWarning() {
         // Arrange
-        // Issue CAP-142: AC-3a — mechanic currentLocationId differs from workorder locationId
+        // Issue CAP-142: AC-3a — mechanic currentLocationId differs from workorder
+        // locationId
         UUID differentLocation = UUID.fromString("00000000-0000-0000-0000-000000000002");
         Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-011", null);
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
@@ -386,14 +395,16 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-3b: Mechanic lacks required certification → MECHANIC_SKILL_MISMATCH WARNING
+    // AC-3b: Mechanic lacks required certification → MECHANIC_SKILL_MISMATCH
+    // WARNING
     // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("AC-3b: Mechanic lacks required certification generates MECHANIC_SKILL_MISMATCH WARNING")
     void getDashboard_mechanicMissingCertification_returnsWarning() {
         // Arrange
-        // Issue CAP-142: AC-3b — workorder requires ALIGNMENT_CERT but mechanic only has BRAKE_CERT
+        // Issue CAP-142: AC-3b — workorder requires ALIGNMENT_CERT but mechanic only
+        // has BRAKE_CERT
         Workorder wo = Workorder.builder()
                 .id(UUID.randomUUID())
                 .locationId(LOCATION_UUID)
@@ -538,7 +549,8 @@ class DashboardServiceTest {
         when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
                 .thenReturn(List.of());
 
-        // Act + Assert: should not throw; invalid certifications treated as empty → no skill conflict
+        // Act + Assert: should not throw; invalid certifications treated as empty → no
+        // skill conflict
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
         assertThat(response).isNotNull();
         assertThat(response.getConflicts())

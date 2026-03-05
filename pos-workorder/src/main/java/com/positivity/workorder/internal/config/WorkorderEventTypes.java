@@ -448,7 +448,10 @@ public final class WorkorderEventTypes {
 
         // ==================== DASHBOARD EVENTS (CAP-142) ====================
 
-        /** Daily dispatch board dashboard — custom SLA: P50<1.0s, P95<2.0s, P99<3.5s (issue #60) */
+        /**
+         * Daily dispatch board dashboard — custom SLA: P50<1.0s, P95<2.0s, P99<3.5s
+         * (issue #60)
+         */
         public static final EventTypeRegistration WORKEXEC_DASHBOARD_TODAY_GET = EventTypeRegistration.builder()
                         .typeCode("WORKEXEC_DASHBOARD_TODAY_GET")
                         .description("Get daily dispatch board dashboard")

@@ -22,7 +22,8 @@ public class PeopleAvailabilityClient {
 
     /**
      * Fetches mechanic availability for a given location and date.
-     * Returns real-time clock status, break state, PTO, and schedule for each mechanic.
+     * Returns real-time clock status, break state, PTO, and schedule for each
+     * mechanic.
      */
     public PeopleAvailabilityResponse fetchAvailability(@NonNull String locationId, @NonNull LocalDate date) {
         try {

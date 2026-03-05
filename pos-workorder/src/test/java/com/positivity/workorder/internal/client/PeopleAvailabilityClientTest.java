@@ -26,7 +26,8 @@ import java.util.function.Function;
 /**
  * Unit tests for {@link PeopleAvailabilityClient}.
  *
- * <p>Happy-path test uses Mockito deep stubs to avoid Jackson deserialization
+ * <p>
+ * Happy-path test uses Mockito deep stubs to avoid Jackson deserialization
  * configuration issues with Lombok {@code @Value @Builder} classes.
  * Error-path tests use an embedded {@link HttpServer} to exercise real
  * RestClient HTTP-level error handling.
@@ -125,7 +126,6 @@ class PeopleAvailabilityClientTest {
                 .build();
         return new PeopleAvailabilityClient(restClient);
     }
-
 
     private HttpServer startServer(int statusCode, String body, AtomicInteger callCount)
             throws IOException {

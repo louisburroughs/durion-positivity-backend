@@ -27,9 +27,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Controller-layer tests for CAP-142 Story #60: Daily Dispatch Board Dashboard endpoints.
+ * Controller-layer tests for CAP-142 Story #60: Daily Dispatch Board Dashboard
+ * endpoints.
  *
- * <p>Verifies HTTP routing, required parameter enforcement, date parameter forwarding,
+ * <p>
+ * Verifies HTTP routing, required parameter enforcement, date parameter
+ * forwarding,
  * and default-date (today) behaviour for {@link DashboardController}.
  *
  * Issue: CAP-142
@@ -52,7 +55,8 @@ class DashboardControllerTest {
     private DashboardService dashboardService;
 
     // -----------------------------------------------------------------------
-    // AC-1 (controller): GET with locationId returns 200 OK with DashboardResponse body
+    // AC-1 (controller): GET with locationId returns 200 OK with DashboardResponse
+    // body
     // -----------------------------------------------------------------------
 
     @Test
@@ -113,8 +117,8 @@ class DashboardControllerTest {
 
         // Act
         mockMvc.perform(get(DASHBOARD_URL)
-                        .param("locationId", "LOC-123")
-                        .param("date", "2026-03-01"))
+                .param("locationId", "LOC-123")
+                .param("date", "2026-03-01"))
                 .andExpect(status().isOk());
 
         // Assert: service received the exact parsed date

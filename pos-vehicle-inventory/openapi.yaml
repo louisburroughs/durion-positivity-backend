@@ -36,14 +36,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: No preferences found for this vehicle
+        "200":
+          description: Preferences found and returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "200":
-          description: Preferences found and returned
+        "404":
+          description: No preferences found for this vehicle
           content:
             '*/*':
               schema:
@@ -70,26 +70,26 @@ paths:
               $ref: "#/components/schemas/PreferencesUpsertDto"
         required: true
       responses:
-        "200":
-          description: Preferences updated successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "400":
           description: Invalid preference data
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "201":
-          description: Preferences created successfully
+        "200":
+          description: Preferences updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "404":
           description: Vehicle not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
+        "201":
+          description: Preferences created successfully
           content:
             '*/*':
               schema:
