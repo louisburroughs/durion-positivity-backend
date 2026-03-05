@@ -83,7 +83,7 @@ public class PostingRuleController {
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_CREATE", apiVersion = "1")
         public ResponseEntity<PostingRuleSetResponse> createPostingRuleSet(
                         @Valid @RequestBody PostingRuleSetCreateRequest request) {
-                log.info("Create posting rule set - name={}, eventType={}", request.getName(), request.getEventType());
+
                 PostingRuleSetResponse response = postingRuleService.createPostingRuleSetWithVersion(request);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
@@ -112,7 +112,7 @@ public class PostingRuleController {
         public ResponseEntity<PostingRuleSetResponse> updatePostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
                         @Valid @RequestBody PostingRuleSetCreateRequest request) {
-                log.info("Update posting rule set - ruleSetId={}, name={}", postingRuleSetId, request.getName());
+
                 // Delegate to service layer which handles entity creation and updates
                 postingRuleService.updatePostingRuleSetFromRequest(postingRuleSetId, request);
                 PostingRuleSetResponse response = postingRuleService.getPostingRuleSetAsResponse(postingRuleSetId);

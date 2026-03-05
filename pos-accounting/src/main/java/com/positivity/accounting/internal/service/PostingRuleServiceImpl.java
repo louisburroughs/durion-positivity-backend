@@ -44,7 +44,6 @@ import java.util.UUID;
 public class PostingRuleServiceImpl implements PostingRuleService {
     private final Clock clock;
 
-
     private final PostingRuleSetRepository ruleSetRepository;
     private final PostingRuleVersionRepository versionRepository;
 
@@ -52,6 +51,9 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleSetResponse createPostingRuleSetWithVersion(PostingRuleSetCreateRequest request) {
+
+        log.info("Create posting rule set - name={}, eventType={}", request.getName(), request.getEventType());
+
         PostingRuleSet ruleSet = PostingRuleMapper.toEntity(request);
 
         PostingRuleVersion version = new PostingRuleVersion();
@@ -69,7 +71,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersionResponse publishRuleSet(UUID ruleSetId) {
-        List<PostingRuleVersion> versions = listVersions(ruleSetId);
+        List<PostingRuleVersion> versions = findVersionsByRuleSetId(ruleSetId);
         PostingRuleVersion draftVersion = versions.stream()
                 .filter(v -> v.getState() == PostingRuleSetState.DRAFT)
                 .findFirst()
@@ -81,7 +83,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersionResponse archiveRuleSet(UUID ruleSetId) {
-        List<PostingRuleVersion> versions = listVersions(ruleSetId);
+        List<PostingRuleVersion> versions = findVersionsByRuleSetId(ruleSetId);
         PostingRuleVersion publishedVersion = versions.stream()
                 .filter(v -> v.getState() == PostingRuleSetState.PUBLISHED)
                 .findFirst()
@@ -109,7 +111,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId, int page, int size) {
-        List<PostingRuleVersion> versions = listVersions(ruleSetId);
+        List<PostingRuleVersion> versions = findVersionsByRuleSetId(ruleSetId);
         // Apply pagination
         int fromIndex = page * size;
         int toIndex = Math.min(fromIndex + size, versions.size());
@@ -123,6 +125,8 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleSet updatePostingRuleSetFromRequest(UUID ruleSetId, PostingRuleSetCreateRequest request) {
+
+        log.info("Update posting rule set - ruleSetId={}, name={}", ruleSetId, request.getName());
         PostingRuleSet updates = PostingRuleMapper.toEntity(request);
         return updatePostingRuleSet(ruleSetId, updates);
     }
@@ -273,6 +277,14 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public List<PostingRuleVersion> listVersions(UUID ruleSetId) {
+        return findVersionsByRuleSetId(ruleSetId);
+    }
+
+    /**
+     * Internal lookup — no transactional annotation so it inherits the caller's
+     * transaction context without the proxy-bypass pitfall.
+     */
+    private List<PostingRuleVersion> findVersionsByRuleSetId(UUID ruleSetId) {
         return versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId);
     }
 }
