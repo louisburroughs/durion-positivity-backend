@@ -20,13 +20,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Unit tests for {@link ShopmgrOperationalContextClient}.
  *
- * <p>Uses an embedded {@link HttpServer} to exercise real RestClient paths,
- * including 200 success, 404 fallback, non-404 rethrow, and connection failures.
+ * <p>
+ * Uses an embedded {@link HttpServer} to exercise real RestClient paths,
+ * including 200 success, 404 fallback, non-404 rethrow, and connection
+ * failures.
  */
 class ShopmgrOperationalContextClientTest {
 
     private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID LOCATION_ID  = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
     // -----------------------------------------------------------------------
     // getOperationalContext
@@ -104,8 +106,7 @@ class ShopmgrOperationalContextClientTest {
         try {
             ShopmgrOperationalContextClient client = buildClient(server);
 
-            List<ShopmgrOperationalContextClient.BayAvailabilityDto> bays =
-                    client.getBayStatusForLocation(LOCATION_ID);
+            List<ShopmgrOperationalContextClient.BayAvailabilityDto> bays = client.getBayStatusForLocation(LOCATION_ID);
 
             assertThat(bays).hasSize(2);
             assertThat(bays.get(0).status()).isEqualTo("OPEN");
@@ -124,8 +125,7 @@ class ShopmgrOperationalContextClientTest {
         try {
             ShopmgrOperationalContextClient client = buildClient(server);
 
-            List<ShopmgrOperationalContextClient.BayAvailabilityDto> bays =
-                    client.getBayStatusForLocation(LOCATION_ID);
+            List<ShopmgrOperationalContextClient.BayAvailabilityDto> bays = client.getBayStatusForLocation(LOCATION_ID);
 
             assertThat(bays).isEmpty();
             assertThat(callCount.get()).isEqualTo(1);
@@ -157,8 +157,7 @@ class ShopmgrOperationalContextClientTest {
         ShopmgrOperationalContextClient client = new ShopmgrOperationalContextClient(
                 RestClient.builder(), "http://localhost:1");
 
-        List<ShopmgrOperationalContextClient.BayAvailabilityDto> bays =
-                client.getBayStatusForLocation(LOCATION_ID);
+        List<ShopmgrOperationalContextClient.BayAvailabilityDto> bays = client.getBayStatusForLocation(LOCATION_ID);
 
         assertThat(bays).isEmpty();
     }

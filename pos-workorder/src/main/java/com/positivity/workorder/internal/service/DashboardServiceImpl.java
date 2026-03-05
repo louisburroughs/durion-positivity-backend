@@ -34,8 +34,10 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 
 /**
- * Implementation of {@link DashboardService} for the Daily Dispatch Board Dashboard.
- * Aggregates workorder, mechanic, and bay data for conflict detection and display.
+ * Implementation of {@link DashboardService} for the Daily Dispatch Board
+ * Dashboard.
+ * Aggregates workorder, mechanic, and bay data for conflict detection and
+ * display.
  */
 @Service
 @Slf4j
@@ -60,7 +62,8 @@ public class DashboardServiceImpl implements DashboardService {
 
         PeopleAvailabilityResponse availability = peopleAvailabilityClient.fetchAvailability(locationId, date);
         List<PersonAvailability> people = availability != null && availability.getPeople() != null
-                ? availability.getPeople() : List.of();
+                ? availability.getPeople()
+                : List.of();
 
         List<WorkorderSummary> workorderSummaries = workorders.stream()
                 .map(wo -> WorkorderSummary.builder()
@@ -177,8 +180,8 @@ public class DashboardServiceImpl implements DashboardService {
             List<Workorder> workorders,
             UUID locationId,
             List<ConflictEntry> conflicts) {
-        List<ShopmgrOperationalContextClient.BayAvailabilityDto> bayStatuses =
-                shopmgrOperationalContextClient.getBayStatusForLocation(locationId);
+        List<ShopmgrOperationalContextClient.BayAvailabilityDto> bayStatuses = shopmgrOperationalContextClient
+                .getBayStatusForLocation(locationId);
         Map<UUID, String> statusByBayId = bayStatuses.stream()
                 .collect(Collectors.toMap(
                         ShopmgrOperationalContextClient.BayAvailabilityDto::bayId,
