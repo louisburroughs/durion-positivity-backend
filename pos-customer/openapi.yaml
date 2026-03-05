@@ -1339,7 +1339,7 @@ components:
         description:
           type: string
           description: Human-readable vehicle description.
-          example: 2024
+          example: "2024 Ford F-150 XL"
         licensePlate:
           type: string
           description: License plate value.
