@@ -1,19 +1,29 @@
 package com.positivity.accounting.internal.audit.entity;
 
-import java.time.Clock;
-
-import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
-import lombok.*;
-
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import com.positivity.shared.id.UUIDv7Id;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.positivity.shared.id.UUIDv7Id;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 /**
  * Configuration for role-based price override thresholds.
  * 

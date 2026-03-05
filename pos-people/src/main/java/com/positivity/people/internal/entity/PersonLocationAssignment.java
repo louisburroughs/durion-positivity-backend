@@ -1,14 +1,24 @@
 package com.positivity.people.internal.entity;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import com.positivity.people.internal.enums.AssignmentStatus;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
@@ -17,22 +27,11 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.jspecify.annotations.NonNull;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.UUID;
-
-import jakarta.persistence.GeneratedValue;
-import com.positivity.shared.id.UUIDv7Id;
 
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "person_location_assignment",
-		uniqueConstraints = @UniqueConstraint(columnNames = { "person_id", "location_id", "role", "effective_from" }))
+@Table(name = "person_location_assignment", uniqueConstraints = @UniqueConstraint(columnNames = { "person_id",
+		"location_id", "role", "effective_from" }))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

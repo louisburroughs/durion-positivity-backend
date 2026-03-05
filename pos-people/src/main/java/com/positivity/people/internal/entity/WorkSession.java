@@ -13,7 +13,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.UUID;
-import com.positivity.shared.id.UUIDv7Generator;
 
 import jakarta.persistence.GeneratedValue;
 import com.positivity.shared.id.UUIDv7Id;

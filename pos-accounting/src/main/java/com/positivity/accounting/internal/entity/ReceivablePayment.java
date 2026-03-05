@@ -1,21 +1,35 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Clock;
-
-import com.positivity.shared.id.UUIDv7Generator;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import jakarta.persistence.*;
-import lombok.*;
-import org.jspecify.annotations.NonNull;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import com.positivity.shared.id.UUIDv7Id;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
 /**
  * ReceivablePayment - tracks cleared payments available for application to AR
  * invoices.
@@ -43,16 +57,13 @@ import com.positivity.shared.id.UUIDv7Id;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "receivable_payment", 
-    indexes = {
+@Table(name = "receivable_payment", indexes = {
         @Index(name = "idx_receivable_payment_customer", columnList = "customer_id"),
         @Index(name = "idx_receivable_payment_status", columnList = "status"),
         @Index(name = "idx_receivable_payment_cleared_at", columnList = "cleared_at")
-    },
-    uniqueConstraints = {
+}, uniqueConstraints = {
         @UniqueConstraint(name = "uk_receivable_payment_source_event", columnNames = "source_event_id")
-    }
-)
+})
 public class ReceivablePayment {
 
     @EqualsAndHashCode.Include
@@ -64,7 +75,7 @@ public class ReceivablePayment {
 
     @PrePersist
     public void onPrePersist() {
-if (status == null) {
+        if (status == null) {
             status = ReceivablePaymentStatus.AVAILABLE;
         }
     }
@@ -105,6 +116,7 @@ if (status == null) {
 
     @Column(name = "modified_by", length = 50)
     private String modifiedBy;
+
     /**
      * Check if this payment has sufficient funds for an application.
      * 

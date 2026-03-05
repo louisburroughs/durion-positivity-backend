@@ -40,8 +40,6 @@ import java.util.function.Function;
  */
 class PeopleAvailabilityClientTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
-
     private static final LocalDate TEST_DATE = LocalDate.of(2026, 3, 1);
     private static final String LOCATION_ID = "LOC-001";
 
@@ -73,7 +71,7 @@ class PeopleAvailabilityClientTest {
                 .body(PeopleAvailabilityResponse.class))
                 .thenReturn(expected);
 
-        PeopleAvailabilityClient client = new PeopleAvailabilityClient(mockRestClient);
+        PeopleAvailabilityClient client = new PeopleAvailabilityClient(TEST_CLOCK, mockRestClient);
         var response = client.fetchAvailability(LOCATION_ID, TEST_DATE);
 
         assertThat(response).isNotNull();
@@ -173,7 +171,7 @@ class PeopleAvailabilityClientTest {
         RestClient restClient = RestClient.builder()
                 .baseUrl("http://localhost:" + server.getAddress().getPort())
                 .build();
-        return new PeopleAvailabilityClient(restClient);
+        return new PeopleAvailabilityClient(TEST_CLOCK, restClient);
     }
 
     private HttpServer startServer(int statusCode, String body, AtomicInteger callCount)
