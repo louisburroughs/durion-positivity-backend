@@ -35,318 +35,295 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class EmployeeServiceImpl implements EmployeeService {
-    private final Clock clock;
 
-    private static final String SYSTEM_ACTOR = "system";
+	private final Clock clock;
 
-    private final PersonRepository personRepository;
-    private final EmployeeOffboardingRetryRepository offboardingRetryRepository;
-    private final ObjectMapper objectMapper;
+	private static final String SYSTEM_ACTOR = "system";
 
-    @Override
-    @Transactional
-    public @NonNull EmployeeProfileDto createEmployee(@NonNull CreateEmployeeRequest request) {
-        validateEmployeeRequest(request.getHireDate(), request.getTerminationDate());
-        List<String> warnings = evaluateDuplicatePolicy(null, request.getDuplicatePolicy(), request.getEmployeeNumber(),
-                request.getContactInfo(), request.getLegalName());
+	private final PersonRepository personRepository;
 
-        Person entity = new Person();
-        applyEmployeeFields(entity, new EmployeeFieldSet(
-                request.getLegalName(),
-                request.getPreferredName(),
-                request.getEmployeeNumber(),
-                request.getStatus(),
-                request.getHireDate(),
-                request.getTerminationDate(),
-                request.getContactInfo()));
+	private final EmployeeOffboardingRetryRepository offboardingRetryRepository;
 
-        Person saved = personRepository.save(entity);
-        return toEmployeeProfile(saved, warnings);
-    }
+	private final ObjectMapper objectMapper;
 
-    @Override
-    @Transactional(readOnly = true)
-    public @NonNull EmployeeProfileDto getEmployee(@NonNull UUID employeeId) {
-        Person entity = personRepository.findById(employeeId)
-                .orElseThrow(() -> new PersonNotFoundException(employeeId));
-        return toEmployeeProfile(entity, List.of());
-    }
+	@Override
+	@Transactional
+	public @NonNull EmployeeProfileDto createEmployee(@NonNull CreateEmployeeRequest request) {
+		validateEmployeeRequest(request.getHireDate(), request.getTerminationDate());
+		List<String> warnings = evaluateDuplicatePolicy(null, request.getDuplicatePolicy(), request.getEmployeeNumber(),
+				request.getContactInfo(), request.getLegalName());
 
-    @Override
-    @Transactional
-    public @NonNull EmployeeProfileDto updateEmployee(@NonNull UUID employeeId,
-            @NonNull UpdateEmployeeRequest request) {
-        validateEmployeeRequest(request.getHireDate(), request.getTerminationDate());
+		Person entity = new Person();
+		applyEmployeeFields(entity,
+				new EmployeeFieldSet(request.getLegalName(), request.getPreferredName(), request.getEmployeeNumber(),
+						request.getStatus(), request.getHireDate(), request.getTerminationDate(),
+						request.getContactInfo()));
 
-        Person entity = personRepository.findById(employeeId)
-                .orElseThrow(() -> new PersonNotFoundException(employeeId));
+		Person saved = personRepository.save(entity);
+		return toEmployeeProfile(saved, warnings);
+	}
 
-        List<String> warnings = evaluateDuplicatePolicy(
-                employeeId,
-                request.getDuplicatePolicy(),
-                request.getEmployeeNumber(),
-                request.getContactInfo(),
-                request.getLegalName());
+	@Override
+	@Transactional(readOnly = true)
+	public @NonNull EmployeeProfileDto getEmployee(@NonNull UUID employeeId) {
+		Person entity = personRepository.findById(employeeId)
+			.orElseThrow(() -> new PersonNotFoundException(employeeId));
+		return toEmployeeProfile(entity, List.of());
+	}
 
-        EmployeeStatus previousStatus = entity.getStatus();
-        applyEmployeeFields(entity, new EmployeeFieldSet(
-                request.getLegalName(),
-                request.getPreferredName(),
-                request.getEmployeeNumber(),
-                request.getStatus(),
-                request.getHireDate(),
-                request.getTerminationDate(),
-                request.getContactInfo()));
+	@Override
+	@Transactional
+	public @NonNull EmployeeProfileDto updateEmployee(@NonNull UUID employeeId,
+			@NonNull UpdateEmployeeRequest request) {
+		validateEmployeeRequest(request.getHireDate(), request.getTerminationDate());
 
-        if (previousStatus != request.getStatus()) {
-            entity.setStatusEffectiveAt(Instant.now(clock));
-        }
+		Person entity = personRepository.findById(employeeId)
+			.orElseThrow(() -> new PersonNotFoundException(employeeId));
 
-        Person saved = personRepository.save(entity);
-        return toEmployeeProfile(saved, warnings);
-    }
+		List<String> warnings = evaluateDuplicatePolicy(employeeId, request.getDuplicatePolicy(),
+				request.getEmployeeNumber(), request.getContactInfo(), request.getLegalName());
 
-    @Override
-    @Transactional
-    public @NonNull EmployeeProfileDto disableEmployee(@NonNull UUID employeeId,
-            @NonNull DisableEmployeeRequestDto request) {
-        Person entity = personRepository.findById(employeeId)
-                .orElseThrow(() -> new PersonNotFoundException(employeeId));
+		EmployeeStatus previousStatus = entity.getStatus();
+		applyEmployeeFields(entity,
+				new EmployeeFieldSet(request.getLegalName(), request.getPreferredName(), request.getEmployeeNumber(),
+						request.getStatus(), request.getHireDate(), request.getTerminationDate(),
+						request.getContactInfo()));
 
-        EmployeeStatus currentStatus = entity.getStatus();
-        if (currentStatus == EmployeeStatus.DISABLED || currentStatus == EmployeeStatus.TERMINATED) {
-            throw new IllegalArgumentException("Employee is already DISABLED or TERMINATED");
-        }
-        if (currentStatus != EmployeeStatus.ACTIVE) {
-            throw new IllegalArgumentException("Only ACTIVE employees can be disabled");
-        }
+		if (previousStatus != request.getStatus()) {
+			entity.setStatusEffectiveAt(Instant.now(clock));
+		}
 
-        entity.setStatus(EmployeeStatus.DISABLED);
-        entity.setStatusEffectiveAt(Instant.now(clock));
-        Person saved = personRepository.save(entity);
+		Person saved = personRepository.save(entity);
+		return toEmployeeProfile(saved, warnings);
+	}
 
-        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
-        try {
-            applyAssignmentPolicy(saved, request, actorId);
-        } catch (Exception exception) {
-            log.warn("Offboarding downstream action failed for employee {}. Queuing retry. Reason: {}",
-                    employeeId,
-                    exception.getMessage());
-            queueOffboardingRetry(saved.getId(), request, actorId, exception.getMessage());
-        }
+	@Override
+	@Transactional
+	public @NonNull EmployeeProfileDto disableEmployee(@NonNull UUID employeeId,
+			@NonNull DisableEmployeeRequestDto request) {
+		Person entity = personRepository.findById(employeeId)
+			.orElseThrow(() -> new PersonNotFoundException(employeeId));
 
-        return toEmployeeProfile(saved, List.of());
-    }
+		EmployeeStatus currentStatus = entity.getStatus();
+		if (currentStatus == EmployeeStatus.DISABLED || currentStatus == EmployeeStatus.TERMINATED) {
+			throw new IllegalArgumentException("Employee is already DISABLED or TERMINATED");
+		}
+		if (currentStatus != EmployeeStatus.ACTIVE) {
+			throw new IllegalArgumentException("Only ACTIVE employees can be disabled");
+		}
 
-    private void validateEmployeeRequest(java.time.LocalDate hireDate, java.time.LocalDate terminationDate) {
-        if (terminationDate != null && terminationDate.isBefore(hireDate)) {
-            throw new SemanticValidationException("terminationDate must be greater than or equal to hireDate");
-        }
-    }
+		entity.setStatus(EmployeeStatus.DISABLED);
+		entity.setStatusEffectiveAt(Instant.now(clock));
+		Person saved = personRepository.save(entity);
 
-    private List<String> evaluateDuplicatePolicy(
-            UUID employeeId,
-            DuplicatePolicy duplicatePolicy,
-            String employeeNumber,
-            EmployeeContactInfoDto contactInfo,
-            String legalName) {
-        DuplicatePolicy policy = duplicatePolicy != null ? duplicatePolicy : DuplicatePolicy.STRICT;
+		String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
+		try {
+			applyAssignmentPolicy(saved, request, actorId);
+		}
+		catch (Exception exception) {
+			log.warn("Offboarding downstream action failed for employee {}. Queuing retry. Reason: {}", employeeId,
+					exception.getMessage());
+			queueOffboardingRetry(saved.getId(), request, actorId, exception.getMessage());
+		}
 
-        DuplicateSignals duplicateSignals = collectDuplicateSignals(employeeId, employeeNumber, contactInfo);
-        List<String> warnings = new ArrayList<>();
-        if (policy == DuplicatePolicy.STRICT && duplicateSignals.hasAny()) {
-            throw new IllegalStateException("Duplicate employee detected by STRICT policy");
-        }
+		return toEmployeeProfile(saved, List.of());
+	}
 
-        if (policy != DuplicatePolicy.BALANCED) {
-            return warnings;
-        }
+	private void validateEmployeeRequest(java.time.LocalDate hireDate, java.time.LocalDate terminationDate) {
+		if (terminationDate != null && terminationDate.isBefore(hireDate)) {
+			throw new SemanticValidationException("terminationDate must be greater than or equal to hireDate");
+		}
+	}
 
-        if (duplicateSignals.hasAny()) {
-            warnings.add("Potential duplicate detected; request accepted due to BALANCED duplicatePolicy");
-        }
+	private List<String> evaluateDuplicatePolicy(UUID employeeId, DuplicatePolicy duplicatePolicy,
+			String employeeNumber, EmployeeContactInfoDto contactInfo, String legalName) {
+		DuplicatePolicy policy = duplicatePolicy != null ? duplicatePolicy : DuplicatePolicy.STRICT;
 
-        if (hasAmbiguousLegalNameMatch(employeeId, legalName)) {
-            warnings.add("Ambiguous duplicate match detected by legalName similarity");
-        }
+		DuplicateSignals duplicateSignals = collectDuplicateSignals(employeeId, employeeNumber, contactInfo);
+		List<String> warnings = new ArrayList<>();
+		if (policy == DuplicatePolicy.STRICT && duplicateSignals.hasAny()) {
+			throw new IllegalStateException("Duplicate employee detected by STRICT policy");
+		}
 
-        return warnings;
-    }
+		if (policy != DuplicatePolicy.BALANCED) {
+			return warnings;
+		}
 
-    private DuplicateSignals collectDuplicateSignals(
-            UUID employeeId,
-            String employeeNumber,
-            EmployeeContactInfoDto contactInfo) {
-        String primaryEmail = contactInfo != null ? normalize(contactInfo.getPrimaryEmail()) : null;
-        String primaryPhone = contactInfo != null ? normalize(contactInfo.getPrimaryPhone()) : null;
-        String secondaryPhone = contactInfo != null ? normalize(contactInfo.getSecondaryPhone()) : null;
+		if (duplicateSignals.hasAny()) {
+			warnings.add("Potential duplicate detected; request accepted due to BALANCED duplicatePolicy");
+		}
 
-        boolean duplicateEmployeeNumber = employeeId == null
-                ? personRepository.existsByEmployeeNumberIgnoreCase(employeeNumber)
-                : personRepository.existsByEmployeeNumberIgnoreCaseAndIdNot(employeeNumber, employeeId);
+		if (hasAmbiguousLegalNameMatch(employeeId, legalName)) {
+			warnings.add("Ambiguous duplicate match detected by legalName similarity");
+		}
 
-        boolean duplicatePrimaryEmail = primaryEmail != null && (employeeId == null
-                ? personRepository.existsByPrimaryEmailIgnoreCase(primaryEmail)
-                : personRepository.existsByPrimaryEmailIgnoreCaseAndIdNot(primaryEmail, employeeId));
+		return warnings;
+	}
 
-        boolean duplicatePhone = hasDuplicatePhone(employeeId, primaryPhone, secondaryPhone);
-        return new DuplicateSignals(duplicateEmployeeNumber, duplicatePrimaryEmail, duplicatePhone);
-    }
+	private DuplicateSignals collectDuplicateSignals(UUID employeeId, String employeeNumber,
+			EmployeeContactInfoDto contactInfo) {
+		String primaryEmail = contactInfo != null ? normalize(contactInfo.getPrimaryEmail()) : null;
+		String primaryPhone = contactInfo != null ? normalize(contactInfo.getPrimaryPhone()) : null;
+		String secondaryPhone = contactInfo != null ? normalize(contactInfo.getSecondaryPhone()) : null;
 
-    private boolean hasAmbiguousLegalNameMatch(UUID employeeId, String legalName) {
-        if (legalName == null || legalName.isBlank()) {
-            return false;
-        }
-        return personRepository.findByLegalNameIgnoreCase(legalName).stream()
-                .anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
-    }
+		boolean duplicateEmployeeNumber = employeeId == null
+				? personRepository.existsByEmployeeNumberIgnoreCase(employeeNumber)
+				: personRepository.existsByEmployeeNumberIgnoreCaseAndIdNot(employeeNumber, employeeId);
 
-    private void applyEmployeeFields(
-            Person entity,
-            EmployeeFieldSet fields) {
-        String legalName = fields.legalName();
-        String preferredName = fields.preferredName();
-        String employeeNumber = fields.employeeNumber();
-        EmployeeStatus status = fields.status();
-        java.time.LocalDate hireDate = fields.hireDate();
-        java.time.LocalDate terminationDate = fields.terminationDate();
-        EmployeeContactInfoDto contactInfo = fields.contactInfo();
+		boolean duplicatePrimaryEmail = primaryEmail != null
+				&& (employeeId == null ? personRepository.existsByPrimaryEmailIgnoreCase(primaryEmail)
+						: personRepository.existsByPrimaryEmailIgnoreCaseAndIdNot(primaryEmail, employeeId));
 
-        entity.setLegalName(legalName);
-        entity.setPreferredName(preferredName);
-        entity.setEmployeeNumber(employeeNumber);
-        entity.setStatus(status);
-        entity.setHireDate(hireDate);
-        entity.setTerminationDate(terminationDate);
+		boolean duplicatePhone = hasDuplicatePhone(employeeId, primaryPhone, secondaryPhone);
+		return new DuplicateSignals(duplicateEmployeeNumber, duplicatePrimaryEmail, duplicatePhone);
+	}
 
-        if (entity.getStatusEffectiveAt() == null) {
-            entity.setStatusEffectiveAt(Instant.now(clock));
-        }
+	private boolean hasAmbiguousLegalNameMatch(UUID employeeId, String legalName) {
+		if (legalName == null || legalName.isBlank()) {
+			return false;
+		}
+		return personRepository.findByLegalNameIgnoreCase(legalName)
+			.stream()
+			.anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
+	}
 
-        if (contactInfo != null) {
-            entity.setPrimaryEmail(normalize(contactInfo.getPrimaryEmail()));
-            entity.setSecondaryEmail(normalize(contactInfo.getSecondaryEmail()));
+	private void applyEmployeeFields(Person entity, EmployeeFieldSet fields) {
+		String legalName = fields.legalName();
+		String preferredName = fields.preferredName();
+		String employeeNumber = fields.employeeNumber();
+		EmployeeStatus status = fields.status();
+		java.time.LocalDate hireDate = fields.hireDate();
+		java.time.LocalDate terminationDate = fields.terminationDate();
+		EmployeeContactInfoDto contactInfo = fields.contactInfo();
 
-            List<String> phones = java.util.stream.Stream.of(
-                    normalize(contactInfo.getPrimaryPhone()),
-                    normalize(contactInfo.getSecondaryPhone()))
-                    .filter(value -> value != null && !value.isBlank())
-                    .toList();
-            entity.setPhoneNumbers(new ArrayList<>(phones));
-            entity.setContactInfoJson(writeContactInfo(contactInfo));
-        } else {
-            entity.setContactInfoJson(null);
-            entity.setPhoneNumbers(new ArrayList<>());
-        }
-    }
+		entity.setLegalName(legalName);
+		entity.setPreferredName(preferredName);
+		entity.setEmployeeNumber(employeeNumber);
+		entity.setStatus(status);
+		entity.setHireDate(hireDate);
+		entity.setTerminationDate(terminationDate);
 
-    private boolean hasDuplicatePhone(UUID employeeId, String primaryPhone, String secondaryPhone) {
-        if (primaryPhone == null && secondaryPhone == null) {
-            return false;
-        }
+		if (entity.getStatusEffectiveAt() == null) {
+			entity.setStatusEffectiveAt(Instant.now(clock));
+		}
 
-        return hasDuplicatePhoneValue(employeeId, primaryPhone) || hasDuplicatePhoneValue(employeeId, secondaryPhone);
-    }
+		if (contactInfo != null) {
+			entity.setPrimaryEmail(normalize(contactInfo.getPrimaryEmail()));
+			entity.setSecondaryEmail(normalize(contactInfo.getSecondaryEmail()));
 
-    private boolean hasDuplicatePhoneValue(UUID employeeId, String phoneValue) {
-        if (phoneValue == null || phoneValue.isBlank()) {
-            return false;
-        }
-        return personRepository.findByPhoneNumbersContains(phoneValue).stream()
-                .anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
-    }
+			List<String> phones = java.util.stream.Stream
+				.of(normalize(contactInfo.getPrimaryPhone()), normalize(contactInfo.getSecondaryPhone()))
+				.filter(value -> value != null && !value.isBlank())
+				.toList();
+			entity.setPhoneNumbers(new ArrayList<>(phones));
+			entity.setContactInfoJson(writeContactInfo(contactInfo));
+		}
+		else {
+			entity.setContactInfoJson(null);
+			entity.setPhoneNumbers(new ArrayList<>());
+		}
+	}
 
-    private EmployeeProfileDto toEmployeeProfile(Person person, List<String> warnings) {
-        return EmployeeProfileDto.builder()
-                .id(person.getId())
-                .legalName(person.getLegalName())
-                .preferredName(person.getPreferredName())
-                .employeeNumber(person.getEmployeeNumber())
-                .status(person.getStatus())
-                .hireDate(person.getHireDate())
-                .terminationDate(person.getTerminationDate())
-                .contactInfo(readContactInfo(person.getContactInfoJson()))
-                .statusEffectiveAt(person.getStatusEffectiveAt())
-                .warnings(warnings)
-                .build();
-    }
+	private boolean hasDuplicatePhone(UUID employeeId, String primaryPhone, String secondaryPhone) {
+		if (primaryPhone == null && secondaryPhone == null) {
+			return false;
+		}
 
-    private EmployeeContactInfoDto readContactInfo(String contactInfoJson) {
-        if (contactInfoJson == null || contactInfoJson.isBlank()) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(contactInfoJson, EmployeeContactInfoDto.class);
-        } catch (JsonProcessingException exception) {
-            log.warn("Failed to deserialize contact info JSON. Returning null. reason={}", exception.getMessage());
-            return null;
-        }
-    }
+		return hasDuplicatePhoneValue(employeeId, primaryPhone) || hasDuplicatePhoneValue(employeeId, secondaryPhone);
+	}
 
-    private String writeContactInfo(EmployeeContactInfoDto contactInfo) {
-        try {
-            return objectMapper.writeValueAsString(contactInfo);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Unable to persist contactInfo", exception);
-        }
-    }
+	private boolean hasDuplicatePhoneValue(UUID employeeId, String phoneValue) {
+		if (phoneValue == null || phoneValue.isBlank()) {
+			return false;
+		}
+		return personRepository.findByPhoneNumbersContains(phoneValue)
+			.stream()
+			.anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
+	}
 
-    private void applyAssignmentPolicy(
-            Person employee,
-            DisableEmployeeRequestDto request,
-            String actorId) {
-        AssignmentTerminationPolicy policy = request.getAssignmentPolicy() != null
-                ? request.getAssignmentPolicy()
-                : AssignmentTerminationPolicy.IMMEDIATE;
+	private EmployeeProfileDto toEmployeeProfile(Person person, List<String> warnings) {
+		return EmployeeProfileDto.builder()
+			.id(person.getId())
+			.legalName(person.getLegalName())
+			.preferredName(person.getPreferredName())
+			.employeeNumber(person.getEmployeeNumber())
+			.status(person.getStatus())
+			.hireDate(person.getHireDate())
+			.terminationDate(person.getTerminationDate())
+			.contactInfo(readContactInfo(person.getContactInfoJson()))
+			.statusEffectiveAt(person.getStatusEffectiveAt())
+			.warnings(warnings)
+			.build();
+	}
 
-        switch (policy) {
-            case IMMEDIATE -> log.info("Applying IMMEDIATE assignment offboarding for employee {} by actor {}",
-                    employee.getId(), actorId);
-            case GRACE_PERIOD ->
-                log.info(
-                        "Applying GRACE_PERIOD assignment offboarding for employee {} with assignmentEndDate {} by actor {}",
-                        employee.getId(), request.getAssignmentEndDate(), actorId);
-            default -> throw new IllegalStateException("Unsupported assignment policy");
-        }
-    }
+	private EmployeeContactInfoDto readContactInfo(String contactInfoJson) {
+		if (contactInfoJson == null || contactInfoJson.isBlank()) {
+			return null;
+		}
+		try {
+			return objectMapper.readValue(contactInfoJson, EmployeeContactInfoDto.class);
+		}
+		catch (JsonProcessingException exception) {
+			log.warn("Failed to deserialize contact info JSON. Returning null. reason={}", exception.getMessage());
+			return null;
+		}
+	}
 
-    private void queueOffboardingRetry(UUID employeeId, DisableEmployeeRequestDto request, String actorId,
-            String failureReason) {
-        EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
-        retry.setEmployeeId(employeeId);
-        retry.setAssignmentPolicy(request.getAssignmentPolicy() != null
-                ? request.getAssignmentPolicy()
-                : AssignmentTerminationPolicy.IMMEDIATE);
-        retry.setDisableReason(request.getDisableReason());
-        retry.setActorId(actorId);
-        retry.setFailureReason(failureReason != null ? failureReason : "unknown");
-        retry.setAttempts(0);
-        retry.setNextAttemptAt(Instant.now(clock).plusSeconds(300));
-        offboardingRetryRepository.save(retry);
-    }
+	private String writeContactInfo(EmployeeContactInfoDto contactInfo) {
+		try {
+			return objectMapper.writeValueAsString(contactInfo);
+		}
+		catch (JsonProcessingException exception) {
+			throw new IllegalStateException("Unable to persist contactInfo", exception);
+		}
+	}
 
-    private String normalize(String value) {
-        if (value == null) {
-            return null;
-        }
-        String normalized = value.trim();
-        return normalized.isEmpty() ? null : normalized;
-    }
+	private void applyAssignmentPolicy(Person employee, DisableEmployeeRequestDto request, String actorId) {
+		AssignmentTerminationPolicy policy = request.getAssignmentPolicy() != null ? request.getAssignmentPolicy()
+				: AssignmentTerminationPolicy.IMMEDIATE;
 
-    private record EmployeeFieldSet(
-            String legalName,
-            String preferredName,
-            String employeeNumber,
-            EmployeeStatus status,
-            java.time.LocalDate hireDate,
-            java.time.LocalDate terminationDate,
-            EmployeeContactInfoDto contactInfo) {
-    }
+		switch (policy) {
+			case IMMEDIATE -> log.info("Applying IMMEDIATE assignment offboarding for employee {} by actor {}",
+					employee.getId(), actorId);
+			case GRACE_PERIOD -> log.info(
+					"Applying GRACE_PERIOD assignment offboarding for employee {} with assignmentEndDate {} by actor {}",
+					employee.getId(), request.getAssignmentEndDate(), actorId);
+			default -> throw new IllegalStateException("Unsupported assignment policy");
+		}
+	}
 
-    private record DuplicateSignals(boolean duplicateEmployeeNumber, boolean duplicatePrimaryEmail,
-            boolean duplicatePhone) {
-        private boolean hasAny() {
-            return duplicateEmployeeNumber || duplicatePrimaryEmail || duplicatePhone;
-        }
-    }
+	private void queueOffboardingRetry(UUID employeeId, DisableEmployeeRequestDto request, String actorId,
+			String failureReason) {
+		EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
+		retry.setEmployeeId(employeeId);
+		retry.setAssignmentPolicy(request.getAssignmentPolicy() != null ? request.getAssignmentPolicy()
+				: AssignmentTerminationPolicy.IMMEDIATE);
+		retry.setDisableReason(request.getDisableReason());
+		retry.setActorId(actorId);
+		retry.setFailureReason(failureReason != null ? failureReason : "unknown");
+		retry.setAttempts(0);
+		retry.setNextAttemptAt(Instant.now(clock).plusSeconds(300));
+		offboardingRetryRepository.save(retry);
+	}
+
+	private String normalize(String value) {
+		if (value == null) {
+			return null;
+		}
+		String normalized = value.trim();
+		return normalized.isEmpty() ? null : normalized;
+	}
+
+	private record EmployeeFieldSet(String legalName, String preferredName, String employeeNumber,
+			EmployeeStatus status, java.time.LocalDate hireDate, java.time.LocalDate terminationDate,
+			EmployeeContactInfoDto contactInfo) {
+	}
+
+	private record DuplicateSignals(boolean duplicateEmployeeNumber, boolean duplicatePrimaryEmail,
+			boolean duplicatePhone) {
+		private boolean hasAny() {
+			return duplicateEmployeeNumber || duplicatePrimaryEmail || duplicatePhone;
+		}
+	}
+
 }

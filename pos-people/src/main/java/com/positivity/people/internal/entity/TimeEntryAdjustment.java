@@ -13,155 +13,158 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.util.UUID;
 
 import com.positivity.shared.id.UUIDv7Id;
+
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_adjustment")
 public class TimeEntryAdjustment {
 
-    @Id
-    @GeneratedValue
-    @UUIDv7Id
-    @Column(name = "adjustment_id", columnDefinition = "UUID", updatable = false, nullable = false)
-    private UUID adjustmentId;
+	@Id
+	@GeneratedValue
+	@UUIDv7Id
+	@Column(name = "adjustment_id", columnDefinition = "UUID", updatable = false, nullable = false)
+	private UUID adjustmentId;
 
-    @Column(name = "time_entry_id", nullable = false, columnDefinition = "UUID")
-    private UUID timeEntryId;
+	@Column(name = "time_entry_id", nullable = false, columnDefinition = "UUID")
+	private UUID timeEntryId;
 
-    @Column(name = "reason_code", length = 200)
-    private String reasonCode;
+	@Column(name = "reason_code", length = 200)
+	private String reasonCode;
 
-    @Column(name = "notes", columnDefinition = "TEXT")
-    private String notes;
+	@Column(name = "notes", columnDefinition = "TEXT")
+	private String notes;
 
-    @Column(name = "proposed_start_at")
-    private Instant proposedStartAt;
+	@Column(name = "proposed_start_at")
+	private Instant proposedStartAt;
 
-    @Column(name = "proposed_end_at")
-    private Instant proposedEndAt;
+	@Column(name = "proposed_end_at")
+	private Instant proposedEndAt;
 
-    @Column(name = "minutes_delta")
-    private Integer minutesDelta;
+	@Column(name = "minutes_delta")
+	private Integer minutesDelta;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", length = 50)
-    private AdjustmentStatus status;
+	@Enumerated(EnumType.STRING)
+	@Column(name = "status", length = 50)
+	private AdjustmentStatus status;
 
-    @Column(name = "created_by")
-    private String createdBy;
+	@Column(name = "created_by")
+	private String createdBy;
 
-    @CreatedDate
-    @Column(name = "created_at")
-    private Instant createdAt;
+	@CreatedDate
+	@Column(name = "created_at")
+	private Instant createdAt;
 
-    @LastModifiedDate
-    @Column(name = "updated_at")
-    private Instant updatedAt;
+	@LastModifiedDate
+	@Column(name = "updated_at")
+	private Instant updatedAt;
 
-    @Column(name = "decided_by")
-    private String decidedBy;
+	@Column(name = "decided_by")
+	private String decidedBy;
 
-    @Column(name = "decided_at")
-    private Instant decidedAt;
-    // Getters and setters
-    public UUID getAdjustmentId() {
-        return adjustmentId;
-    }
+	@Column(name = "decided_at")
+	private Instant decidedAt;
 
-    public void setAdjustmentId(UUID adjustmentId) {
-        this.adjustmentId = adjustmentId;
-    }
+	// Getters and setters
+	public UUID getAdjustmentId() {
+		return adjustmentId;
+	}
 
-    public UUID getTimeEntryId() {
-        return timeEntryId;
-    }
+	public void setAdjustmentId(UUID adjustmentId) {
+		this.adjustmentId = adjustmentId;
+	}
 
-    public void setTimeEntryId(UUID timeEntryId) {
-        this.timeEntryId = timeEntryId;
-    }
+	public UUID getTimeEntryId() {
+		return timeEntryId;
+	}
 
-    public String getReasonCode() {
-        return reasonCode;
-    }
+	public void setTimeEntryId(UUID timeEntryId) {
+		this.timeEntryId = timeEntryId;
+	}
 
-    public void setReasonCode(String reasonCode) {
-        this.reasonCode = reasonCode;
-    }
+	public String getReasonCode() {
+		return reasonCode;
+	}
 
-    public String getNotes() {
-        return notes;
-    }
+	public void setReasonCode(String reasonCode) {
+		this.reasonCode = reasonCode;
+	}
 
-    public void setNotes(String notes) {
-        this.notes = notes;
-    }
+	public String getNotes() {
+		return notes;
+	}
 
-    public Instant getProposedStartAt() {
-        return proposedStartAt;
-    }
+	public void setNotes(String notes) {
+		this.notes = notes;
+	}
 
-    public void setProposedStartAt(Instant proposedStartAt) {
-        this.proposedStartAt = proposedStartAt;
-    }
+	public Instant getProposedStartAt() {
+		return proposedStartAt;
+	}
 
-    public Instant getProposedEndAt() {
-        return proposedEndAt;
-    }
+	public void setProposedStartAt(Instant proposedStartAt) {
+		this.proposedStartAt = proposedStartAt;
+	}
 
-    public void setProposedEndAt(Instant proposedEndAt) {
-        this.proposedEndAt = proposedEndAt;
-    }
+	public Instant getProposedEndAt() {
+		return proposedEndAt;
+	}
 
-    public Integer getMinutesDelta() {
-        return minutesDelta;
-    }
+	public void setProposedEndAt(Instant proposedEndAt) {
+		this.proposedEndAt = proposedEndAt;
+	}
 
-    public void setMinutesDelta(Integer minutesDelta) {
-        this.minutesDelta = minutesDelta;
-    }
+	public Integer getMinutesDelta() {
+		return minutesDelta;
+	}
 
-    public AdjustmentStatus getStatus() {
-        return status;
-    }
+	public void setMinutesDelta(Integer minutesDelta) {
+		this.minutesDelta = minutesDelta;
+	}
 
-    public void setStatus(AdjustmentStatus status) {
-        this.status = status;
-    }
+	public AdjustmentStatus getStatus() {
+		return status;
+	}
 
-    public String getCreatedBy() {
-        return createdBy;
-    }
+	public void setStatus(AdjustmentStatus status) {
+		this.status = status;
+	}
 
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
+	public String getCreatedBy() {
+		return createdBy;
+	}
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
 
-    public void setCreatedAt(Instant createdAt) {
-}
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+	public void setCreatedAt(Instant createdAt) {
+	}
 
-    public void setUpdatedAt(Instant updatedAt) {
-}
+	public Instant getUpdatedAt() {
+		return updatedAt;
+	}
 
-    public String getDecidedBy() {
-        return decidedBy;
-    }
+	public void setUpdatedAt(Instant updatedAt) {
+	}
 
-    public void setDecidedBy(String decidedBy) {
-        this.decidedBy = decidedBy;
-    }
+	public String getDecidedBy() {
+		return decidedBy;
+	}
 
-    public Instant getDecidedAt() {
-        return decidedAt;
-    }
+	public void setDecidedBy(String decidedBy) {
+		this.decidedBy = decidedBy;
+	}
 
-    public void setDecidedAt(Instant decidedAt) {
-        this.decidedAt = decidedAt;
-    }
+	public Instant getDecidedAt() {
+		return decidedAt;
+	}
+
+	public void setDecidedAt(Instant decidedAt) {
+		this.decidedAt = decidedAt;
+	}
+
 }

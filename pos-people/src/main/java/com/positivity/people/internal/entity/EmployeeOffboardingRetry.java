@@ -28,40 +28,40 @@ import com.positivity.shared.id.UUIDv7Id;
 @Setter
 public class EmployeeOffboardingRetry {
 
-    @Id
-    @GeneratedValue
-    @UUIDv7Id
-    @Column(columnDefinition = "UUID")
-    private UUID id;
+	@Id
+	@GeneratedValue
+	@UUIDv7Id
+	@Column(columnDefinition = "UUID")
+	private UUID id;
 
-    @Column(name = "employee_id", nullable = false)
-    private UUID employeeId;
+	@Column(name = "employee_id", nullable = false)
+	private UUID employeeId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "assignment_policy", nullable = false)
-    private AssignmentTerminationPolicy assignmentPolicy;
+	@Enumerated(EnumType.STRING)
+	@Column(name = "assignment_policy", nullable = false)
+	private AssignmentTerminationPolicy assignmentPolicy;
 
-    @Column(name = "disable_reason")
-    private String disableReason;
+	@Column(name = "disable_reason")
+	private String disableReason;
 
-    @Column(name = "actor_id", nullable = false)
-    private String actorId;
+	@Column(name = "actor_id", nullable = false)
+	private String actorId;
 
-    @Column(name = "failure_reason", nullable = false)
-    private String failureReason;
+	@Column(name = "failure_reason", nullable = false)
+	private String failureReason;
 
-    @Column(name = "attempts", nullable = false)
-    private int attempts;
+	@Column(name = "attempts", nullable = false)
+	private int attempts;
 
-    @Column(name = "next_attempt_at", nullable = false)
-    private Instant nextAttemptAt;
+	@Column(name = "next_attempt_at", nullable = false)
+	private Instant nextAttemptAt;
 
-    @CreatedDate
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+	@CreatedDate
+	@Column(name = "created_at", nullable = false)
+	private Instant createdAt;
 
-    @LastModifiedDate
-    @Column(name = "updated_at")
-    private Instant updatedAt;
+	@LastModifiedDate
+	@Column(name = "updated_at")
+	private Instant updatedAt;
 
 }

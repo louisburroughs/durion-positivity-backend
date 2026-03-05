@@ -18,30 +18,31 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Resolve person result")
 public class ResolvePersonResponse {
 
-    @Schema(description = "Canonical person ID", example = "550e8400-e29b-41d4-a716-446655440000")
-    private UUID personId;
+	@Schema(description = "Canonical person ID", example = "550e8400-e29b-41d4-a716-446655440000")
+	private UUID personId;
 
-    @Schema(description = "True when an existing person matched threshold")
-    private boolean matchedExisting;
+	@Schema(description = "True when an existing person matched threshold")
+	private boolean matchedExisting;
 
-    @Schema(description = "Score of selected match (0 when created)")
-    private int score;
+	@Schema(description = "Score of selected match (0 when created)")
+	private int score;
 
-    @Schema(description = "Threshold used for decision")
-    private int thresholdApplied;
+	@Schema(description = "Threshold used for decision")
+	private int thresholdApplied;
 
-    @Schema(description = "Which fields contributed to the winning match")
-    private List<String> matchedBy;
+	@Schema(description = "Which fields contributed to the winning match")
+	private List<String> matchedBy;
 
-    @Schema(description = "Resolved first name", example = "Jane")
-    private String firstName;
+	@Schema(description = "Resolved first name", example = "Jane")
+	private String firstName;
 
-    @Schema(description = "Resolved last name", example = "Smith")
-    private String lastName;
+	@Schema(description = "Resolved last name", example = "Smith")
+	private String lastName;
 
-    @Schema(description = "Resolved primary email", example = "jane.smith@example.com")
-    private String primaryEmail;
+	@Schema(description = "Resolved primary email", example = "jane.smith@example.com")
+	private String primaryEmail;
 
-    @Schema(description = "Resolved phone numbers")
-    private List<String> phoneNumbers;
+	@Schema(description = "Resolved phone numbers")
+	private List<String> phoneNumbers;
+
 }

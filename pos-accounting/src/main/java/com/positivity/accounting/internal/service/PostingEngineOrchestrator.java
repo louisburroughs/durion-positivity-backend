@@ -59,9 +59,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Transactional
 public class PostingEngineOrchestrator {
+
     private final Clock clock;
-
-
     private final PostingRuleEvaluator postingRuleEvaluator;
     private final JournalEntryService journalEntryService;
     private final IdempotencyService idempotencyService;

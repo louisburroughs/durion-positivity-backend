@@ -7,8 +7,5 @@ import java.util.UUID;
  *
  * Issue: #79
  */
-public record LocationSummaryResponse(
-        UUID id,
-        String name,
-        boolean active) {
+public record LocationSummaryResponse(UUID id, String name, boolean active) {
 }

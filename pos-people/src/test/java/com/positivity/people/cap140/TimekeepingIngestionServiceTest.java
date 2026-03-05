@@ -27,154 +27,151 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link TimekeepingIngestionServiceImpl} covering HR ingestion
- * of work sessions from shopmgr (CAP-140, Story #58).
+ * Unit tests for {@link TimekeepingIngestionServiceImpl} covering HR ingestion of work
+ * sessions from shopmgr (CAP-140, Story #58).
  *
  * Issue: #58
  */
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S100")
 class TimekeepingIngestionServiceTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
+	private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    @Mock
-    TimekeepingEntryRepository timekeepingEntryRepository;
+	@Mock
+	TimekeepingEntryRepository timekeepingEntryRepository;
 
-    @InjectMocks
-    TimekeepingIngestionServiceImpl timekeepingIngestionService;
+	@InjectMocks
+	TimekeepingIngestionServiceImpl timekeepingIngestionService;
 
-    // -------------------------------------------------------------------------
-    // AC1 – new session creates TimekeepingEntry with PENDING_APPROVAL
-    // -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// AC1 – new session creates TimekeepingEntry with PENDING_APPROVAL
+	// -------------------------------------------------------------------------
 
-    @Test
-    void ingestWorkSession_newEntry_createsEntryWithPendingApproval() {
-        // Issue #58: AC1 — valid event, no existing entry → new
-        // TimekeepingEntry(PENDING_APPROVAL)
-        UUID tenantId = UUID.randomUUID();
-        UUID sessionId = UUID.randomUUID();
-        UUID employeeId = UUID.randomUUID();
-        UUID workOrderId = UUID.randomUUID();
-        Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
-        Instant end = Instant.now(TEST_CLOCK);
+	@Test
+	void ingestWorkSession_newEntry_createsEntryWithPendingApproval() {
+		// Issue #58: AC1 — valid event, no existing entry → new
+		// TimekeepingEntry(PENDING_APPROVAL)
+		UUID tenantId = UUID.randomUUID();
+		UUID sessionId = UUID.randomUUID();
+		UUID employeeId = UUID.randomUUID();
+		UUID workOrderId = UUID.randomUUID();
+		Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
+		Instant end = Instant.now(TEST_CLOCK);
 
-        WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
-                tenantId, sessionId, employeeId, start, end, workOrderId);
+		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(tenantId, sessionId, employeeId, start, end,
+				workOrderId);
 
-        when(timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(
-                tenantId, "shopmgr", sessionId)).thenReturn(false);
-        when(timekeepingEntryRepository.save(any(TimekeepingEntry.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+		when(timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(tenantId, "shopmgr",
+				sessionId))
+			.thenReturn(false);
+		when(timekeepingEntryRepository.save(any(TimekeepingEntry.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        timekeepingIngestionService.ingestWorkSession(event);
+		timekeepingIngestionService.ingestWorkSession(event);
 
-        ArgumentCaptor<TimekeepingEntry> captor = ArgumentCaptor.forClass(TimekeepingEntry.class);
-        verify(timekeepingEntryRepository).save(captor.capture());
-        TimekeepingEntry saved = captor.getValue();
+		ArgumentCaptor<TimekeepingEntry> captor = ArgumentCaptor.forClass(TimekeepingEntry.class);
+		verify(timekeepingEntryRepository).save(captor.capture());
+		TimekeepingEntry saved = captor.getValue();
 
-        assertThat(saved.getTenantId()).isEqualTo(tenantId);
-        assertThat(saved.getSourceSessionId()).isEqualTo(sessionId);
-        assertThat(saved.getEmployeeId()).isEqualTo(employeeId);
-        assertThat(saved.getSourceSystem()).isEqualTo("shopmgr");
-        assertThat(saved.getSessionStartTime()).isEqualTo(start);
-        assertThat(saved.getSessionEndTime()).isEqualTo(end);
-        assertThat(saved.getAssociatedWorkOrderId()).isEqualTo(workOrderId);
-        assertThat(saved.getApprovalStatus()).isEqualTo(ApprovalStatus.PENDING_APPROVAL);
-        assertThat(saved.getCreatedAt()).isNotNull();
-    }
+		assertThat(saved.getTenantId()).isEqualTo(tenantId);
+		assertThat(saved.getSourceSessionId()).isEqualTo(sessionId);
+		assertThat(saved.getEmployeeId()).isEqualTo(employeeId);
+		assertThat(saved.getSourceSystem()).isEqualTo("shopmgr");
+		assertThat(saved.getSessionStartTime()).isEqualTo(start);
+		assertThat(saved.getSessionEndTime()).isEqualTo(end);
+		assertThat(saved.getAssociatedWorkOrderId()).isEqualTo(workOrderId);
+		assertThat(saved.getApprovalStatus()).isEqualTo(ApprovalStatus.PENDING_APPROVAL);
+		assertThat(saved.getCreatedAt()).isNotNull();
+	}
 
-    // -------------------------------------------------------------------------
-    // AC2 – duplicate event is idempotent: no persist, no modification
-    // -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// AC2 – duplicate event is idempotent: no persist, no modification
+	// -------------------------------------------------------------------------
 
-    @Test
-    void ingestWorkSession_duplicateEvent_isIdempotentAndDoesNotPersist() {
-        // Issue #58: AC2 — same (tenantId, sessionId) already in DB → no-op
-        UUID tenantId = UUID.randomUUID();
-        UUID sessionId = UUID.randomUUID();
+	@Test
+	void ingestWorkSession_duplicateEvent_isIdempotentAndDoesNotPersist() {
+		// Issue #58: AC2 — same (tenantId, sessionId) already in DB → no-op
+		UUID tenantId = UUID.randomUUID();
+		UUID sessionId = UUID.randomUUID();
 
-        WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
-                tenantId, sessionId, UUID.randomUUID(),
-                Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
+		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(tenantId, sessionId, UUID.randomUUID(),
+				Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
-        when(timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(
-                tenantId, "shopmgr", sessionId)).thenReturn(true);
+		when(timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(tenantId, "shopmgr",
+				sessionId))
+			.thenReturn(true);
 
-        timekeepingIngestionService.ingestWorkSession(event);
+		timekeepingIngestionService.ingestWorkSession(event);
 
-        verify(timekeepingEntryRepository, never()).save(any());
-    }
+		verify(timekeepingEntryRepository, never()).save(any());
+	}
 
-    // -------------------------------------------------------------------------
-    // AC3 – null tenantId → IllegalArgumentException, no persist
-    // -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// AC3 – null tenantId → IllegalArgumentException, no persist
+	// -------------------------------------------------------------------------
 
-    @Test
-    void ingestWorkSession_nullTenantId_throwsIllegalArgumentException() {
-        // Issue #58: AC3 — null tenantId simulates DLQ rejection
-        WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
-                null, UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
+	@Test
+	void ingestWorkSession_nullTenantId_throwsIllegalArgumentException() {
+		// Issue #58: AC3 — null tenantId simulates DLQ rejection
+		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(null, UUID.randomUUID(), UUID.randomUUID(),
+				Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
-        assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
-                .isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
+			.isInstanceOf(IllegalArgumentException.class);
 
-        verify(timekeepingEntryRepository, never()).save(any());
-    }
+		verify(timekeepingEntryRepository, never()).save(any());
+	}
 
-    // -------------------------------------------------------------------------
-    // AC4 – null sessionId → IllegalArgumentException, no persist
-    // -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// AC4 – null sessionId → IllegalArgumentException, no persist
+	// -------------------------------------------------------------------------
 
-    @Test
-    void ingestWorkSession_nullSessionId_throwsIllegalArgumentException() {
-        // Issue #58: AC4 — null sessionId simulates DLQ rejection
-        WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
-                UUID.randomUUID(), null, UUID.randomUUID(),
-                Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
+	@Test
+	void ingestWorkSession_nullSessionId_throwsIllegalArgumentException() {
+		// Issue #58: AC4 — null sessionId simulates DLQ rejection
+		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(UUID.randomUUID(), null, UUID.randomUUID(),
+				Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
-        assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
-                .isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
+			.isInstanceOf(IllegalArgumentException.class);
 
-        verify(timekeepingEntryRepository, never()).save(any());
-    }
+		verify(timekeepingEntryRepository, never()).save(any());
+	}
 
-    // -------------------------------------------------------------------------
-    // AC5 – correction event persists a supplemental TimekeepingEntry
-    // -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// AC5 – correction event persists a supplemental TimekeepingEntry
+	// -------------------------------------------------------------------------
 
-    @Test
-    void recordCorrection_validEvent_persistsCorrectionEntry() {
-        // Issue #58: AC5 — WorkSessionCorrectedEvent → supplemental TimekeepingEntry
-        // saved
-        UUID tenantId = UUID.randomUUID();
-        UUID originalSessionId = UUID.randomUUID();
-        UUID correctionId = UUID.randomUUID();
-        UUID employeeId = UUID.randomUUID();
-        UUID workOrderId = UUID.randomUUID();
-        String correctionReason = "Clock error correction";
-        Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
-        Instant end = Instant.now(TEST_CLOCK);
+	@Test
+	void recordCorrection_validEvent_persistsCorrectionEntry() {
+		// Issue #58: AC5 — WorkSessionCorrectedEvent → supplemental TimekeepingEntry
+		// saved
+		UUID tenantId = UUID.randomUUID();
+		UUID originalSessionId = UUID.randomUUID();
+		UUID correctionId = UUID.randomUUID();
+		UUID employeeId = UUID.randomUUID();
+		UUID workOrderId = UUID.randomUUID();
+		String correctionReason = "Clock error correction";
+		Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
+		Instant end = Instant.now(TEST_CLOCK);
 
-        WorkSessionCorrectedEvent event = new WorkSessionCorrectedEvent(
-                tenantId, originalSessionId, correctionId, employeeId,
-                start, end, workOrderId, correctionReason);
+		WorkSessionCorrectedEvent event = new WorkSessionCorrectedEvent(tenantId, originalSessionId, correctionId,
+				employeeId, start, end, workOrderId, correctionReason);
 
-        when(timekeepingEntryRepository.save(any(TimekeepingEntry.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+		when(timekeepingEntryRepository.save(any(TimekeepingEntry.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        timekeepingIngestionService.recordCorrection(event);
+		timekeepingIngestionService.recordCorrection(event);
 
-        ArgumentCaptor<TimekeepingEntry> captor = ArgumentCaptor.forClass(TimekeepingEntry.class);
-        verify(timekeepingEntryRepository).save(captor.capture());
+		ArgumentCaptor<TimekeepingEntry> captor = ArgumentCaptor.forClass(TimekeepingEntry.class);
+		verify(timekeepingEntryRepository).save(captor.capture());
 
-        TimekeepingEntry saved = captor.getValue();
-        assertThat(saved.getCorrectionId()).isEqualTo(correctionId);
-        assertThat(saved.getCorrectionReason()).isEqualTo(correctionReason);
-        assertThat(saved.getSourceSessionId()).isEqualTo(correctionId);
-        assertThat(saved.getOriginalSourceSessionId()).isEqualTo(originalSessionId);
-        assertThat(saved.getApprovalStatus()).isEqualTo(ApprovalStatus.PENDING_APPROVAL);
-        assertThat(saved.getTenantId()).isEqualTo(tenantId);
-    }
+		TimekeepingEntry saved = captor.getValue();
+		assertThat(saved.getCorrectionId()).isEqualTo(correctionId);
+		assertThat(saved.getCorrectionReason()).isEqualTo(correctionReason);
+		assertThat(saved.getSourceSessionId()).isEqualTo(correctionId);
+		assertThat(saved.getOriginalSourceSessionId()).isEqualTo(originalSessionId);
+		assertThat(saved.getApprovalStatus()).isEqualTo(ApprovalStatus.PENDING_APPROVAL);
+		assertThat(saved.getTenantId()).isEqualTo(tenantId);
+	}
+
 }

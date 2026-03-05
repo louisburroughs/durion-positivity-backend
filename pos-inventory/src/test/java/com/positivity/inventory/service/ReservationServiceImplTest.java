@@ -9,6 +9,20 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
@@ -23,16 +37,6 @@ import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.internal.service.ReservationServiceImpl;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link ReservationServiceImpl} — Story #29: Reserve/Allocate
@@ -58,6 +62,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("ReservationServiceImpl — Story #29 unit tests (RED phase)")
 class ReservationServiceImplTest {
 
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
         @Mock
         private ReservationRepository reservationRepository;
 
@@ -71,7 +77,7 @@ class ReservationServiceImplTest {
 
         @BeforeEach
         void setUp() {
-                service = new ReservationServiceImpl(
+                service = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository, allocationRepository, inventoryLedgerEntryRepository);
                 // Default lenient stubs for the SC1–SC7 scaffold tests
                 lenient().when(reservationRepository.findByWorkorderLineId(any())).thenReturn(Optional.empty());
@@ -236,8 +242,10 @@ class ReservationServiceImplTest {
                 // Act
                 service.cancelReservation(workorderLineId);
 
-                // Assert: No on-hand change expected for SOFT cancel — no additional
+                // No on-hand change expected for SOFT cancel — no additional
                 // repository calls beyond the standard cancel flow.
+                assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+                verify(inventoryLedgerEntryRepository, never()).save(any());
         }
 
         // ─── SC6: Cancel HARD allocation — ATP restored ─────────────────────────────
@@ -306,7 +314,7 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("createOrUpdateReservation repository mode updates existing reservation by workorderLineId")
         void createOrUpdateReservation_repositoryMode_existingReservation_updatesRequiredQuantity() {
-                ReservationServiceImpl repositoryService = new ReservationServiceImpl(
+                ReservationServiceImpl repositoryService = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository,
                                 allocationRepository,
                                 inventoryLedgerEntryRepository);
@@ -335,7 +343,7 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("createOrUpdateReservation repository mode creates reservation and SOFT allocation when absent")
         void createOrUpdateReservation_repositoryMode_missingReservation_createsSoftAllocation() {
-                ReservationServiceImpl repositoryService = new ReservationServiceImpl(
+                ReservationServiceImpl repositoryService = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository,
                                 allocationRepository,
                                 inventoryLedgerEntryRepository);
@@ -370,7 +378,7 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("promoteToHard throws ResourceNotFoundException when allocationId does not exist")
         void promoteToHard_repositoryMode_allocationMissing_throwsResourceNotFound() {
-                ReservationServiceImpl repositoryService = new ReservationServiceImpl(
+                ReservationServiceImpl repositoryService = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository,
                                 allocationRepository,
                                 inventoryLedgerEntryRepository);
@@ -378,9 +386,8 @@ class ReservationServiceImplTest {
                 UUID allocationId = UUID.randomUUID();
                 when(allocationRepository.findById(allocationId)).thenReturn(Optional.empty());
 
-                assertThatThrownBy(() -> repositoryService.promoteToHard(
-                                allocationId,
-                                new PromoteAllocationRequest("normal")))
+                PromoteAllocationRequest request = new PromoteAllocationRequest("normal");
+                assertThatThrownBy(() -> repositoryService.promoteToHard(allocationId, request))
                                 .isInstanceOf(ResourceNotFoundException.class)
                                 .hasMessageContaining("Allocation not found");
         }
@@ -388,7 +395,7 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("promoteToHard sets BACKORDERED and throws InsufficientAtpException when ATP is insufficient")
         void promoteToHard_repositoryMode_insufficientAtp_setsBackorderedAndThrows() {
-                ReservationServiceImpl repositoryService = new ReservationServiceImpl(
+                ReservationServiceImpl repositoryService = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository,
                                 allocationRepository,
                                 inventoryLedgerEntryRepository);
@@ -417,9 +424,10 @@ class ReservationServiceImplTest {
                 when(reservationRepository.save(any(ReservationEntity.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-                assertThatThrownBy(() -> repositoryService.promoteToHard(
-                                allocation.getAllocationId(),
-                                new PromoteAllocationRequest("urgent")))
+                UUID targetAllocationId = allocation.getAllocationId();
+                PromoteAllocationRequest request = new PromoteAllocationRequest("urgent");
+
+                assertThatThrownBy(() -> repositoryService.promoteToHard(targetAllocationId, request))
                                 .isInstanceOf(InsufficientAtpException.class)
                                 .hasMessageContaining("INSUFFICIENT_ATP");
 
@@ -430,7 +438,7 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("promoteToHard transitions allocation to HARD and returns FULFILLED when ATP is sufficient")
         void promoteToHard_repositoryMode_sufficientAtp_transitionsToHard() {
-                ReservationServiceImpl repositoryService = new ReservationServiceImpl(
+                ReservationServiceImpl repositoryService = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository,
                                 allocationRepository,
                                 inventoryLedgerEntryRepository);
@@ -477,7 +485,7 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("promoteToHard excludes current HARD allocation from ATP subtraction")
         void promoteToHard_repositoryMode_currentHardAllocation_excludesSelfFromExistingHard() {
-                ReservationServiceImpl repositoryService = new ReservationServiceImpl(
+                ReservationServiceImpl repositoryService = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository,
                                 allocationRepository,
                                 inventoryLedgerEntryRepository);
@@ -514,9 +522,10 @@ class ReservationServiceImplTest {
                 when(reservationRepository.save(any(ReservationEntity.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-                assertThatThrownBy(() -> repositoryService.promoteToHard(
-                                current.getAllocationId(),
-                                new PromoteAllocationRequest("re-harden")))
+                UUID currentAllocationId = current.getAllocationId();
+                PromoteAllocationRequest promoteReq = new PromoteAllocationRequest("re-harden");
+
+                assertThatThrownBy(() -> repositoryService.promoteToHard(currentAllocationId, promoteReq))
                                 .isInstanceOf(InsufficientAtpException.class);
 
                 verify(allocationRepository, never()).save(any(AllocationEntity.class));
@@ -525,7 +534,7 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("cancelReservation throws ResourceNotFoundException when reservation does not exist")
         void cancelReservation_repositoryMode_reservationMissing_throwsResourceNotFound() {
-                ReservationServiceImpl repositoryService = new ReservationServiceImpl(
+                ReservationServiceImpl repositoryService = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository,
                                 allocationRepository,
                                 inventoryLedgerEntryRepository);
@@ -541,7 +550,7 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("cancelReservation handles empty allocation list and marks reservation CANCELLED")
         void cancelReservation_repositoryMode_emptyAllocationList_marksCancelled() {
-                ReservationServiceImpl repositoryService = new ReservationServiceImpl(
+                ReservationServiceImpl repositoryService = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository,
                                 allocationRepository,
                                 inventoryLedgerEntryRepository);
@@ -564,7 +573,7 @@ class ReservationServiceImplTest {
 
                 repositoryService.cancelReservation(workorderLineId);
 
-                assertThat(reservation.getAllocatedQuantity()).isEqualTo(0);
+                assertThat(reservation.getAllocatedQuantity()).isZero();
                 assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
                 verify(allocationRepository).saveAll(List.of());
         }
@@ -572,7 +581,7 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("cancelReservation releases both SOFT and HARD allocations")
         void cancelReservation_repositoryMode_releasesSoftAndHardAllocations() {
-                ReservationServiceImpl repositoryService = new ReservationServiceImpl(
+                ReservationServiceImpl repositoryService = new ReservationServiceImpl(TEST_CLOCK,
                                 reservationRepository,
                                 allocationRepository,
                                 inventoryLedgerEntryRepository);

@@ -28,76 +28,73 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService {
 
-    private final PersonLocationAssignmentRepository assignmentRepository;
-    private final PersonRepository personRepository;
-    private final UserPersonTranslationService userPersonTranslationService;
-    private final Clock clock;
+	private final PersonLocationAssignmentRepository assignmentRepository;
 
-    @Override
-    @NonNull
-    public List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date) {
-        LocalDate targetDate = date != null ? date : LocalDate.now(clock);
-        UUID resolvedLocationId = locationId != null ? locationId : resolveRequesterLocationId(targetDate);
+	private final PersonRepository personRepository;
 
-        List<PersonLocationAssignment> assignments = assignmentRepository.findActiveByDateAndOptionalLocation(
-                targetDate,
-                resolvedLocationId);
+	private final UserPersonTranslationService userPersonTranslationService;
 
-        Map<UUID, Person> peopleById = personRepository.findAllById(assignments.stream()
-                .map(PersonLocationAssignment::getPersonId)
-                .collect(Collectors.toSet()))
-                .stream()
-                .collect(Collectors.toMap(Person::getId, person -> person));
+	private final Clock clock;
 
-        return assignments.stream()
-                .map(assignment -> {
-                    Person person = peopleById.get(assignment.getPersonId());
-                    return PeopleAvailabilityResponse.builder()
-                            .personId(assignment.getPersonId())
-                            .firstName(person != null ? person.getFirstName() : null)
-                            .lastName(person != null ? person.getLastName() : null)
-                            .locationId(assignment.getLocationId())
-                            .role(assignment.getRole())
-                            .primary(assignment.isPrimary())
-                            .assignmentStatus(assignment.getStatus())
-                            .effectiveFrom(assignment.getEffectiveFrom())
-                            .effectiveTo(assignment.getEffectiveTo())
-                            .availableOn(targetDate)
-                            .build();
-                })
-                .toList();
-    }
+	@Override
+	@NonNull public List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date) {
+		LocalDate targetDate = date != null ? date : LocalDate.now(clock);
+		UUID resolvedLocationId = locationId != null ? locationId : resolveRequesterLocationId(targetDate);
 
-    @Override
-    @NonNull
-    public UUID resolveCurrentUserPrimaryLocationId() {
-        return resolveRequesterLocationId(LocalDate.now(clock));
-    }
+		List<PersonLocationAssignment> assignments = assignmentRepository
+			.findActiveByDateAndOptionalLocation(targetDate, resolvedLocationId);
 
-    @NonNull
-    private UUID resolveRequesterLocationId(@NonNull LocalDate targetDate) {
-        String currentUserId = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "locationId was not provided and authenticated user context is missing"));
+		Map<UUID, Person> peopleById = personRepository
+			.findAllById(assignments.stream().map(PersonLocationAssignment::getPersonId).collect(Collectors.toSet()))
+			.stream()
+			.collect(Collectors.toMap(Person::getId, person -> person));
 
-        UUID userId = parseUuid(currentUserId, "authenticated userId");
-        UUID personId = userPersonTranslationService.getPersonUuidForUser(userId);
+		return assignments.stream().map(assignment -> {
+			Person person = peopleById.get(assignment.getPersonId());
+			return PeopleAvailabilityResponse.builder()
+				.personId(assignment.getPersonId())
+				.firstName(person != null ? person.getFirstName() : null)
+				.lastName(person != null ? person.getLastName() : null)
+				.locationId(assignment.getLocationId())
+				.role(assignment.getRole())
+				.primary(assignment.isPrimary())
+				.assignmentStatus(assignment.getStatus())
+				.effectiveFrom(assignment.getEffectiveFrom())
+				.effectiveTo(assignment.getEffectiveTo())
+				.availableOn(targetDate)
+				.build();
+		}).toList();
+	}
 
-        return assignmentRepository.findActiveByPersonIdAndDate(personId, targetDate)
-                .stream()
-                .findFirst()
-                .map(PersonLocationAssignment::getLocationId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "locationId was not provided and no active location assignment exists for requester on "
-                                + targetDate));
-    }
+	@Override
+	@NonNull public UUID resolveCurrentUserPrimaryLocationId() {
+		return resolveRequesterLocationId(LocalDate.now(clock));
+	}
 
-    @NonNull
-    private UUID parseUuid(@NonNull String value, @NonNull String label) {
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Invalid " + label + ": " + value, ex);
-        }
-    }
+	@NonNull private UUID resolveRequesterLocationId(@NonNull LocalDate targetDate) {
+		String currentUserId = SecurityContextHelper.getCurrentUsername()
+			.orElseThrow(() -> new EntityNotFoundException(
+					"locationId was not provided and authenticated user context is missing"));
+
+		UUID userId = parseUuid(currentUserId, "authenticated userId");
+		UUID personId = userPersonTranslationService.getPersonUuidForUser(userId);
+
+		return assignmentRepository.findActiveByPersonIdAndDate(personId, targetDate)
+			.stream()
+			.findFirst()
+			.map(PersonLocationAssignment::getLocationId)
+			.orElseThrow(() -> new EntityNotFoundException(
+					"locationId was not provided and no active location assignment exists for requester on "
+							+ targetDate));
+	}
+
+	@NonNull private UUID parseUuid(@NonNull String value, @NonNull String label) {
+		try {
+			return UUID.fromString(value);
+		}
+		catch (IllegalArgumentException ex) {
+			throw new IllegalArgumentException("Invalid " + label + ": " + value, ex);
+		}
+	}
+
 }

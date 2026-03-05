@@ -17,82 +17,85 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-@SuppressWarnings("java:S100") // Test class is allowed to have non-camel-case method names for readability
+@SuppressWarnings("java:S100") // Test class is allowed to have non-camel-case method
+								// names for readability
 class TimeEntryAdjustmentControllerTest {
 
-    private TimeEntryAdjustmentService service;
-    private TimeEntryAdjustmentController controller;
+	private TimeEntryAdjustmentService service;
 
-    @BeforeEach
-    void setup() {
-        service = mock(TimeEntryAdjustmentService.class);
-        controller = new TimeEntryAdjustmentController(service);
-    }
+	private TimeEntryAdjustmentController controller;
 
-    @Test
-    void listForTimeEntry_returnsList() {
-        UUID timeEntryId = UUID.randomUUID();
-        TimeEntryAdjustment a = new TimeEntryAdjustment();
-        a.setAdjustmentId(UUID.randomUUID());
-        a.setTimeEntryId(timeEntryId);
-        when(service.listForTimeEntry(timeEntryId)).thenReturn(List.of(a));
+	@BeforeEach
+	void setup() {
+		service = mock(TimeEntryAdjustmentService.class);
+		controller = new TimeEntryAdjustmentController(service);
+	}
 
-        ResponseEntity<List<TimeEntryAdjustment>> resp = controller.listForTimeEntry(timeEntryId);
-        assertEquals(200, resp.getStatusCode().value());
-        assertNotNull(resp.getBody());
-        assertEquals(1, resp.getBody().size());
-    }
+	@Test
+	void listForTimeEntry_returnsList() {
+		UUID timeEntryId = UUID.randomUUID();
+		TimeEntryAdjustment a = new TimeEntryAdjustment();
+		a.setAdjustmentId(UUID.randomUUID());
+		a.setTimeEntryId(timeEntryId);
+		when(service.listForTimeEntry(timeEntryId)).thenReturn(List.of(a));
 
-    @Test
-    void createAdjustment_success_returnsOk() {
-        UUID timeEntryId = UUID.randomUUID();
-        TimeEntryAdjustmentRequest req = new TimeEntryAdjustmentRequest();
-        req.setTimeEntryId(timeEntryId);
-        req.setReasonCode("RC1");
-        req.setMinutesDelta(15);
-        req.setCreatedBy("tester");
+		ResponseEntity<List<TimeEntryAdjustment>> resp = controller.listForTimeEntry(timeEntryId);
+		assertEquals(200, resp.getStatusCode().value());
+		assertNotNull(resp.getBody());
+		assertEquals(1, resp.getBody().size());
+	}
 
-        TimeEntryAdjustmentResponse created = new TimeEntryAdjustmentResponse(UUID.randomUUID(), true, "created");
-        when(service.createAdjustment(req)).thenReturn(created);
+	@Test
+	void createAdjustment_success_returnsOk() {
+		UUID timeEntryId = UUID.randomUUID();
+		TimeEntryAdjustmentRequest req = new TimeEntryAdjustmentRequest();
+		req.setTimeEntryId(timeEntryId);
+		req.setReasonCode("RC1");
+		req.setMinutesDelta(15);
+		req.setCreatedBy("tester");
 
-        ResponseEntity<TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
-        assertEquals(201, resp.getStatusCode().value());
-        assertNotNull(resp.getBody());
-        assertTrue(resp.getBody().isSuccess());
-        assertNotNull(resp.getBody().getAdjustmentId());
-    }
+		TimeEntryAdjustmentResponse created = new TimeEntryAdjustmentResponse(UUID.randomUUID(), true, "created");
+		when(service.createAdjustment(req)).thenReturn(created);
 
-    @Test
-    void createAdjustment_failure_throwsExceptionForHandler() {
-        UUID timeEntryId = UUID.randomUUID();
-        TimeEntryAdjustmentRequest req = new TimeEntryAdjustmentRequest();
-        req.setTimeEntryId(timeEntryId);
-        req.setReasonCode(" ");
+		ResponseEntity<TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+		assertEquals(201, resp.getStatusCode().value());
+		assertNotNull(resp.getBody());
+		assertTrue(resp.getBody().isSuccess());
+		assertNotNull(resp.getBody().getAdjustmentId());
+	}
 
-        when(service.createAdjustment(req)).thenThrow(new IllegalArgumentException("reasonCode is required"));
+	@Test
+	void createAdjustment_failure_throwsExceptionForHandler() {
+		UUID timeEntryId = UUID.randomUUID();
+		TimeEntryAdjustmentRequest req = new TimeEntryAdjustmentRequest();
+		req.setTimeEntryId(timeEntryId);
+		req.setReasonCode(" ");
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> controller.createAdjustment(req));
-        assertEquals("reasonCode is required", ex.getMessage());
-    }
+		when(service.createAdjustment(req)).thenThrow(new IllegalArgumentException("reasonCode is required"));
 
-    @Test
-    void approveAdjustment_notFound_throwsExceptionForHandler() {
-        UUID adjustmentId = UUID.randomUUID();
-        doThrow(new NotFoundException("Adjustment not found")).when(service)
-                .approveAdjustment(eq(adjustmentId), anyString(), any(), any());
+		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+				() -> controller.createAdjustment(req));
+		assertEquals("reasonCode is required", ex.getMessage());
+	}
 
-        assertThrows(NotFoundException.class,
-                () -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));
-    }
+	@Test
+	void approveAdjustment_notFound_throwsExceptionForHandler() {
+		UUID adjustmentId = UUID.randomUUID();
+		doThrow(new NotFoundException("Adjustment not found")).when(service)
+			.approveAdjustment(eq(adjustmentId), anyString(), any(), any());
 
-    @Test
-    void approveAdjustment_forbidden_throwsExceptionForHandler() {
-        UUID adjustmentId = UUID.randomUUID();
-        doThrow(new AccessDeniedException("Permission denied")).when(service)
-                .approveAdjustment(eq(adjustmentId), anyString(), any(), any());
+		assertThrows(NotFoundException.class,
+				() -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));
+	}
 
-        assertThrows(AccessDeniedException.class,
-                () -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));
-    }
+	@Test
+	void approveAdjustment_forbidden_throwsExceptionForHandler() {
+		UUID adjustmentId = UUID.randomUUID();
+		doThrow(new AccessDeniedException("Permission denied")).when(service)
+			.approveAdjustment(eq(adjustmentId), anyString(), any(), any());
+
+		assertThrows(AccessDeniedException.class,
+				() -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));
+	}
+
 }

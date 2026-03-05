@@ -20,169 +20,173 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.GeneratedValue;
 import com.positivity.shared.id.UUIDv7Id;
+
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "time_entry", indexes = {
-        @Index(name = "idx_time_entry_attendance_window", columnList = "attendance_start_at, attendance_end_at"),
-        @Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
-        @Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at")
-})
+@Table(name = "time_entry",
+		indexes = {
+				@Index(name = "idx_time_entry_attendance_window",
+						columnList = "attendance_start_at, attendance_end_at"),
+				@Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
+				@Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at") })
 public class TimeEntry {
 
-    @Id
-    @GeneratedValue
-    @UUIDv7Id
-    @Column(name = "time_entry_id", columnDefinition = "UUID", nullable = false)
-    private UUID timeEntryId;
-    @Column(name = "person_id")
-    private String personId;
+	@Id
+	@GeneratedValue
+	@UUIDv7Id
+	@Column(name = "time_entry_id", columnDefinition = "UUID", nullable = false)
+	private UUID timeEntryId;
 
-    @Column(name = "timesheet_id")
-    private String timesheetId;
+	@Column(name = "person_id")
+	private String personId;
 
-    @Column(name = "location_id")
-    private UUID locationId;
+	@Column(name = "timesheet_id")
+	private String timesheetId;
 
-    @Column(name = "attendance_start_at")
-    private Instant attendanceStartAt;
+	@Column(name = "location_id")
+	private UUID locationId;
 
-    @Column(name = "attendance_end_at")
-    private Instant attendanceEndAt;
+	@Column(name = "attendance_start_at")
+	private Instant attendanceStartAt;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status")
-    private TimeEntryStatus status;
+	@Column(name = "attendance_end_at")
+	private Instant attendanceEndAt;
 
-    @Column(name = "approved_by")
-    private String approvedBy;
+	@Enumerated(EnumType.STRING)
+	@Column(name = "status")
+	private TimeEntryStatus status;
 
-    @Column(name = "approved_at")
-    private Instant approvedAt;
+	@Column(name = "approved_by")
+	private String approvedBy;
 
-    @Column(name = "rejected_by")
-    private String rejectedBy;
+	@Column(name = "approved_at")
+	private Instant approvedAt;
 
-    @Column(name = "rejected_at")
-    private Instant rejectedAt;
+	@Column(name = "rejected_by")
+	private String rejectedBy;
 
-    @Column(name = "rejection_reason", length = 500)
-    private String rejectionReason;
+	@Column(name = "rejected_at")
+	private Instant rejectedAt;
 
-    @CreatedDate
-    @Column(name = "created_at", updatable = false)
-    private Instant createdAt;
+	@Column(name = "rejection_reason", length = 500)
+	private String rejectionReason;
 
-    @LastModifiedDate
-    @Column(name = "updated_at")
-    private Instant updatedAt;
+	@CreatedDate
+	@Column(name = "created_at", updatable = false)
+	private Instant createdAt;
 
-    public UUID getTimeEntryId() {
-        return timeEntryId;
-    }
+	@LastModifiedDate
+	@Column(name = "updated_at")
+	private Instant updatedAt;
 
-    public void setTimeEntryId(UUID timeEntryId) {
-        this.timeEntryId = timeEntryId;
-    }
+	public UUID getTimeEntryId() {
+		return timeEntryId;
+	}
 
-    public String getPersonId() {
-        return personId;
-    }
+	public void setTimeEntryId(UUID timeEntryId) {
+		this.timeEntryId = timeEntryId;
+	}
 
-    public void setPersonId(String personId) {
-        this.personId = personId;
-    }
+	public String getPersonId() {
+		return personId;
+	}
 
-    public String getTimesheetId() {
-        return timesheetId;
-    }
+	public void setPersonId(String personId) {
+		this.personId = personId;
+	}
 
-    public void setTimesheetId(String timesheetId) {
-        this.timesheetId = timesheetId;
-    }
+	public String getTimesheetId() {
+		return timesheetId;
+	}
 
-    public UUID getLocationId() {
-        return locationId;
-    }
+	public void setTimesheetId(String timesheetId) {
+		this.timesheetId = timesheetId;
+	}
 
-    public void setLocationId(UUID locationId) {
-        this.locationId = locationId;
-    }
+	public UUID getLocationId() {
+		return locationId;
+	}
 
-    public Instant getAttendanceStartAt() {
-        return attendanceStartAt;
-    }
+	public void setLocationId(UUID locationId) {
+		this.locationId = locationId;
+	}
 
-    public void setAttendanceStartAt(Instant attendanceStartAt) {
-        this.attendanceStartAt = attendanceStartAt;
-    }
+	public Instant getAttendanceStartAt() {
+		return attendanceStartAt;
+	}
 
-    public Instant getAttendanceEndAt() {
-        return attendanceEndAt;
-    }
+	public void setAttendanceStartAt(Instant attendanceStartAt) {
+		this.attendanceStartAt = attendanceStartAt;
+	}
 
-    public void setAttendanceEndAt(Instant attendanceEndAt) {
-        this.attendanceEndAt = attendanceEndAt;
-    }
+	public Instant getAttendanceEndAt() {
+		return attendanceEndAt;
+	}
 
-    public TimeEntryStatus getStatus() {
-        return status;
-    }
+	public void setAttendanceEndAt(Instant attendanceEndAt) {
+		this.attendanceEndAt = attendanceEndAt;
+	}
 
-    public void setStatus(TimeEntryStatus status) {
-        this.status = status;
-    }
+	public TimeEntryStatus getStatus() {
+		return status;
+	}
 
-    public String getApprovedBy() {
-        return approvedBy;
-    }
+	public void setStatus(TimeEntryStatus status) {
+		this.status = status;
+	}
 
-    public void setApprovedBy(String approvedBy) {
-        this.approvedBy = approvedBy;
-    }
+	public String getApprovedBy() {
+		return approvedBy;
+	}
 
-    public Instant getApprovedAt() {
-        return approvedAt;
-    }
+	public void setApprovedBy(String approvedBy) {
+		this.approvedBy = approvedBy;
+	}
 
-    public void setApprovedAt(Instant approvedAt) {
-        this.approvedAt = approvedAt;
-    }
+	public Instant getApprovedAt() {
+		return approvedAt;
+	}
 
-    public String getRejectedBy() {
-        return rejectedBy;
-    }
+	public void setApprovedAt(Instant approvedAt) {
+		this.approvedAt = approvedAt;
+	}
 
-    public void setRejectedBy(String rejectedBy) {
-        this.rejectedBy = rejectedBy;
-    }
+	public String getRejectedBy() {
+		return rejectedBy;
+	}
 
-    public Instant getRejectedAt() {
-        return rejectedAt;
-    }
+	public void setRejectedBy(String rejectedBy) {
+		this.rejectedBy = rejectedBy;
+	}
 
-    public void setRejectedAt(Instant rejectedAt) {
-        this.rejectedAt = rejectedAt;
-    }
+	public Instant getRejectedAt() {
+		return rejectedAt;
+	}
 
-    public String getRejectionReason() {
-        return rejectionReason;
-    }
+	public void setRejectedAt(Instant rejectedAt) {
+		this.rejectedAt = rejectedAt;
+	}
 
-    public void setRejectionReason(String rejectionReason) {
-        this.rejectionReason = rejectionReason;
-    }
+	public String getRejectionReason() {
+		return rejectionReason;
+	}
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+	public void setRejectionReason(String rejectionReason) {
+		this.rejectionReason = rejectionReason;
+	}
 
-    public void setCreatedAt(Instant createdAt) {
-}
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+	public void setCreatedAt(Instant createdAt) {
+	}
 
-    public void setUpdatedAt(Instant updatedAt) {
-}
+	public Instant getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(Instant updatedAt) {
+	}
+
 }

@@ -24,164 +24,149 @@ import java.util.UUID;
 @Transactional
 public class UserPersonLinkServiceImpl implements UserPersonLinkService {
 
-    private static final String SYSTEM_USER = "system";
+	private static final String SYSTEM_USER = "system";
 
-    private final UserPersonLinkRepository linkRepository;
-    private final PersonRepository personRepository;
+	private final UserPersonLinkRepository linkRepository;
 
-    public UserPersonLinkServiceImpl(
-            @NonNull UserPersonLinkRepository linkRepository,
-            @NonNull PersonRepository personRepository) {
-        this.linkRepository = linkRepository;
-        this.personRepository = personRepository;
-    }
+	private final PersonRepository personRepository;
 
-    @Override
-    public boolean linkExistsByUserId(@NonNull UUID userId) {
-        return linkRepository.existsByUserId(userId);
-    }
+	public UserPersonLinkServiceImpl(@NonNull UserPersonLinkRepository linkRepository,
+			@NonNull PersonRepository personRepository) {
+		this.linkRepository = linkRepository;
+		this.personRepository = personRepository;
+	}
 
-    @Override
-    public boolean linkExistsByUserIdAndPersonId(@NonNull UUID userId, @NonNull UUID personId) {
-        return linkRepository.existsByUserIdAndPersonId(userId, personId);
-    }
+	@Override
+	public boolean linkExistsByUserId(@NonNull UUID userId) {
+		return linkRepository.existsByUserId(userId);
+	}
 
-    @Override
-    @NonNull
-    public UserPersonLinkResponse createUserLink(@NonNull UUID userId, @NonNull UUID personId) {
-        personRepository.findById(personId)
-                .orElseThrow(() -> new PersonNotFoundException(personId));
+	@Override
+	public boolean linkExistsByUserIdAndPersonId(@NonNull UUID userId, @NonNull UUID personId) {
+		return linkRepository.existsByUserIdAndPersonId(userId, personId);
+	}
 
-        if (linkRepository.existsByUserId(userId)) {
-            UserPersonLink existingLink = linkRepository.findByUserId(userId)
-                    .orElseThrow(() -> new UserAlreadyLinkedException(userId));
-            if (existingLink.getPersonId().equals(personId)) {
-                return toResponse(existingLink);
-            }
-            throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
-        }
+	@Override
+	@NonNull public UserPersonLinkResponse createUserLink(@NonNull UUID userId, @NonNull UUID personId) {
+		personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
-        UserPersonLink link = new UserPersonLink();
-        link.setUserId(userId);
-        link.setPersonId(personId);
-        link.setLinkType("PRIMARY");
-        link.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER));
-        try {
-            UserPersonLink saved = linkRepository.save(link);
-            return toResponse(saved);
-        } catch (DataIntegrityViolationException e) {
-            UserPersonLink existingLink = linkRepository.findByUserId(userId)
-                    .orElseThrow(() -> e);
-            if (existingLink.getPersonId().equals(personId)) {
-                return toResponse(existingLink);
-            }
-            throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
-        }
-    }
+		if (linkRepository.existsByUserId(userId)) {
+			UserPersonLink existingLink = linkRepository.findByUserId(userId)
+				.orElseThrow(() -> new UserAlreadyLinkedException(userId));
+			if (existingLink.getPersonId().equals(personId)) {
+				return toResponse(existingLink);
+			}
+			throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
+		}
 
-    @Override
-    @Transactional(readOnly = true)
-    @NonNull
-    public List<UserPersonLinkResponse> getUserLinks(@NonNull UUID personId) {
-        personRepository.findById(personId)
-                .orElseThrow(() -> new PersonNotFoundException(personId));
+		UserPersonLink link = new UserPersonLink();
+		link.setUserId(userId);
+		link.setPersonId(personId);
+		link.setLinkType("PRIMARY");
+		link.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER));
+		try {
+			UserPersonLink saved = linkRepository.save(link);
+			return toResponse(saved);
+		}
+		catch (DataIntegrityViolationException e) {
+			UserPersonLink existingLink = linkRepository.findByUserId(userId).orElseThrow(() -> e);
+			if (existingLink.getPersonId().equals(personId)) {
+				return toResponse(existingLink);
+			}
+			throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
+		}
+	}
 
-        return linkRepository.findByPersonId(personId)
-                .stream()
-                .map(this::toResponse)
-                .toList();
-    }
+	@Override
+	@Transactional(readOnly = true)
+	@NonNull public List<UserPersonLinkResponse> getUserLinks(@NonNull UUID personId) {
+		personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
-    @Override
-    @NonNull
-    public UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request) {
-        UserPersonLinkResponse response = createUserLink(request.getUserId(), request.getPersonId());
-        if (request.getNotes() != null || request.getLinkType() != null) {
-            var existingLink = linkRepository.findByUserId(request.getUserId());
-            if (existingLink.isPresent()) {
-                UserPersonLink link = existingLink.get();
-                if (request.getLinkType() != null && !request.getLinkType().isBlank()) {
-                    link.setLinkType(request.getLinkType());
-                }
-                if (request.getNotes() != null) {
-                    link.setNotes(request.getNotes());
-                }
-                response = toResponse(linkRepository.save(link));
-            }
-        }
-        return response;
-    }
+		return linkRepository.findByPersonId(personId).stream().map(this::toResponse).toList();
+	}
 
-    @Override
-    public void unlinkUserFromPerson(@NonNull UUID userId) {
-        if (!linkRepository.existsByUserId(userId)) {
-            throw new UserPersonLinkNotFoundException(userId);
-        }
-        linkRepository.deleteByUserId(userId);
-    }
+	@Override
+	@NonNull public UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request) {
+		UserPersonLinkResponse response = createUserLink(request.getUserId(), request.getPersonId());
+		if (request.getNotes() != null || request.getLinkType() != null) {
+			var existingLink = linkRepository.findByUserId(request.getUserId());
+			if (existingLink.isPresent()) {
+				UserPersonLink link = existingLink.get();
+				if (request.getLinkType() != null && !request.getLinkType().isBlank()) {
+					link.setLinkType(request.getLinkType());
+				}
+				if (request.getNotes() != null) {
+					link.setNotes(request.getNotes());
+				}
+				response = toResponse(linkRepository.save(link));
+			}
+		}
+		return response;
+	}
 
-    @Override
-    @Transactional(readOnly = true)
-    @NonNull
-    public PersonResponse findPersonByUserId(@NonNull UUID userId) {
-        UserPersonLink link = linkRepository.findByUserId(userId)
-                .orElseThrow(() -> new UserPersonLinkNotFoundException(userId));
+	@Override
+	public void unlinkUserFromPerson(@NonNull UUID userId) {
+		if (!linkRepository.existsByUserId(userId)) {
+			throw new UserPersonLinkNotFoundException(userId);
+		}
+		linkRepository.deleteByUserId(userId);
+	}
 
-        Person person = personRepository.findById(link.getPersonId())
-                .orElseThrow(() -> new PersonNotFoundException(link.getPersonId()));
+	@Override
+	@Transactional(readOnly = true)
+	@NonNull public PersonResponse findPersonByUserId(@NonNull UUID userId) {
+		UserPersonLink link = linkRepository.findByUserId(userId)
+			.orElseThrow(() -> new UserPersonLinkNotFoundException(userId));
 
-        return toPersonResponse(person);
-    }
+		Person person = personRepository.findById(link.getPersonId())
+			.orElseThrow(() -> new PersonNotFoundException(link.getPersonId()));
 
-    @Override
-    @Transactional(readOnly = true)
-    @NonNull
-    public List<UUID> findUserIdsByPersonId(@NonNull UUID personId) {
-        personRepository.findById(personId)
-                .orElseThrow(() -> new PersonNotFoundException(personId));
+		return toPersonResponse(person);
+	}
 
-        return linkRepository.findByPersonId(personId)
-                .stream()
-                .map(UserPersonLink::getUserId)
-                .toList();
-    }
+	@Override
+	@Transactional(readOnly = true)
+	@NonNull public List<UUID> findUserIdsByPersonId(@NonNull UUID personId) {
+		personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
-    @Override
-    @Transactional(readOnly = true)
-    @NonNull
-    public UserPersonLinkResponse findLinkByPersonId(@NonNull UUID personId) {
-        personRepository.findById(personId)
-                .orElseThrow(() -> new PersonNotFoundException(personId));
+		return linkRepository.findByPersonId(personId).stream().map(UserPersonLink::getUserId).toList();
+	}
 
-        UserPersonLink link = linkRepository.findFirstByPersonIdAndStatusOrderByCreatedAtDesc(
-                personId,
-                com.positivity.people.internal.enums.UserLinkStatus.ACTIVE)
-                .orElseThrow(() -> new UserPersonLinkNotFoundException(personId));
+	@Override
+	@Transactional(readOnly = true)
+	@NonNull public UserPersonLinkResponse findLinkByPersonId(@NonNull UUID personId) {
+		personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
-        return toResponse(link);
-    }
+		UserPersonLink link = linkRepository
+			.findFirstByPersonIdAndStatusOrderByCreatedAtDesc(personId,
+					com.positivity.people.internal.enums.UserLinkStatus.ACTIVE)
+			.orElseThrow(() -> new UserPersonLinkNotFoundException(personId));
 
-    private UserPersonLinkResponse toResponse(UserPersonLink link) {
-        return UserPersonLinkResponse.builder()
-                .linkId(link.getId())
-                .userId(link.getUserId())
-                .personId(link.getPersonId())
-                .linkType(link.getLinkType())
-                .createdAt(link.getCreatedAt())
-                .createdBy(link.getCreatedBy())
-                .notes(link.getNotes())
-                .build();
-    }
+		return toResponse(link);
+	}
 
-    private PersonResponse toPersonResponse(Person person) {
-        return PersonResponse.builder()
-                .id(person.getId())
-                .firstName(person.getFirstName())
-                .lastName(person.getLastName())
-                .primaryEmail(person.getPrimaryEmail())
-                .secondaryEmail(person.getSecondaryEmail())
-                .phoneNumbers(person.getPhoneNumbers())
-                .username(person.getUsername())
-                .build();
-    }
+	private UserPersonLinkResponse toResponse(UserPersonLink link) {
+		return UserPersonLinkResponse.builder()
+			.linkId(link.getId())
+			.userId(link.getUserId())
+			.personId(link.getPersonId())
+			.linkType(link.getLinkType())
+			.createdAt(link.getCreatedAt())
+			.createdBy(link.getCreatedBy())
+			.notes(link.getNotes())
+			.build();
+	}
+
+	private PersonResponse toPersonResponse(Person person) {
+		return PersonResponse.builder()
+			.id(person.getId())
+			.firstName(person.getFirstName())
+			.lastName(person.getLastName())
+			.primaryEmail(person.getPrimaryEmail())
+			.secondaryEmail(person.getSecondaryEmail())
+			.phoneNumbers(person.getPhoneNumbers())
+			.username(person.getUsername())
+			.build();
+	}
+
 }

@@ -55,8 +55,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ExtendWith(MockitoExtension.class)
 class PostingRuleEvaluatorFeatureFlagTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private PostingRuleVersionRepository versionRepository;
@@ -81,7 +81,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
     @BeforeEach
     void setUp() {
         defaultGLMappingProperties = new DefaultGLMappingProperties();
-        evaluator = new PostingRuleEvaluatorImpl(
+        evaluator = new PostingRuleEvaluatorImpl(TEST_CLOCK,
                 versionRepository,
                 ruleSetRepository,
                 glMappingResolver,

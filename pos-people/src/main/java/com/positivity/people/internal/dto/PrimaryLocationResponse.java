@@ -18,6 +18,8 @@ import java.util.UUID;
 @Schema(description = "Primary location resolved from the authenticated user's active staffing assignments")
 public class PrimaryLocationResponse {
 
-    @Schema(description = "Location identifier of the user's primary active assignment", example = "22222222-2222-2222-2222-222222222222", requiredMode = Schema.RequiredMode.REQUIRED)
-    private UUID locationId;
+	@Schema(description = "Location identifier of the user's primary active assignment",
+			example = "22222222-2222-2222-2222-222222222222", requiredMode = Schema.RequiredMode.REQUIRED)
+	private UUID locationId;
+
 }

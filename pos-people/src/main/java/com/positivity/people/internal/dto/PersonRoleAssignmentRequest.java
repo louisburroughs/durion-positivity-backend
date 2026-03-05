@@ -14,9 +14,14 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PersonRoleAssignmentRequest {
-    @NotBlank
-    private String roleCode;
-    private UUID locationId;
-    private LocalDateTime startDate;
-    private LocalDateTime endDate;
+
+	@NotBlank
+	private String roleCode;
+
+	private UUID locationId;
+
+	private LocalDateTime startDate;
+
+	private LocalDateTime endDate;
+
 }

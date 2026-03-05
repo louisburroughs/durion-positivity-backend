@@ -19,54 +19,54 @@ import java.util.UUID;
 import static org.mockito.Mockito.verify;
 
 /**
- * Unit tests for {@link WorkSessionEventListener} verifying that Spring
- * application events are correctly delegated to
- * {@link TimekeepingIngestionService}
- * (CAP-140, Story #58).
+ * Unit tests for {@link WorkSessionEventListener} verifying that Spring application
+ * events are correctly delegated to {@link TimekeepingIngestionService} (CAP-140, Story
+ * #58).
  *
  * Issue: #58
  */
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S100")
 class WorkSessionEventListenerTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
+	private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    @Mock
-    TimekeepingIngestionService timekeepingIngestionService;
+	@Mock
+	TimekeepingIngestionService timekeepingIngestionService;
 
-    @InjectMocks
-    WorkSessionEventListener workSessionEventListener;
+	@InjectMocks
+	WorkSessionEventListener workSessionEventListener;
 
-    // -------------------------------------------------------------------------
-    // AC6 – onWorkSessionCompleted delegates to ingestWorkSession
-    // -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// AC6 – onWorkSessionCompleted delegates to ingestWorkSession
+	// -------------------------------------------------------------------------
 
-    @Test
-    void onWorkSessionCompleted_delegatesToIngestWorkSession() {
-        // Issue #58: AC6 — listener must call ingestWorkSession exactly once
-        WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now(TEST_CLOCK).minusSeconds(3600), Instant.now(TEST_CLOCK), UUID.randomUUID());
+	@Test
+	void onWorkSessionCompleted_delegatesToIngestWorkSession() {
+		// Issue #58: AC6 — listener must call ingestWorkSession exactly once
+		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(UUID.randomUUID(), UUID.randomUUID(),
+				UUID.randomUUID(), Instant.now(TEST_CLOCK).minusSeconds(3600), Instant.now(TEST_CLOCK),
+				UUID.randomUUID());
 
-        workSessionEventListener.onWorkSessionCompleted(event);
+		workSessionEventListener.onWorkSessionCompleted(event);
 
-        verify(timekeepingIngestionService).ingestWorkSession(event);
-    }
+		verify(timekeepingIngestionService).ingestWorkSession(event);
+	}
 
-    // -------------------------------------------------------------------------
-    // AC7 – onWorkSessionCorrected delegates to recordCorrection
-    // -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// AC7 – onWorkSessionCorrected delegates to recordCorrection
+	// -------------------------------------------------------------------------
 
-    @Test
-    void onWorkSessionCorrected_delegatesToRecordCorrection() {
-        // Issue #58: AC7 — listener must call recordCorrection exactly once
-        WorkSessionCorrectedEvent event = new WorkSessionCorrectedEvent(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now(TEST_CLOCK).minusSeconds(3600), Instant.now(TEST_CLOCK), null, "Test correction");
+	@Test
+	void onWorkSessionCorrected_delegatesToRecordCorrection() {
+		// Issue #58: AC7 — listener must call recordCorrection exactly once
+		WorkSessionCorrectedEvent event = new WorkSessionCorrectedEvent(UUID.randomUUID(), UUID.randomUUID(),
+				UUID.randomUUID(), UUID.randomUUID(), Instant.now(TEST_CLOCK).minusSeconds(3600),
+				Instant.now(TEST_CLOCK), null, "Test correction");
 
-        workSessionEventListener.onWorkSessionCorrected(event);
+		workSessionEventListener.onWorkSessionCorrected(event);
 
-        verify(timekeepingIngestionService).recordCorrection(event);
-    }
+		verify(timekeepingIngestionService).recordCorrection(event);
+	}
+
 }

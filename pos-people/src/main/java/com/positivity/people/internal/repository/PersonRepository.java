@@ -10,25 +10,27 @@ import java.util.UUID;
 
 @Repository
 public interface PersonRepository extends JpaRepository<Person, UUID> {
-    Optional<Person> findByPrimaryEmailIgnoreCase(String primaryEmail);
 
-    Optional<Person> findBySecondaryEmailIgnoreCase(String secondaryEmail);
+	Optional<Person> findByPrimaryEmailIgnoreCase(String primaryEmail);
 
-    boolean existsByUsername(String username);
+	Optional<Person> findBySecondaryEmailIgnoreCase(String secondaryEmail);
 
-    boolean existsByEmployeeNumberIgnoreCase(String employeeNumber);
+	boolean existsByUsername(String username);
 
-    boolean existsByEmployeeNumberIgnoreCaseAndIdNot(String employeeNumber, UUID id);
+	boolean existsByEmployeeNumberIgnoreCase(String employeeNumber);
 
-    boolean existsByPrimaryEmailIgnoreCase(String primaryEmail);
+	boolean existsByEmployeeNumberIgnoreCaseAndIdNot(String employeeNumber, UUID id);
 
-    boolean existsByPrimaryEmailIgnoreCaseAndIdNot(String primaryEmail, UUID id);
+	boolean existsByPrimaryEmailIgnoreCase(String primaryEmail);
 
-    List<Person> findByLegalNameIgnoreCase(String legalName);
+	boolean existsByPrimaryEmailIgnoreCaseAndIdNot(String primaryEmail, UUID id);
 
-    List<Person> findByLastNameIgnoreCase(String lastName);
+	List<Person> findByLegalNameIgnoreCase(String legalName);
 
-    List<Person> findByFirstNameIgnoreCase(String firstName);
+	List<Person> findByLastNameIgnoreCase(String lastName);
 
-    List<Person> findByPhoneNumbersContains(String phoneNumber);
+	List<Person> findByFirstNameIgnoreCase(String firstName);
+
+	List<Person> findByPhoneNumbersContains(String phoneNumber);
+
 }
