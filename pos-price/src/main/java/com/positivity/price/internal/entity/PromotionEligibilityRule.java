@@ -3,7 +3,6 @@ package com.positivity.price.internal.entity;
 import com.positivity.price.internal.enums.ConditionType;
 import com.positivity.price.internal.enums.RuleCombination;
 import com.positivity.price.internal.enums.RuleOperator;
-import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
