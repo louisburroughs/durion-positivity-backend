@@ -169,7 +169,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
 
                                         return builder.build();
                                 })
-                                .collect(Collectors.toList());
+                                .toList();
         }
 
         private List<WorkorderPartResponse> buildPartResponses(

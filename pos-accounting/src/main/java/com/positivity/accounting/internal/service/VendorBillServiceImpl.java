@@ -1,8 +1,7 @@
 package com.positivity.accounting.internal.service;
 
-import java.time.Clock;
-
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -32,6 +31,7 @@ import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRep
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.service.VendorBillService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -141,7 +141,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 // Dr Inventory (for inventory items) or Dr Expense (for non-inventory)
                 // Cr Accounts Payable
                 VendorBillGLPostingEvent glPostingEvent = VendorBillGLPostingEvent.builder()
-                                .eventId(UUID.randomUUID())
+                                .eventId(UUIDv7Generator.generate())
                                 .vendorBillId(savedBill.getVendorBillId())
                                 .vendorId(savedBill.getVendorId())
                                 .organizationId(event.getOrganizationId())

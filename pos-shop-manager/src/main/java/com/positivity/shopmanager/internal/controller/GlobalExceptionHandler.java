@@ -1,32 +1,36 @@
 package com.positivity.shopmanager.internal.controller;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
+
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shopmanager.internal.dto.ErrorResponse;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
-import com.positivity.shopmanager.internal.exception.HrUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
+import com.positivity.shopmanager.internal.exception.HrUnavailableException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 
 @ControllerAdvice
 @RequiredArgsConstructor
@@ -186,12 +190,12 @@ public class GlobalExceptionHandler {
                                 .filter(header -> !header.isBlank())
                                 .orElse(null);
                 if (rawCorrelationId == null) {
-                        return UUID.randomUUID();
+                        return UUIDv7Generator.generate();
                 }
                 try {
                         return UUID.fromString(rawCorrelationId);
                 } catch (IllegalArgumentException ignored) {
-                        return UUID.randomUUID();
+                        return UUIDv7Generator.generate();
                 }
         }
 

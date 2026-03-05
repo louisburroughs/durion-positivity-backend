@@ -1,6 +1,19 @@
 package com.positivity.accounting.internal.service;
 
+import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.client.InvoiceServiceException;
@@ -10,28 +23,21 @@ import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.ReversePaymentApplicationRequest;
-import com.positivity.accounting.internal.entity.*;
+import com.positivity.accounting.internal.entity.CustomerCredit;
+import com.positivity.accounting.internal.entity.PaymentApplication;
+import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
+import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
-import com.positivity.accounting.internal.repository.*;
+import com.positivity.accounting.internal.repository.CustomerCreditRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
+import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.security.common.SecurityContextHelper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
 import com.positivity.shared.id.UUIDv7Generator;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for managing payment applications to invoices (AR).

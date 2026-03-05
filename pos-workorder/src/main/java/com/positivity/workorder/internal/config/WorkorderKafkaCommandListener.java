@@ -3,7 +3,6 @@ package com.positivity.workorder.internal.config;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
-import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -11,6 +10,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 
 import lombok.RequiredArgsConstructor;
@@ -72,7 +72,7 @@ public class WorkorderKafkaCommandListener {
             }
 
             if (event.getEventId() == null) {
-                event.setEventId(UUID.randomUUID());
+                event.setEventId(UUIDv7Generator.generate());
             }
             if (event.getTimestamp() == null) {
                 event.setTimestamp(Instant.now(clock));

@@ -1,12 +1,9 @@
 package com.positivity.customer.internal.config;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
 
-import com.positivity.customer.internal.exception.DuplicateRedemptionException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -15,10 +12,14 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.positivity.customer.internal.exception.DuplicateRedemptionException;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Global exception handler for CRM (pos-customer) REST controllers.
@@ -37,7 +38,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 @RequiredArgsConstructor
 public class CrmExceptionHandler {
     private final Clock clock;
-
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ErrorResponse(
@@ -129,11 +129,11 @@ public class CrmExceptionHandler {
 
     private String resolveCorrelationId(HttpServletRequest request) {
         if (request == null) {
-            return UUID.randomUUID().toString();
+            return UUIDv7Generator.generate().toString();
         }
         String correlationId = request.getHeader("X-Correlation-Id");
         if (correlationId == null || correlationId.isBlank()) {
-            return UUID.randomUUID().toString();
+            return UUIDv7Generator.generate().toString();
         }
         return correlationId;
     }

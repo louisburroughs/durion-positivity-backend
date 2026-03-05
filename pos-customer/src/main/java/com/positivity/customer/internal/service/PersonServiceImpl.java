@@ -11,15 +11,16 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.positivity.customer.internal.client.PeopleClient;
-import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
 import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PersonParty;
+import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,7 +85,8 @@ public class PersonServiceImpl implements PersonService {
         // Reuse existing person-party if already associated to this canonical person
         PersonParty existing = personRepository.findByPersonId(peoplePersonId).orElse(null);
         if (existing != null) {
-            int existingContactPointCount = contactPointRepository.findByPersonPartyId(existing.getPersonPartyId()).size();
+            int existingContactPointCount = contactPointRepository.findByPersonPartyId(existing.getPersonPartyId())
+                    .size();
             return CreatePersonResponse.from(existing, existingContactPointCount);
         }
 
@@ -93,7 +95,7 @@ public class PersonServiceImpl implements PersonService {
         person.setFirstName(request.getFirstName().trim());
         person.setLastName(request.getLastName().trim());
         person.setPersonId(peoplePersonId);
-        person.setCustomerNumber("CUST-PER-" + UUID.randomUUID().toString().substring(0, 8));
+        person.setCustomerNumber("CUST-PER-" + UUIDv7Generator.generate().toString().substring(0, 8));
         person.setPreferredContactMethod(request.getPreferredContactMethod());
 
         // Save person first to get ID

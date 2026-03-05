@@ -38,6 +38,7 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.service.PurchaseOrderService;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -506,7 +507,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     private String generatePoNumber() {
-        return "PO-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        return "PO-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase();
     }
 
     private record TotalsAndLines(List<PurchaseOrderLineEntity> lines, long subtotalMinor, long taxMinor) {

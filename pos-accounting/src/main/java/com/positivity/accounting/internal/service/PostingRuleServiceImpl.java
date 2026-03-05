@@ -1,6 +1,16 @@
 package com.positivity.accounting.internal.service;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.accounting.internal.dto.PostingRuleMapper;
 import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
@@ -13,19 +23,10 @@ import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import com.positivity.accounting.service.PostingRuleService;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Service for Posting Rule Set and Version management.
@@ -190,7 +191,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
                 .max(Integer::compareTo)
                 .orElse(0);
 
-        version.setVersionId(UUID.randomUUID());
+        version.setVersionId(UUIDv7Generator.generate());
         version.setPostingRuleSet(ruleSet); // Set child -> parent (owning side)
         version.setVersionNumber(maxVersion + 1);
         version.setState(PostingRuleSetState.DRAFT);

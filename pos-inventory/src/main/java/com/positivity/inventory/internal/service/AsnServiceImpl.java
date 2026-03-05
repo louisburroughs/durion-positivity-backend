@@ -1,6 +1,19 @@
 package com.positivity.inventory.internal.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.inventory.internal.dto.asn.AsnLineResponse;
 import com.positivity.inventory.internal.dto.asn.AsnResponse;
@@ -29,19 +42,9 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.service.AsnService;
 import com.positivity.security.common.SecurityContextHelper;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import com.positivity.shared.id.UUIDv7Generator;
+
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.NonNull;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -312,7 +315,7 @@ public class AsnServiceImpl implements AsnService {
         }
 
         private String generateReceiptNumber() {
-                return "GR-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                return "GR-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase();
         }
 
         private @NonNull AsnResponse toAsnResponse(@NonNull AdvanceShippingNoticeEntity entity) {

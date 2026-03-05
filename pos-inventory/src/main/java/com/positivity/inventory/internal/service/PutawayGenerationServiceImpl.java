@@ -22,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PutawayGenerationServiceImpl implements PutawayGenerationService {
 
+    // NOTE: These default/staging location IDs are hardcoded for simplicity, but in
+    // a real implementation they would likely be configurable or determined
+    // dynamically based on the receipt or warehouse context.
     private static final UUID DEFAULT_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID STAGING_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
@@ -116,7 +119,8 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
 
         if (hasLegacyProductId || hasLegacyQuantity) {
             if (!hasLegacyProductId || !hasLegacyQuantity) {
-                throw new IllegalArgumentException("Both productId and quantity are required when lineItems is not provided");
+                throw new IllegalArgumentException(
+                        "Both productId and quantity are required when lineItems is not provided");
             }
             return List.of(new ParsedPutawayLineItem(
                     parseRequiredUuid(request.getProductId(), "productId"),
