@@ -1,7 +1,6 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.UserLinkStatus;
-import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;

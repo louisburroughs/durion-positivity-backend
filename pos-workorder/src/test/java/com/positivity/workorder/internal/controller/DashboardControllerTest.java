@@ -72,7 +72,7 @@ class DashboardControllerTest {
                 // Issue CAP-142: AC-1 — happy path, mock service returns structured response
                 DashboardResponse expectedResponse = DashboardResponse.builder()
                                 .locationId("LOC-123")
-                                .date(LocalDate.now(TE
+                                .date(LocalDate.now(TEST_CLOCK))
                                 .workorders(List.of())
                                 .mechanics(List.of())
                                 .bays(List.of())
@@ -128,7 +128,7 @@ class DashboardControllerTest {
                                 .andExpect(status().isOk());
 
                 // Assert: service received the exact parsed date
-                verify(dashboardService).getDashboard(eq("LOC-123"), eq(LocalDate.of(2026, 3, 1)));
+                verify(dashboardService).getDashboard("LOC-123", LocalDate.of(2026, 3, 1));
         }
 
         // -----------------------------------------------------------------------
@@ -136,11 +136,11 @@ class DashboardControllerTest {
         // -----------------------------------------------------------------------
 
         @Test
-        @DisplayName("AC-5: No date param defaults to today (LocalDate.now(TEST_CLOCK)) when calling Dashboar
+        @DisplayName("AC-5: No date param defaults to today (LocalDate.now(TEST_CLOCK)) when calling DashboardService")
         void getDashboard_withDefaultDate_usesToday() throws Exception {
                 // Arrange
                 // Issue CAP-142: AC-5 — default date is today
-                LocalDate today = LocalDate.now(TE
+                LocalDate today = LocalDate.now(TEST_CLOCK);
                 DashboardResponse stub = DashboardResponse.builder()
                                 .locationId("LOC-123")
                                 .date(today)
@@ -156,8 +156,9 @@ class DashboardControllerTest {
                 mockMvc.perform(get(DASHBOARD_URL).param("locationId", "LOC-123"))
                                 .andExpect(status().isOk());
 
-                // Assert: service receives today's date (no date param → LocalDate.now(TE
-                verify(dashboardService).getDashboard(eq("LOC-123"), eq(today));
+                // Assert: service receives today's date (no date param →
+                // LocalDate.now(TEST_CLOCK))
+                verify(dashboardService).getDashboard("LOC-123", today);
         }
 
         // -----------------------------------------------------------------------
@@ -169,7 +170,7 @@ class DashboardControllerTest {
         @DisplayName("GET /today with non-UUID locationId returns 400 Bad Request")
         void getDashboard_nonUuidLocationId_returns400() throws Exception {
                 // Arrange — service throws IllegalArgumentException for non-UUID locationId
-                when(dashboardService.getDashboard(eq("not-a-uuid"), any()))
+                when(dashboardService.getDashboard(eq("not-a-uuid"), any(LocalDate.class)))
                                 .thenThrow(new IllegalArgumentException("locationId is not a valid UUID: not-a-uuid"));
 
                 // Act & Assert

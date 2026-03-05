@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Clock;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -13,13 +14,15 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 
 import com.positivity.workorder.internal.config.WorkorderKafkaCommandListener;
-import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
+import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 
 import tools.jackson.databind.ObjectMapper;
 
 class WorkorderKafkaCommandListenerTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+            java.time.ZoneOffset.UTC);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ApplicationEventPublisher eventPublisher = org.mockito.Mockito.mock(ApplicationEventPublisher.class);
 
@@ -27,7 +30,7 @@ class WorkorderKafkaCommandListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new WorkorderKafkaCommandListener(objectMapper, eventPublisher);
+        listener = new WorkorderKafkaCommandListener(FIXED_CLOCK, objectMapper, eventPublisher);
     }
 
     @Test

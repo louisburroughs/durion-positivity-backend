@@ -19,9 +19,8 @@ import java.time.LocalDate;
 @Slf4j
 @RequiredArgsConstructor
 public class PeopleAvailabilityClient {
+
     private final Clock clock;
-
-
     private final RestClient peopleServiceRestClient;
 
     /**

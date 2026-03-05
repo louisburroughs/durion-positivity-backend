@@ -33,11 +33,11 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class WorkorderKafkaCommandListener {
-    private final Clock clock;
 
-
+    private static final String PAYLOAD = "payload";
     private static final String COMMAND_ASSIGNMENT_UPDATED = "ASSIGNMENT_UPDATED";
 
+    private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
 
@@ -48,7 +48,7 @@ public class WorkorderKafkaCommandListener {
             boolean hasCommandType = root.hasNonNull("commandType");
             String commandType = COMMAND_ASSIGNMENT_UPDATED;
             if (hasCommandType) {
-                String rawCommandType = root.get("commandType").textValue();
+                String rawCommandType = root.get("commandType").stringValue();
                 if (rawCommandType != null && !rawCommandType.isBlank()) {
                     commandType = rawCommandType.toUpperCase(Locale.ROOT);
                 }
@@ -60,9 +60,9 @@ public class WorkorderKafkaCommandListener {
             }
 
             JsonNode payloadNode = hasCommandType
-                    && root.has("payload")
-                    && !root.get("payload").isNull()
-                            ? root.get("payload")
+                    && root.has(PAYLOAD)
+                    && !root.get(PAYLOAD).isNull()
+                            ? root.get(PAYLOAD)
                             : root;
 
             AssignmentUpdatedEvent event = objectMapper.treeToValue(payloadNode, AssignmentUpdatedEvent.class);

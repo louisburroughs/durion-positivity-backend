@@ -4,7 +4,6 @@ import java.time.Clock;
 
 import com.positivity.people.internal.enums.ExceptionSeverity;
 import com.positivity.people.internal.enums.ExceptionStatus;
-import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import java.time.Instant;
 import org.springframework.data.annotation.CreatedDate;

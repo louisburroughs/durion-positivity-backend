@@ -1,12 +1,41 @@
 package com.positivity.people;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.client.SecurityServiceException;
 import com.positivity.people.internal.client.WorkexecClientException;
 import com.positivity.people.internal.client.WorkexecJobTimeClient;
-import com.positivity.people.internal.client.LocationReferenceClient;
+import com.positivity.people.internal.client.dto.UserRoleDto;
 import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
-import com.positivity.people.internal.client.dto.UserRoleDto;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.TimekeepingPolicy;
@@ -16,32 +45,6 @@ import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.TimekeepingPolicyRepository;
 import com.positivity.people.service.PeopleAccessControlService;
 import com.positivity.people.service.TimeEntryService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
-
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @DisplayName("People Access Control ContractBehaviorIT")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
@@ -89,22 +92,23 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		seedGlobalThreshold(60);
 
 		when(workexecJobTimeClient.getJobTimeTotals(reportDate, reportDate, "UTC", locationId, List.of(technicianId)))
-			.thenReturn(List.of(jobTime(technicianId, locationId, reportDate, 360)));
+				.thenReturn(List.of(jobTime(technicianId, locationId, reportDate, 360)));
 
 		mockMvc
-			.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-16")
-				.param("endDate", "2026-02-16")
-				.param("timezone", "UTC")
-				.param("locationId", locationId.toString())
-				.param("technicianIds", technicianId.toString())))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].technicianId").value(technicianId.toString()))
-			.andExpect(jsonPath("$[0].technicianName").value("Jane Doe"))
-			.andExpect(jsonPath("$[0].totalAttendanceHours").value(8.0))
-			.andExpect(jsonPath("$[0].totalJobHours").value(6.0))
-			.andExpect(jsonPath("$[0].discrepancyHours").value(2.0))
-			.andExpect(jsonPath("$[0].thresholdApplied").value(60))
-			.andExpect(jsonPath("$[0].isFlagged").value(true));
+				.perform(
+						withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-16")
+								.param("endDate", "2026-02-16")
+								.param("timezone", "UTC")
+								.param("locationId", locationId.toString())
+								.param("technicianIds", technicianId.toString())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].technicianId").value(technicianId.toString()))
+				.andExpect(jsonPath("$[0].technicianName").value("Jane Doe"))
+				.andExpect(jsonPath("$[0].totalAttendanceHours").value(8.0))
+				.andExpect(jsonPath("$[0].totalJobHours").value(6.0))
+				.andExpect(jsonPath("$[0].discrepancyHours").value(2.0))
+				.andExpect(jsonPath("$[0].thresholdApplied").value(60))
+				.andExpect(jsonPath("$[0].isFlagged").value(true));
 	}
 
 	@Test
@@ -123,54 +127,57 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
 		when(workexecJobTimeClient.getJobTimeTotals(reportDate, reportDate, "UTC", strictLocationId,
 				List.of(strictTechnicianId)))
-			.thenReturn(List.of(jobTime(strictTechnicianId, strictLocationId, reportDate, 435)));
+				.thenReturn(List.of(jobTime(strictTechnicianId, strictLocationId, reportDate, 435)));
 
 		mockMvc
-			.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-17")
-				.param("endDate", "2026-02-17")
-				.param("timezone", "UTC")
-				.param("locationId", strictLocationId.toString())
-				.param("technicianIds", strictTechnicianId.toString())))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].thresholdApplied").value(60))
-			.andExpect(jsonPath("$[0].discrepancyHours").value(0.75))
-			.andExpect(jsonPath("$[0].isFlagged").value(false));
+				.perform(
+						withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-17")
+								.param("endDate", "2026-02-17")
+								.param("timezone", "UTC")
+								.param("locationId", strictLocationId.toString())
+								.param("technicianIds", strictTechnicianId.toString())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].thresholdApplied").value(60))
+				.andExpect(jsonPath("$[0].discrepancyHours").value(0.75))
+				.andExpect(jsonPath("$[0].isFlagged").value(false));
 	}
 
 	@Test
 	@DisplayName("validation: invalid timezone returns 400")
 	void attendanceDiscrepancyReport_rejectsInvalidTimezone() throws Exception {
 		mockMvc
-			.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-17")
-				.param("endDate", "2026-02-17")
-				.param("timezone", "Not/AZone")))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.detail").value("timezone must be a valid IANA timezone"));
+				.perform(
+						withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-17")
+								.param("endDate", "2026-02-17")
+								.param("timezone", "Not/AZone")))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("timezone must be a valid IANA timezone"));
 	}
 
 	@Test
 	@DisplayName("auth failure: unauthenticated report request is rejected")
 	void attendanceDiscrepancyReport_unauthenticatedRejected() throws Exception {
 		mockMvc
-			.perform(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-17")
-				.param("endDate", "2026-02-17")
-				.param("timezone", "UTC"))
-			.andExpect(status().isForbidden());
+				.perform(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-17")
+						.param("endDate", "2026-02-17")
+						.param("timezone", "UTC"))
+				.andExpect(status().isForbidden());
 	}
 
 	@Test
 	@DisplayName("dependency failure: workexec non-2xx fails request")
 	void attendanceDiscrepancyReport_workexecFailure() throws Exception {
 		when(workexecJobTimeClient.getJobTimeTotals(any(), any(), any(), any(), any()))
-			.thenThrow(new WorkexecClientException("Work Execution request failed with status 503", 503,
-					"WORKEXEC_UNAVAILABLE"));
+				.thenThrow(new WorkexecClientException("Work Execution request failed with status 503", 503,
+						"WORKEXEC_UNAVAILABLE"));
 
 		mockMvc
-			.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-17")
-				.param("endDate", "2026-02-17")
-				.param("timezone", "UTC")))
-			.andExpect(status().isServiceUnavailable())
-			.andExpect(jsonPath("$.errorCode").value("WORKEXEC_UNAVAILABLE"));
+				.perform(
+						withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-17")
+								.param("endDate", "2026-02-17")
+								.param("timezone", "UTC")))
+				.andExpect(status().isServiceUnavailable())
+				.andExpect(jsonPath("$.errorCode").value("WORKEXEC_UNAVAILABLE"));
 	}
 
 	@Test
@@ -195,37 +202,37 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
 
 		mockMvc
-			.perform(withAuth(get("/v1/people/reports/approvedTime").param("startDate", reportDate.toString())
-				.param("endDate", reportDate.toString())
-				.param("locationId", locationId.toString())
-				.header("X-Authorities", "people:time:export:read")))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].employeeId").value(technicianId.toString()))
-			.andExpect(jsonPath("$[0].employeeName").value("Jane Doe"))
-			.andExpect(jsonPath("$[0].locationName").value("North Shop"))
-			.andExpect(jsonPath("$[0].hoursWorked").value(8.50));
+				.perform(withAuth(get("/v1/people/reports/approvedTime").param("startDate", reportDate.toString())
+						.param("endDate", reportDate.toString())
+						.param("locationId", locationId.toString())
+						.header("X-Authorities", "people:time:export:read")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].employeeId").value(technicianId.toString()))
+				.andExpect(jsonPath("$[0].employeeName").value("Jane Doe"))
+				.andExpect(jsonPath("$[0].locationName").value("North Shop"))
+				.andExpect(jsonPath("$[0].hoursWorked").value(8.50));
 	}
 
 	@Test
 	@DisplayName("validation: approved time export rejects invalid date range")
 	void approvedTimeExport_invalidDateRange() throws Exception {
 		mockMvc
-			.perform(withAuth(get("/v1/people/reports/approvedTime").param("startDate", "2026-02-17")
-				.param("endDate", "2026-02-16")
-				.param("locationId", locationId.toString())
-				.header("X-Authorities", "people:time:export:read")))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.detail").value("endDate must be on or after startDate"));
+				.perform(withAuth(get("/v1/people/reports/approvedTime").param("startDate", "2026-02-17")
+						.param("endDate", "2026-02-16")
+						.param("locationId", locationId.toString())
+						.header("X-Authorities", "people:time:export:read")))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("endDate must be on or after startDate"));
 	}
 
 	@Test
 	@DisplayName("auth failure: approved time export requires export authority")
 	void approvedTimeExport_forbiddenWithoutAuthority() throws Exception {
 		mockMvc
-			.perform(withAuth(get("/v1/people/reports/approvedTime").param("startDate", "2026-02-16")
-				.param("endDate", "2026-02-16")
-				.param("locationId", locationId.toString())))
-			.andExpect(status().isForbidden());
+				.perform(withAuth(get("/v1/people/reports/approvedTime").param("startDate", "2026-02-16")
+						.param("endDate", "2026-02-16")
+						.param("locationId", locationId.toString())))
+				.andExpect(status().isForbidden());
 	}
 
 	@Test
@@ -233,7 +240,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	void approvedTimeExport_dependencyFailure() throws Exception {
 		when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
 		when(locationReferenceClient.getLocationName(locationId))
-			.thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to fetch location"));
+				.thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to fetch location"));
 
 		TimeEntry approved = new TimeEntry();
 		approved.setPersonId(technicianId.toString());
@@ -246,18 +253,19 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		timeEntryRepository.save(approved);
 
 		mockMvc
-			.perform(withAuth(get("/v1/people/reports/approvedTime").param("startDate", "2026-02-16")
-				.param("endDate", "2026-02-16")
-				.param("locationId", locationId.toString())
-				.header("X-Authorities", "people:time:export:read")))
-			.andExpect(status().isServiceUnavailable());
+				.perform(withAuth(get("/v1/people/reports/approvedTime").param("startDate", "2026-02-16")
+						.param("endDate", "2026-02-16")
+						.param("locationId", locationId.toString())
+						.header("X-Authorities", "people:time:export:read")))
+				.andExpect(status().isServiceUnavailable());
 	}
 
 	@Test
 	@DisplayName("happy path: approve time entries returns decision results")
 	void approveTimeEntries_happyPath() throws Exception {
-		when(timeEntryService.approveEntries(anyList(), any(), any(), any()))
-			.thenReturn(List.of(new TimeEntryDecisionResult("11111111-1111-1111-1111-111111111111", true, null, null)));
+		when(timeEntryService.approveEntries(anyList(), anyString()))
+				.thenReturn(
+						List.of(new TimeEntryDecisionResult("11111111-1111-1111-1111-111111111111", true, null, null)));
 
 		String payload = """
 				{
@@ -270,13 +278,13 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				""";
 
 		mockMvc
-			.perform(withAuth(post("/v1/people/timeEntries/approve").contentType(MediaType.APPLICATION_JSON)
-				.content(payload)
-				.header("X-User-Id", "approver-user")
-				.header("X-Permissions", "people:timeEntry:approve")))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.results[0].timeEntryId").value("11111111-1111-1111-1111-111111111111"))
-			.andExpect(jsonPath("$.results[0].success").value(true));
+				.perform(withAuth(post("/v1/people/timeEntries/approve").contentType(MediaType.APPLICATION_JSON)
+						.content(payload)
+						.header("X-User-Id", "approver-user")
+						.header("X-Permissions", "people:timeEntry:approve")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.results[0].timeEntryId").value("11111111-1111-1111-1111-111111111111"))
+				.andExpect(jsonPath("$.results[0].success").value(true));
 	}
 
 	@Test
@@ -289,10 +297,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				""";
 
 		mockMvc
-			.perform(withAuth(
-					post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON).content(payload)))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+				.perform(withAuth(
+						post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON).content(payload)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -309,18 +317,19 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				""";
 
 		mockMvc
-			.perform(withAuth(
-					post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON).content(payload)))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.errorCode").value("REJECTION_REASON_REQUIRED"))
-			.andExpect(jsonPath("$.message").value("rejectionReason is required for all decisions"));
+				.perform(withAuth(
+						post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON).content(payload)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errorCode").value("REJECTION_REASON_REQUIRED"))
+				.andExpect(jsonPath("$.message").value("rejectionReason is required for all decisions"));
 	}
 
 	@Test
 	@DisplayName("happy path: reject time entries returns decision results")
 	void rejectTimeEntries_happyPath() throws Exception {
-		when(timeEntryService.rejectEntries(anyList(), any(), any(), any(), any()))
-			.thenReturn(List.of(new TimeEntryDecisionResult("11111111-1111-1111-1111-111111111111", true, null, null)));
+		when(timeEntryService.rejectEntries(anyList(), anyMap(), anyString()))
+				.thenReturn(
+						List.of(new TimeEntryDecisionResult("11111111-1111-1111-1111-111111111111", true, null, null)));
 
 		String payload = """
 				{
@@ -334,12 +343,12 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				""";
 
 		mockMvc
-			.perform(withAuth(post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON)
-				.content(payload)
-				.header("X-User-Id", "rejector-user")
-				.header("X-Permissions", "people:timeEntry:reject")))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.results[0].success").value(true));
+				.perform(withAuth(post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON)
+						.content(payload)
+						.header("X-User-Id", "rejector-user")
+						.header("X-Permissions", "people:timeEntry:reject")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.results[0].success").value(true));
 	}
 
 	@Test
@@ -347,23 +356,23 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	void listAssignments_happyPath() throws Exception {
 		UUID personUuid = UUID.randomUUID();
 		UserRoleDto assignment = UserRoleDto.builder()
-			.userId("11111111-1111-1111-1111-111111111111")
-			.roleCode("SHOP_MANAGER")
-			.locationId(UUID.fromString("22222222-2222-2222-2222-222222222222"))
-			.startDate(LocalDate.parse("2026-01-01"))
-			.endDate(null)
-			.active(true)
-			.build();
+				.userId("11111111-1111-1111-1111-111111111111")
+				.roleCode("SHOP_MANAGER")
+				.locationId(UUID.fromString("22222222-2222-2222-2222-222222222222"))
+				.startDate(LocalDate.parse("2026-01-01"))
+				.endDate(null)
+				.active(true)
+				.build();
 
 		when(peopleAccessControlService.getPersonRoleAssignments(personUuid, true, null))
-			.thenReturn(List.of(assignment));
+				.thenReturn(List.of(assignment));
 
 		mockMvc
-			.perform(withAuth(
-					get("/v1/people/{personUuid}/access/assignments", personUuid).param("includeHistory", "true")))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].roleCode").value("SHOP_MANAGER"))
-			.andExpect(jsonPath("$[0].locationId").value("22222222-2222-2222-2222-222222222222"));
+				.perform(withAuth(
+						get("/v1/people/{personUuid}/access/assignments", personUuid).param("includeHistory", "true")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].roleCode").value("SHOP_MANAGER"))
+				.andExpect(jsonPath("$[0].locationId").value("22222222-2222-2222-2222-222222222222"));
 	}
 
 	@Test
@@ -371,15 +380,15 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	void createAssignment_happyPath() throws Exception {
 		UUID personUuid = UUID.randomUUID();
 		UserRoleDto created = UserRoleDto.builder()
-			.userId("11111111-1111-1111-1111-111111111111")
-			.roleCode("SHOP_MANAGER")
-			.locationId(UUID.fromString("22222222-2222-2222-2222-222222222222"))
-			.startDate(LocalDate.parse("2026-02-16"))
-			.active(true)
-			.build();
+				.userId("11111111-1111-1111-1111-111111111111")
+				.roleCode("SHOP_MANAGER")
+				.locationId(UUID.fromString("22222222-2222-2222-2222-222222222222"))
+				.startDate(LocalDate.parse("2026-02-16"))
+				.active(true)
+				.build();
 
 		when(peopleAccessControlService.assignRoleToPerson(eq(personUuid), eq("SHOP_MANAGER"), any(), any(), any()))
-			.thenReturn(created);
+				.thenReturn(created);
 
 		String payload = """
 				{
@@ -391,12 +400,12 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				""";
 
 		mockMvc
-			.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(payload)))
-			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.roleCode").value("SHOP_MANAGER"))
-			.andExpect(jsonPath("$.locationId").value("22222222-2222-2222-2222-222222222222"));
+				.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(payload)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.roleCode").value("SHOP_MANAGER"))
+				.andExpect(jsonPath("$.locationId").value("22222222-2222-2222-2222-222222222222"));
 	}
 
 	@Test
@@ -405,11 +414,11 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		UUID personUuid = UUID.randomUUID();
 
 		mockMvc
-			.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"locationId\":\"22222222-2222-2222-2222-222222222222\"}")))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.status").value(400));
+				.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"locationId\":\"22222222-2222-2222-2222-222222222222\"}")))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.status").value(400));
 	}
 
 	@Test
@@ -418,7 +427,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		UUID personUuid = UUID.randomUUID();
 
 		when(peopleAccessControlService.assignRoleToPerson(eq(personUuid), eq("SHOP_MANAGER"), any(), any(), any()))
-			.thenThrow(new IllegalArgumentException("endDate must be greater than or equal to startDate"));
+				.thenThrow(new IllegalArgumentException("endDate must be greater than or equal to startDate"));
 
 		String payload = """
 				{
@@ -430,11 +439,11 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				""";
 
 		mockMvc
-			.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(payload)))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.detail").value("endDate must be greater than or equal to startDate"));
+				.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(payload)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("endDate must be greater than or equal to startDate"));
 	}
 
 	@Test
@@ -443,10 +452,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		UUID personUuid = UUID.randomUUID();
 
 		mockMvc
-			.perform(post("/v1/people/{personUuid}/access/assignments", personUuid)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"roleCode\":\"SHOP_MANAGER\"}"))
-			.andExpect(status().isForbidden());
+				.perform(post("/v1/people/{personUuid}/access/assignments", personUuid)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"roleCode\":\"SHOP_MANAGER\"}"))
+				.andExpect(status().isForbidden());
 	}
 
 	@Test
@@ -455,7 +464,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		UUID personUuid = UUID.randomUUID();
 
 		when(peopleAccessControlService.assignRoleToPerson(eq(personUuid), eq("MECHANIC"), any(), any(), any()))
-			.thenThrow(new SecurityServiceException("Overlapping assignments are not allowed", 409));
+				.thenThrow(new SecurityServiceException("Overlapping assignments are not allowed", 409));
 
 		String payload = """
 				{
@@ -467,11 +476,11 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				""";
 
 		mockMvc
-			.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(payload)))
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.detail").value("Overlapping assignments are not allowed"));
+				.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(payload)))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.detail").value("Overlapping assignments are not allowed"));
 	}
 
 	@Test
@@ -481,22 +490,22 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		String roleCode = "SHOP_MANAGER";
 
 		doNothing().when(peopleAccessControlService)
-			.revokeRoleFromPerson(personUuid, roleCode, LocalDateTime.parse("2026-12-31T23:59:59"));
+				.revokeRoleFromPerson(personUuid, roleCode, LocalDateTime.parse("2026-12-31T23:59:59"));
 
 		mockMvc
-			.perform(withAuth(delete("/v1/people/{personUuid}/access/assignments/{roleCode}", personUuid, roleCode)
-				.param("endDate", "2026-12-31T23:59:59")))
-			.andExpect(status().isNoContent());
+				.perform(withAuth(delete("/v1/people/{personUuid}/access/assignments/{roleCode}", personUuid, roleCode)
+						.param("endDate", "2026-12-31T23:59:59")))
+				.andExpect(status().isNoContent());
 	}
 
 	private void seedTechnician(UUID technicianId, String firstName, String lastName) {
 		Person person = Person.builder()
-			.id(technicianId)
-			.firstName(firstName)
-			.lastName(lastName)
-			.primaryEmail(firstName.toLowerCase() + "@example.com")
-			.phoneNumbers(new ArrayList<>())
-			.build();
+				.id(technicianId)
+				.firstName(firstName)
+				.lastName(lastName)
+				.primaryEmail(firstName.toLowerCase() + "@example.com")
+				.phoneNumbers(new ArrayList<>())
+				.build();
 		personRepository.save(person);
 	}
 

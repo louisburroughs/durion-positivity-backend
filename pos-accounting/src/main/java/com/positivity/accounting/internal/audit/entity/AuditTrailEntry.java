@@ -1,10 +1,11 @@
 package com.positivity.accounting.internal.audit.entity;
 
-import java.time.Clock;
-
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
+
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.accounting.internal.enums.AccountingIntent;
 import com.positivity.accounting.internal.enums.AccountingStatus;
@@ -12,12 +13,14 @@ import com.positivity.accounting.internal.enums.CancellationType;
 import com.positivity.accounting.internal.enums.RefundMethod;
 import com.positivity.accounting.internal.enums.RefundPaymentStatus;
 import com.positivity.accounting.internal.enums.RefundType;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
@@ -27,10 +30,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.GeneratedValue;
-import com.positivity.shared.id.UUIDv7Id;
 /**
  * Immutable audit trail entry for financial exceptions.
  * 
