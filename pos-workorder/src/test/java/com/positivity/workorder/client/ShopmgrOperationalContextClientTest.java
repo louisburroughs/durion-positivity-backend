@@ -1,8 +1,9 @@
-package com.positivity.workorder.internal.client;
+package com.positivity.workorder.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

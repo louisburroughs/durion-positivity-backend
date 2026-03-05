@@ -58,9 +58,9 @@ class TimekeepingIngestionServiceTest {
 		// Issue #58: AC1 — valid event, no existing entry → new
 		// TimekeepingEntry(PENDING_APPROVAL)
 		UUID tenantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID employeeId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+		UUID employeeId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+		UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000021");
 		Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
 		Instant end = Instant.now(TEST_CLOCK);
 
@@ -70,7 +70,11 @@ class TimekeepingIngestionServiceTest {
 		when(timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(tenantId, "shopmgr",
 				sessionId))
 				.thenReturn(false);
-		when(timekeepingEntryRepository.save(any(TimekeepingEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+		when(timekeepingEntryRepository.save(any(TimekeepingEntry.class))).thenAnswer(inv -> {
+			TimekeepingEntry entry = inv.getArgument(0);
+			entry.setCreatedAt(Instant.now(TEST_CLOCK));
+			return entry;
+		});
 
 		timekeepingIngestionService.ingestWorkSession(event);
 
@@ -97,10 +101,10 @@ class TimekeepingIngestionServiceTest {
 	void ingestWorkSession_duplicateEvent_isIdempotentAndDoesNotPersist() {
 		// Issue #58: AC2 — same (tenantId, sessionId) already in DB → no-op
 		UUID tenantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
 		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(tenantId, sessionId,
-				UUID.fromString("00000000-0000-0000-0000-000000000001"),
+				UUID.fromString("00000000-0000-0000-0000-000000000011"),
 				Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
 		when(timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(tenantId, "shopmgr",
@@ -121,7 +125,7 @@ class TimekeepingIngestionServiceTest {
 		// Issue #58: AC3 — null tenantId simulates DLQ rejection
 		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(null,
 				UUID.fromString("00000000-0000-0000-0000-000000000001"),
-				UUID.fromString("00000000-0000-0000-0000-000000000001"),
+				UUID.fromString("00000000-0000-0000-0000-000000000009"),
 				Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
 		assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
@@ -139,7 +143,7 @@ class TimekeepingIngestionServiceTest {
 		// Issue #58: AC4 — null sessionId simulates DLQ rejection
 		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
 				UUID.fromString("00000000-0000-0000-0000-000000000001"), null,
-				UUID.fromString("00000000-0000-0000-0000-000000000001"),
+				UUID.fromString("00000000-0000-0000-0000-000000000009"),
 				Instant.now(TEST_CLOCK).minusSeconds(100), Instant.now(TEST_CLOCK), null);
 
 		assertThatThrownBy(() -> timekeepingIngestionService.ingestWorkSession(event))
@@ -157,10 +161,10 @@ class TimekeepingIngestionServiceTest {
 		// Issue #58: AC5 — WorkSessionCorrectedEvent → supplemental TimekeepingEntry
 		// saved
 		UUID tenantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID originalSessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID correctionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID employeeId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID originalSessionId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+		UUID correctionId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+		UUID employeeId = UUID.fromString("00000000-0000-0000-0000-000000000021");
+		UUID workOrderId = UUID.fromString("00000000-0000-0000-0000-000000000031");
 		String correctionReason = "Clock error correction";
 		Instant start = Instant.now(TEST_CLOCK).minusSeconds(3600);
 		Instant end = Instant.now(TEST_CLOCK);

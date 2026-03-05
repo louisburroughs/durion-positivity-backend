@@ -88,7 +88,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - valid create returns response with ACTIVE status")
         void createStorageLocation_success_returnsResponse() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationRequest request = validRequest("Bin-A1", "BAR-001", StorageLocationType.BIN, null);
 
                 when(locationRepository.existsById(siteId)).thenReturn(true);
@@ -113,7 +113,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - createStorageLocation persists and returns capacity/temperature metadata")
         void createStorageLocation_withCapacityAndTemperature_returnsMetadata() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationRequest request = validRequest("Bin-A2", "BAR-010", StorageLocationType.BIN, null);
                 request.setCapacity(Map.of("unitCount", 50, "weightKg", 100));
                 request.setTemperature(Map.of("minCelsius", 2, "maxCelsius", 8));
@@ -185,8 +185,8 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - parentStorageLocationId from different site returns 400")
         void createStorageLocation_parentNotSameSite_throwsBadRequest() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID differentSiteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID differentSiteId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000011");
                 StorageLocationRequest request = validRequest("Truck-Y", "BAR-004", StorageLocationType.TRUCK,
                                 parentId);
 
@@ -222,8 +222,8 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patching parentStorageLocationId to create a cycle returns 409 CYCLE_DETECTED")
         void updateStorageLocation_cyclicParent_throwsCycleDetected() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID existingId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID existingId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000011");
 
                 // The existing node (existingId) is an ancestor of the proposed parent
                 // (parentId),
@@ -270,7 +270,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - getStorageLocation for unknown id returns 404")
         void getStorageLocation_notFound_throwsNotFound() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
                 when(storageLocationRepository.findByIdAndSiteId(id, siteId)).thenReturn(Optional.empty());
 
@@ -286,7 +286,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - getStorageLocationValidation returns exists/active state by id")
         void getStorageLocationValidation_returnsValidationPayload() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationEntity entity = StorageLocationEntity.builder()
                                 .id(storageId)
                                 .siteId(siteId)
@@ -317,7 +317,7 @@ class StorageLocationServiceTest {
         void listStorageLocations_filterByType_returnsFiltered() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 StorageLocationEntity entity = StorageLocationEntity.builder()
-                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000009"))
                                 .name("BIN-1")
                                 .type(StorageLocationType.BIN)
                                 .barcode("BIN-BC-001")
@@ -342,7 +342,7 @@ class StorageLocationServiceTest {
         void listStorageLocations_withoutType_returnsPage() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 StorageLocationEntity entity = StorageLocationEntity.builder()
-                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000009"))
                                 .name("NO-TYPE-1")
                                 .type(StorageLocationType.SHELF)
                                 .siteId(siteId)
@@ -372,7 +372,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - deactivate with no inventory succeeds, status becomes INACTIVE")
         void deactivateStorageLocation_noInventory_succeeds() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationEntity entity = StorageLocationEntity.builder()
                                 .id(id)
                                 .name("Shelf-B2")
@@ -404,7 +404,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - deactivate with inventory but no destination returns 422 DESTINATION_REQUIRED")
         void deactivateStorageLocation_withInventory_noDestination_throwsValidationError() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationEntity entity = StorageLocationEntity.builder()
                                 .id(id)
                                 .name("Floor-C3")
@@ -430,8 +430,8 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - deactivate with inventory transfers stock to active destination and inactivates source")
         void deactivateStorageLocation_withInventoryAndDestination_transfersInventory() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID destinationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID destinationId = UUID.fromString("00000000-0000-0000-0000-000000000011");
                 StorageLocationEntity source = StorageLocationEntity.builder()
                                 .id(sourceId)
                                 .name("Floor-C3")
@@ -465,8 +465,8 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - deactivate with inventory and missing destination location returns 404")
         void deactivateStorageLocation_withInventoryAndUnknownDestination_throwsNotFound() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID destinationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID destinationId = UUID.fromString("00000000-0000-0000-0000-000000000011");
                 StorageLocationEntity source = StorageLocationEntity.builder()
                                 .id(sourceId)
                                 .name("Floor-C3")
@@ -493,8 +493,8 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - deactivate with inventory and inactive destination returns 422")
         void deactivateStorageLocation_withInventoryAndInactiveDestination_throwsValidationError() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID destinationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID destinationId = UUID.fromString("00000000-0000-0000-0000-000000000011");
                 StorageLocationEntity source = StorageLocationEntity.builder()
                                 .id(sourceId)
                                 .name("Floor-C3")
@@ -531,7 +531,7 @@ class StorageLocationServiceTest {
         @Test
         @DisplayName("#39 - createStorageLocation when site does not exist returns 404 SITE_NOT_FOUND")
         void createStorageLocation_siteMissing_throwsNotFound() {
-                UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationRequest request = validRequest("Bin-X1", "BAR-X1", StorageLocationType.BIN, null);
 
                 when(locationRepository.existsById(siteId)).thenReturn(false);
@@ -583,7 +583,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - createStorageLocation with missing parent returns 400 PARENT_NOT_FOUND")
         void createStorageLocation_parentNotFound_throwsBadRequest() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationRequest request = validRequest("Bin-X4", "BAR-X4", StorageLocationType.BIN, parentId);
 
                 when(locationRepository.existsById(siteId)).thenReturn(true);
@@ -604,8 +604,8 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation updates parent and status when valid")
         void patchStorageLocation_validPatch_updatesFields() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000011");
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
@@ -656,7 +656,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation duplicate name returns 409 DUPLICATE_NAME")
         void patchStorageLocation_duplicateName_throwsConflict() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
@@ -688,7 +688,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation duplicate barcode returns 409 DUPLICATE_BARCODE")
         void patchStorageLocation_duplicateBarcode_throwsConflict() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
@@ -720,7 +720,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation self parent returns 409 CYCLE_DETECTED")
         void patchStorageLocation_selfParent_throwsConflict() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
@@ -749,7 +749,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation unknown id returns 404")
         void patchStorageLocation_notFound_throwsNotFound() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
                 StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
                                 .name("Any")
@@ -771,8 +771,8 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation parent not found returns 400 PARENT_NOT_FOUND")
         void patchStorageLocation_parentNotFound_throwsBadRequest() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000011");
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
@@ -802,9 +802,9 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation parent site mismatch returns 400 PARENT_SITE_MISMATCH")
         void patchStorageLocation_parentSiteMismatch_throwsBadRequest() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID otherSiteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID otherSiteId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000011");
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
@@ -839,9 +839,9 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation detects cycle through ancestor traversal")
         void patchStorageLocation_cycleDetectedByTraversal_throwsConflict() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID ancestorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+                UUID ancestorId = UUID.fromString("00000000-0000-0000-0000-000000000012");
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
@@ -885,7 +885,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation blank barcode clears existing barcode")
         void patchStorageLocation_blankBarcode_clearsValue() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
@@ -915,7 +915,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - createStorageLocation trims blank barcode to null")
         void createStorageLocation_blankBarcode_normalizesToNull() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationRequest request = validRequest("Bin-X5", "   ", StorageLocationType.BIN, null);
 
                 when(locationRepository.existsById(siteId)).thenReturn(true);
@@ -937,7 +937,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - patchStorageLocation inactive with inventory and no destination returns 422")
         void patchStorageLocation_inactiveWithInventoryNoDestination_throwsValidationError() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID storageLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
@@ -967,7 +967,7 @@ class StorageLocationServiceTest {
         @DisplayName("#39 - deactivateStorageLocation unknown id returns 404")
         void deactivateStorageLocation_notFound_throwsNotFound() {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
                 when(storageLocationRepository.findByIdAndSiteId(id, siteId)).thenReturn(Optional.empty());
 

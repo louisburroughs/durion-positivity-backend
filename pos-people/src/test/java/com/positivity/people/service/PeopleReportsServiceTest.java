@@ -61,9 +61,9 @@ class PeopleReportsServiceTest {
 	@Test
 	void getApprovedTimeForExport_onlyApprovedRowsReturned() {
 		UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID approvedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID rejectedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000009");
+		UUID approvedId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+		UUID rejectedId = UUID.fromString("00000000-0000-0000-0000-000000000021");
 
 		TimeEntry approved = new TimeEntry();
 		approved.setTimeEntryId(approvedId);
