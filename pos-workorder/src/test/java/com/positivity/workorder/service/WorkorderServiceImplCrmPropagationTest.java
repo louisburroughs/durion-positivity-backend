@@ -32,8 +32,6 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.service.WorkorderServiceImpl;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
-import com.positivity.workorder.service.IdempotencyService;
-import com.positivity.workorder.service.PromotionValidationService;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 
 /**

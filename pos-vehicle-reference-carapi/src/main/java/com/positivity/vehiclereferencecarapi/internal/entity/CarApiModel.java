@@ -1,7 +1,6 @@
 package com.positivity.vehiclereferencecarapi.internal.entity;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.UUID;

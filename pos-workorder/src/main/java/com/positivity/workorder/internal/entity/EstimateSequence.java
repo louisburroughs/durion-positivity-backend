@@ -1,6 +1,5 @@
 package com.positivity.workorder.internal.entity;
 
-import java.time.Clock;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
@@ -16,7 +15,6 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import jakarta.persistence.PrePersist;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

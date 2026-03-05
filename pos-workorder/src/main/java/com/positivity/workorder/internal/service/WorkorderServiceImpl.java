@@ -55,10 +55,10 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @Slf4j
 public class WorkorderServiceImpl implements WorkorderService {
-    private final Clock clock;
 
     private static final String SYSTEM_ACTOR = "system";
 
+    private final Clock clock;
     private final WorkorderRepository workorderRepository;
     private final EstimateRepository estimateRepository;
     private final EstimateItemRepository estimateItemRepository;
