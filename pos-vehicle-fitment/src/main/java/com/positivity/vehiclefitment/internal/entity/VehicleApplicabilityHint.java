@@ -1,9 +1,7 @@
 package com.positivity.vehiclefitment.internal.entity;
 
-import java.time.Clock;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
