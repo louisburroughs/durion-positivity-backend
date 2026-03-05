@@ -1,12 +1,13 @@
 package com.positivity.price.internal.entity;
 
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import lombok.Data;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -17,11 +18,13 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.GeneratedValue;
 import com.positivity.shared.id.UUIDv7Id;
+
 /**
  * Customer tier discount pricing rule for a product.
  *
  * Issue: #51
  */
+@Data
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "customer_tier_pricing_rule", indexes = {
@@ -56,65 +59,5 @@ public class CustomerTierPricingRule {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-    public UUID getId() {
-        return id;
-    }
 
-    public void setId(UUID id) {
-        this.id = id;
-    }
-
-    public UUID getProductId() {
-        return productId;
-    }
-
-    public void setProductId(UUID productId) {
-        this.productId = productId;
-    }
-
-    public UUID getCustomerTierId() {
-        return customerTierId;
-    }
-
-    public void setCustomerTierId(UUID customerTierId) {
-        this.customerTierId = customerTierId;
-    }
-
-    public BigDecimal getDiscountRate() {
-        return discountRate;
-    }
-
-    public void setDiscountRate(BigDecimal discountRate) {
-        this.discountRate = discountRate;
-    }
-
-    public Instant getEffectiveFrom() {
-        return effectiveFrom;
-    }
-
-    public void setEffectiveFrom(Instant effectiveFrom) {
-        this.effectiveFrom = effectiveFrom;
-    }
-
-    public Instant getEffectiveTo() {
-        return effectiveTo;
-    }
-
-    public void setEffectiveTo(Instant effectiveTo) {
-        this.effectiveTo = effectiveTo;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-}
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-}
 }

@@ -79,16 +79,29 @@ class EstimateServiceImplTest {
     @InjectMocks
     private EstimateServiceImpl estimateService;
 
+    private java.time.Clock fixedClock;
+
+    private static final UUID ESTIMATE_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID CUSTOMER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID VEHICLE_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final UUID CONFIG_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
+    private static final UUID ITEM_ID = UUID.fromString("55555555-5555-5555-5555-555555555555");
+    private static final UUID LOCAL_CUSTOMER_ID = UUID.fromString("66666666-6666-6666-6666-666666666666");
+    private static final UUID LOCAL_VEHICLE_ID = UUID.fromString("77777777-7777-7777-7777-777777777777");
+
     private Estimate estimate;
     private UUID customerId;
     private UUID vehicleId;
 
     @BeforeEach
     void setUp() {
-        customerId = UUID.randomUUID();
-        vehicleId = UUID.randomUUID();
+        fixedClock = java.time.Clock.fixed(java.time.Instant.parse("2024-01-01T12:00:00Z"), java.time.ZoneOffset.UTC);
+        org.springframework.test.util.ReflectionTestUtils.setField(estimateService, "clock", fixedClock);
+
+        customerId = CUSTOMER_ID;
+        vehicleId = VEHICLE_ID;
         estimate = Estimate.builder()
-                .id(UUID.randomUUID())
+                .id(ESTIMATE_ID)
                 .customerId(customerId)
                 .vehicleId(vehicleId)
                 .status(EstimateStatus.DRAFT)
@@ -147,28 +160,26 @@ class EstimateServiceImplTest {
 
     @Test
     void createEstimate_validRequest_createsEstimate() {
-        UUID customerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
         String username = "testuser";
         CreateEstimateRequest request = CreateEstimateRequest.builder()
-                .customerId(customerId)
-                .vehicleId(vehicleId)
+                .customerId(LOCAL_CUSTOMER_ID)
+                .vehicleId(LOCAL_VEHICLE_ID)
                 .build();
-        ApprovalConfiguration config = ApprovalConfiguration.builder().id(UUID.randomUUID()).build();
+        ApprovalConfiguration config = ApprovalConfiguration.builder().id(CONFIG_ID).build();
         when(approvalConfigurationRepository.findApplicableConfigurations(any(), any())).thenReturn(List.of(config));
         when(estimateRepository.save(any(Estimate.class))).thenAnswer(i -> i.getArgument(0));
 
         EstimateResponse result = estimateService.createEstimate(request, username);
 
-        assertEquals(customerId, result.getCustomerId());
-        assertEquals(vehicleId, result.getVehicleId());
+        assertEquals(LOCAL_CUSTOMER_ID, result.getCustomerId());
+        assertEquals(LOCAL_VEHICLE_ID, result.getVehicleId());
         assertEquals(EstimateStatus.DRAFT.toString(), result.getStatus());
     }
 
     @Test
     void createEstimate_missingCustomerId_throwsException() {
         CreateEstimateRequest request = CreateEstimateRequest.builder()
-                .vehicleId(UUID.randomUUID())
+                .vehicleId(LOCAL_VEHICLE_ID)
                 .build();
         String username = "testuser";
 
@@ -181,7 +192,7 @@ class EstimateServiceImplTest {
     @Test
     void createEstimate_missingVehicleId_throwsException() {
         CreateEstimateRequest request = CreateEstimateRequest.builder()
-                .customerId(UUID.randomUUID())
+                .customerId(LOCAL_CUSTOMER_ID)
                 .build();
         String username = "testuser";
 
@@ -207,9 +218,6 @@ class EstimateServiceImplTest {
         estimate.setStatus(EstimateStatus.PENDING_APPROVAL);
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
         when(estimateRepository.save(any(Estimate.class))).thenAnswer(i -> i.getArgument(0));
-        ApprovalConfiguration config = ApprovalConfiguration.builder().id(UUID.randomUUID()).declineExpiryDays(30)
-                .build();
-        // when(approvalConfigurationRepository.findById(any())).thenReturn(Optional.empty());
 
         EstimateResponse result = estimateService.declineEstimate(estimate.getId(), "reason");
 
@@ -221,7 +229,7 @@ class EstimateServiceImplTest {
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
         when(estimateItemRepository.save(any(EstimateItem.class))).thenAnswer(i -> i.getArgument(0));
         AddEstimateItemRequest request = new AddEstimateItemRequest(EstimateItemType.PART, "description",
-                BigDecimal.ONE, BigDecimal.TEN, "taxCode", UUID.randomUUID(), null);
+                BigDecimal.ONE, BigDecimal.TEN, "taxCode", LOCAL_VEHICLE_ID, null);
 
         EstimateItemResponse result = estimateService.addEstimateItem(estimate.getId(), request, "testuser");
 
@@ -230,7 +238,7 @@ class EstimateServiceImplTest {
 
     @Test
     void updateEstimateItem_valid_updatesItem() {
-        EstimateItem item = EstimateItem.builder().id(UUID.randomUUID()).estimateId(estimate.getId()).build();
+        EstimateItem item = EstimateItem.builder().id(ITEM_ID).estimateId(estimate.getId()).build();
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
         when(estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(any(UUID.class), any(UUID.class)))
                 .thenReturn(Optional.of(item));
@@ -244,7 +252,7 @@ class EstimateServiceImplTest {
 
     @Test
     void deleteEstimateItem_valid_deletesItem() {
-        EstimateItem item = EstimateItem.builder().id(UUID.randomUUID()).estimateId(estimate.getId()).build();
+        EstimateItem item = EstimateItem.builder().id(ITEM_ID).estimateId(estimate.getId()).build();
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
         when(estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(any(UUID.class), any(UUID.class)))
                 .thenReturn(Optional.of(item));

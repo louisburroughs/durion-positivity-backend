@@ -12,10 +12,10 @@ spring:
       ddl-auto: update
     show-sql: false
     properties:
-      hibernate:
-        format_sql: true
+      "[hibernate.format_sql]": true
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: 
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: pos-customer-workorder-events
       auto-offset-reset: earliest

@@ -53,7 +53,7 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
 @ActiveProfiles("test")
 @DisplayName("Accounting Backend Contract Behavioral Tests")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private JournalEntryRepository journalEntryRepository;
@@ -91,6 +91,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
          * Adds gateway authentication headers to a request builder.
          * Mirrors the headers injected by pos-api-gateway after JWT validation.
          */
+        @Override
         protected MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
                 return builder
                                 .header("X-User", TEST_USER)
@@ -190,7 +191,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Extract journal entry ID for GET request
                 String responseBody = result.getResponse().getContentAsString();
-                Map<String, Object> response = objectMapper.readValue(responseBody, Map.class);
+                Map<String, Object> response = objectMapper.readValue(responseBody,
+                                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                });
                 String journalEntryId = (String) response.get("journalEntryId");
 
                 // Assert: GET the created entry to verify audit fields persisted

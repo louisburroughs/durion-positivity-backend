@@ -385,8 +385,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         @DisplayName("PU-009: Verify usage history retrieval works")
         void testGetUsageHistory_Works() {
                 // Given: A workorder with multiple usage events in database
-                UUID workorderId = seedWorkorderWithPartiallyConsumedPart(BigDecimal.valueOf(5.0),
-                                BigDecimal.valueOf(3.0));
+                UUID workorderId = seedWorkorderWithMultipleUsageEvents();
 
                 // When: Verify events exist in database (GET endpoint has known RestAssured
                 // compatibility issue)
@@ -394,9 +393,12 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                                 .findByWorkorderIdOrderByPerformedAtDesc(workorderId);
 
                 // Then: Verify events were created in correct order (newest first)
-                assertThat(events).hasSizeGreaterThanOrEqualTo(2);
+                assertThat(events).hasSizeGreaterThanOrEqualTo(3);
                 // Events ordered by performedAt DESC means newest first
                 assertThat(events.get(0).getPerformedAt()).isAfter(events.get(1).getPerformedAt());
+                assertThat(events.get(0).getEventType()).isEqualTo("RETURN");
+                assertThat(events.get(1).getEventType()).isEqualTo("CONSUME");
+                assertThat(events.get(2).getEventType()).isEqualTo("ISSUE");
         }
 
         @Test
@@ -487,17 +489,13 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                 issuePartViaService(workorderId, partId, BigDecimal.valueOf(5.0));
 
                 // Sleep briefly to ensure timestamps are different
-                try {
-                        Thread.sleep(10);
-                } catch (InterruptedException e) {
-                }
+                java.util.concurrent.locks.LockSupport
+                                .parkNanos(java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(10));
 
                 consumePartViaService(workorderId, partId, BigDecimal.valueOf(3.0));
 
-                try {
-                        Thread.sleep(10);
-                } catch (InterruptedException e) {
-                }
+                java.util.concurrent.locks.LockSupport
+                                .parkNanos(java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(10));
 
                 returnPartViaService(workorderId, partId, BigDecimal.valueOf(1.0));
 
