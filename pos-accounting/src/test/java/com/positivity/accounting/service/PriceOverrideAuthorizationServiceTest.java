@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,9 @@ class PriceOverrideAuthorizationServiceTest {
     @Mock
     private OverridePolicyThresholdRepository policyRepository;
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+            java.time.ZoneOffset.UTC);
+
     @InjectMocks
     private PriceOverrideAuthorizationServiceImpl service;
 
@@ -59,7 +63,8 @@ class PriceOverrideAuthorizationServiceTest {
     void validate_withinThresholds_approved() {
         // Arrange
         BigDecimal adjustedPrice = new BigDecimal("90.00"); // 10% off, $10 discount
-        when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.of(testPolicy));
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant()))
+                .thenReturn(Optional.of(testPolicy));
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, null);
@@ -78,7 +83,8 @@ class PriceOverrideAuthorizationServiceTest {
         // Original: $100, threshold: $50 absolute OR 25% off
         // To stay within both thresholds: adjust to $75 (25% off, $25 discount)
         BigDecimal adjustedPrice = new BigDecimal("75.00"); // Exactly 25% off = $25 discount
-        when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.of(testPolicy));
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant()))
+                .thenReturn(Optional.of(testPolicy));
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, null);
@@ -92,7 +98,8 @@ class PriceOverrideAuthorizationServiceTest {
     void validate_atPercentageThreshold_approved() {
         // Arrange
         BigDecimal adjustedPrice = new BigDecimal("75.00"); // Exactly 25% off
-        when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.of(testPolicy));
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant()))
+                .thenReturn(Optional.of(testPolicy));
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, null);
@@ -108,7 +115,8 @@ class PriceOverrideAuthorizationServiceTest {
     void validate_exceedsAbsoluteAmount_rejected() {
         // Arrange
         BigDecimal adjustedPrice = new BigDecimal("45.00"); // $55 discount, exceeds $50 limit
-        when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.of(testPolicy));
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant()))
+                .thenReturn(Optional.of(testPolicy));
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, null);
@@ -125,7 +133,8 @@ class PriceOverrideAuthorizationServiceTest {
     void validate_exceedsPercentage_rejected() {
         // Arrange
         BigDecimal adjustedPrice = new BigDecimal("70.00"); // 30% off, exceeds 25% limit
-        when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.of(testPolicy));
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant()))
+                .thenReturn(Optional.of(testPolicy));
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, null);
@@ -141,7 +150,7 @@ class PriceOverrideAuthorizationServiceTest {
     void validate_noPolicyFound_rejected() {
         // Arrange
         BigDecimal adjustedPrice = new BigDecimal("90.00");
-        when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.empty());
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant())).thenReturn(Optional.empty());
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, null);
@@ -223,7 +232,8 @@ class PriceOverrideAuthorizationServiceTest {
         // Arrange
         BigDecimal adjustedPrice = new BigDecimal("90.00");
         String allowedCategory = "CUSTOMER_LOYALTY";
-        when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.of(testPolicy));
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant()))
+                .thenReturn(Optional.of(testPolicy));
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, allowedCategory);
@@ -241,7 +251,8 @@ class PriceOverrideAuthorizationServiceTest {
         // Arrange
         testPolicy.setMaxAbsoluteAmount(null); // No absolute limit
         BigDecimal adjustedPrice = new BigDecimal("10.00"); // 90% off, but within percentage
-        when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.of(testPolicy));
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant()))
+                .thenReturn(Optional.of(testPolicy));
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, null);
@@ -256,7 +267,8 @@ class PriceOverrideAuthorizationServiceTest {
         // Arrange
         testPolicy.setMaxPercentOff(null); // No percentage limit
         BigDecimal adjustedPrice = new BigDecimal("45.00"); // Within absolute limit
-        when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.of(testPolicy));
+        when(policyRepository.findActiveByRoleAtTime(testRole, FIXED_CLOCK.instant()))
+                .thenReturn(Optional.of(testPolicy));
 
         // Act
         AuthorizationResult result = service.validate(testRole, originalPrice, adjustedPrice, null);

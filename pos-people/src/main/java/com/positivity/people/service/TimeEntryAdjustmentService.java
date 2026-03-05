@@ -9,15 +9,11 @@ import org.jspecify.annotations.NonNull;
 
 public interface TimeEntryAdjustmentService {
 
-    @NonNull
-    TimeEntryAdjustmentResponse createAdjustment(@NonNull TimeEntryAdjustmentRequest request);
+	@NonNull TimeEntryAdjustmentResponse createAdjustment(@NonNull TimeEntryAdjustmentRequest request);
 
-    @NonNull
-    List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull UUID timeEntryId);
+	@NonNull List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull UUID timeEntryId);
 
-    boolean approveAdjustment(
-            @NonNull UUID adjustmentId,
-            @NonNull String approverUserId,
-            Set<String> permissions,
-            String correlationId);
+	boolean approveAdjustment(@NonNull UUID adjustmentId, @NonNull String approverUserId, Set<String> permissions,
+			String correlationId);
+
 }

@@ -62,7 +62,6 @@ import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 class PostingEngineOrchestratorTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-
     @Mock
     private PostingRuleEvaluator postingRuleEvaluator;
 
@@ -100,7 +99,7 @@ class PostingEngineOrchestratorTest {
     void setUp() {
         // Create orchestrator with all dependencies
         objectMapper = new ObjectMapper();
-        orchestrator = new PostingEngineOrchestrator(
+        orchestrator = new PostingEngineOrchestrator(TEST_CLOCK,
                 postingRuleEvaluator,
                 journalEntryService,
                 idempotencyService,

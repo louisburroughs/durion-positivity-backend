@@ -16,6 +16,7 @@ import java.util.UUID;
 import com.positivity.people.internal.enums.EmployeeStatus;
 
 import com.positivity.shared.id.UUIDv7Id;
+
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Data
@@ -23,68 +24,72 @@ import com.positivity.shared.id.UUIDv7Id;
 @AllArgsConstructor
 @Builder
 public class Person {
-    @Id
-    @GeneratedValue
-    @UUIDv7Id
-    @Column(columnDefinition = "UUID")
-    private UUID id;
 
-    @PrePersist
-    public void generateId() {
-        if (status != null && statusEffectiveAt == null) {
-            statusEffectiveAt = Instant.now(Clock.systemUTC());
-        }
-    }
+	@Id
+	@GeneratedValue
+	@UUIDv7Id
+	@Column(columnDefinition = "UUID")
+	private UUID id;
 
-    private String firstName;
-    private String lastName;
+	@PrePersist
+	public void generateId() {
+		if (status != null && statusEffectiveAt == null) {
+			statusEffectiveAt = Instant.now(Clock.systemUTC());
+		}
+	}
 
-    @Column(name = "legal_name")
-    private String legalName;
+	private String firstName;
 
-    @Column(name = "preferred_name")
-    private String preferredName;
+	private String lastName;
 
-    @Column(name = "employee_number")
-    private String employeeNumber;
+	@Column(name = "legal_name")
+	private String legalName;
 
-    @Enumerated(EnumType.STRING)
-    private EmployeeStatus status;
+	@Column(name = "preferred_name")
+	private String preferredName;
 
-    @Column(name = "hire_date")
-    private LocalDate hireDate;
+	@Column(name = "employee_number")
+	private String employeeNumber;
 
-    @Column(name = "termination_date")
-    private LocalDate terminationDate;
+	@Enumerated(EnumType.STRING)
+	private EmployeeStatus status;
 
-    @Lob
-    @Column(name = "contact_info_json")
-    private String contactInfoJson;
+	@Column(name = "hire_date")
+	private LocalDate hireDate;
 
-    @Column(name = "status_effective_at")
-    private Instant statusEffectiveAt;
+	@Column(name = "termination_date")
+	private LocalDate terminationDate;
 
-    @CreatedDate
-    @Column(name = "created_at", updatable = false)
-    private Instant createdAt;
+	@Lob
+	@Column(name = "contact_info_json")
+	private String contactInfoJson;
 
-    @LastModifiedDate
-    @Column(name = "updated_at")
-    private Instant updatedAt;
+	@Column(name = "status_effective_at")
+	private Instant statusEffectiveAt;
 
-    private String primaryEmail;
-    private String secondaryEmail;
+	@CreatedDate
+	@Column(name = "created_at", updatable = false)
+	private Instant createdAt;
 
-    @ElementCollection
-    private List<String> phoneNumbers;
+	@LastModifiedDate
+	@Column(name = "updated_at")
+	private Instant updatedAt;
 
-    /** Optional, validated externally - stick with username not userName */
-    private String username;
+	private String primaryEmail;
 
-    @PreUpdate
-    public void ensureStatusEffectiveAt() {
-        if (status != null && statusEffectiveAt == null) {
-            statusEffectiveAt = Instant.now(Clock.systemUTC());
-        }
-    }
+	private String secondaryEmail;
+
+	@ElementCollection
+	private List<String> phoneNumbers;
+
+	/** Optional, validated externally - stick with username not userName */
+	private String username;
+
+	@PreUpdate
+	public void ensureStatusEffectiveAt() {
+		if (status != null && statusEffectiveAt == null) {
+			statusEffectiveAt = Instant.now(Clock.systemUTC());
+		}
+	}
+
 }

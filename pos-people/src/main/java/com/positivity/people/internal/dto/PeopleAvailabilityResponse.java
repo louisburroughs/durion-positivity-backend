@@ -10,14 +10,25 @@ import java.util.UUID;
 @Data
 @Builder
 public class PeopleAvailabilityResponse {
-    private UUID personId;
-    private String firstName;
-    private String lastName;
-    private UUID locationId;
-    private String role;
-    private boolean primary;
-    private AssignmentStatus assignmentStatus;
-    private LocalDate effectiveFrom;
-    private LocalDate effectiveTo;
-    private LocalDate availableOn;
+
+	private UUID personId;
+
+	private String firstName;
+
+	private String lastName;
+
+	private UUID locationId;
+
+	private String role;
+
+	private boolean primary;
+
+	private AssignmentStatus assignmentStatus;
+
+	private LocalDate effectiveFrom;
+
+	private LocalDate effectiveTo;
+
+	private LocalDate availableOn;
+
 }

@@ -12,6 +12,9 @@ import java.util.UUID;
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class User {
-    private UUID id;
-    private String username;
+
+	private UUID id;
+
+	private String username;
+
 }

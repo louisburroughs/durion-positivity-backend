@@ -8,4 +8,5 @@ import java.util.UUID;
 
 @Repository
 public interface TimeEntryAuditRepository extends JpaRepository<TimeEntryAudit, UUID> {
+
 }

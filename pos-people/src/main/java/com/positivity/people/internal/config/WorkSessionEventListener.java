@@ -8,19 +8,21 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class WorkSessionEventListener {
-    private final TimekeepingIngestionService service;
 
-    public WorkSessionEventListener(TimekeepingIngestionService service) {
-        this.service = service;
-    }
+	private final TimekeepingIngestionService service;
 
-    @EventListener
-    public void onWorkSessionCompleted(WorkSessionCompletedEvent event) {
-        service.ingestWorkSession(event);
-    }
+	public WorkSessionEventListener(TimekeepingIngestionService service) {
+		this.service = service;
+	}
 
-    @EventListener
-    public void onWorkSessionCorrected(WorkSessionCorrectedEvent event) {
-        service.recordCorrection(event);
-    }
+	@EventListener
+	public void onWorkSessionCompleted(WorkSessionCompletedEvent event) {
+		service.ingestWorkSession(event);
+	}
+
+	@EventListener
+	public void onWorkSessionCorrected(WorkSessionCorrectedEvent event) {
+		service.recordCorrection(event);
+	}
+
 }

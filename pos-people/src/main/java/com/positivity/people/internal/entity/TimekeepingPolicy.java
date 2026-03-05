@@ -19,113 +19,116 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.GeneratedValue;
 import com.positivity.shared.id.UUIDv7Id;
+
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "timekeeping_policy", indexes = {
-        @Index(name = "idx_timekeeping_policy_scope", columnList = "scope_type, scope_id"),
-        @Index(name = "idx_timekeeping_policy_scope_effective_updated", columnList = "scope_type, scope_id, effective_start_at, effective_end_at, updated_at")
-})
+@Table(name = "timekeeping_policy",
+		indexes = { @Index(name = "idx_timekeeping_policy_scope", columnList = "scope_type, scope_id"),
+				@Index(name = "idx_timekeeping_policy_scope_effective_updated",
+						columnList = "scope_type, scope_id, effective_start_at, effective_end_at, updated_at") })
 public class TimekeepingPolicy {
 
-    @Id
-    @GeneratedValue
-    @UUIDv7Id
-    @Column(name = "timekeeping_policy_id", columnDefinition = "UUID", nullable = false)
-    private UUID timekeepingPolicyId;
+	@Id
+	@GeneratedValue
+	@UUIDv7Id
+	@Column(name = "timekeeping_policy_id", columnDefinition = "UUID", nullable = false)
+	private UUID timekeepingPolicyId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "scope_type", nullable = false, length = 16)
-    private TimekeepingPolicyScopeType scopeType;
+	@Enumerated(EnumType.STRING)
+	@Column(name = "scope_type", nullable = false, length = 16)
+	private TimekeepingPolicyScopeType scopeType;
 
-    @Column(name = "scope_id")
-    private UUID scopeId;
+	@Column(name = "scope_id")
+	private UUID scopeId;
 
-    @Column(name = "job_time_discrepancy_threshold_minutes", nullable = false)
-    private Integer jobTimeDiscrepancyThresholdMinutes;
+	@Column(name = "job_time_discrepancy_threshold_minutes", nullable = false)
+	private Integer jobTimeDiscrepancyThresholdMinutes;
 
-    @Column(name = "effective_start_at")
-    private Instant effectiveStartAt;
+	@Column(name = "effective_start_at")
+	private Instant effectiveStartAt;
 
-    @Column(name = "effective_end_at")
-    private Instant effectiveEndAt;
+	@Column(name = "effective_end_at")
+	private Instant effectiveEndAt;
 
-    @Column(name = "updated_by")
-    private String updatedBy;
+	@Column(name = "updated_by")
+	private String updatedBy;
 
-    @CreatedDate
-    @Column(name = "created_at", updatable = false)
-    private Instant createdAt;
+	@CreatedDate
+	@Column(name = "created_at", updatable = false)
+	private Instant createdAt;
 
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-    public UUID getTimekeepingPolicyId() {
-        return timekeepingPolicyId;
-    }
+	@LastModifiedDate
+	@Column(name = "updated_at", nullable = false)
+	private Instant updatedAt;
 
-    public void setTimekeepingPolicyId(UUID timekeepingPolicyId) {
-        this.timekeepingPolicyId = timekeepingPolicyId;
-    }
+	public UUID getTimekeepingPolicyId() {
+		return timekeepingPolicyId;
+	}
 
-    public TimekeepingPolicyScopeType getScopeType() {
-        return scopeType;
-    }
+	public void setTimekeepingPolicyId(UUID timekeepingPolicyId) {
+		this.timekeepingPolicyId = timekeepingPolicyId;
+	}
 
-    public void setScopeType(TimekeepingPolicyScopeType scopeType) {
-        this.scopeType = scopeType;
-    }
+	public TimekeepingPolicyScopeType getScopeType() {
+		return scopeType;
+	}
 
-    public UUID getScopeId() {
-        return scopeId;
-    }
+	public void setScopeType(TimekeepingPolicyScopeType scopeType) {
+		this.scopeType = scopeType;
+	}
 
-    public void setScopeId(UUID scopeId) {
-        this.scopeId = scopeId;
-    }
+	public UUID getScopeId() {
+		return scopeId;
+	}
 
-    public Integer getJobTimeDiscrepancyThresholdMinutes() {
-        return jobTimeDiscrepancyThresholdMinutes;
-    }
+	public void setScopeId(UUID scopeId) {
+		this.scopeId = scopeId;
+	}
 
-    public void setJobTimeDiscrepancyThresholdMinutes(Integer jobTimeDiscrepancyThresholdMinutes) {
-        this.jobTimeDiscrepancyThresholdMinutes = jobTimeDiscrepancyThresholdMinutes;
-    }
+	public Integer getJobTimeDiscrepancyThresholdMinutes() {
+		return jobTimeDiscrepancyThresholdMinutes;
+	}
 
-    public Instant getEffectiveStartAt() {
-        return effectiveStartAt;
-    }
+	public void setJobTimeDiscrepancyThresholdMinutes(Integer jobTimeDiscrepancyThresholdMinutes) {
+		this.jobTimeDiscrepancyThresholdMinutes = jobTimeDiscrepancyThresholdMinutes;
+	}
 
-    public void setEffectiveStartAt(Instant effectiveStartAt) {
-        this.effectiveStartAt = effectiveStartAt;
-    }
+	public Instant getEffectiveStartAt() {
+		return effectiveStartAt;
+	}
 
-    public Instant getEffectiveEndAt() {
-        return effectiveEndAt;
-    }
+	public void setEffectiveStartAt(Instant effectiveStartAt) {
+		this.effectiveStartAt = effectiveStartAt;
+	}
 
-    public void setEffectiveEndAt(Instant effectiveEndAt) {
-        this.effectiveEndAt = effectiveEndAt;
-    }
+	public Instant getEffectiveEndAt() {
+		return effectiveEndAt;
+	}
 
-    public String getUpdatedBy() {
-        return updatedBy;
-    }
+	public void setEffectiveEndAt(Instant effectiveEndAt) {
+		this.effectiveEndAt = effectiveEndAt;
+	}
 
-    public void setUpdatedBy(String updatedBy) {
-        this.updatedBy = updatedBy;
-    }
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
+	}
 
-    public void setCreatedAt(Instant createdAt) {
-}
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+	public void setCreatedAt(Instant createdAt) {
+	}
 
-    public void setUpdatedAt(Instant updatedAt) {
-}
+	public Instant getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(Instant updatedAt) {
+	}
+
 }

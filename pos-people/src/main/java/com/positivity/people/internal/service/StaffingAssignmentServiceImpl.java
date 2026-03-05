@@ -31,184 +31,161 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class StaffingAssignmentServiceImpl implements StaffingAssignmentService {
 
-    private final PersonLocationAssignmentRepository repository;
-    private final PersonRepository personRepository;
-    private final LocationReferenceClient locationReferenceClient;
-    private final Clock clock;
+	private final PersonLocationAssignmentRepository repository;
 
-    @Override
-    @Transactional
-    public @NonNull StaffingAssignmentResponse create(
-            @NonNull CreateStaffingAssignmentRequest request,
-            @NonNull String actor) {
-        validatePersonAndLocation(request.getPersonId(), request.getLocationId());
+	private final PersonRepository personRepository;
 
-        if (repository.existsOverlapping(
-                request.getPersonId(), request.getLocationId(), request.getRole(),
-                request.getEffectiveFrom(), request.getEffectiveTo())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "An overlapping assignment already exists for this person, location, and role");
-        }
+	private final LocationReferenceClient locationReferenceClient;
 
-        if (request.isPrimary()) {
-            repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(
-                    request.getPersonId(), AssignmentStatus.ACTIVE)
-                    .ifPresent(existing -> {
-                        if (!dateRangesOverlap(
-                                existing.getEffectiveFrom(),
-                                existing.getEffectiveTo(),
-                                request.getEffectiveFrom(),
-                                request.getEffectiveTo())) {
-                            return;
-                        }
+	private final Clock clock;
 
-                        LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
-                        if (demotionDate.isBefore(existing.getEffectiveFrom())) {
-                            demotionDate = existing.getEffectiveFrom();
-                        }
+	@Override
+	@Transactional
+	public @NonNull StaffingAssignmentResponse create(@NonNull CreateStaffingAssignmentRequest request,
+			@NonNull String actor) {
+		validatePersonAndLocation(request.getPersonId(), request.getLocationId());
 
-                        existing.setEffectiveTo(demotionDate);
-                        existing.setStatus(AssignmentStatus.ENDED);
-                        repository.save(existing);
-                    });
-        }
+		if (repository.existsOverlapping(request.getPersonId(), request.getLocationId(), request.getRole(),
+				request.getEffectiveFrom(), request.getEffectiveTo())) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT,
+					"An overlapping assignment already exists for this person, location, and role");
+		}
 
-        PersonLocationAssignment assignment = PersonLocationAssignment.builder()
-                .personId(request.getPersonId())
-                .locationId(request.getLocationId())
-                .role(request.getRole())
-                .isPrimary(request.isPrimary())
-                .effectiveFrom(request.getEffectiveFrom())
-                .effectiveTo(request.getEffectiveTo())
-                .status(AssignmentStatus.ACTIVE)
-                .createdBy(actor)
-                .build();
+		if (request.isPrimary()) {
+			repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
+				.ifPresent(existing -> {
+					if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),
+							request.getEffectiveFrom(), request.getEffectiveTo())) {
+						return;
+					}
 
-        PersonLocationAssignment saved = repository.save(assignment);
-        log.info("Created staffing assignment {} for person {} at location {}",
-                saved.getId(), request.getPersonId(), request.getLocationId());
+					LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
+					if (demotionDate.isBefore(existing.getEffectiveFrom())) {
+						demotionDate = existing.getEffectiveFrom();
+					}
 
-        return toResponse(saved);
-    }
+					existing.setEffectiveTo(demotionDate);
+					existing.setStatus(AssignmentStatus.ENDED);
+					repository.save(existing);
+				});
+		}
 
-    @Override
-    public @NonNull List<StaffingAssignmentResponse> findByPersonId(@NonNull UUID personId) {
-        return repository.findByPersonId(personId).stream()
-                .map(this::toResponse)
-                .toList();
-    }
+		PersonLocationAssignment assignment = PersonLocationAssignment.builder()
+			.personId(request.getPersonId())
+			.locationId(request.getLocationId())
+			.role(request.getRole())
+			.isPrimary(request.isPrimary())
+			.effectiveFrom(request.getEffectiveFrom())
+			.effectiveTo(request.getEffectiveTo())
+			.status(AssignmentStatus.ACTIVE)
+			.createdBy(actor)
+			.build();
 
-    @Override
-    public @NonNull Optional<StaffingAssignmentResponse> findById(@NonNull UUID assignmentId) {
-        return repository.findById(assignmentId).map(this::toResponse);
-    }
+		PersonLocationAssignment saved = repository.save(assignment);
+		log.info("Created staffing assignment {} for person {} at location {}", saved.getId(), request.getPersonId(),
+				request.getLocationId());
 
-    @Override
-    @Transactional
-    public @NonNull Optional<StaffingAssignmentResponse> update(
-            @NonNull UUID assignmentId,
-            @NonNull UpdateStaffingAssignmentRequest request,
-            @NonNull String actor) {
-        Optional<PersonLocationAssignment> existingAssignment = repository.findById(assignmentId);
-        if (existingAssignment.isEmpty()) {
-            return Optional.empty();
-        }
-        validatePersonAndLocation(request.getPersonId(), request.getLocationId());
+		return toResponse(saved);
+	}
 
-        if (repository.existsOverlappingExcludingId(
-                assignmentId,
-                request.getPersonId(),
-                request.getLocationId(),
-                request.getRole(),
-                request.getEffectiveFrom(),
-                request.getEffectiveTo())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "An overlapping assignment already exists for this person, location, and role");
-        }
+	@Override
+	public @NonNull List<StaffingAssignmentResponse> findByPersonId(@NonNull UUID personId) {
+		return repository.findByPersonId(personId).stream().map(this::toResponse).toList();
+	}
 
-        PersonLocationAssignment assignment = existingAssignment.get();
+	@Override
+	public @NonNull Optional<StaffingAssignmentResponse> findById(@NonNull UUID assignmentId) {
+		return repository.findById(assignmentId).map(this::toResponse);
+	}
 
-        if (request.isPrimary()) {
-            repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(
-                    request.getPersonId(), AssignmentStatus.ACTIVE)
-                    .filter(existing -> !existing.getId().equals(assignmentId))
-                    .ifPresent(existing -> {
-                        if (!dateRangesOverlap(
-                                existing.getEffectiveFrom(),
-                                existing.getEffectiveTo(),
-                                request.getEffectiveFrom(),
-                                request.getEffectiveTo())) {
-                            return;
-                        }
+	@Override
+	@Transactional
+	public @NonNull Optional<StaffingAssignmentResponse> update(@NonNull UUID assignmentId,
+			@NonNull UpdateStaffingAssignmentRequest request, @NonNull String actor) {
+		Optional<PersonLocationAssignment> existingAssignment = repository.findById(assignmentId);
+		if (existingAssignment.isEmpty()) {
+			return Optional.empty();
+		}
+		validatePersonAndLocation(request.getPersonId(), request.getLocationId());
 
-                        LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
-                        if (demotionDate.isBefore(existing.getEffectiveFrom())) {
-                            demotionDate = existing.getEffectiveFrom();
-                        }
+		if (repository.existsOverlappingExcludingId(assignmentId, request.getPersonId(), request.getLocationId(),
+				request.getRole(), request.getEffectiveFrom(), request.getEffectiveTo())) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT,
+					"An overlapping assignment already exists for this person, location, and role");
+		}
 
-                        existing.setEffectiveTo(demotionDate);
-                        existing.setStatus(AssignmentStatus.ENDED);
-                        repository.save(existing);
-                    });
-        }
+		PersonLocationAssignment assignment = existingAssignment.get();
 
-        assignment.setPersonId(request.getPersonId());
-        assignment.setLocationId(request.getLocationId());
-        assignment.setRole(request.getRole());
-        assignment.setPrimary(request.isPrimary());
-        assignment.setEffectiveFrom(request.getEffectiveFrom());
-        assignment.setEffectiveTo(request.getEffectiveTo());
+		if (request.isPrimary()) {
+			repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
+				.filter(existing -> !existing.getId().equals(assignmentId))
+				.ifPresent(existing -> {
+					if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),
+							request.getEffectiveFrom(), request.getEffectiveTo())) {
+						return;
+					}
 
-        PersonLocationAssignment saved = repository.save(assignment);
-        log.info("Updated staffing assignment {} by actor {}", saved.getId(), actor);
-        return Optional.of(toResponse(saved));
-    }
+					LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
+					if (demotionDate.isBefore(existing.getEffectiveFrom())) {
+						demotionDate = existing.getEffectiveFrom();
+					}
 
-    @Override
-    @Transactional
-    public void end(@NonNull UUID assignmentId) {
-        PersonLocationAssignment assignment = repository.findById(assignmentId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Assignment not found: " + assignmentId));
-        assignment.setStatus(AssignmentStatus.ENDED);
-        if (assignment.getEffectiveTo() == null) {
-            assignment.setEffectiveTo(LocalDate.now(clock));
-        }
-        repository.save(assignment);
-    }
+					existing.setEffectiveTo(demotionDate);
+					existing.setStatus(AssignmentStatus.ENDED);
+					repository.save(existing);
+				});
+		}
 
-    private StaffingAssignmentResponse toResponse(PersonLocationAssignment assignment) {
-        return new StaffingAssignmentResponse(
-                assignment.getId(),
-                assignment.getPersonId(),
-                assignment.getLocationId(),
-                assignment.getRole(),
-                assignment.isPrimary(),
-                assignment.getStatus(),
-                assignment.getEffectiveFrom(),
-                assignment.getEffectiveTo(),
-                assignment.getCreatedAt(),
-                assignment.getUpdatedAt(),
-                assignment.getCreatedBy());
-    }
+		assignment.setPersonId(request.getPersonId());
+		assignment.setLocationId(request.getLocationId());
+		assignment.setRole(request.getRole());
+		assignment.setPrimary(request.isPrimary());
+		assignment.setEffectiveFrom(request.getEffectiveFrom());
+		assignment.setEffectiveTo(request.getEffectiveTo());
 
-    private boolean dateRangesOverlap(LocalDate leftStart, LocalDate leftEnd, LocalDate rightStart,
-            LocalDate rightEnd) {
-        LocalDate normalizedLeftEnd = leftEnd != null ? leftEnd : LocalDate.MAX;
-        LocalDate normalizedRightEnd = rightEnd != null ? rightEnd : LocalDate.MAX;
-        return !normalizedLeftEnd.isBefore(rightStart) && !normalizedRightEnd.isBefore(leftStart);
-    }
+		PersonLocationAssignment saved = repository.save(assignment);
+		log.info("Updated staffing assignment {} by actor {}", saved.getId(), actor);
+		return Optional.of(toResponse(saved));
+	}
 
-    private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
-        var person = personRepository.findById(personId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
+	@Override
+	@Transactional
+	public void end(@NonNull UUID assignmentId) {
+		PersonLocationAssignment assignment = repository.findById(assignmentId)
+			.orElseThrow(
+					() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found: " + assignmentId));
+		assignment.setStatus(AssignmentStatus.ENDED);
+		if (assignment.getEffectiveTo() == null) {
+			assignment.setEffectiveTo(LocalDate.now(clock));
+		}
+		repository.save(assignment);
+	}
 
-        if (person.getStatus() != EmployeeStatus.ACTIVE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);
-        }
+	private StaffingAssignmentResponse toResponse(PersonLocationAssignment assignment) {
+		return new StaffingAssignmentResponse(assignment.getId(), assignment.getPersonId(), assignment.getLocationId(),
+				assignment.getRole(), assignment.isPrimary(), assignment.getStatus(), assignment.getEffectiveFrom(),
+				assignment.getEffectiveTo(), assignment.getCreatedAt(), assignment.getUpdatedAt(),
+				assignment.getCreatedBy());
+	}
 
-        if (!locationReferenceClient.isLocationActive(locationId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found or inactive: " + locationId);
-        }
-    }
+	private boolean dateRangesOverlap(LocalDate leftStart, LocalDate leftEnd, LocalDate rightStart,
+			LocalDate rightEnd) {
+		LocalDate normalizedLeftEnd = leftEnd != null ? leftEnd : LocalDate.MAX;
+		LocalDate normalizedRightEnd = rightEnd != null ? rightEnd : LocalDate.MAX;
+		return !normalizedLeftEnd.isBefore(rightStart) && !normalizedRightEnd.isBefore(leftStart);
+	}
+
+	private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
+		var person = personRepository.findById(personId)
+			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
+
+		if (person.getStatus() != EmployeeStatus.ACTIVE) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);
+		}
+
+		if (!locationReferenceClient.isLocationActive(locationId)) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found or inactive: " + locationId);
+		}
+	}
+
 }

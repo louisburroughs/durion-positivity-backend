@@ -13,10 +13,17 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserRoleDto {
-    private String userId;
-    private String roleCode;
-    private UUID locationId;
-    private LocalDate startDate;
-    private LocalDate endDate;
-    private Boolean active;
+
+	private String userId;
+
+	private String roleCode;
+
+	private UUID locationId;
+
+	private LocalDate startDate;
+
+	private LocalDate endDate;
+
+	private Boolean active;
+
 }

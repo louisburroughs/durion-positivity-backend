@@ -18,156 +18,158 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.GeneratedValue;
 import com.positivity.shared.id.UUIDv7Id;
+
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "timekeeping_entry", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "tenant_id", "source_system", "source_session_id" })
-})
+@Table(name = "timekeeping_entry",
+		uniqueConstraints = { @UniqueConstraint(columnNames = { "tenant_id", "source_system", "source_session_id" }) })
 public class TimekeepingEntry {
 
-    @Id
-    @GeneratedValue
-    @UUIDv7Id
-    @Column(name = "timekeeping_entry_id", columnDefinition = "UUID", nullable = false, updatable = false)
-    private UUID timekeepingEntryId;
+	@Id
+	@GeneratedValue
+	@UUIDv7Id
+	@Column(name = "timekeeping_entry_id", columnDefinition = "UUID", nullable = false, updatable = false)
+	private UUID timekeepingEntryId;
 
-    @Column(name = "tenant_id", columnDefinition = "UUID", nullable = false)
-    private UUID tenantId;
+	@Column(name = "tenant_id", columnDefinition = "UUID", nullable = false)
+	private UUID tenantId;
 
-    @Column(name = "source_system", nullable = false, length = 50)
-    private String sourceSystem = "shopmgr";
+	@Column(name = "source_system", nullable = false, length = 50)
+	private String sourceSystem = "shopmgr";
 
-    @Column(name = "source_session_id", columnDefinition = "UUID", nullable = false)
-    private UUID sourceSessionId;
+	@Column(name = "source_session_id", columnDefinition = "UUID", nullable = false)
+	private UUID sourceSessionId;
 
-    @Column(name = "original_source_session_id", nullable = true)
-    private UUID originalSourceSessionId;
+	@Column(name = "original_source_session_id", nullable = true)
+	private UUID originalSourceSessionId;
 
-    @Column(name = "correction_id", nullable = true)
-    private UUID correctionId;
+	@Column(name = "correction_id", nullable = true)
+	private UUID correctionId;
 
-    @Column(name = "correction_reason", nullable = true, columnDefinition = "TEXT")
-    private String correctionReason;
+	@Column(name = "correction_reason", nullable = true, columnDefinition = "TEXT")
+	private String correctionReason;
 
-    @Column(name = "employee_id", columnDefinition = "UUID", nullable = false)
-    private UUID employeeId;
+	@Column(name = "employee_id", columnDefinition = "UUID", nullable = false)
+	private UUID employeeId;
 
-    @Column(name = "session_start_time", nullable = false)
-    private Instant sessionStartTime;
+	@Column(name = "session_start_time", nullable = false)
+	private Instant sessionStartTime;
 
-    @Column(name = "session_end_time", nullable = false)
-    private Instant sessionEndTime;
+	@Column(name = "session_end_time", nullable = false)
+	private Instant sessionEndTime;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "approval_status", nullable = false, length = 50)
-    private ApprovalStatus approvalStatus = ApprovalStatus.PENDING_APPROVAL;
+	@Enumerated(EnumType.STRING)
+	@Column(name = "approval_status", nullable = false, length = 50)
+	private ApprovalStatus approvalStatus = ApprovalStatus.PENDING_APPROVAL;
 
-    @Column(name = "associated_work_order_id", columnDefinition = "UUID")
-    private UUID associatedWorkOrderId;
+	@Column(name = "associated_work_order_id", columnDefinition = "UUID")
+	private UUID associatedWorkOrderId;
 
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-    public UUID getTimekeepingEntryId() {
-        return timekeepingEntryId;
-    }
+	@CreatedDate
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private Instant createdAt;
 
-    public void setTimekeepingEntryId(UUID timekeepingEntryId) {
-        this.timekeepingEntryId = timekeepingEntryId;
-    }
+	public UUID getTimekeepingEntryId() {
+		return timekeepingEntryId;
+	}
 
-    public UUID getTenantId() {
-        return tenantId;
-    }
+	public void setTimekeepingEntryId(UUID timekeepingEntryId) {
+		this.timekeepingEntryId = timekeepingEntryId;
+	}
 
-    public void setTenantId(UUID tenantId) {
-        this.tenantId = tenantId;
-    }
+	public UUID getTenantId() {
+		return tenantId;
+	}
 
-    public String getSourceSystem() {
-        return sourceSystem;
-    }
+	public void setTenantId(UUID tenantId) {
+		this.tenantId = tenantId;
+	}
 
-    public void setSourceSystem(String sourceSystem) {
-        this.sourceSystem = sourceSystem;
-    }
+	public String getSourceSystem() {
+		return sourceSystem;
+	}
 
-    public UUID getSourceSessionId() {
-        return sourceSessionId;
-    }
+	public void setSourceSystem(String sourceSystem) {
+		this.sourceSystem = sourceSystem;
+	}
 
-    public void setSourceSessionId(UUID sourceSessionId) {
-        this.sourceSessionId = sourceSessionId;
-    }
+	public UUID getSourceSessionId() {
+		return sourceSessionId;
+	}
 
-    public UUID getOriginalSourceSessionId() {
-        return originalSourceSessionId;
-    }
+	public void setSourceSessionId(UUID sourceSessionId) {
+		this.sourceSessionId = sourceSessionId;
+	}
 
-    public void setOriginalSourceSessionId(UUID originalSourceSessionId) {
-        this.originalSourceSessionId = originalSourceSessionId;
-    }
+	public UUID getOriginalSourceSessionId() {
+		return originalSourceSessionId;
+	}
 
-    public UUID getCorrectionId() {
-        return correctionId;
-    }
+	public void setOriginalSourceSessionId(UUID originalSourceSessionId) {
+		this.originalSourceSessionId = originalSourceSessionId;
+	}
 
-    public void setCorrectionId(UUID correctionId) {
-        this.correctionId = correctionId;
-    }
+	public UUID getCorrectionId() {
+		return correctionId;
+	}
 
-    public String getCorrectionReason() {
-        return correctionReason;
-    }
+	public void setCorrectionId(UUID correctionId) {
+		this.correctionId = correctionId;
+	}
 
-    public void setCorrectionReason(String correctionReason) {
-        this.correctionReason = correctionReason;
-    }
+	public String getCorrectionReason() {
+		return correctionReason;
+	}
 
-    public UUID getEmployeeId() {
-        return employeeId;
-    }
+	public void setCorrectionReason(String correctionReason) {
+		this.correctionReason = correctionReason;
+	}
 
-    public void setEmployeeId(UUID employeeId) {
-        this.employeeId = employeeId;
-    }
+	public UUID getEmployeeId() {
+		return employeeId;
+	}
 
-    public Instant getSessionStartTime() {
-        return sessionStartTime;
-    }
+	public void setEmployeeId(UUID employeeId) {
+		this.employeeId = employeeId;
+	}
 
-    public void setSessionStartTime(Instant sessionStartTime) {
-        this.sessionStartTime = sessionStartTime;
-    }
+	public Instant getSessionStartTime() {
+		return sessionStartTime;
+	}
 
-    public Instant getSessionEndTime() {
-        return sessionEndTime;
-    }
+	public void setSessionStartTime(Instant sessionStartTime) {
+		this.sessionStartTime = sessionStartTime;
+	}
 
-    public void setSessionEndTime(Instant sessionEndTime) {
-        this.sessionEndTime = sessionEndTime;
-    }
+	public Instant getSessionEndTime() {
+		return sessionEndTime;
+	}
 
-    public ApprovalStatus getApprovalStatus() {
-        return approvalStatus;
-    }
+	public void setSessionEndTime(Instant sessionEndTime) {
+		this.sessionEndTime = sessionEndTime;
+	}
 
-    public void setApprovalStatus(ApprovalStatus approvalStatus) {
-        this.approvalStatus = approvalStatus;
-    }
+	public ApprovalStatus getApprovalStatus() {
+		return approvalStatus;
+	}
 
-    public UUID getAssociatedWorkOrderId() {
-        return associatedWorkOrderId;
-    }
+	public void setApprovalStatus(ApprovalStatus approvalStatus) {
+		this.approvalStatus = approvalStatus;
+	}
 
-    public void setAssociatedWorkOrderId(UUID associatedWorkOrderId) {
-        this.associatedWorkOrderId = associatedWorkOrderId;
-    }
+	public UUID getAssociatedWorkOrderId() {
+		return associatedWorkOrderId;
+	}
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+	public void setAssociatedWorkOrderId(UUID associatedWorkOrderId) {
+		this.associatedWorkOrderId = associatedWorkOrderId;
+	}
 
-    public void setCreatedAt(Instant createdAt) {
-}
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(Instant createdAt) {
+	}
+
 }

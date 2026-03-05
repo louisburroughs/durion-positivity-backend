@@ -34,311 +34,269 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class PeopleReportsServiceImpl implements PeopleReportsService {
-    private final Clock clock;
 
+	private final Clock clock;
 
-    private final TimeEntryRepository timeEntryRepository;
-    private final PersonRepository personRepository;
-    private final WorkexecJobTimeClient workexecJobTimeClient;
-    private final LocationReferenceClient locationReferenceClient;
-    private final TimekeepingThresholdCache timekeepingThresholdCache;
+	private final TimeEntryRepository timeEntryRepository;
 
-    public PeopleReportsServiceImpl(
-            TimeEntryRepository timeEntryRepository,
-            PersonRepository personRepository,
-            WorkexecJobTimeClient workexecJobTimeClient,
-            LocationReferenceClient locationReferenceClient,
-            TimekeepingThresholdCache timekeepingThresholdCache,
-            Clock clock) {
-        this.clock = clock;
-        this.timeEntryRepository = timeEntryRepository;
-        this.personRepository = personRepository;
-        this.workexecJobTimeClient = workexecJobTimeClient;
-        this.locationReferenceClient = locationReferenceClient;
-        this.timekeepingThresholdCache = timekeepingThresholdCache;
-    }
+	private final PersonRepository personRepository;
 
-    @Override
-    @NonNull
-    public List<ApprovedTimeExportResponse> getApprovedTimeForExport(
-            @NonNull LocalDate startDate,
-            @NonNull LocalDate endDate,
-            @NonNull List<UUID> locationIds) {
-        // Issue #79: enforce stable approved-only export read contract.
-        if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("endDate must be on or after startDate");
-        }
-        if (locationIds.isEmpty()) {
-            throw new IllegalArgumentException("At least one locationId is required");
-        }
+	private final WorkexecJobTimeClient workexecJobTimeClient;
 
-        for (UUID locationId : locationIds) {
-            if (!locationReferenceClient.isLocationActive(locationId)) {
-                throw new IllegalArgumentException("Unknown locationId: " + locationId);
-            }
-        }
+	private final LocationReferenceClient locationReferenceClient;
 
-        Instant windowStartInclusive = startDate.atStartOfDay(ZoneId.of("UTC")).toInstant();
-        Instant windowEndExclusive = endDate.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant();
+	private final TimekeepingThresholdCache timekeepingThresholdCache;
 
-        List<TimeEntry> entries = timeEntryRepository.findApprovedForExport(
-                TimeEntryStatus.APPROVED,
-                windowStartInclusive,
-                windowEndExclusive,
-                locationIds);
+	public PeopleReportsServiceImpl(TimeEntryRepository timeEntryRepository, PersonRepository personRepository,
+			WorkexecJobTimeClient workexecJobTimeClient, LocationReferenceClient locationReferenceClient,
+			TimekeepingThresholdCache timekeepingThresholdCache, Clock clock) {
+		this.clock = clock;
+		this.timeEntryRepository = timeEntryRepository;
+		this.personRepository = personRepository;
+		this.workexecJobTimeClient = workexecJobTimeClient;
+		this.locationReferenceClient = locationReferenceClient;
+		this.timekeepingThresholdCache = timekeepingThresholdCache;
+	}
 
-        if (entries.isEmpty()) {
-            return List.of();
-        }
+	@Override
+	@NonNull public List<ApprovedTimeExportResponse> getApprovedTimeForExport(@NonNull LocalDate startDate,
+			@NonNull LocalDate endDate, @NonNull List<UUID> locationIds) {
+		// Issue #79: enforce stable approved-only export read contract.
+		if (endDate.isBefore(startDate)) {
+			throw new IllegalArgumentException("endDate must be on or after startDate");
+		}
+		if (locationIds.isEmpty()) {
+			throw new IllegalArgumentException("At least one locationId is required");
+		}
 
-        Map<String, String> employeeNamesById = loadEmployeeNames(entries);
-        Map<UUID, String> locationNamesById = loadLocationNames(locationIds);
+		for (UUID locationId : locationIds) {
+			if (!locationReferenceClient.isLocationActive(locationId)) {
+				throw new IllegalArgumentException("Unknown locationId: " + locationId);
+			}
+		}
 
-        return entries.stream()
-                .filter(entry -> entry.getApprovedAt() != null
-                        && entry.getApprovedBy() != null
-                        && entry.getAttendanceStartAt() != null
-                        && entry.getAttendanceEndAt() != null
-                        && !entry.getAttendanceEndAt().isBefore(entry.getAttendanceStartAt()))
-                .map(entry -> {
-                    BigDecimal hoursWorked = BigDecimal.valueOf(Duration
-                            .between(entry.getAttendanceStartAt(), entry.getAttendanceEndAt())
-                            .toMinutes())
-                            .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+		Instant windowStartInclusive = startDate.atStartOfDay(ZoneId.of("UTC")).toInstant();
+		Instant windowEndExclusive = endDate.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant();
 
-                    String employeeId = entry.getPersonId() == null ? "" : entry.getPersonId();
-                    String employeeName = employeeNamesById.getOrDefault(employeeId, employeeId);
-                    String locationName = locationNamesById.getOrDefault(entry.getLocationId(),
-                            entry.getLocationId().toString());
+		List<TimeEntry> entries = timeEntryRepository.findApprovedForExport(TimeEntryStatus.APPROVED,
+				windowStartInclusive, windowEndExclusive, locationIds);
 
-                    return new ApprovedTimeExportResponse(
-                            entry.getTimeEntryId().toString(),
-                            employeeId,
-                            employeeName,
-                            entry.getLocationId(),
-                            locationName,
-                            entry.getAttendanceStartAt().atZone(ZoneId.of("UTC")).toLocalDate(),
-                            hoursWorked,
-                            entry.getApprovedAt(),
-                            entry.getApprovedBy());
-                })
-                .sorted(Comparator
-                        .comparing(ApprovedTimeExportResponse::entryDate)
-                        .thenComparing(ApprovedTimeExportResponse::timeEntryId))
-                .toList();
-    }
+		if (entries.isEmpty()) {
+			return List.of();
+		}
 
-    @Override
-    @NonNull
-    public List<AttendanceDiscrepancyReportResponse> getAttendanceDiscrepancyReport(
-            @NonNull LocalDate startDate,
-            @NonNull LocalDate endDate,
-            @NonNull String timezone,
-            UUID locationId,
-            @NonNull List<UUID> technicianIds,
-            boolean flaggedOnly) {
-        if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("endDate must be on or after startDate");
-        }
+		Map<String, String> employeeNamesById = loadEmployeeNames(entries);
+		Map<UUID, String> locationNamesById = loadLocationNames(locationIds);
 
-        ZoneId zoneId = parseZoneId(timezone);
-        Instant windowStartInclusive = startDate.atStartOfDay(zoneId).toInstant();
-        Instant windowEndExclusive = endDate.plusDays(1).atStartOfDay(zoneId).toInstant();
-        boolean includeAllTechnicians = technicianIds.isEmpty();
-        List<String> technicianIdStrings = technicianIds.stream().map(UUID::toString).toList();
+		return entries.stream()
+			.filter(entry -> entry.getApprovedAt() != null && entry.getApprovedBy() != null
+					&& entry.getAttendanceStartAt() != null && entry.getAttendanceEndAt() != null
+					&& !entry.getAttendanceEndAt().isBefore(entry.getAttendanceStartAt()))
+			.map(entry -> {
+				BigDecimal hoursWorked = BigDecimal
+					.valueOf(Duration.between(entry.getAttendanceStartAt(), entry.getAttendanceEndAt()).toMinutes())
+					.divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
 
-        List<TimeEntry> attendanceEntries = timeEntryRepository.findAttendanceOverlappingWindow(
-                windowStartInclusive,
-                windowEndExclusive,
-                locationId,
-                technicianIdStrings,
-                includeAllTechnicians);
+				String employeeId = entry.getPersonId() == null ? "" : entry.getPersonId();
+				String employeeName = employeeNamesById.getOrDefault(employeeId, employeeId);
+				String locationName = locationNamesById.getOrDefault(entry.getLocationId(),
+						entry.getLocationId().toString());
 
-        Map<AttendanceReportKey, Long> attendanceMinutesByKey = aggregateAttendanceMinutes(
-                attendanceEntries,
-                windowStartInclusive,
-                windowEndExclusive,
-                zoneId);
+				return new ApprovedTimeExportResponse(entry.getTimeEntryId().toString(), employeeId, employeeName,
+						entry.getLocationId(), locationName,
+						entry.getAttendanceStartAt().atZone(ZoneId.of("UTC")).toLocalDate(), hoursWorked,
+						entry.getApprovedAt(), entry.getApprovedBy());
+			})
+			.sorted(Comparator.comparing(ApprovedTimeExportResponse::entryDate)
+				.thenComparing(ApprovedTimeExportResponse::timeEntryId))
+			.toList();
+	}
 
-        List<WorkexecJobTimeTotal> jobTotals = workexecJobTimeClient.getJobTimeTotals(
-                startDate,
-                endDate,
-                timezone,
-                locationId,
-                technicianIds);
-        Map<AttendanceReportKey, Long> jobMinutesByKey = aggregateJobMinutes(jobTotals);
+	@Override
+	@NonNull public List<AttendanceDiscrepancyReportResponse> getAttendanceDiscrepancyReport(@NonNull LocalDate startDate,
+			@NonNull LocalDate endDate, @NonNull String timezone, UUID locationId, @NonNull List<UUID> technicianIds,
+			boolean flaggedOnly) {
+		if (endDate.isBefore(startDate)) {
+			throw new IllegalArgumentException("endDate must be on or after startDate");
+		}
 
-        Set<AttendanceReportKey> allKeys = new HashSet<>();
-        allKeys.addAll(attendanceMinutesByKey.keySet());
-        allKeys.addAll(jobMinutesByKey.keySet());
+		ZoneId zoneId = parseZoneId(timezone);
+		Instant windowStartInclusive = startDate.atStartOfDay(zoneId).toInstant();
+		Instant windowEndExclusive = endDate.plusDays(1).atStartOfDay(zoneId).toInstant();
+		boolean includeAllTechnicians = technicianIds.isEmpty();
+		List<String> technicianIdStrings = technicianIds.stream().map(UUID::toString).toList();
 
-        if (allKeys.isEmpty()) {
-            return List.of();
-        }
+		List<TimeEntry> attendanceEntries = timeEntryRepository.findAttendanceOverlappingWindow(windowStartInclusive,
+				windowEndExclusive, locationId, technicianIdStrings, includeAllTechnicians);
 
-        var thresholdContext = timekeepingThresholdCache.createContext(allKeys, zoneId);
-        Map<String, String> technicianNamesById = loadTechnicianNames(allKeys);
+		Map<AttendanceReportKey, Long> attendanceMinutesByKey = aggregateAttendanceMinutes(attendanceEntries,
+				windowStartInclusive, windowEndExclusive, zoneId);
 
-        List<AttendanceDiscrepancyReportResponse> rows = new ArrayList<>();
-        for (AttendanceReportKey key : allKeys) {
-            long attendanceMinutes = attendanceMinutesByKey.getOrDefault(key, 0L);
-            long jobMinutes = jobMinutesByKey.getOrDefault(key, 0L);
-            long discrepancyMinutes = attendanceMinutes - jobMinutes;
-            int thresholdMinutes = thresholdContext.resolveThresholdMinutes(key.getLocationId(), key.getReportDate());
-            boolean flagged = Math.abs(discrepancyMinutes) > thresholdMinutes;
+		List<WorkexecJobTimeTotal> jobTotals = workexecJobTimeClient.getJobTimeTotals(startDate, endDate, timezone,
+				locationId, technicianIds);
+		Map<AttendanceReportKey, Long> jobMinutesByKey = aggregateJobMinutes(jobTotals);
 
-            if (flaggedOnly && !flagged) {
-                continue;
-            }
+		Set<AttendanceReportKey> allKeys = new HashSet<>();
+		allKeys.addAll(attendanceMinutesByKey.keySet());
+		allKeys.addAll(jobMinutesByKey.keySet());
 
-            rows.add(new AttendanceDiscrepancyReportResponse(
-                    key.getTechnicianId(),
-                    technicianNamesById.getOrDefault(key.getTechnicianId(), key.getTechnicianId()),
-                    key.getLocationId(),
-                    key.getReportDate(),
-                    attendanceMinutes / 60.0d,
-                    jobMinutes / 60.0d,
-                    discrepancyMinutes / 60.0d,
-                    flagged,
-                    thresholdMinutes));
-        }
+		if (allKeys.isEmpty()) {
+			return List.of();
+		}
 
-        rows.sort(Comparator
-                .comparing(AttendanceDiscrepancyReportResponse::getReportDate)
-                .thenComparing(AttendanceDiscrepancyReportResponse::getTechnicianId)
-                .thenComparing(AttendanceDiscrepancyReportResponse::getLocationId));
-        return rows;
-    }
+		var thresholdContext = timekeepingThresholdCache.createContext(allKeys, zoneId);
+		Map<String, String> technicianNamesById = loadTechnicianNames(allKeys);
 
-    private ZoneId parseZoneId(String timezone) {
-        try {
-            return ZoneId.of(timezone);
-        } catch (ZoneRulesException ex) {
-            throw new IllegalArgumentException("timezone must be a valid IANA timezone");
-        }
-    }
+		List<AttendanceDiscrepancyReportResponse> rows = new ArrayList<>();
+		for (AttendanceReportKey key : allKeys) {
+			long attendanceMinutes = attendanceMinutesByKey.getOrDefault(key, 0L);
+			long jobMinutes = jobMinutesByKey.getOrDefault(key, 0L);
+			long discrepancyMinutes = attendanceMinutes - jobMinutes;
+			int thresholdMinutes = thresholdContext.resolveThresholdMinutes(key.getLocationId(), key.getReportDate());
+			boolean flagged = Math.abs(discrepancyMinutes) > thresholdMinutes;
 
-    private Map<AttendanceReportKey, Long> aggregateAttendanceMinutes(
-            List<TimeEntry> entries,
-            Instant windowStartInclusive,
-            Instant windowEndExclusive,
-            ZoneId zoneId) {
-        Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
-        Instant now = Instant.now(clock);
+			if (flaggedOnly && !flagged) {
+				continue;
+			}
 
-        for (TimeEntry entry : entries) {
-            Instant rawStart = entry.getAttendanceStartAt();
-            if (rawStart == null || entry.getPersonId() == null || entry.getLocationId() == null) {
-                continue;
-            }
+			rows.add(new AttendanceDiscrepancyReportResponse(key.getTechnicianId(),
+					technicianNamesById.getOrDefault(key.getTechnicianId(), key.getTechnicianId()), key.getLocationId(),
+					key.getReportDate(), attendanceMinutes / 60.0d, jobMinutes / 60.0d, discrepancyMinutes / 60.0d,
+					flagged, thresholdMinutes));
+		}
 
-            Instant rawEnd = entry.getAttendanceEndAt() == null ? now : entry.getAttendanceEndAt();
-            Instant effectiveStart = rawStart.isBefore(windowStartInclusive) ? windowStartInclusive : rawStart;
-            Instant effectiveEnd = rawEnd.isAfter(windowEndExclusive) ? windowEndExclusive : rawEnd;
-            if (!effectiveEnd.isAfter(effectiveStart)) {
-                continue;
-            }
+		rows.sort(Comparator.comparing(AttendanceDiscrepancyReportResponse::getReportDate)
+			.thenComparing(AttendanceDiscrepancyReportResponse::getTechnicianId)
+			.thenComparing(AttendanceDiscrepancyReportResponse::getLocationId));
+		return rows;
+	}
 
-            Instant cursor = effectiveStart;
-            while (cursor.isBefore(effectiveEnd)) {
-                LocalDate localDate = cursor.atZone(zoneId).toLocalDate();
-                Instant dayBoundary = localDate.plusDays(1).atStartOfDay(zoneId).toInstant();
-                Instant segmentEnd = dayBoundary.isBefore(effectiveEnd) ? dayBoundary : effectiveEnd;
-                long segmentMinutes = Duration.between(cursor, segmentEnd).toMinutes();
-                if (segmentMinutes > 0) {
-                    AttendanceReportKey key = new AttendanceReportKey(
-                            entry.getPersonId(),
-                            entry.getLocationId().toString(),
-                            localDate);
-                    long currentMinutes = minutesByKey.getOrDefault(key, 0L);
-                    minutesByKey.put(key, currentMinutes + segmentMinutes);
-                }
-                cursor = segmentEnd;
-            }
-        }
+	private ZoneId parseZoneId(String timezone) {
+		try {
+			return ZoneId.of(timezone);
+		}
+		catch (ZoneRulesException ex) {
+			throw new IllegalArgumentException("timezone must be a valid IANA timezone");
+		}
+	}
 
-        return minutesByKey;
-    }
+	private Map<AttendanceReportKey, Long> aggregateAttendanceMinutes(List<TimeEntry> entries,
+			Instant windowStartInclusive, Instant windowEndExclusive, ZoneId zoneId) {
+		Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
+		Instant now = Instant.now(clock);
 
-    private Map<AttendanceReportKey, Long> aggregateJobMinutes(List<WorkexecJobTimeTotal> rows) {
-        Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
-        for (WorkexecJobTimeTotal row : rows) {
-            if (row.getTechnicianId() == null
-                    || row.getLocationId() == null
-                    || row.getLocalDate() == null
-                    || row.getTotalJobMinutes() == null) {
-                continue;
-            }
-            AttendanceReportKey key = new AttendanceReportKey(
-                    row.getTechnicianId().toString(),
-                    row.getLocationId().toString(),
-                    row.getLocalDate());
-            long currentMinutes = minutesByKey.getOrDefault(key, 0L);
-            minutesByKey.put(key, currentMinutes + row.getTotalJobMinutes().longValue());
-        }
-        return minutesByKey;
-    }
+		for (TimeEntry entry : entries) {
+			Instant rawStart = entry.getAttendanceStartAt();
+			if (rawStart == null || entry.getPersonId() == null || entry.getLocationId() == null) {
+				continue;
+			}
 
-    private Map<String, String> loadTechnicianNames(Set<AttendanceReportKey> keys) {
-        Set<UUID> technicianIds = new HashSet<>();
-        for (AttendanceReportKey key : keys) {
-            try {
-                technicianIds.add(UUID.fromString(key.getTechnicianId()));
-            } catch (IllegalArgumentException ignored) {
-                // Skip non-UUID identifiers, fallback to technicianId in the response.
-            }
-        }
+			Instant rawEnd = entry.getAttendanceEndAt() == null ? now : entry.getAttendanceEndAt();
+			Instant effectiveStart = rawStart.isBefore(windowStartInclusive) ? windowStartInclusive : rawStart;
+			Instant effectiveEnd = rawEnd.isAfter(windowEndExclusive) ? windowEndExclusive : rawEnd;
+			if (!effectiveEnd.isAfter(effectiveStart)) {
+				continue;
+			}
 
-        if (technicianIds.isEmpty()) {
-            return Map.of();
-        }
+			Instant cursor = effectiveStart;
+			while (cursor.isBefore(effectiveEnd)) {
+				LocalDate localDate = cursor.atZone(zoneId).toLocalDate();
+				Instant dayBoundary = localDate.plusDays(1).atStartOfDay(zoneId).toInstant();
+				Instant segmentEnd = dayBoundary.isBefore(effectiveEnd) ? dayBoundary : effectiveEnd;
+				long segmentMinutes = Duration.between(cursor, segmentEnd).toMinutes();
+				if (segmentMinutes > 0) {
+					AttendanceReportKey key = new AttendanceReportKey(entry.getPersonId(),
+							entry.getLocationId().toString(), localDate);
+					long currentMinutes = minutesByKey.getOrDefault(key, 0L);
+					minutesByKey.put(key, currentMinutes + segmentMinutes);
+				}
+				cursor = segmentEnd;
+			}
+		}
 
-        Map<String, String> namesById = new HashMap<>();
-        for (Person person : personRepository.findAllById(technicianIds)) {
-            String fullName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
-                    + (person.getLastName() == null ? "" : person.getLastName())).trim();
-            namesById.put(person.getId().toString(), fullName.isBlank() ? person.getId().toString() : fullName);
-        }
-        return namesById;
-    }
+		return minutesByKey;
+	}
 
-    private Map<String, String> loadEmployeeNames(List<TimeEntry> entries) {
-        Set<UUID> employeeIds = new HashSet<>();
-        for (TimeEntry entry : entries) {
-            if (entry.getPersonId() == null || entry.getPersonId().isBlank()) {
-                continue;
-            }
-            try {
-                employeeIds.add(UUID.fromString(entry.getPersonId()));
-            } catch (IllegalArgumentException ignored) {
-                // keep source identifier fallback for non-UUID person IDs
-            }
-        }
+	private Map<AttendanceReportKey, Long> aggregateJobMinutes(List<WorkexecJobTimeTotal> rows) {
+		Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
+		for (WorkexecJobTimeTotal row : rows) {
+			if (row.getTechnicianId() == null || row.getLocationId() == null || row.getLocalDate() == null
+					|| row.getTotalJobMinutes() == null) {
+				continue;
+			}
+			AttendanceReportKey key = new AttendanceReportKey(row.getTechnicianId().toString(),
+					row.getLocationId().toString(), row.getLocalDate());
+			long currentMinutes = minutesByKey.getOrDefault(key, 0L);
+			minutesByKey.put(key, currentMinutes + row.getTotalJobMinutes().longValue());
+		}
+		return minutesByKey;
+	}
 
-        if (employeeIds.isEmpty()) {
-            return Map.of();
-        }
+	private Map<String, String> loadTechnicianNames(Set<AttendanceReportKey> keys) {
+		Set<UUID> technicianIds = new HashSet<>();
+		for (AttendanceReportKey key : keys) {
+			try {
+				technicianIds.add(UUID.fromString(key.getTechnicianId()));
+			}
+			catch (IllegalArgumentException ignored) {
+				// Skip non-UUID identifiers, fallback to technicianId in the response.
+			}
+		}
 
-        Map<String, String> namesById = new HashMap<>();
-        for (Person person : personRepository.findAllById(employeeIds)) {
-            String displayName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
-                    + (person.getLastName() == null ? "" : person.getLastName())).trim();
-            if (displayName.isBlank() && person.getLegalName() != null && !person.getLegalName().isBlank()) {
-                displayName = person.getLegalName();
-            }
-            if (displayName.isBlank() && person.getPreferredName() != null && !person.getPreferredName().isBlank()) {
-                displayName = person.getPreferredName();
-            }
-            namesById.put(person.getId().toString(), displayName.isBlank() ? person.getId().toString() : displayName);
-        }
-        return namesById;
-    }
+		if (technicianIds.isEmpty()) {
+			return Map.of();
+		}
 
-    private Map<UUID, String> loadLocationNames(List<UUID> locationIds) {
-        Map<UUID, String> namesById = new HashMap<>();
-        for (UUID locationId : locationIds) {
-            namesById.put(locationId, locationReferenceClient.getLocationName(locationId));
-        }
-        return namesById;
-    }
+		Map<String, String> namesById = new HashMap<>();
+		for (Person person : personRepository.findAllById(technicianIds)) {
+			String fullName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
+					+ (person.getLastName() == null ? "" : person.getLastName()))
+				.trim();
+			namesById.put(person.getId().toString(), fullName.isBlank() ? person.getId().toString() : fullName);
+		}
+		return namesById;
+	}
+
+	private Map<String, String> loadEmployeeNames(List<TimeEntry> entries) {
+		Set<UUID> employeeIds = new HashSet<>();
+		for (TimeEntry entry : entries) {
+			if (entry.getPersonId() == null || entry.getPersonId().isBlank()) {
+				continue;
+			}
+			try {
+				employeeIds.add(UUID.fromString(entry.getPersonId()));
+			}
+			catch (IllegalArgumentException ignored) {
+				// keep source identifier fallback for non-UUID person IDs
+			}
+		}
+
+		if (employeeIds.isEmpty()) {
+			return Map.of();
+		}
+
+		Map<String, String> namesById = new HashMap<>();
+		for (Person person : personRepository.findAllById(employeeIds)) {
+			String displayName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
+					+ (person.getLastName() == null ? "" : person.getLastName()))
+				.trim();
+			if (displayName.isBlank() && person.getLegalName() != null && !person.getLegalName().isBlank()) {
+				displayName = person.getLegalName();
+			}
+			if (displayName.isBlank() && person.getPreferredName() != null && !person.getPreferredName().isBlank()) {
+				displayName = person.getPreferredName();
+			}
+			namesById.put(person.getId().toString(), displayName.isBlank() ? person.getId().toString() : displayName);
+		}
+		return namesById;
+	}
+
+	private Map<UUID, String> loadLocationNames(List<UUID> locationIds) {
+		Map<UUID, String> namesById = new HashMap<>();
+		for (UUID locationId : locationIds) {
+			namesById.put(locationId, locationReferenceClient.getLocationName(locationId));
+		}
+		return namesById;
+	}
+
 }
