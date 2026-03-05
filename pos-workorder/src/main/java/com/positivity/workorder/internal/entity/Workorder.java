@@ -1,6 +1,5 @@
 package com.positivity.workorder.internal.entity;
 
-import java.time.Clock;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -29,7 +28,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import jakarta.persistence.PrePersist;
 
 @Entity
 @Data

@@ -1,6 +1,5 @@
 package com.positivity.workorder.internal.entity;
 
-import java.time.Clock;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;

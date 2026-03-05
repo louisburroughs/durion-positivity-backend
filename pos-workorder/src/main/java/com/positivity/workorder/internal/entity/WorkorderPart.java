@@ -1,6 +1,5 @@
 package com.positivity.workorder.internal.entity;
 
-import java.time.Clock;
 
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
@@ -15,7 +14,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
-import jakarta.persistence.PrePersist;
 
 @Entity
 @Data
