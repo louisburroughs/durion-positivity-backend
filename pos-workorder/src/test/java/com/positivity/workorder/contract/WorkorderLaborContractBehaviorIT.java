@@ -20,7 +20,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
-import com.positivity.workorder.internal.entity.*;
+import com.positivity.workorder.entity.*;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;

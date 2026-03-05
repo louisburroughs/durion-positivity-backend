@@ -1,4 +1,4 @@
-package com.positivity.workorder.internal.controller;
+package com.positivity.workorder.controller;
 
 import java.time.ZoneOffset;
 import java.time.Clock;
@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.config.TestSecurityConfig;
+import com.positivity.workorder.internal.controller.DashboardController;
 import com.positivity.workorder.internal.dto.DashboardResponse;
 import com.positivity.workorder.service.DashboardService;
 
@@ -26,6 +27,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -43,7 +46,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * Issue: CAP-142
  */
 @WebMvcTest(DashboardController.class)
-@Import(TestSecurityConfig.class)
+@Import({ TestSecurityConfig.class, DashboardControllerTest.ClockTestConfig.class })
 @ActiveProfiles("test")
 class DashboardControllerTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -59,6 +62,14 @@ class DashboardControllerTest {
 
         @MockitoBean
         private DashboardService dashboardService;
+
+        @TestConfiguration(proxyBeanMethods = false)
+        static class ClockTestConfig {
+                @Bean
+                Clock testClock() {
+                        return TEST_CLOCK;
+                }
+        }
 
         // -----------------------------------------------------------------------
         // AC-1 (controller): GET with locationId returns 200 OK with DashboardResponse

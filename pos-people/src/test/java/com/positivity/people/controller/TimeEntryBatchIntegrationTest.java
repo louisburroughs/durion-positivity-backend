@@ -59,7 +59,7 @@ class TimeEntryBatchIntegrationTest {
 	@Test
 	void approveTimeEntries_withValidEntries_succeeds() {
 		java.util.UUID entryId1 = java.util.UUID.fromString("00000000-0000-0000-0000-000000000001");
-		java.util.UUID entryId2 = java.util.UUID.fromString("00000000-0000-0000-0000-000000000001");
+		java.util.UUID entryId2 = java.util.UUID.fromString("00000000-0000-0000-0000-000000000009");
 
 		TimeEntry entry1 = new TimeEntry();
 		entry1.setTimeEntryId(entryId1);

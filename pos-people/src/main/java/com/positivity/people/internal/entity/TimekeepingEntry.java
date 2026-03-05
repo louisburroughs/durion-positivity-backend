@@ -9,6 +9,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.Data;
+
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.annotation.CreatedDate;
@@ -17,10 +19,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.GeneratedValue;
 import com.positivity.shared.id.UUIDv7Id;
 
+@Data
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "timekeeping_entry",
-		uniqueConstraints = { @UniqueConstraint(columnNames = { "tenant_id", "source_system", "source_session_id" }) })
+@Table(name = "timekeeping_entry", uniqueConstraints = {
+		@UniqueConstraint(columnNames = { "tenant_id", "source_system", "source_session_id" }) })
 public class TimekeepingEntry {
 
 	@Id
@@ -66,108 +69,5 @@ public class TimekeepingEntry {
 	@CreatedDate
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
-
-	public UUID getTimekeepingEntryId() {
-		return timekeepingEntryId;
-	}
-
-	public void setTimekeepingEntryId(UUID timekeepingEntryId) {
-		this.timekeepingEntryId = timekeepingEntryId;
-	}
-
-	public UUID getTenantId() {
-		return tenantId;
-	}
-
-	public void setTenantId(UUID tenantId) {
-		this.tenantId = tenantId;
-	}
-
-	public String getSourceSystem() {
-		return sourceSystem;
-	}
-
-	public void setSourceSystem(String sourceSystem) {
-		this.sourceSystem = sourceSystem;
-	}
-
-	public UUID getSourceSessionId() {
-		return sourceSessionId;
-	}
-
-	public void setSourceSessionId(UUID sourceSessionId) {
-		this.sourceSessionId = sourceSessionId;
-	}
-
-	public UUID getOriginalSourceSessionId() {
-		return originalSourceSessionId;
-	}
-
-	public void setOriginalSourceSessionId(UUID originalSourceSessionId) {
-		this.originalSourceSessionId = originalSourceSessionId;
-	}
-
-	public UUID getCorrectionId() {
-		return correctionId;
-	}
-
-	public void setCorrectionId(UUID correctionId) {
-		this.correctionId = correctionId;
-	}
-
-	public String getCorrectionReason() {
-		return correctionReason;
-	}
-
-	public void setCorrectionReason(String correctionReason) {
-		this.correctionReason = correctionReason;
-	}
-
-	public UUID getEmployeeId() {
-		return employeeId;
-	}
-
-	public void setEmployeeId(UUID employeeId) {
-		this.employeeId = employeeId;
-	}
-
-	public Instant getSessionStartTime() {
-		return sessionStartTime;
-	}
-
-	public void setSessionStartTime(Instant sessionStartTime) {
-		this.sessionStartTime = sessionStartTime;
-	}
-
-	public Instant getSessionEndTime() {
-		return sessionEndTime;
-	}
-
-	public void setSessionEndTime(Instant sessionEndTime) {
-		this.sessionEndTime = sessionEndTime;
-	}
-
-	public ApprovalStatus getApprovalStatus() {
-		return approvalStatus;
-	}
-
-	public void setApprovalStatus(ApprovalStatus approvalStatus) {
-		this.approvalStatus = approvalStatus;
-	}
-
-	public UUID getAssociatedWorkOrderId() {
-		return associatedWorkOrderId;
-	}
-
-	public void setAssociatedWorkOrderId(UUID associatedWorkOrderId) {
-		this.associatedWorkOrderId = associatedWorkOrderId;
-	}
-
-	public Instant getCreatedAt() {
-		return createdAt;
-	}
-
-	public void setCreatedAt(Instant createdAt) {
-	}
 
 }

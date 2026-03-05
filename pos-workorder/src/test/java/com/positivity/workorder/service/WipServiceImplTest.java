@@ -63,6 +63,7 @@ import static org.mockito.Mockito.when;
 @DisplayName("WipService Unit Tests")
 class WipServiceImplTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private long nextPartUuidSuffix;
 
         @Spy
         Clock clock = TEST_CLOCK;
@@ -97,6 +98,7 @@ class WipServiceImplTest {
 
         @BeforeEach
         void setUp() {
+                nextPartUuidSuffix = 1L;
                 lenient()
                                 .when(workorderRepository.findByShopIdAndStatusIn(any(UUID.class), anyCollection(),
                                                 any(Pageable.class)))
@@ -332,7 +334,7 @@ class WipServiceImplTest {
         @DisplayName("getWipDetail: AWAITING_PARTS workorder has non-empty partsBlocking list")
         void getWipDetail_returnsPartsBlocking_whenAwaitingParts() {
                 // Arrange
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("10000000-0000-0000-0000-000000000001");
 
                 // Act
                 WorkorderStatusDetail detail = service.getWipDetail(workorderId);
@@ -349,7 +351,7 @@ class WipServiceImplTest {
         @Test
         @DisplayName("getWipDetail: partsBlocking includes only parts with unfulfilled quantity gap")
         void getWipDetail_partsBlocking_usesQuantityGapRule() {
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("22000000-0000-0000-0000-000000000001");
                 WorkorderPart partReady = buildPart("Oil Filter", new BigDecimal("1.00"), new BigDecimal("1.00"),
                                 BigDecimal.ZERO, BigDecimal.ZERO);
                 WorkorderPart partBlocked = buildPart("Brake Pad Kit", new BigDecimal("2.00"), new BigDecimal("1.00"),
@@ -369,7 +371,7 @@ class WipServiceImplTest {
         @Test
         @DisplayName("getWipDetail: fully covered part quantities fall back to generic PARTS_PENDING token")
         void getWipDetail_partsBlocking_fallsBackWhenNoQuantityGap() {
-                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("33000000-0000-0000-0000-000000000001");
                 WorkorderPart coveredPart = buildPart("Cabin Filter", new BigDecimal("1.00"), new BigDecimal("1.00"),
                                 BigDecimal.ZERO, BigDecimal.ZERO);
                 when(workorderRepository.findById(workorderId))
@@ -397,7 +399,7 @@ class WipServiceImplTest {
         @DisplayName("getWipDetail: unknown workorder ID throws IllegalArgumentException or NoSuchElementException")
         void getWipDetail_unknownWorkorderId_throwsIllegalArgumentException() {
                 // Arrange
-                UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID unknownId = UUID.fromString("44000000-0000-0000-0000-000000000001");
                 // Issue #14: stub the repository so the real impl can detect the missing entity
                 when(workorderRepository.findById(unknownId)).thenReturn(Optional.empty());
 
@@ -468,8 +470,8 @@ class WipServiceImplTest {
                 return Workorder.builder()
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .shopId(shopId)
-                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000009"))
+                                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"))
                                 .status(status)
                                 .updatedAt(LocalDateTime.now(TEST_CLOCK))
                                 .build();
@@ -479,21 +481,22 @@ class WipServiceImplTest {
                 return Workorder.builder()
                                 .id(workorderId)
                                 .shopId(shopId)
-                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000099"))
+                                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000999"))
                                 .status(WorkorderStatus.AWAITING_PARTS)
                                 .updatedAt(LocalDateTime.now(TEST_CLOCK))
                                 .build();
         }
 
-        private static com.positivity.workorder.internal.entity.WorkorderPart buildPart(
+        private com.positivity.workorder.internal.entity.WorkorderPart buildPart(
                         String description,
                         BigDecimal quantity,
                         BigDecimal issued,
                         BigDecimal consumed,
                         BigDecimal returned) {
                 return com.positivity.workorder.internal.entity.WorkorderPart.builder()
-                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .id(UUID.fromString(
+                                                String.format("00000000-0000-0000-0000-%012d", nextPartUuidSuffix++)))
                                 .description(description)
                                 .quantity(quantity)
                                 .quantityIssued(issued)

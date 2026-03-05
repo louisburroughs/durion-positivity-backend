@@ -76,9 +76,9 @@ class WorkorderInvoiceServiceTest {
 
         @BeforeEach
         void setUp() {
-                workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                estimateId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                approvalId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                workorderId = UUID.fromString("11000000-0000-0000-0000-000000000001");
+                estimateId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                approvalId = UUID.fromString("00000000-0000-0000-0000-000000000011");
         }
 
         @Test
@@ -277,7 +277,7 @@ class WorkorderInvoiceServiceTest {
 
                 // Create a standalone part with unique ID
                 WorkorderPart standalonePart = WorkorderPart.builder()
-                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000033"))
                                 .description("Standalone Part")
                                 .quantity(new BigDecimal("1.0000"))
                                 .unitPrice(new BigDecimal("25.0000"))

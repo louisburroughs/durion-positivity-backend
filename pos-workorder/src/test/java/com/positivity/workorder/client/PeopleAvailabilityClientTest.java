@@ -1,4 +1,4 @@
-package com.positivity.workorder.internal.client;
+package com.positivity.workorder.client;
 
 import java.time.ZoneOffset;
 import java.time.Clock;
@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.positivity.workorder.internal.client.PeopleAvailabilityClient;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.DisplayName;

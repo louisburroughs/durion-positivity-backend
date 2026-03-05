@@ -1,4 +1,4 @@
-package com.positivity.workorder.internal.service;
+package com.positivity.workorder.service;
 
 import java.time.Clock;
 
@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PtoBlock
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.service.DashboardServiceImpl;
 
 import java.time.Instant;
 import java.time.LocalDate;

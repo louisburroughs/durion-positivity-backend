@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,14 +27,16 @@ import com.positivity.workorder.internal.exception.WorkSessionStateException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
 
 @RestControllerAdvice
-@RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
     private final Clock clock;
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
+
+    public GlobalExceptionHandler(ObjectProvider<Clock> clockProvider) {
+        this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
+    }
 
     @ExceptionHandler(WorkorderNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleWorkorderNotFound(

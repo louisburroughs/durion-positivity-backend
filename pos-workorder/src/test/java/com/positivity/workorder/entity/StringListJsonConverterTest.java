@@ -1,7 +1,9 @@
-package com.positivity.workorder.internal.entity;
+package com.positivity.workorder.entity;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.positivity.workorder.internal.entity.StringListJsonConverter;
 
 import java.util.ArrayList;
 import java.util.List;
