@@ -42,6 +42,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class PostingRuleServiceImpl implements PostingRuleService {
+    private static final String VERSION_NOT_FOUND = "Version not found: ";
+
     private final Clock clock;
 
     private final PostingRuleSetRepository ruleSetRepository;
@@ -204,7 +206,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     public PostingRuleVersion updateVersion(UUID versionId, PostingRuleVersion updates) {
         PostingRuleVersion version = versionRepository.findById(versionId)
-                .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
+                .orElseThrow(() -> new IllegalArgumentException(VERSION_NOT_FOUND + versionId));
 
         if (version.getState() != PostingRuleSetState.DRAFT) {
             throw new IllegalStateException("Can only update DRAFT versions");
@@ -220,7 +222,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     public PostingRuleVersion publishVersion(UUID versionId) {
         PostingRuleVersion version = versionRepository.findById(versionId)
-                .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
+                .orElseThrow(() -> new IllegalArgumentException(VERSION_NOT_FOUND + versionId));
 
         if (version.getState() != PostingRuleSetState.DRAFT) {
             throw new IllegalStateException("Can only publish DRAFT versions");
@@ -254,7 +256,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     public PostingRuleVersion archiveVersion(UUID versionId) {
         PostingRuleVersion version = versionRepository.findById(versionId)
-                .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
+                .orElseThrow(() -> new IllegalArgumentException(VERSION_NOT_FOUND + versionId));
 
         if (version.getState() != PostingRuleSetState.PUBLISHED) {
             throw new IllegalStateException("Can only archive PUBLISHED versions");
