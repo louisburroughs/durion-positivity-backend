@@ -1,9 +1,7 @@
 package com.positivity.vehiclefitment.internal.entity;
 
-import java.time.Clock;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
 import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;

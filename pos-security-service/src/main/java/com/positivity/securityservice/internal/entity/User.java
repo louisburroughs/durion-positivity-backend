@@ -1,6 +1,5 @@
 package com.positivity.securityservice.internal.entity;
 
-import java.time.Clock;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.shared.id.UUIDv7Id;
