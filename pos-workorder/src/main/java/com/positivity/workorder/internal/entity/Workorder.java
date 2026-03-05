@@ -98,6 +98,9 @@ public class Workorder {
     @Column(columnDefinition = "TEXT")
     private String mechanicIds; // JSON array of mechanic UUIDs e.g. ["uuid1","uuid2"]
 
+    @Column(columnDefinition = "TEXT")
+    private String requiredCertifications; // JSON array of certification codes e.g. ["BRAKE_CERT","ALIGNMENT_CERT"]
+
     // Operational context fields (CAP:140 Story #59)
     private String operationalContextVersion;
     private Instant workStartedAt;

@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -45,4 +46,38 @@ public class ShopmgrOperationalContextClient {
             throw new IllegalStateException("Shopmgr unavailable: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * Fetches the bay availability status for all bays at a given location.
+     *
+     * @param locationId the location UUID
+     * @return list of bay availability DTOs, empty list on 404 or connection error
+     */
+    @SuppressWarnings("unchecked")
+    public List<BayAvailabilityDto> getBayStatusForLocation(@NonNull UUID locationId) {
+        try {
+            List<BayAvailabilityDto> result = restClient.get()
+                    .uri("/v1/shopmgr/locations/{locationId}/bays", locationId)
+                    .retrieve()
+                    .body(new org.springframework.core.ParameterizedTypeReference<List<BayAvailabilityDto>>() {});
+            return result != null ? result : List.of();
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 404) {
+                return List.of();
+            }
+            throw e;
+        } catch (ResourceAccessException e) {
+            log.warn("Shopmgr unavailable when fetching bays for location {}: {}", locationId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * DTO for bay availability status from the Shop Management Service.
+     *
+     * @param bayId    unique identifier for the bay
+     * @param bayName  human-readable bay name
+     * @param status   bay status: OPEN, CLOSED, RESERVED, UNDER_MAINTENANCE, etc.
+     */
+    public record BayAvailabilityDto(UUID bayId, String bayName, String status) {}
 }

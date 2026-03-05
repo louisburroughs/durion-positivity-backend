@@ -36,10 +36,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * double-booked mechanic (AC-4a), PTO overlap (AC-4b), break overlap (AC-6),
  * clock-out mismatch (AC-4d), and bay double-booking detection.
  *
- * <p>All tests are RED: the stub implementation throws
- * {@link UnsupportedOperationException} ("not yet implemented"), so each test
- * will ERROR until the production code is implemented.
- *
  * Issue: CAP-142
  */
 @ExtendWith(MockitoExtension.class)
@@ -79,8 +75,9 @@ class DashboardServiceTest {
                         .location(LOCATION_ID)
                         .people(List.of())
                         .build());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
-        // Act — expected to error with UnsupportedOperationException until GREEN
+        // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
 
         // Assert
@@ -105,6 +102,7 @@ class DashboardServiceTest {
                                 personAvailability("MECH-001", "Alice", "AVAILABLE"),
                                 personAvailability("MECH-002", "Bob", "AVAILABLE")))
                         .build());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -128,6 +126,7 @@ class DashboardServiceTest {
                 .thenReturn(List.of(wo1, wo2));
         when(peopleAvailabilityClient.fetchAvailability(any(), any()))
                 .thenReturn(emptyAvailability());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -171,6 +170,7 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mechanicWithPto))
                         .build());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -211,6 +211,7 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mechanicOnBreak))
                         .build());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -228,11 +229,10 @@ class DashboardServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC-4d: Mechanic physically on a different job at schedule time generates DOUBLE_BOOKED_MECHANIC BLOCKING conflict")
+    @DisplayName("AC-4d: Mechanic clocked in for another job without clock-out generates CLOCK_OUT_MISMATCH WARNING conflict")
     void getDashboard_mechanicClockedInForDifferentJob_returnsWarning() {
         // Arrange
-        // Issue CAP-142: AC-4d — mechanic is ON_JOB (a different workorder), physically unavailable → BLOCKING
-        UUID differentWorkorderId = UUID.randomUUID();
+        // Issue CAP-142: AC-4d — mechanic is ON_JOB (clocked in elsewhere, not clocked out) → CLOCK_OUT_MISMATCH WARNING
         Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-005", null);
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
                 .thenReturn(List.of(wo));
@@ -247,15 +247,16 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mechanicOnJob))
                         .build());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
 
-        // Assert: mechanic is physically unavailable → BLOCKING not WARNING
+        // Assert: mechanic has not clocked out → WARNING, not BLOCKING
         assertThat(response.getConflicts())
                 .anySatisfy(conflict -> {
-                    assertThat(conflict.getConflictType()).isEqualTo("DOUBLE_BOOKED_MECHANIC");
-                    assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
+                    assertThat(conflict.getConflictType()).isEqualTo("CLOCK_OUT_MISMATCH");
+                    assertThat(conflict.getSeverity()).isEqualTo("WARNING");
                     assertThat(conflict.getAffectedResourceId()).isEqualTo("MECH-005");
                 });
     }
@@ -276,6 +277,7 @@ class DashboardServiceTest {
                 .thenReturn(List.of(wo1, wo2));
         when(peopleAvailabilityClient.fetchAvailability(any(), any()))
                 .thenReturn(emptyAvailability());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -301,6 +303,7 @@ class DashboardServiceTest {
                 .thenReturn(List.of());
         when(peopleAvailabilityClient.fetchAvailability(any(), any()))
                 .thenReturn(emptyAvailability());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
         Instant before = Instant.now();
 
         // Act
@@ -309,6 +312,120 @@ class DashboardServiceTest {
         // Assert
         assertThat(response.getLastRefreshed()).isNotNull();
         assertThat(response.getLastRefreshed()).isBetween(before, Instant.now().plusSeconds(1));
+    }
+
+    // -----------------------------------------------------------------------
+    // AC-2b: Bay marked CLOSED/RESERVED/UNDER_MAINTENANCE → BAY_UNAVAILABLE BLOCKING
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-2b: Bay with status CLOSED triggers BAY_UNAVAILABLE BLOCKING conflict")
+    void getDashboard_bayUnavailableClosed_returnsBlockingConflict() {
+        // Arrange
+        // Issue CAP-142: AC-2b — bay at this location is marked CLOSED → BLOCKING
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000BA1");
+        Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-010", bayId);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(wo));
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(emptyAvailability());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
+                .thenReturn(List.of(new ShopmgrOperationalContextClient.BayAvailabilityDto(
+                        bayId, "Bay 1", "CLOSED")));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts())
+                .anySatisfy(conflict -> {
+                    assertThat(conflict.getConflictType()).isEqualTo("BAY_UNAVAILABLE");
+                    assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
+                    assertThat(conflict.getAffectedResourceId()).isEqualTo(bayId.toString());
+                });
+    }
+
+    // -----------------------------------------------------------------------
+    // AC-3a: Mechanic at different location → LOCATION_MISMATCH WARNING
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-3a: Mechanic at different location than workorder generates LOCATION_MISMATCH WARNING")
+    void getDashboard_mechanicAtDifferentLocation_returnsWarning() {
+        // Arrange
+        // Issue CAP-142: AC-3a — mechanic currentLocationId differs from workorder locationId
+        UUID differentLocation = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        Workorder wo = buildWorkorder(UUID.randomUUID(), "MECH-011", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(wo));
+        PersonAvailability mechanicElsewhere = PersonAvailability.builder()
+                .personId("MECH-011")
+                .firstName("Frank")
+                .lastName("Kelly")
+                .currentStatus("AVAILABLE")
+                .currentLocationId(differentLocation.toString())
+                .build();
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanicElsewhere))
+                        .build());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
+                .thenReturn(List.of());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts())
+                .anySatisfy(conflict -> {
+                    assertThat(conflict.getConflictType()).isEqualTo("LOCATION_MISMATCH");
+                    assertThat(conflict.getSeverity()).isEqualTo("WARNING");
+                    assertThat(conflict.getAffectedResourceId()).isEqualTo("MECH-011");
+                });
+    }
+
+    // -----------------------------------------------------------------------
+    // AC-3b: Mechanic lacks required certification → MECHANIC_SKILL_MISMATCH WARNING
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-3b: Mechanic lacks required certification generates MECHANIC_SKILL_MISMATCH WARNING")
+    void getDashboard_mechanicMissingCertification_returnsWarning() {
+        // Arrange
+        // Issue CAP-142: AC-3b — workorder requires ALIGNMENT_CERT but mechanic only has BRAKE_CERT
+        Workorder wo = Workorder.builder()
+                .id(UUID.randomUUID())
+                .locationId(LOCATION_UUID)
+                .mechanicIds("[\"MECH-012\"]")
+                .requiredCertifications("[\"BRAKE_CERT\",\"ALIGNMENT_CERT\"]")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(wo));
+        PersonAvailability mechanicMissingCert = PersonAvailability.builder()
+                .personId("MECH-012")
+                .firstName("Grace")
+                .lastName("Lee")
+                .currentStatus("AVAILABLE")
+                .certifications(List.of("BRAKE_CERT"))
+                .build();
+        when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanicMissingCert))
+                        .build());
+        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
+                .thenReturn(List.of());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts())
+                .anySatisfy(conflict -> {
+                    assertThat(conflict.getConflictType()).isEqualTo("MECHANIC_SKILL_MISMATCH");
+                    assertThat(conflict.getSeverity()).isEqualTo("WARNING");
+                    assertThat(conflict.getAffectedResourceId()).isEqualTo("MECH-012");
+                });
     }
 
     // -----------------------------------------------------------------------

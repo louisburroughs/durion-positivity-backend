@@ -22,6 +22,8 @@ public class PeopleAvailabilityResponse {
         String firstName;
         String lastName;
         String currentStatus;
+        String currentLocationId;
+        List<String> certifications;
         ClockInfo clock;
         BreakInfo breakInfo;
         List<PtoBlock> pto;
