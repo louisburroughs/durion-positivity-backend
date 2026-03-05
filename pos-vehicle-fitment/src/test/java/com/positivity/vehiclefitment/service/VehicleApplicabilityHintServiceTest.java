@@ -1,30 +1,51 @@
 package com.positivity.vehiclefitment.service;
 
-import com.positivity.vehiclefitment.internal.dto.*;
-import com.positivity.vehiclefitment.internal.entity.TagType;
-import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
-import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
-import com.positivity.vehiclefitment.internal.service.VehicleApplicabilityHintServiceImpl;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.*;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import com.positivity.vehiclefitment.internal.dto.CreateHintRequest;
+import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
+import com.positivity.vehiclefitment.internal.dto.FitmentTagDto;
+import com.positivity.vehiclefitment.internal.dto.HintResponse;
+import com.positivity.vehiclefitment.internal.dto.UpdateHintRequest;
+import com.positivity.vehiclefitment.internal.entity.TagType;
+import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
+import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
+import com.positivity.vehiclefitment.internal.service.VehicleApplicabilityHintServiceImpl;
 
 /**
  * Unit tests for VehicleApplicabilityHintService.
  */
 @ExtendWith(MockitoExtension.class)
 class VehicleApplicabilityHintServiceTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     private static final UUID TEST_HINT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID TEST_PRODUCT_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");

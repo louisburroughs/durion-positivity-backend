@@ -22,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -42,6 +43,9 @@ import static org.mockito.Mockito.when;
 @DisplayName("TravelSegmentServiceImpl Unit Tests")
 class TravelSegmentServiceImplTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+        @Spy
+        Clock clock = TEST_CLOCK;
 
         private static final UUID MOBILE_WORK_ASSIGNMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
         private static final UUID TECHNICIAN_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");

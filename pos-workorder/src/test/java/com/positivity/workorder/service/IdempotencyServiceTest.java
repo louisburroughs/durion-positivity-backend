@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.workorder.internal.entity.IdempotencyKey;
@@ -35,6 +36,9 @@ import com.positivity.workorder.internal.service.IdempotencyServiceImpl;
 @DisplayName("IdempotencyService Unit Tests")
 class IdempotencyServiceTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private IdempotencyKeyRepository repository;

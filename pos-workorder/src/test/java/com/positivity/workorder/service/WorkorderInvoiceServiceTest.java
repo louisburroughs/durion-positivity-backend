@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.shared.dto.InvoiceCreationRequest;
@@ -45,6 +46,9 @@ import com.positivity.workorder.internal.service.WorkorderInvoiceServiceImpl;
 @DisplayName("WorkorderInvoiceService Unit Tests")
 class WorkorderInvoiceServiceTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+        @Spy
+        Clock clock = TEST_CLOCK;
 
         private static final String INV_KEY_1 = "inv-key-1";
 

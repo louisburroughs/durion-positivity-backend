@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -34,6 +35,9 @@ import static org.mockito.Mockito.when;
 @DisplayName("TimeEntryServiceImpl Unit Tests")
 class TimeEntryServiceImplTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     private static final UUID TIME_ENTRY_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID WORK_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");

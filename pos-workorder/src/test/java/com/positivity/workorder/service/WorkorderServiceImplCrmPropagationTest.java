@@ -5,6 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,11 +20,13 @@ import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.web.client.RestClient;
 
+import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
@@ -32,7 +37,6 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.service.WorkorderServiceImpl;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 
 /**
  * Unit tests for {@link WorkorderServiceImpl} — CRM reference ID propagation
@@ -51,6 +55,11 @@ import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("WorkorderServiceImpl — CRM Reference ID Propagation Unit Tests (CAP-094 Story #93)")
 class WorkorderServiceImplCrmPropagationTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private WorkorderRepository workorderRepository;

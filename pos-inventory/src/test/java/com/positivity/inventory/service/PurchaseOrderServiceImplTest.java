@@ -411,7 +411,7 @@ class PurchaseOrderServiceImplTest {
                 PurchaseOrderEntity po2 = PurchaseOrderEntity.builder().vendorId(vendorId).currency("EUR")
                                 .shipToLocationId(locationId).lines(new ArrayList<>()).build();
                 PurchaseOrderEntity po3 = PurchaseOrderEntity.builder()
-                                .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001")).currency(currency)
+                                .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000002")).currency(currency)
                                 .shipToLocationId(locationId).lines(new ArrayList<>()).build();
 
                 List<PurchaseOrderEntity> allPos = List.of(po1, po2, po3);

@@ -5,6 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -79,7 +83,10 @@ class EstimateServiceImplTest {
     @InjectMocks
     private EstimateServiceImpl estimateService;
 
-    private java.time.Clock fixedClock;
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     private static final UUID ESTIMATE_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID CUSTOMER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
@@ -95,8 +102,7 @@ class EstimateServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        fixedClock = java.time.Clock.fixed(java.time.Instant.parse("2024-01-01T12:00:00Z"), java.time.ZoneOffset.UTC);
-        org.springframework.test.util.ReflectionTestUtils.setField(estimateService, "clock", fixedClock);
+        org.springframework.test.util.ReflectionTestUtils.setField(estimateService, "clock", clock);
 
         customerId = CUSTOMER_ID;
         vehicleId = VEHICLE_ID;
