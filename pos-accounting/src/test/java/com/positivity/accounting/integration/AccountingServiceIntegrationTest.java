@@ -1,5 +1,8 @@
 package com.positivity.accounting.integration;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,6 +33,8 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 @Transactional
 @DisplayName("Phase 3 Integration Tests - Accounting Service Wrappers")
 class AccountingServiceIntegrationTest extends BaseIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
   @Autowired
   private GLAccountRepository glAccountRepository;
@@ -97,7 +102,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     account.setAccountName("Test Liability");
     account.setAccountType(AccountType.LIABILITY);
     account.setDescription("Test Liability Account");
-    account.setActivationDate(LocalDateTime.now().plusDays(1)); // Not yet active
+    account.setActivationDate(LocalDateTime.now(TEST_CLOCK).plusDays(1)); // Not yet active
     account = glAccountRepository.save(account);
 
     String payload = """
@@ -121,7 +126,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     account.setAccountCode("3000");
     account.setAccountName("Test Account");
     account.setAccountType(AccountType.ASSET);
-    account.setActivationDate(LocalDateTime.now().plusDays(1));
+    account.setActivationDate(LocalDateTime.now(TEST_CLOCK).plusDays(1));
     account = glAccountRepository.save(account);
 
     mockMvc.perform(withAuth(post(BASE_URL + "/gl-accounts/" + account.getGlAccountId() + "/activate"))
@@ -443,9 +448,9 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     account.setAccountType(AccountType.ASSET);
     account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
     account.setCreatedBy("testuser");
-    account.setCreatedAt(Instant.now());
+    account.setCreatedAt(Instant.now(TEST_CLOCK));
     account.setModifiedBy("testuser");
-    account.setUpdatedAt(Instant.now());
+    account.setUpdatedAt(Instant.now(TEST_CLOCK));
     account = glAccountRepository.save(account);
 
     String payload = """
@@ -482,9 +487,9 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     account.setAccountType(AccountType.ASSET);
     account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
     account.setCreatedBy("testuser");
-    account.setCreatedAt(Instant.now());
+    account.setCreatedAt(Instant.now(TEST_CLOCK));
     account.setModifiedBy("testuser");
-    account.setUpdatedAt(Instant.now());
+    account.setUpdatedAt(Instant.now(TEST_CLOCK));
     account = glAccountRepository.save(account);
 
     // Create the mapping first

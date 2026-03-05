@@ -1,5 +1,8 @@
 package com.positivity.inventory.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
@@ -26,6 +29,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class InventoryAvailabilityServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         private static final UUID LOC_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
         private static final UUID SLOC_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -281,7 +286,7 @@ class InventoryAvailabilityServiceImplTest {
                                 .changeInQuantity(changeInQuantity)
                                 .quantityAfter(0)
                                 .transactionUserId("test-user")
-                                .timestamp(Instant.now())
+                                .timestamp(Instant.now(TEST_CLOCK))
                                 .locationId(locationId)
                                 .build();
         }

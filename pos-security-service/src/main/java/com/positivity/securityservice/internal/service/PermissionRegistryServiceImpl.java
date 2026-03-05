@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
@@ -26,6 +28,8 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 @Slf4j
 public class PermissionRegistryServiceImpl implements PermissionRegistryService {
+    private final Clock clock;
+
 
     public record ProcessingCounters(int registered, int updated, int skipped) {
     }
@@ -125,7 +129,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
         permission.setName(permDef.getName());
         permission.setDescription(permDef.getDescription());
         permission.setRegisteredByService(request.getServiceName());
-        permission.setRegisteredAt(Instant.now());
+        permission.setRegisteredAt(Instant.now(clock));
         return permission;
     }
 

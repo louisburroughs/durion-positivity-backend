@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.config;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
@@ -32,6 +33,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class WorkorderKafkaCommandListener {
+    private final Clock clock;
+
 
     private static final String COMMAND_ASSIGNMENT_UPDATED = "ASSIGNMENT_UPDATED";
 
@@ -72,7 +75,7 @@ public class WorkorderKafkaCommandListener {
                 event.setEventId(UUID.randomUUID());
             }
             if (event.getTimestamp() == null) {
-                event.setTimestamp(Instant.now());
+                event.setTimestamp(Instant.now(clock));
             }
 
             applicationEventPublisher.publishEvent(event);

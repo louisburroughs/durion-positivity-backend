@@ -143,11 +143,4 @@ public class Appointment {
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "appointment_status_timeline", joinColumns = @JoinColumn(name = "appointment_id", referencedColumnName = "appointment_id"))
     private List<StatusTimelineEntry> statusTimeline = new ArrayList<>();
-
-    @PrePersist
-    public void generateAppointmentId() {
-        if (appointmentId == null) {
-            appointmentId = UUIDv7Generator.generate();
-        }
-    }
 }

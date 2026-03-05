@@ -9,8 +9,12 @@ import com.positivity.inventory.internal.service.InventoryLocationServiceImpl;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.client.RestClient;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,6 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Issue: CAP-221
  */
 class InventoryLocationServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Test
     void deactivateLocation_returnsInactiveResponseWithProvidedLocationIds() {
@@ -43,7 +49,7 @@ class InventoryLocationServiceImplTest {
                 new StubStorageLocationValidationClient(validations),
                 eventPublisher(publishedEvents),
                 new SimpleMeterRegistry(),
-                Clock.systemUTC());
+                TEST_CLOCK);
 
         DeactivateLocationResponse response = service.deactivateLocation(sourceLocationId, destinationLocationId);
 
@@ -58,32 +64,38 @@ class InventoryLocationServiceImplTest {
 
     @Test
     void deactivateLocation_withStock_transfersAndReturnsTransferDetails() {
-        UUID sourceLocationId = UUID.randomUUID();
-        UUID destinationLocationId = UUID.randomUUID();
-        UUID siteId = UUID.randomUUID();
-        List<InventoryLedgerEntry> persistedEntries = new ArrayList<>();
-        Map<String, StorageLocationValidationClient.StorageLocationValidation> validations = new HashMap<>();
-        validations.put(sourceLocationId.toString(), validation(sourceLocationId, siteId, true, true));
-        validations.put(destinationLocationId.toString(), validation(destinationLocationId, siteId, true, true));
-        InventoryLocationServiceImpl service = new InventoryLocationServiceImpl(
-                stubLedgerRepository(
-                        List.of(onHand("SKU-001", 5L)),
-                        Map.of(stockKey("SKU-001", destinationLocationId), 3),
-                        persistedEntries),
-                new StubStorageLocationValidationClient(validations),
-                eventPublisher(new ArrayList<>()),
-                new SimpleMeterRegistry(),
-                Clock.systemUTC());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("inventory-test-user", "n/a", List.of()));
+        try {
+            UUID sourceLocationId = UUID.randomUUID();
+            UUID destinationLocationId = UUID.randomUUID();
+            UUID siteId = UUID.randomUUID();
+            List<InventoryLedgerEntry> persistedEntries = new ArrayList<>();
+            Map<String, StorageLocationValidationClient.StorageLocationValidation> validations = new HashMap<>();
+            validations.put(sourceLocationId.toString(), validation(sourceLocationId, siteId, true, true));
+            validations.put(destinationLocationId.toString(), validation(destinationLocationId, siteId, true, true));
+            InventoryLocationServiceImpl service = new InventoryLocationServiceImpl(
+                    stubLedgerRepository(
+                            List.of(onHand("SKU-001", 5L)),
+                            Map.of(stockKey("SKU-001", destinationLocationId), 3),
+                            persistedEntries),
+                    new StubStorageLocationValidationClient(validations),
+                    eventPublisher(new ArrayList<>()),
+                    new SimpleMeterRegistry(),
+                    TEST_CLOCK);
 
-        DeactivateLocationResponse response = service.deactivateLocation(sourceLocationId, destinationLocationId);
+            DeactivateLocationResponse response = service.deactivateLocation(sourceLocationId, destinationLocationId);
 
-        assertThat(response.getTransfer()).isNotNull();
-        assertThat(response.getTransfer().getMovedItems()).hasSize(1);
-        assertThat(response.getTransfer().getMovedItems().get(0).getItemId()).isEqualTo("SKU-001");
-        assertThat(response.getTransfer().getMovedItems().get(0).getQuantity()).isEqualTo(5);
-        assertThat(persistedEntries).hasSize(2);
-        assertThat(persistedEntries.get(0).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_OUT);
-        assertThat(persistedEntries.get(1).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_IN);
+            assertThat(response.getTransfer()).isNotNull();
+            assertThat(response.getTransfer().getMovedItems()).hasSize(1);
+            assertThat(response.getTransfer().getMovedItems().get(0).getItemId()).isEqualTo("SKU-001");
+            assertThat(response.getTransfer().getMovedItems().get(0).getQuantity()).isEqualTo(5);
+            assertThat(persistedEntries).hasSize(2);
+            assertThat(persistedEntries.get(0).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_OUT);
+            assertThat(persistedEntries.get(1).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_IN);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     private InventoryLedgerEntryRepository stubLedgerRepository(

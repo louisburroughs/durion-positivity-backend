@@ -116,6 +116,7 @@ public class ArchitectureTest {
             .matching("com.positivity.accounting.internal.service.(*)..")
             .should().beFreeOfCycles()
             .allowEmptyShould(true)
+            
             .because("service package cycles make the module harder to maintain and evolve");
 
     @ArchTest

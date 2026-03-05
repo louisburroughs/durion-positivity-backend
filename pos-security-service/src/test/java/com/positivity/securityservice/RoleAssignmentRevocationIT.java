@@ -1,5 +1,8 @@
 package com.positivity.securityservice;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -51,6 +54,8 @@ import com.positivity.shared.id.UUIDv7Generator;
 @ActiveProfiles("test")
 @DisplayName("Role Assignment Revocation Integration Tests")
 class RoleAssignmentRevocationIT extends BaseIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @TestConfiguration
         static class TestConfig {
@@ -97,7 +102,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
                 testRole.setId(UUIDv7Generator.generate());
                 testRole.setName("TEST_ROLE_" + System.currentTimeMillis());
                 testRole.setDescription("Test role for revocation tests");
-                testRole.setCreatedAt(Instant.now());
+                testRole.setCreatedAt(Instant.now(TEST_CLOCK));
                 testRole.setCreatedBy("test");
                 testRole = roleRepository.save(testRole);
         }
@@ -107,9 +112,9 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         void testImmediateRevocation() throws Exception {
                 // Given: Create a role assignment
                 RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
-                                LocalDateTime.now(), null, ScopeType.GLOBAL);
+                                LocalDateTime.now(TEST_CLOCK), null, ScopeType.GLOBAL);
 
-                Instant beforeRevocation = Instant.now();
+                Instant beforeRevocation = Instant.now(TEST_CLOCK);
 
                 // When: Revoke immediately (no endDate parameter = defaults to today)
                 mockMvc.perform(
@@ -117,7 +122,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isNoContent());
 
-                Instant afterRevocation = Instant.now();
+                Instant afterRevocation = Instant.now(TEST_CLOCK);
 
                 // Then: Assignment should have effectiveEndDate set and revokedAt set
                 RoleAssignment revokedAssignment = roleAssignmentRepository.findById(assignment.getId())
@@ -134,10 +139,10 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         void testScheduledRevocation() throws Exception {
                 // Given: Create a role assignment
                 RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
-                                LocalDateTime.now(), null, ScopeType.GLOBAL);
+                                LocalDateTime.now(TEST_CLOCK), null, ScopeType.GLOBAL);
 
-                LocalDateTime futureDate = LocalDateTime.now().plusDays(30);
-                Instant beforeRevocation = Instant.now();
+                LocalDateTime futureDate = LocalDateTime.now(TEST_CLOCK).plusDays(30);
+                Instant beforeRevocation = Instant.now(TEST_CLOCK);
 
                 // When: Schedule revocation for future date
                 mockMvc.perform(
@@ -146,7 +151,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isNoContent());
 
-                Instant afterRevocation = Instant.now();
+                Instant afterRevocation = Instant.now(TEST_CLOCK);
 
                 // Then: Assignment should have future effectiveEndDate but revokedAt = now
                 RoleAssignment revokedAssignment = roleAssignmentRepository.findById(assignment.getId())
@@ -164,10 +169,10 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         void testBackdatedRevocation() throws Exception {
                 // Given: Create a role assignment
                 RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
-                                LocalDateTime.now().minusDays(30), null, ScopeType.GLOBAL);
+                                LocalDateTime.now(TEST_CLOCK).minusDays(30), null, ScopeType.GLOBAL);
 
-                LocalDateTime pastDate = LocalDateTime.now().minusDays(5);
-                Instant beforeRevocation = Instant.now();
+                LocalDateTime pastDate = LocalDateTime.now(TEST_CLOCK).minusDays(5);
+                Instant beforeRevocation = Instant.now(TEST_CLOCK);
 
                 // When: Revoke with past date
                 mockMvc.perform(
@@ -176,7 +181,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isNoContent());
 
-                Instant afterRevocation = Instant.now();
+                Instant afterRevocation = Instant.now(TEST_CLOCK);
 
                 // Then: Assignment should have past effectiveEndDate but revokedAt = now
                 RoleAssignment revokedAssignment = roleAssignmentRepository.findById(assignment.getId())
@@ -193,9 +198,9 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         void testUpdatingRevocation() throws Exception {
                 // Given: Create and revoke an assignment
                 RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
-                                LocalDateTime.now(), null, ScopeType.GLOBAL);
+                                LocalDateTime.now(TEST_CLOCK), null, ScopeType.GLOBAL);
 
-                LocalDateTime firstEndDate = LocalDateTime.now().plusDays(7);
+                LocalDateTime firstEndDate = LocalDateTime.now(TEST_CLOCK).plusDays(7);
                 mockMvc.perform(
                                 withAuth(delete("/v1/roles/assignments/" + assignment.getId()))
                                                 .param("endDate", firstEndDate.toString())
@@ -209,8 +214,8 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
                 // Wait a moment to ensure timestamp difference
                 Awaitility.await().atMost(100, java.util.concurrent.TimeUnit.MILLISECONDS);
                 // When: Update the revocation with a different end date
-                LocalDateTime secondEndDate = LocalDateTime.now().plusDays(14);
-                Instant beforeSecondRevocation = Instant.now();
+                LocalDateTime secondEndDate = LocalDateTime.now(TEST_CLOCK).plusDays(14);
+                Instant beforeSecondRevocation = Instant.now(TEST_CLOCK);
 
                 mockMvc.perform(
                                 withAuth(delete("/v1/roles/assignments/" + assignment.getId()))
@@ -218,7 +223,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isNoContent());
 
-                Instant afterSecondRevocation = Instant.now();
+                Instant afterSecondRevocation = Instant.now(TEST_CLOCK);
 
                 // Then: revokedAt should be updated to current timestamp
                 RoleAssignment secondRevocation = roleAssignmentRepository.findById(assignment.getId())
@@ -246,11 +251,11 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         void testRetrieveRevokedAssignments() throws Exception {
                 // Given: Create and revoke an assignment
                 RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
-                                LocalDateTime.now().minusDays(30), null, ScopeType.GLOBAL);
+                                LocalDateTime.now(TEST_CLOCK).minusDays(30), null, ScopeType.GLOBAL);
 
                 mockMvc.perform(
                                 withAuth(delete("/v1/roles/assignments/" + assignment.getId()))
-                                                .param("endDate", LocalDateTime.now().minusDays(5).toString())
+                                                .param("endDate", LocalDateTime.now(TEST_CLOCK).minusDays(5).toString())
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isNoContent());
 
@@ -293,7 +298,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
                 // null
                 assignment.setEffectiveEndDate(endDate);
                 assignment.setScopeType(scopeType);
-                assignment.setCreatedAt(Instant.now());
+                assignment.setCreatedAt(Instant.now(TEST_CLOCK));
                 assignment.setCreatedBy("test");
                 return roleAssignmentRepository.save(assignment);
         }

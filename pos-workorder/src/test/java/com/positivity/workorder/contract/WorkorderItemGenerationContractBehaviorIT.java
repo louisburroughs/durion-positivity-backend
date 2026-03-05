@@ -1,5 +1,9 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
@@ -45,6 +49,8 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 @DisplayName("Workorder Item Generation Contract Behavior Tests (CAP:004 Story #27)")
 @Import(ContractTestConfiguration.class)
 class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -430,12 +436,12 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now())
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK))
                                 .approvedBy(testCustomerId)
                                 .subtotal(new BigDecimal("280.00"))
                                 .taxAmount(new BigDecimal("23.10"))
                                 .total(new BigDecimal("303.10"))
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .currencyUomId("USD")
                                 .createdByUserId("test-user")
                                 .createdById("test-user")
@@ -496,12 +502,12 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now())
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK))
                                 .approvedBy(testCustomerId)
                                 .subtotal(new BigDecimal("120.00"))
                                 .taxAmount(new BigDecimal("9.90"))
                                 .total(new BigDecimal("129.90"))
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .currencyUomId("USD")
                                 .createdByUserId("test-user")
                                 .createdById("test-user")
@@ -533,12 +539,12 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now())
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK))
                                 .approvedBy(testCustomerId)
                                 .subtotal(BigDecimal.ZERO)
                                 .taxAmount(BigDecimal.ZERO)
                                 .total(BigDecimal.ZERO)
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .currencyUomId("USD")
                                 .createdByUserId("test-user")
                                 .createdById("test-user")
@@ -565,8 +571,8 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now().minusHours(1))
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK).minusHours(1))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .subtotal(new BigDecimal("175.00")) // Only approved items: $90 + $85
                                 .taxAmount(new BigDecimal("14.44"))
                                 .total(new BigDecimal("189.44"))
@@ -586,7 +592,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                                 .lineTotal(new BigDecimal("90.00"))
                                 .taxCode("LABOR_TAX")
                                 .approvalStatus(ApprovalStatus.APPROVED)
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .createdById("test-user")
                                 .build();
 
@@ -600,7 +606,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                                 .lineTotal(new BigDecimal("85.00"))
                                 .taxCode("PARTS_TAX")
                                 .approvalStatus(ApprovalStatus.APPROVED)
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .createdById("test-user")
                                 .build();
 
@@ -615,7 +621,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                                 .taxCode("LABOR_TAX")
                                 .approvalStatus(ApprovalStatus.DECLINED)
                                 .rejectionReason("CUSTOMER_DECLINED")
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .createdById("test-user")
                                 .build();
 

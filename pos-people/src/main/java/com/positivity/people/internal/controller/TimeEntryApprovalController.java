@@ -4,6 +4,8 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.TimeEntryDecisionBatchRequest;
 import com.positivity.people.internal.dto.TimeEntryDecisionResponse;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
+import java.time.Clock;
+import java.time.Instant;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
@@ -28,10 +30,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @Tag(name = "Time Entry Approval API", description = "Approve/reject time entries (batch)")
 public class TimeEntryApprovalController {
 
+    private final Clock clock;
     private final com.positivity.people.service.TimeEntryService timeEntryService;
 
-    public TimeEntryApprovalController(com.positivity.people.service.TimeEntryService timeEntryService) {
+    public TimeEntryApprovalController(com.positivity.people.service.TimeEntryService timeEntryService, Clock clock) {
         this.timeEntryService = timeEntryService;
+        this.clock = clock;
     }
 
     @Operation(summary = "Batch approve time entries", description = "Approve multiple time entries. pos-people is authoritative for approval execution.")
@@ -49,7 +53,7 @@ public class TimeEntryApprovalController {
         if (request == null || request.getDecisions() == null || request.getDecisions().isEmpty()) {
             com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
                     "INVALID_REQUEST",
-                    "Invalid request: decisions required and non-empty", correlationId);
+                    "Invalid request: decisions required and non-empty", correlationId, Instant.now(clock));
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
         }
 
@@ -102,7 +106,7 @@ public class TimeEntryApprovalController {
         if (request == null || request.getDecisions() == null || request.getDecisions().isEmpty()) {
             com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
                     "INVALID_REQUEST",
-                    "Invalid request: decisions required and non-empty", correlationId);
+                    "Invalid request: decisions required and non-empty", correlationId, Instant.now(clock));
             return ResponseEntity.badRequest().body(err);
         }
 
@@ -111,7 +115,7 @@ public class TimeEntryApprovalController {
             if (decision.getRejectionReason() == null || decision.getRejectionReason().isBlank()) {
                 com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
                         "REJECTION_REASON_REQUIRED",
-                        "rejectionReason is required for all decisions", correlationId);
+                        "rejectionReason is required for all decisions", correlationId, Instant.now(clock));
                 return ResponseEntity.badRequest().body(err);
             }
         }

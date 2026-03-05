@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -74,6 +77,8 @@ import com.positivity.workorder.internal.service.WorkSessionServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class WorkSessionServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private WorkSessionRepository workSessionRepository;
@@ -157,7 +162,7 @@ class WorkSessionServiceImplTest {
     @DisplayName("AC2: startSession rejects request when another IN_PROGRESS session exists for same mechanic")
     void startSession_rejectsOverlap_whenAnotherSessionInProgress() {
         // Issue CAP-139 Story #68: overlap conflict
-        WorkSession existing = inProgressSession(Instant.now().minus(30, ChronoUnit.MINUTES));
+        WorkSession existing = inProgressSession(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
         when(workSessionRepository.findByMechanicIdAndStatus(MECHANIC_ID, WorkSessionStatus.IN_PROGRESS))
                 .thenReturn(List.of(existing));
 
@@ -183,7 +188,7 @@ class WorkSessionServiceImplTest {
         when(auth.getName()).thenReturn(SYSTEM_USER_ID.toString());
         SecurityContextHolder.setContext(secCtx);
 
-        WorkSession existing = inProgressSession(Instant.now().minus(30, ChronoUnit.MINUTES));
+        WorkSession existing = inProgressSession(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
         when(workSessionRepository.findByMechanicIdAndStatus(MECHANIC_ID, WorkSessionStatus.IN_PROGRESS))
                 .thenReturn(List.of(existing));
         when(workSessionRepository.save(any())).thenAnswer(inv -> {
@@ -219,7 +224,7 @@ class WorkSessionServiceImplTest {
         when(auth.getPrincipal()).thenReturn(SYSTEM_USER_ID.toString());
         SecurityContextHolder.setContext(secCtx);
 
-        WorkSession existing = inProgressSession(Instant.now().minus(30, ChronoUnit.MINUTES));
+        WorkSession existing = inProgressSession(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
         when(workSessionRepository.findByMechanicIdAndStatus(MECHANIC_ID, WorkSessionStatus.IN_PROGRESS))
                 .thenReturn(List.of(existing));
 
@@ -247,7 +252,7 @@ class WorkSessionServiceImplTest {
         when(auth.getName()).thenReturn(SYSTEM_USER_ID.toString());
         SecurityContextHolder.setContext(secCtx);
 
-        WorkSession existing = inProgressSession(Instant.now().minus(30, ChronoUnit.MINUTES));
+        WorkSession existing = inProgressSession(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
         when(workSessionRepository.findByMechanicIdAndStatus(MECHANIC_ID, WorkSessionStatus.IN_PROGRESS))
                 .thenReturn(List.of(existing));
 
@@ -265,7 +270,7 @@ class WorkSessionServiceImplTest {
     @DisplayName("AC4: stopSession updates session to COMPLETED with non-null endAt and positive duration")
     void stopSession_updatesSessionToCompleted_withUtcEndAt() {
         // Issue CAP-139 Story #68: stop session happy path
-        Instant startAt = Instant.now().minus(45, ChronoUnit.MINUTES);
+        Instant startAt = Instant.now(TEST_CLOCK).minus(45, ChronoUnit.MINUTES);
         WorkSession session = inProgressSession(startAt);
         when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(breakSegmentRepository.findByWorkSessionId(SESSION_ID)).thenReturn(List.of());
@@ -296,7 +301,7 @@ class WorkSessionServiceImplTest {
     @DisplayName("AC6: addBreakSegment creates BreakSegment with non-null breakStartAt")
     void addBreakSegment_createsBreakSegment_onActiveSession() {
         // Issue CAP-139 Story #68: start break
-        WorkSession session = inProgressSession(Instant.now().minus(60, ChronoUnit.MINUTES));
+        WorkSession session = inProgressSession(Instant.now(TEST_CLOCK).minus(60, ChronoUnit.MINUTES));
         when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(breakSegmentRepository.findFirstByWorkSessionIdAndBreakEndAtIsNull(SESSION_ID))
                 .thenReturn(Optional.empty());
@@ -319,7 +324,7 @@ class WorkSessionServiceImplTest {
     @DisplayName("A-2: addBreakSegment rejects if an open break already exists")
     void addBreakSegment_rejectsWhenOpenBreakAlreadyExists() {
         // Issue CAP-139 Story #68: open-break guard
-        WorkSession session = inProgressSession(Instant.now().minus(60, ChronoUnit.MINUTES));
+        WorkSession session = inProgressSession(Instant.now(TEST_CLOCK).minus(60, ChronoUnit.MINUTES));
         when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(breakSegmentRepository.findFirstByWorkSessionIdAndBreakEndAtIsNull(SESSION_ID))
                 .thenReturn(Optional.of(new BreakSegment()));
@@ -336,7 +341,7 @@ class WorkSessionServiceImplTest {
     @DisplayName("A-2: addBreakSegment succeeds when no open break exists")
     void addBreakSegment_allowsBreakWhenNoOpenBreakExists() {
         // Issue CAP-139 Story #68: no open-break guard triggered
-        WorkSession session = inProgressSession(Instant.now().minus(60, ChronoUnit.MINUTES));
+        WorkSession session = inProgressSession(Instant.now(TEST_CLOCK).minus(60, ChronoUnit.MINUTES));
         when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(breakSegmentRepository.findFirstByWorkSessionIdAndBreakEndAtIsNull(SESSION_ID))
                 .thenReturn(Optional.empty());
@@ -359,12 +364,12 @@ class WorkSessionServiceImplTest {
     @DisplayName("AC7: stopBreakSegment updates BreakSegment with non-null breakEndAt")
     void stopBreakSegment_updatesBreakSegment_withBreakEndAt() {
         // Issue CAP-139 Story #68: stop break
-        WorkSession session = inProgressSession(Instant.now().minus(60, ChronoUnit.MINUTES));
+        WorkSession session = inProgressSession(Instant.now(TEST_CLOCK).minus(60, ChronoUnit.MINUTES));
         BreakSegment openBreak = BreakSegment.builder()
                 .breakSegmentId(BREAK_ID)
                 .workSession(session)
                 .workSessionId(SESSION_ID)
-                .breakStartAt(Instant.now().minus(10, ChronoUnit.MINUTES))
+                .breakStartAt(Instant.now(TEST_CLOCK).minus(10, ChronoUnit.MINUTES))
                 .build();
         when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(breakSegmentRepository.findById(BREAK_ID)).thenReturn(Optional.of(openBreak));
@@ -392,7 +397,7 @@ class WorkSessionServiceImplTest {
     @DisplayName("A-5: stopBreakSegment throws BreakSegmentNotFoundException when break does not belong to session")
     void stopBreakSegment_throwsWhenBreakBelongsToDifferentSession() {
         // Issue CAP-139 Story #68: cross-session validation
-        WorkSession session = inProgressSession(Instant.now().minus(60, ChronoUnit.MINUTES));
+        WorkSession session = inProgressSession(Instant.now(TEST_CLOCK).minus(60, ChronoUnit.MINUTES));
         UUID otherSessionId = UUID.fromString("99999999-0000-0000-0000-000000000009");
         BreakSegment breakFromOtherSession = mock(BreakSegment.class);
         when(breakFromOtherSession.getWorkSessionId()).thenReturn(otherSessionId);
@@ -410,7 +415,7 @@ class WorkSessionServiceImplTest {
     @DisplayName("AC8: stopSession total duration nets out closed break segments (50 min total − 10 min break = 3000s)")
     void stopSession_netsDurationMinusBreaks() {
         // Issue CAP-139 Story #68: net duration calculation
-        Instant now = Instant.now();
+        Instant now = Instant.now(TEST_CLOCK);
         Instant startAt = now.minus(60, ChronoUnit.MINUTES);
         WorkSession session = inProgressSession(startAt);
 

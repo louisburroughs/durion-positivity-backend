@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -33,6 +35,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * General Ledger Account entity.
  * 
@@ -72,6 +76,8 @@ public class GLAccount implements Persistable<UUID> {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "gl_account_id", nullable = false)
     private UUID glAccountId;
 
@@ -130,14 +136,8 @@ public class GLAccount implements Persistable<UUID> {
     // Lifecycle callbacks
     @PrePersist
     protected void onCreate() {
-        if (this.glAccountId == null) {
-            this.glAccountId = UUIDv7Generator.generate();
-        }
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-        if (this.activationDate == null) {
-            this.activationDate = LocalDateTime.now();
+if (this.activationDate == null) {
+            this.activationDate = LocalDateTime.now(Clock.systemUTC());
         }
     }
 
@@ -146,12 +146,6 @@ public class GLAccount implements Persistable<UUID> {
     protected void markNotNew() {
         this.isNew = false;
     }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
-    }
-
     /**
      * Derive account status from activation and deactivation dates.
      * 
@@ -159,7 +153,7 @@ public class GLAccount implements Persistable<UUID> {
      */
     @Transient
     public String getDerivedStatus() {
-        LocalDateTime today = LocalDateTime.now();
+        LocalDateTime today = LocalDateTime.now(Clock.systemUTC());
 
         if (activationDate != null && activationDate.isAfter(today)) {
             return "NOT_YET_ACTIVE";

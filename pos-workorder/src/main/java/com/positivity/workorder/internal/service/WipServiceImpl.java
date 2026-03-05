@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusHistoryEntry;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
@@ -40,6 +42,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class WipServiceImpl implements WipService {
+    private final Clock clock;
+
 
         private static final String PARTS_PENDING = "PARTS_PENDING";
         private static final Set<WorkorderStatus> ACTIVE_WIP_STATUSES = EnumSet.of(
@@ -125,7 +129,7 @@ public class WipServiceImpl implements WipService {
 
                 Instant lastUpdatedAt = wo.getUpdatedAt() != null
                                 ? wo.getUpdatedAt().toInstant(ZoneOffset.UTC)
-                                : Instant.now();
+                                : Instant.now(clock);
                 String locationId = wo.getShopId() != null ? wo.getShopId().toString() : "";
 
                 return WorkorderStatusDetail.builder()
@@ -200,7 +204,7 @@ public class WipServiceImpl implements WipService {
                         Map<UUID, VehicleReferenceService.VehicleReference> vehicleById) {
                 Instant lastUpdatedAt = wo.getUpdatedAt() != null
                                 ? wo.getUpdatedAt().toInstant(ZoneOffset.UTC)
-                                : Instant.now();
+                                : Instant.now(clock);
                 CustomerReferenceService.CustomerContact customerContact = wo.getCustomerId() != null
                                 ? customerById.get(wo.getCustomerId())
                                 : null;

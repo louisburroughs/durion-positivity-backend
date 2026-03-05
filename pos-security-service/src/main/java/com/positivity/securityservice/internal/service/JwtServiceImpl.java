@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.service.JwtService;
@@ -37,6 +39,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class JwtServiceImpl implements JwtService {
+    private final Clock clock;
+
     private static final long ACCESS_TOKEN_EXPIRATION_SECONDS = 3600L;
     private static final long REFRESH_TOKEN_EXPIRATION_SECONDS = 604800L;
 
@@ -85,7 +89,7 @@ public class JwtServiceImpl implements JwtService {
         }
         String resolvedPersonId = resolvePersonId(username, personId);
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         Instant expiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
         String jti = UUID.randomUUID().toString();
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(roles);
@@ -131,7 +135,7 @@ public class JwtServiceImpl implements JwtService {
             }
 
             Instant expiresAt = claims.getExpiration().toInstant();
-            if (expiresAt.isBefore(Instant.now())) {
+            if (expiresAt.isBefore(Instant.now(clock))) {
                 log.debug("Token validation failed: token is expired. jti={}", jti);
                 return false;
             }
@@ -235,7 +239,7 @@ public class JwtServiceImpl implements JwtService {
             Instant expiresAt = claims.getExpiration().toInstant();
 
             if (jti != null && expiresAt != null) {
-                long secondsUntilExpiry = ChronoUnit.SECONDS.between(Instant.now(), expiresAt);
+                long secondsUntilExpiry = ChronoUnit.SECONDS.between(Instant.now(clock), expiresAt);
                 if (secondsUntilExpiry > 0) {
                     tokenRevocationManager.revokeToken(jti, secondsUntilExpiry);
                     log.debug("Token deleted and revoked: jti={}", jti);
@@ -274,7 +278,7 @@ public class JwtServiceImpl implements JwtService {
         }
         String resolvedPersonId = resolvePersonId(username, personId);
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         Instant accessExpiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
         Instant refreshExpiry = now.plusSeconds(REFRESH_TOKEN_EXPIRATION_SECONDS);
 
@@ -336,7 +340,7 @@ public class JwtServiceImpl implements JwtService {
             }
 
             Instant expiresAt = claims.getExpiration().toInstant();
-            if (expiresAt.isBefore(Instant.now())) {
+            if (expiresAt.isBefore(Instant.now(clock))) {
                 log.debug("Refresh token validation failed: token is expired. jti={}", jti);
                 return false;
             }

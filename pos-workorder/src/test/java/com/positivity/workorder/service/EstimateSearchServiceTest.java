@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -45,6 +48,8 @@ import com.positivity.workorder.internal.service.EstimateServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class EstimateSearchServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Mock
         private EstimateRepository estimateRepository;
@@ -94,8 +99,8 @@ class EstimateSearchServiceTest {
                                 .taxAmount(BigDecimal.valueOf(8))
                                 .total(BigDecimal.valueOf(108))
                                 .currencyUomId("USD")
-                                .createdAt(Instant.now())
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .build();
         }
 

@@ -102,7 +102,8 @@ public class ArchitectureTest {
         static final ArchRule packages_should_be_free_of_cycles = slices()
                         .matching("com.positivity.gateway.internal.(*)..")
                         .should().beFreeOfCycles()
-                        .allowEmptyShould(true)
+            .allowEmptyShould(true)
+                        
                         .because("cyclic dependencies make modules harder to maintain and evolve");
         @ArchTest
         static final ArchRule entities_should_depend_on_uuidv7_generator = classes()

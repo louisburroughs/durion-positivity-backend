@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.service.GLPostingService;
@@ -42,6 +44,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class GLPostingServiceImpl implements GLPostingService {
+    private final Clock clock;
+
 
         private final JournalEntryService journalEntryService;
 
@@ -83,7 +87,7 @@ public class GLPostingServiceImpl implements GLPostingService {
 
                 // Create journal entry
                 JournalEntry entry = new JournalEntry();
-                entry.setTransactionDate(LocalDateTime.now());
+                entry.setTransactionDate(LocalDateTime.now(clock));
                 entry.setDescription(description + (isPriorPeriod ? " [PRIOR PERIOD: " + originalPeriodId + "]" : ""));
                 entry.setSourceEventId(creditMemoId);
 
@@ -152,7 +156,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                                 paymentApplicationId, amount, amount);
 
                 JournalEntry entry = new JournalEntry();
-                entry.setTransactionDate(LocalDateTime.now());
+                entry.setTransactionDate(LocalDateTime.now(clock));
                 entry.setDescription(description);
                 entry.setSourceEventId(paymentApplicationId);
 

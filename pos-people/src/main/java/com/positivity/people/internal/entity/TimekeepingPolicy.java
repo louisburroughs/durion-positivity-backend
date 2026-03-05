@@ -17,6 +17,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "timekeeping_policy", indexes = {
@@ -26,6 +28,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class TimekeepingPolicy {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "timekeeping_policy_id", columnDefinition = "UUID", nullable = false)
     private UUID timekeepingPolicyId;
 
@@ -55,14 +59,6 @@ public class TimekeepingPolicy {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    @PrePersist
-    public void onPrePersist() {
-        if (timekeepingPolicyId == null) {
-            timekeepingPolicyId = UUIDv7Generator.generate();
-        }
-    }
-
     public UUID getTimekeepingPolicyId() {
         return timekeepingPolicyId;
     }
@@ -124,14 +120,12 @@ public class TimekeepingPolicy {
     }
 
     public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+}
 
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+}
 }

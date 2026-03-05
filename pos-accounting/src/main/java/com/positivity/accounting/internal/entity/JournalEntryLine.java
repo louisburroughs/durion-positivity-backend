@@ -22,6 +22,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
 /**
  * Journal Entry Line - individual GL account posting within a JournalEntry.
  * 
@@ -37,6 +39,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "journal_entry_line", indexes = {
         @Index(name = "idx_journal_entry_line_je", columnList = "journal_entry_id"),
         @Index(name = "idx_journal_entry_line_gl_account", columnList = "gl_account_id")
@@ -49,11 +52,6 @@ public class JournalEntryLine {
     @UUIDv7Id
     @Column(name = "line_id", nullable = false, columnDefinition = "UUID")
     private UUID lineId;
-
-    @PrePersist
-    public void generateId() {
-    }
-
     @Column(name = "journal_entry_id", nullable = false)
     private UUID journalEntryId;
 

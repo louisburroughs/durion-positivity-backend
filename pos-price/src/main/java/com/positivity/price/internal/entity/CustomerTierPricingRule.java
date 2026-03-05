@@ -1,5 +1,7 @@
 package com.positivity.price.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,6 +18,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Customer tier discount pricing rule for a product.
  *
@@ -29,6 +33,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class CustomerTierPricingRule {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     private UUID id;
 
     @Column(nullable = false)
@@ -53,20 +59,6 @@ public class CustomerTierPricingRule {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    @PrePersist
-    public void prePersist() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
-
     public UUID getId() {
         return id;
     }
@@ -120,14 +112,12 @@ public class CustomerTierPricingRule {
     }
 
     public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+}
 
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+}
 }

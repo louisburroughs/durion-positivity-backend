@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -38,6 +39,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentService {
+    private final Clock clock;
+
 
         private final TechnicianAssignmentRepository assignmentRepository;
         private final WorkorderRepository workorderRepository;
@@ -82,12 +85,12 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 if (existingAssignment.isPresent()) {
                         log.debug("Found existing assignment for workorder {}, marking as not current", workorderId);
                         TechnicianAssignment existing = existingAssignment.get();
-                        existing.markAsNotCurrent(LocalDateTime.now(), REASSIGNMENT_REASON);
+                        existing.markAsNotCurrent(LocalDateTime.now(clock), REASSIGNMENT_REASON);
                         assignmentRepository.save(existing);
                 }
 
                 // Create new assignment
-                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime now = LocalDateTime.now(clock);
                 TechnicianAssignment assignment = TechnicianAssignment.builder()
                                 .workorderId(workorderId)
                                 .technicianId(technicianId)
@@ -157,11 +160,11 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                                 workorderId, previousTechnicianId, newTechnicianId);
 
                 // Mark current assignment as not current
-                currentAssignment.markAsNotCurrent(LocalDateTime.now(), reason);
+                currentAssignment.markAsNotCurrent(LocalDateTime.now(clock), reason);
                 assignmentRepository.save(currentAssignment);
 
                 // Create new assignment
-                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime now = LocalDateTime.now(clock);
                 TechnicianAssignment newAssignment = TechnicianAssignment.builder()
                                 .workorderId(workorderId)
                                 .technicianId(newTechnicianId)

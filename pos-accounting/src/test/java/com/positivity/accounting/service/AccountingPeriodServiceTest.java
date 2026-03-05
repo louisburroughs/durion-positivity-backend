@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
@@ -26,6 +29,7 @@ import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AccountingPeriodService Unit Tests")
 class AccountingPeriodServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @InjectMocks
     private AccountingPeriodServiceImpl service;
@@ -35,8 +39,8 @@ class AccountingPeriodServiceTest {
 
     @BeforeEach
     void setUp() {
-        now = Instant.now();
-        currentPeriod = YearMonth.now().toString();
+        now = Instant.now(TEST_CLOCK);
+        currentPeriod = YearMonth.now(TEST_CLOCK).toString();
     }
 
     // ===== GET CURRENT PERIOD ID TESTS =====
@@ -48,8 +52,7 @@ class AccountingPeriodServiceTest {
         String result = service.getCurrentPeriodId();
 
         // Assert
-        assertThat(result).isEqualTo(currentPeriod);
-        assertThat(result).matches("\\d{4}-\\d{2}");
+        assertThat(result).isEqualTo(currentPeriod).matches("\\d{4}-\\d{2}");
     }
 
     // ===== GET PERIOD ID FOR DATE TESTS =====
@@ -161,7 +164,7 @@ class AccountingPeriodServiceTest {
     @DisplayName("isPriorPeriod - returns true for first day of previous month")
     void isPriorPeriod_firstDayPreviousMonth_returnsTrue() {
         // Arrange
-        YearMonth previousMonth = YearMonth.now().minusMonths(1);
+        YearMonth previousMonth = YearMonth.now(TEST_CLOCK).minusMonths(1);
         LocalDate firstDay = previousMonth.atDay(1);
         Instant instant = firstDay.atStartOfDay(ZoneId.systemDefault()).toInstant();
 
@@ -176,7 +179,7 @@ class AccountingPeriodServiceTest {
     @DisplayName("isPriorPeriod - returns false for first day of current month")
     void isPriorPeriod_firstDayCurrentMonth_returnsFalse() {
         // Arrange
-        YearMonth currentMonth = YearMonth.now();
+        YearMonth currentMonth = YearMonth.now(TEST_CLOCK);
         LocalDate firstDay = currentMonth.atDay(1);
         Instant instant = firstDay.atStartOfDay(ZoneId.systemDefault()).toInstant();
 

@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.workorder.internal.dto.CreateTravelSegmentAdjustmentRequest;
 import com.positivity.workorder.internal.dto.StartTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.StopTravelSegmentRequest;
@@ -38,6 +41,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("TravelSegmentServiceImpl Unit Tests")
 class TravelSegmentServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     private static final UUID MOBILE_WORK_ASSIGNMENT_ID = UUID.randomUUID();
     private static final UUID TECHNICIAN_ID = UUID.randomUUID();
@@ -108,7 +113,7 @@ class TravelSegmentServiceImplTest {
                 .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
                 .technicianId(TECHNICIAN_ID)
                 .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(600))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
                 .status(TravelSegmentStatus.IN_PROGRESS)
                 .createdBy("system")
                 .build();
@@ -153,7 +158,7 @@ class TravelSegmentServiceImplTest {
                 .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
                 .technicianId(TECHNICIAN_ID)
                 .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(600))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
                 .status(TravelSegmentStatus.COMPLETED)
                 .createdBy("system")
                 .build();
@@ -189,7 +194,7 @@ class TravelSegmentServiceImplTest {
                 .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
                 .technicianId(TECHNICIAN_ID)
                 .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(300))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(300))
                 .status(TravelSegmentStatus.IN_PROGRESS)
                 .createdBy("system")
                 .build();
@@ -198,8 +203,8 @@ class TravelSegmentServiceImplTest {
                 .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
                 .technicianId(TECHNICIAN_ID)
                 .segmentType(TravelSegmentType.ARRIVE_CUSTOMER_SITE)
-                .startAt(Instant.now().minusSeconds(600))
-                .endAt(Instant.now().minusSeconds(300))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
+                .endAt(Instant.now(TEST_CLOCK).minusSeconds(300))
                 .status(TravelSegmentStatus.COMPLETED)
                 .createdBy("system")
                 .build();
@@ -233,7 +238,7 @@ class TravelSegmentServiceImplTest {
                 .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
                 .technicianId(TECHNICIAN_ID)
                 .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(600))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
                 .status(TravelSegmentStatus.APPROVED)
                 .createdBy("system")
                 .build();
@@ -255,7 +260,7 @@ class TravelSegmentServiceImplTest {
                 .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
                 .technicianId(TECHNICIAN_ID)
                 .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(600))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
                 .status(TravelSegmentStatus.DRAFT)
                 .createdBy("system")
                 .build();

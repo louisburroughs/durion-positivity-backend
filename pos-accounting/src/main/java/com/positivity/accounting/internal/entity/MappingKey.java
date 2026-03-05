@@ -50,11 +50,6 @@ public class MappingKey {
     @UUIDv7Id
     @Column(name = "mapping_key_id", nullable = false, columnDefinition = "UUID")
     private UUID mappingKeyId;
-
-    @PrePersist
-    public void onPrePersist() {
-    }
-
     @Column(name = "posting_category_id", nullable = false)
     private UUID postingCategoryId;
 

@@ -1,5 +1,9 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 
@@ -46,6 +50,8 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("JournalEntryService Unit Tests")
 class JournalEntryServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private JournalEntryRepository journalEntryRepository;
@@ -68,7 +74,7 @@ class JournalEntryServiceTest {
         testGLAccountId1 = UUID.randomUUID();
         testGLAccountId2 = UUID.randomUUID();
         testSourceEventId = UUID.randomUUID();
-        testTransactionDate = LocalDateTime.now();
+        testTransactionDate = LocalDateTime.now(TEST_CLOCK);
     }
 
     // ===== CREATE TESTS =====

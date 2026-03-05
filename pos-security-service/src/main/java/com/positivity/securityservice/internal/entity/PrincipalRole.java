@@ -1,8 +1,11 @@
 package com.positivity.securityservice.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -27,7 +30,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Data
 @NoArgsConstructor
 @Entity
-@jakarta.persistence.EntityListeners(AuditingEntityListener.class)
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "principal_roles", uniqueConstraints = {
         @UniqueConstraint(columnNames = { "principal_id", "role_id" })
 })
@@ -53,19 +56,4 @@ public class PrincipalRole {
     @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = Instant.now();
-    }
 }

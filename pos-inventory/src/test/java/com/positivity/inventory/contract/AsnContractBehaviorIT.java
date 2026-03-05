@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -62,6 +65,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("ASN + Goods Receipt Contract Behavior — Story #571")
 class AsnContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -421,8 +425,8 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
                 request.setVendorId(UUID.randomUUID());
                 request.setAsnReferenceNumber("ASN-2026-TEST-001");
                 request.setRelatedPoIds(List.of(poId));
-                request.setShipDate(LocalDate.now());
-                request.setExpectedArrivalDate(LocalDate.now().plusDays(3));
+                request.setShipDate(LocalDate.now(TEST_CLOCK));
+                request.setExpectedArrivalDate(LocalDate.now(TEST_CLOCK).plusDays(3));
                 request.setLineItems(List.of(line));
                 return request;
         }
@@ -446,10 +450,10 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
                                 .asnReferenceNumber("ASN-2026-TEST-001")
                                 .vendorId(vendorId)
                                 .status(status)
-                                .shipDate(LocalDate.now())
-                                .expectedArrivalDate(LocalDate.now().plusDays(3))
+                                .shipDate(LocalDate.now(TEST_CLOCK))
+                                .expectedArrivalDate(LocalDate.now(TEST_CLOCK).plusDays(3))
                                 .createdBy("asn-test-user")
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .lineItems(List.of(
                                                 AsnLineResponse.builder()
                                                                 .asnLineId(UUID.randomUUID())
@@ -468,7 +472,7 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
                                 .locationId(locationId)
                                 .totalAccruedAmountMinor(totalAccruedAmountMinor)
                                 .createdBy("asn-test-user")
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .lines(List.of(
                                                 GoodsReceiptLineResponse.builder()
                                                                 .receiptLineId(UUID.randomUUID())

@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
@@ -30,6 +33,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("TimeEntryServiceImpl Unit Tests")
 class TimeEntryServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     private static final UUID TIME_ENTRY_ID = UUID.randomUUID();
     private static final UUID WORK_ORDER_ID = UUID.randomUUID();
@@ -45,7 +50,7 @@ class TimeEntryServiceImplTest {
     private TimeEntry submittedEntry() {
         return TimeEntry.builder()
                 .timeEntryId(TIME_ENTRY_ID).personId(PERSON_ID).workOrderId(WORK_ORDER_ID)
-                .startAt(Instant.now().minusSeconds(3600)).endAt(Instant.now())
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600)).endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.SUBMITTED).build();
     }
 

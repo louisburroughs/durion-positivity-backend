@@ -26,6 +26,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "person_location_assignment", uniqueConstraints = @UniqueConstraint(columnNames = { "person_id",
@@ -37,6 +39,8 @@ import java.util.UUID;
 public class PersonLocationAssignment {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -81,11 +85,4 @@ public class PersonLocationAssignment {
 
     @Column(name = "created_by", updatable = false)
     private String createdBy;
-
-    @PrePersist
-    public void prePersist() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 }

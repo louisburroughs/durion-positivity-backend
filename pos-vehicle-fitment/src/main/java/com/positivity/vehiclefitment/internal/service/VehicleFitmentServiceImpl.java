@@ -1,5 +1,6 @@
 package com.positivity.vehiclefitment.internal.service;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,6 +33,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Service
 public class VehicleFitmentServiceImpl implements VehicleFitmentService {
+    private final Clock clock;
+
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
     private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
     private final ManufacturerRepository manufacturerRepository;
@@ -62,7 +65,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 VehicleVariable variable = new VehicleVariable();
                 variable.setName(node.path("Name").asString(""));
                 variable.setDescription(node.path("Description").asString(""));
-                variable.setCacheTimestamp(LocalDateTime.now());
+                variable.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleVariableRepository.save(variable);
             }
         } catch (Exception e) {
@@ -91,7 +94,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 value.setVariableId(variableId);
                 value.setValue(node.path("Value").asString(""));
                 value.setValueId(node.path("ValueId").asString(""));
-                value.setCacheTimestamp(LocalDateTime.now());
+                value.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleVariableValueRepository.save(value);
             }
         } catch (Exception e) {
@@ -121,7 +124,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 UUID nhtsaId = UUID.fromString(node.path("Mfr_ID").asString());
                 m.setId(java.util.UUID.nameUUIDFromBytes(("manufacturer-" + nhtsaId).getBytes()));
                 m.setName(node.path("Mfr_CommonName").asString(""));
-                m.setCacheTimestamp(LocalDateTime.now());
+                m.setCacheTimestamp(LocalDateTime.now(clock));
                 manufacturerRepository.save(m);
             }
         } catch (Exception e) {
@@ -154,7 +157,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 make.setId(java.util.UUID.nameUUIDFromBytes(("make-" + nhtsaId).getBytes()));
                 make.setName(node.path("Make_Name").asString(""));
                 make.setManufacturer(manufacturer);
-                make.setCacheTimestamp(LocalDateTime.now());
+                make.setCacheTimestamp(LocalDateTime.now(clock));
                 makeRepository.save(make);
             }
         } catch (Exception e) {
@@ -187,7 +190,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 model.setId(java.util.UUID.nameUUIDFromBytes(("model-" + nhtsaId).getBytes()));
                 model.setName(node.path("Model_Name").asString(""));
                 model.setMake(make);
-                model.setCacheTimestamp(LocalDateTime.now());
+                model.setCacheTimestamp(LocalDateTime.now(clock));
                 modelRepository.save(model);
             }
         } catch (Exception e) {
@@ -218,7 +221,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
                 vt.setMake(make);
                 vt.setVehicleTypeId(node.path("VehicleTypeId").asString(""));
                 vt.setVehicleTypeName(node.path("VehicleTypeName").asString(""));
-                vt.setCacheTimestamp(LocalDateTime.now());
+                vt.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleTypeRepository.save(vt);
             }
         } catch (Exception e) {
@@ -228,6 +231,6 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     }
 
     private boolean isCacheExpired(LocalDateTime cacheTimestamp) {
-        return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now());
+        return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now(clock));
     }
 }

@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +43,8 @@ import com.positivity.accounting.internal.service.GLMappingResolverImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GLMappingResolver Unit Tests")
 class GLMappingResolverTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Mock
         private GLMappingRepository mappingRepository;
@@ -445,7 +450,7 @@ class GLMappingResolverTest {
                 mapping.setEffectiveEndDate(null);
                 mapping.setSourceSystem("POS");
                 mapping.setExternalCode("TEST-CODE");
-                mapping.setCreatedAt(Instant.now());
+                mapping.setCreatedAt(Instant.now(TEST_CLOCK));
                 mapping.setCreatedBy("SYSTEM");
                 mapping.setDimensions(dimensions != null ? new HashMap<>(dimensions) : null);
                 return mapping;

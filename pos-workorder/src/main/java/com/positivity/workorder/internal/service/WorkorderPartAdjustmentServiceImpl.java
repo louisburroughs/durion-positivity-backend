@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventResponse;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
@@ -45,6 +47,8 @@ import java.util.UUID;
  */
 @Service
 public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustmentService {
+    private final Clock clock;
+
     private static final String ADJUSTMENT_EVENT_NOT_FOUND = "Adjustment event not found: ";
     private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT = "Idempotency key {} already processed, returning existing adjustment event {}";
     private static final String MISSING_AUTHENTICATED_USERNAME = "Missing authenticated username";
@@ -58,7 +62,9 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
     public WorkorderPartAdjustmentServiceImpl(
             WorkorderPartRepository workorderPartRepository,
             WorkorderPartAdjustmentEventRepository adjustmentEventRepository,
-            IdempotencyService idempotencyService) {
+            IdempotencyService idempotencyService,
+            Clock clock) {
+        this.clock = clock;
         this.workorderPartRepository = workorderPartRepository;
         this.adjustmentEventRepository = adjustmentEventRepository;
         this.idempotencyService = idempotencyService;
@@ -165,7 +171,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 .quantityAdjustment(BigDecimal.ZERO) // No quantity change, just substitution
                 .reason(reason)
                 .performedBy(actorId)
-                .performedAt(Instant.now())
+                .performedAt(Instant.now(clock))
                 .notes(notes)
                 .build();
 
@@ -267,7 +273,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 .quantityAdjustment(quantity.negate()) // Negative for return
                 .reason(reason)
                 .performedBy(actorId)
-                .performedAt(Instant.now())
+                .performedAt(Instant.now(clock))
                 .notes(notes)
                 .build();
 
@@ -362,7 +368,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 .quantityAdjustment(adjustment)
                 .reason(reason)
                 .performedBy(actorId)
-                .performedAt(Instant.now())
+                .performedAt(Instant.now(clock))
                 .notes(notes)
                 .build();
 

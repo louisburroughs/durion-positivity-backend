@@ -1,5 +1,9 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.emptyIterable;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
@@ -52,6 +56,8 @@ import io.restassured.http.ContentType;
  */
 @DisplayName("CAP-094 Story #93: CRM Reference ID Contract Behavior Tests")
 class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     private static final String CRM_PARTY_ID = "01952f4e-a001-7000-8000-crm0000001";
     private static final String CRM_VEHICLE_ID = "01952f4e-a002-7000-8000-crm0000002";
@@ -336,9 +342,9 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
                 .vehicleId(vehicleId)
                 .locationId(locationId)
                 .status(EstimateStatus.APPROVED)
-                .approvedAt(LocalDateTime.now().minusHours(1))
+                .approvedAt(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                 .approvedBy(customerId)
-                .expiresAt(LocalDateTime.now().plusDays(30))
+                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                 .subtotal(new BigDecimal("200.00"))
                 .taxAmount(new BigDecimal("20.00"))
                 .total(new BigDecimal("220.00"))
@@ -361,7 +367,7 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
                 .lineTotal(new BigDecimal("200.00"))
                 .taxCode("LABOR_TAX")
                 .approvalStatus(ApprovalStatus.APPROVED)
-                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                 .createdById("test-user")
                 .build();
         estimateItemRepository.save(item);

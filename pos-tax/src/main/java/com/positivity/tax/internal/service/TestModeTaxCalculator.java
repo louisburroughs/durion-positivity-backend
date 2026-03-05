@@ -1,5 +1,7 @@
 package com.positivity.tax.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
@@ -26,10 +28,13 @@ import java.util.List;
 @Slf4j
 @Component
 public class TestModeTaxCalculator {
+    private final Clock clock;
+
 
     private final TaxProperties properties;
 
-    public TestModeTaxCalculator(TaxProperties properties) {
+    public TestModeTaxCalculator(TaxProperties properties, Clock clock) {
+        this.clock = clock;
         this.properties = properties;
     }
 
@@ -74,7 +79,7 @@ public class TestModeTaxCalculator {
                 .jurisdictions(jurisdictions)
                 .lineItemTaxes(lineItemTaxes)
                 .testMode(true)
-                .calculatedAt(Instant.now())
+                .calculatedAt(Instant.now(clock))
                 .referenceId(request.getReferenceId() != null ? request.getReferenceId() : null)
                 .referenceType(request.getReferenceType() != null ? request.getReferenceType() : null)
                 .build();

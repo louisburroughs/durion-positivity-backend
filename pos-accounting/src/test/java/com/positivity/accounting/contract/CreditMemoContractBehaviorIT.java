@@ -1,5 +1,8 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -56,6 +59,8 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
  */
 @DisplayName("Credit Memo Backend Contract Behavioral Tests (CAP-052)")
 public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private CreditMemoRepository creditMemoRepository;
@@ -89,7 +94,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                                 .totalPaid(BigDecimal.ZERO)
                                 .balanceDue(new BigDecimal("110.00"))
                                 .currency("USD")
-                                .invoiceDate(Instant.now().minus(10, ChronoUnit.DAYS))
+                                .invoiceDate(Instant.now(TEST_CLOCK).minus(10, ChronoUnit.DAYS))
                                 .build();
                 when(invoiceServiceClient.getInvoiceDetails(any(UUID.class))).thenReturn(defaultInvoice);
 
@@ -126,7 +131,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                 account.setAccountCode(code);
                 account.setAccountName(name);
                 account.setAccountType(accountType);
-                account.setActivationDate(LocalDateTime.now().minusDays(1));
+                account.setActivationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
                 account.setCreatedBy(TEST_USER);
                 account.setModifiedBy(TEST_USER);
                 return account;
@@ -405,7 +410,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                                 .totalPaid(new BigDecimal("110.00"))
                                 .balanceDue(BigDecimal.ZERO)
                                 .currency("USD")
-                                .invoiceDate(Instant.now().minus(5, ChronoUnit.DAYS))
+                                .invoiceDate(Instant.now(TEST_CLOCK).minus(5, ChronoUnit.DAYS))
                                 .build();
                 when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(fullyPaidInvoice);
 

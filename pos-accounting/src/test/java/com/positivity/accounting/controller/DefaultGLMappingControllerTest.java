@@ -1,5 +1,8 @@
 package com.positivity.accounting.controller;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,6 +51,8 @@ import tools.jackson.databind.ObjectMapper;
 @ActiveProfiles("test")
 @DisplayName("DefaultGLMappingController Tests")
 class DefaultGLMappingControllerTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private WebApplicationContext context;
@@ -104,9 +109,9 @@ class DefaultGLMappingControllerTest {
                                 .creditAccountName("Revenue")
                                 .description("Default mapping for invoice creation")
                                 .active(true)
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .createdBy("test-user")
-                                .modifiedAt(Instant.now())
+                                .modifiedAt(Instant.now(TEST_CLOCK))
                                 .modifiedBy("test-user")
                                 .build();
         }
@@ -424,7 +429,7 @@ class DefaultGLMappingControllerTest {
                                         .debitAccountId(DEBIT_ACCOUNT_ID)
                                         .creditAccountId(CREDIT_ACCOUNT_ID)
                                         .active(true)
-                                        .createdAt(Instant.now())
+                                        .createdAt(Instant.now(TEST_CLOCK))
                                         .createdBy("system")
                                         .build();
 

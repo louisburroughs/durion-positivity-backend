@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.client.PeopleAvailabilityClient;
@@ -42,6 +44,8 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
+    private final Clock clock;
+
 
     private final WorkorderRepository workorderRepository;
     private final PeopleAvailabilityClient peopleAvailabilityClient;
@@ -156,7 +160,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .mechanics(mechanicStatuses)
                 .bays(bayStatuses)
                 .conflicts(conflicts)
-                .lastRefreshed(Instant.now())
+                .lastRefreshed(Instant.now(clock))
                 .build();
     }
 
@@ -265,7 +269,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         Instant dayStart = date.atStartOfDay().toInstant(ZoneOffset.UTC);
         Instant dayEnd = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         Instant fifteenMinFromNow = now.plusSeconds(900);
 
         for (String mechanicId : assignedMechanicIds) {

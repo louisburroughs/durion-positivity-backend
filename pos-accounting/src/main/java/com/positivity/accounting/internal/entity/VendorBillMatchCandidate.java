@@ -67,13 +67,6 @@ public class VendorBillMatchCandidate {
     @UUIDv7Id
     @Column(name = "candidate_id", nullable = false, columnDefinition = "UUID")
     private UUID candidateId;
-
-    @PrePersist
-    public void onPrePersist() {
-        if (createdAt == null) {
-            }
-    }
-
     /** The invoice event that triggered the ambiguous match. */
     @Column(name = "invoice_event_id", nullable = false)
     private UUID invoiceEventId;

@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.config;
 
+import java.time.Clock;
+
 import java.time.Instant;
 import java.util.UUID;
 import com.positivity.securityservice.internal.dto.ErrorResponse;
@@ -7,6 +9,7 @@ import com.positivity.securityservice.internal.exception.PermissionNotFoundExcep
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,7 +48,10 @@ import org.springframework.web.context.request.WebRequest;
  */
 @Slf4j
 @ControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+    private final Clock clock;
+
 
     /**
      * Handles RoleNotFoundException (role not found by ID or name).
@@ -252,7 +258,7 @@ public class GlobalExceptionHandler {
      * @return error response record
      */
     private ErrorResponse errorResponse(String code, String message, String correlationId) {
-        return new ErrorResponse(code, message, Instant.now().toString(), correlationId);
+        return new ErrorResponse(code, message, Instant.now(clock).toString(), correlationId);
     }
 
     /**

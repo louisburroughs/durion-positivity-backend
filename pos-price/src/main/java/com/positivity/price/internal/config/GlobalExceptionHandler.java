@@ -1,5 +1,7 @@
 package com.positivity.price.internal.config;
 
+import java.time.Clock;
+
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
 import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
 import com.positivity.price.internal.exception.ProductNotFoundException;
@@ -14,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -30,8 +33,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
+    private final Clock clock;
     private static final String PROMOTION_ERROR = "Promotion error [{}]: {}";
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
 
@@ -185,7 +190,7 @@ public class GlobalExceptionHandler {
         body.put("code", code);
         body.put("message", message);
         body.put("status", status.value());
-        body.put("timestamp", Instant.now().toString());
+        body.put("timestamp", Instant.now(clock).toString());
         body.put("correlationId", correlationId);
         if (fieldErrors != null) {
             body.put("fieldErrors", fieldErrors);

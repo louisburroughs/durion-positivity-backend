@@ -7,6 +7,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -52,6 +55,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ExtendWith(MockitoExtension.class)
 class WorkorderEventHandlerTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private ProcessingLogRepository processingLogRepository;
@@ -71,6 +75,7 @@ class WorkorderEventHandlerTest {
     void setUp() {
         // Real ObjectMapper required — handler deserializes raw JSON strings
         handler = new WorkorderEventHandler(
+                TEST_CLOCK,
                 processingLogRepository,
                 communicationPreferenceRepository,
                 personPartyRepository,

@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.dto;
 
-import java.time.Instant;
 import java.util.Map;
 
 import lombok.AllArgsConstructor;
@@ -26,7 +25,6 @@ public class ErrorResponse {
     private String errorCode;
     private String message;
     private String correlationId;
-    @Builder.Default
-    private Long timestamp = Instant.now().toEpochMilli();
+    private Long timestamp;
     private Map<String, String> fieldErrors;
 }

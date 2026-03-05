@@ -45,11 +45,6 @@ public class PostingRuleSet {
     @UUIDv7Id
     @Column(name = "posting_rule_set_id", nullable = false, columnDefinition = "UUID")
     private UUID postingRuleSetId;
-
-    @PrePersist
-    public void onPrePersist() {
-    }
-
     @Column(name = "name", length = 100, nullable = false)
     private String name;
 

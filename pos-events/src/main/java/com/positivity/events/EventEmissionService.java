@@ -1,5 +1,6 @@
 package com.positivity.events;
 
+import java.time.Clock;
 import java.time.Instant;
 
 import org.springframework.context.ApplicationEventPublisher;
@@ -34,6 +35,8 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class EventEmissionService {
+    private final Clock clock;
+
 
     private final ApplicationEventPublisher publisher;
 
@@ -60,19 +63,19 @@ public class EventEmissionService {
      */
     public <T> T executeWithEventEmission(String eventId, String apiVersion, ThrowingSupplier<T> operation)
             throws Throwable {
-        long start = Instant.now().toEpochMilli();
+        long start = Instant.now(clock).toEpochMilli();
         log.info("[EVENT-START] id={} apiVersion={} timestamp={}", eventId, apiVersion, start);
 
         try {
             T result = operation.get();
-            long end = Instant.now().toEpochMilli();
+            long end = Instant.now(clock).toEpochMilli();
             long elapsedMs = end - start;
             log.info("[EVENT-END] id={} apiVersion={} timestamp={} elapsedMs={}", eventId, apiVersion, end, elapsedMs);
 
             publishEvent(eventId, apiVersion, end, elapsedMs);
             return result;
         } catch (Throwable e) {
-            long end = Instant.now().toEpochMilli();
+            long end = Instant.now(clock).toEpochMilli();
             long elapsedMs = end - start;
             log.error("[EVENT-ERROR] id={} apiVersion={} timestamp={} elapsedMs={} error={}", eventId, apiVersion, end,
                     elapsedMs,
@@ -90,7 +93,7 @@ public class EventEmissionService {
      * @param elapsedMs  the elapsed time in milliseconds
      */
     private void publishEvent(String eventId, String apiVersion, long timestamp, long elapsedMs) {
-        EventEmitted event = EventEmitted.from(eventId, apiVersion, timestamp, elapsedMs);
+        EventEmitted event = EventEmitted.from(eventId, apiVersion, timestamp, elapsedMs, Instant.now(clock));
         publisher.publishEvent(event);
         log.debug("[EVENT-PUBLISHED] id={} apiVersion={} elapsedMs={} to Event Receiver API", eventId, apiVersion,
                 elapsedMs);

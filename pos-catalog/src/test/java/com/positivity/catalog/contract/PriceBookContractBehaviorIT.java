@@ -6,23 +6,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseContractIntegrationTest;
-import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
-import com.positivity.catalog.internal.service.CatalogServiceImpl;
-
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.positivity.catalog.BaseContractIntegrationTest;
+import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
+import com.positivity.catalog.internal.service.CatalogServiceImpl;
+
 @DisplayName("Price Book Contract Behavioral Tests")
 class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
+
+        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+                        java.time.ZoneOffset.UTC);
 
         @Autowired
         private CatalogServiceImpl catalogService;
@@ -81,7 +86,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
-                                                "asOf", LocalDate.now().toString())))))
+                                                "asOf", LocalDate.now(FIXED_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("59.9900"));
@@ -125,7 +130,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
-                                                "asOf", LocalDate.now().toString())))))
+                                                "asOf", LocalDate.now(FIXED_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("39.9900"));
@@ -194,7 +199,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
                                                 "currency", "cad",
-                                                "asOf", LocalDate.now().toString())))))
+                                                "asOf", LocalDate.now(FIXED_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("79.9900"))
@@ -212,7 +217,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "88.8800",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now().minusDays(1).toString(),
+                                                "effectiveStartDate",
+                                                LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
                                                 "createdByUserId", UUID.randomUUID().toString()))))
                                 .andExpect(status().isCreated());
 
@@ -245,7 +251,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
-                                                "asOf", LocalDate.now().toString())))))
+                                                "asOf", LocalDate.now(FIXED_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("MSRP"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("88.8800"));

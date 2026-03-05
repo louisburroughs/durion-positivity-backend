@@ -71,6 +71,8 @@ import org.springframework.context.ApplicationEventPublisher;
  */
 @ExtendWith(MockitoExtension.class)
 class AppointmentsServiceImplStory12Test {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private AppointmentRepository appointmentRepository;
@@ -434,7 +436,7 @@ class AppointmentsServiceImplStory12Test {
         Appointment existing = Appointment.builder()
                 .idempotencyKey("test-key")
                 .status(AppointmentStatus.SCHEDULED)
-                .startAt(Instant.now())
+                .startAt(Instant.now(TEST_CLOCK))
                 .build();
         when(appointmentRepository.findByIdempotencyKey("test-key")).thenReturn(java.util.Optional.of(existing));
 

@@ -1,21 +1,10 @@
 package com.positivity.catalog.internal.controller;
 
-import com.positivity.catalog.internal.dto.CreateMsrpRequestDto;
-import com.positivity.catalog.internal.dto.ProductMsrpDto;
-import com.positivity.catalog.internal.dto.UpdateMsrpRequestDto;
-import com.positivity.catalog.internal.exception.CatalogNotFoundException;
-import com.positivity.catalog.service.ProductMsrpService;
-import com.positivity.events.EmitEvent;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,16 +18,30 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.positivity.catalog.internal.dto.CreateMsrpRequestDto;
+import com.positivity.catalog.internal.dto.ProductMsrpDto;
+import com.positivity.catalog.internal.dto.UpdateMsrpRequestDto;
+import com.positivity.catalog.internal.exception.CatalogNotFoundException;
+import com.positivity.catalog.service.ProductMsrpService;
+import com.positivity.events.EmitEvent;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/v1/products/{productId}/msrp")
 @Tag(name = "Product MSRP API", description = "Manage MSRP values with effective dates")
 public class ProductMsrpController {
 
+    private final Clock clock;
     private final ProductMsrpService productMsrpService;
-
-    public ProductMsrpController(ProductMsrpService productMsrpService) {
-        this.productMsrpService = productMsrpService;
-    }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping
@@ -78,7 +81,7 @@ public class ProductMsrpController {
     public ResponseEntity<ProductMsrpDto> getActiveMsrp(
             @Parameter(required = true) @PathVariable UUID productId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf) {
-        LocalDate targetDate = asOf == null ? LocalDate.now() : asOf;
+        LocalDate targetDate = asOf == null ? LocalDate.now(clock) : asOf;
         return productMsrpService.getActiveMsrp(productId, targetDate)
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new CatalogNotFoundException("No active MSRP found for product and date."));

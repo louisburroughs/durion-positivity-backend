@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import org.springframework.data.annotation.CreatedDate;
@@ -55,7 +57,7 @@ public class PaymentApplication {
     @PrePersist
     public void onPrePersist() {
         if (applicationTimestamp == null) {
-            applicationTimestamp = Instant.now();
+            applicationTimestamp = Instant.now(Clock.systemUTC());
         }
     }
 

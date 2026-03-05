@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -59,6 +60,9 @@ import com.positivity.inventory.internal.service.AsnServiceImpl;
 @DisplayName("AsnServiceImpl Unit Tests")
 class AsnServiceImplTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+            java.time.ZoneOffset.UTC);
+
     @Mock
     private AsnRepository asnRepository;
 
@@ -81,7 +85,7 @@ class AsnServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        asnService = new AsnServiceImpl(
+        asnService = new AsnServiceImpl(FIXED_CLOCK,
                 asnRepository,
                 asnLineRepository,
                 goodsReceiptRepository,
@@ -107,8 +111,8 @@ class AsnServiceImplTest {
         request.setVendorId(vendorId);
         request.setAsnReferenceNumber("ASN-2026-UNIT-001");
         request.setRelatedPoIds(List.of(poId));
-        request.setShipDate(LocalDate.now());
-        request.setExpectedArrivalDate(LocalDate.now().plusDays(2));
+        request.setShipDate(LocalDate.now(FIXED_CLOCK));
+        request.setExpectedArrivalDate(LocalDate.now(FIXED_CLOCK).plusDays(2));
         request.setLineItems(List.of(lineRequest));
 
         PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
@@ -124,7 +128,7 @@ class AsnServiceImplTest {
                 .createdBy("system")
                 .build();
 
-        when(purchaseOrderRepository.findById(eq(poId))).thenReturn(Optional.of(approvedPo));
+        when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(approvedPo));
         when(asnRepository.findByVendorIdAndAsnReferenceNumber(vendorId, "ASN-2026-UNIT-001"))
                 .thenReturn(Optional.empty());
         when(asnRepository.save(any(AdvanceShippingNoticeEntity.class)))

@@ -108,7 +108,8 @@ public class ArchitectureTest {
         static final ArchRule packages_should_be_free_of_cycles = slices()
                         .matching("com.positivity.customer.internal.(*)..")
                         .should().beFreeOfCycles()
-                        .allowEmptyShould(true)
+            .allowEmptyShould(true)
+                        
                         .because("cyclic dependencies make modules harder to maintain and evolve");
         private static final DescribedPredicate<JavaClass> NOT_ABSTRACT = new DescribedPredicate<>("not abstract") {
                 @Override

@@ -1,5 +1,8 @@
 package com.positivity.invoice.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -49,6 +52,8 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 class InvoiceFinalizationPermissionTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     /**
      * Repository mock — will be needed by the real implementation for invoice
@@ -216,7 +221,7 @@ class InvoiceFinalizationPermissionTest {
         invoice.setWorkorderId(workorderId);
         invoice.setStatus(InvoiceStatus.FINALIZED);
         invoice.setTotal(BigDecimal.ZERO);
-        invoice.setFinalizedAt(Instant.now().minusSeconds(3600));
+        invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600));
         invoice.setFinalizedBy("manager-001");
         return invoice;
     }

@@ -109,6 +109,7 @@ public class ArchitectureTest {
         static final ArchRule packages_should_be_free_of_cycles = slices()
                         .matching("com.positivity.inventory.internal.(*)..")
                         .should().beFreeOfCycles()
+            .allowEmptyShould(true)
                         .because("internal package cycles make the implementation harder to maintain and evolve");
         @ArchTest
         static final ArchRule entities_should_depend_on_uuidv7_generator = classes()

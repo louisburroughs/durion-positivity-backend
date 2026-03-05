@@ -1,5 +1,8 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
@@ -52,6 +55,8 @@ import io.restassured.http.ContentType;
 @DisplayName("WorkSession Start/Stop Contract Behavior Tests (CAP-139 Story #68)")
 @Import(ContractTestConfiguration.class)
 class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Autowired
     private WorkSessionRepository workSessionRepository;
@@ -245,8 +250,8 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
                 .workOrderId(WORK_ORDER_ID)
                 .workOrderTaskId(TASK_ID)
                 .locationId(LOCATION_ID)
-                .startAt(Instant.now().minus(2, ChronoUnit.HOURS))
-                .endAt(Instant.now().minus(30, ChronoUnit.MINUTES))
+                .startAt(Instant.now(TEST_CLOCK).minus(2, ChronoUnit.HOURS))
+                .endAt(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES))
                 .status(WorkSessionStatus.APPROVED)
                 .locked(true)
                 .totalDurationSeconds(5400)

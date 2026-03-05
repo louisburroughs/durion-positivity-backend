@@ -1,5 +1,7 @@
 package com.positivity.invoice.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -47,6 +49,8 @@ import java.util.UUID;
  */
 @Service
 public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationService {
+    private final Clock clock;
+
 
     private static final String SYSTEM = "system";
 
@@ -59,7 +63,9 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     private final ApplicationEventPublisher eventPublisher;
 
     public InvoiceFinalizationServiceImpl(InvoiceRepository invoiceRepository,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            Clock clock) {
+        this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.eventPublisher = eventPublisher;
     }
@@ -137,7 +143,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         enforcePermissions(request, invoiceId, invoiceTotal);
 
         // AC4: Transition DRAFT → FINALIZED
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         // ADR-0018: finalizedBy from SecurityContext, never from request body
         String finalizedBy = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
 
@@ -190,7 +196,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
 
         // AC6: Check 24h reversion window
         if (invoice.getFinalizedAt() != null) {
-            Duration elapsed = Duration.between(invoice.getFinalizedAt(), Instant.now());
+            Duration elapsed = Duration.between(invoice.getFinalizedAt(), Instant.now(clock));
             if (elapsed.compareTo(REVERSION_WINDOW) > 0) {
                 throw new IllegalStateException(
                         "Reversion window has expired — invoice must be reverted within 24h of finalization");
@@ -210,7 +216,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         }
 
         invoice.setStatus(InvoiceStatus.DRAFT);
-        invoice.setRevertedAt(Instant.now());
+        invoice.setRevertedAt(Instant.now(clock));
         invoice.setReversionReason(reason);
         invoice.setRevertedBy(revertedBy);
         Invoice saved = invoiceRepository.save(invoice);

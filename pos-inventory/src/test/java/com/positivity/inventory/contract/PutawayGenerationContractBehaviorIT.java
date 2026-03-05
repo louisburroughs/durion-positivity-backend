@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -41,6 +44,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Putaway Generation Contract Behavior")
 class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private MockMvc mockMvc;
@@ -74,8 +79,8 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .quantity(10)
                                 .suggestedDestinationLocationId(destinationId)
                                 .status("UNASSIGNED")
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(putawayGenerationService.generateTasksForReceipt(any(GeneratePutawayTasksRequest.class)))
@@ -118,8 +123,8 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .quantity(5)
                                 .suggestedDestinationLocationId(fallbackDestinationId)
                                 .status("UNASSIGNED")
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(putawayGenerationService.generateTasksForReceipt(any(GeneratePutawayTasksRequest.class)))
@@ -167,8 +172,8 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .finalSuggestedLocationId(finalLocationId)
                                 .fallbackReason("ORIGINAL_LOCATION_FULL")
                                 .status("UNASSIGNED")
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(putawayGenerationService.generateTasksForReceipt(any(GeneratePutawayTasksRequest.class)))
@@ -211,8 +216,8 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .productId(UUID.randomUUID().toString())
                                 .quantity(3)
                                 .status("REQUIRES_LOCATION_SELECTION")
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(putawayGenerationService.generateTasksForReceipt(any(GeneratePutawayTasksRequest.class)))
@@ -247,16 +252,16 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .taskId(UUID.randomUUID().toString())
                                 .sourceReceiptId(UUID.randomUUID().toString())
                                 .status("UNASSIGNED")
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 PutawayTaskResponse task2 = PutawayTaskResponse.builder()
                                 .taskId(UUID.randomUUID().toString())
                                 .sourceReceiptId(UUID.randomUUID().toString())
                                 .status("UNASSIGNED")
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(putawayGenerationService.getAvailableTasks()).thenReturn(List.of(task1, task2));
@@ -287,8 +292,8 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .sourceReceiptId(UUID.randomUUID().toString())
                                 .status("ASSIGNED")
                                 .assigneeId(userId)
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(putawayGenerationService.claimTask(eq(taskId), any(String.class)))

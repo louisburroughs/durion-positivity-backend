@@ -21,6 +21,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryReturnRepository;
 import com.positivity.inventory.internal.service.ReturnServiceImpl;
 
+import java.time.ZoneOffset;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -60,6 +61,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReturnServiceImpl")
 class ReturnServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Mock
         private InventoryReturnRepository inventoryReturnRepository;
@@ -70,7 +73,7 @@ class ReturnServiceImplTest {
         @Captor
         private ArgumentCaptor<InventoryReturnEntity> entityCaptor;
 
-        private Clock clock = Clock.fixed(Instant.parse("2026-02-25T03:00:00Z"), Clock.systemUTC().getZone());
+        private Clock clock = Clock.fixed(Instant.parse("2026-02-25T03:00:00Z"), TEST_CLOCK.getZone());
 
         @BeforeEach
         void setUp() {

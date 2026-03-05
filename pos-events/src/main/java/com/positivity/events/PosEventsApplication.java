@@ -1,5 +1,7 @@
 package com.positivity.events;
 
+import java.time.Clock;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.ApplicationEventPublisher;
@@ -18,6 +20,7 @@ import org.springframework.context.annotation.Bean;
 @RequiredArgsConstructor
 public class PosEventsApplication {
 
+    private final Clock clock;
     private final ApplicationEventPublisher publisher;
 
     /**
@@ -27,7 +30,7 @@ public class PosEventsApplication {
      */
     @Bean
     public EventEmissionService eventEmissionService() {
-        return new EventEmissionService(publisher);
+        return new EventEmissionService(clock, publisher);
     }
 
     /**

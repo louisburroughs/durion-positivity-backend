@@ -1,5 +1,8 @@
 package com.positivity.accounting.controller;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -42,6 +45,8 @@ import com.positivity.accounting.internal.repository.ReceivablePaymentRepository
  */
 @DisplayName("Payment Application Controller Integration Tests")
 class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private ReceivablePaymentRepository receivablePaymentRepository;
@@ -148,9 +153,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 application.setAppliedAmount(new BigDecimal("100.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(UUID.randomUUID().toString());
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 application.setCreatedBy("testuser");
-                application.setCreatedAt(Instant.now());
+                application.setCreatedAt(Instant.now(TEST_CLOCK));
                 paymentApplicationRepository.save(application);
 
                 mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/void"))
@@ -173,9 +178,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 application.setAppliedAmount(new BigDecimal("300.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(UUID.randomUUID().toString());
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 application.setCreatedBy("testuser");
-                application.setCreatedAt(Instant.now());
+                application.setCreatedAt(Instant.now(TEST_CLOCK));
                 paymentApplicationRepository.save(application);
 
                 ReceivablePayment payment = receivablePaymentRepository.findById(testPaymentId).orElseThrow();
@@ -439,9 +444,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 payment.setUnappliedAmount(BigDecimal.ZERO);
                 payment.setCurrency("USD");
                 payment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
-                payment.setClearedAt(Instant.now());
+                payment.setClearedAt(Instant.now(TEST_CLOCK));
                 payment.setSourceEventId(UUID.randomUUID());
-                payment.setCreatedAt(Instant.now());
+                payment.setCreatedAt(Instant.now(TEST_CLOCK));
                 receivablePaymentRepository.save(payment);
 
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
@@ -512,9 +517,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(UUID.randomUUID().toString());
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 application.setCreatedBy("testuser");
-                application.setCreatedAt(Instant.now());
+                application.setCreatedAt(Instant.now(TEST_CLOCK));
                 application = paymentApplicationRepository.save(application);
 
                 // Update payment unappliedAmount to reflect application
@@ -637,9 +642,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 payment.setUnappliedAmount(new BigDecimal(amount));
                 payment.setCurrency("USD");
                 payment.setStatus(ReceivablePaymentStatus.AVAILABLE);
-                payment.setClearedAt(Instant.now());
+                payment.setClearedAt(Instant.now(TEST_CLOCK));
                 payment.setSourceEventId(UUID.randomUUID());
-                payment.setCreatedAt(Instant.now());
+                payment.setCreatedAt(Instant.now(TEST_CLOCK));
                 receivablePaymentRepository.save(payment);
         }
 

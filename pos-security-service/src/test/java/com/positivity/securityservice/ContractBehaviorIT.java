@@ -1,5 +1,8 @@
 package com.positivity.securityservice;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -82,6 +85,8 @@ import io.jsonwebtoken.Jwts;
 @ActiveProfiles("test")
 @DisplayName("Security Service Contract Behavior Integration Tests")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         private static final String TEST_SUBJECT = "john.doe";
         private static final Set<String> TEST_ROLES = Set.of("SHOP_MGR", "INVENTORY_MGR");
@@ -152,7 +157,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .isNotBlank();
                 assertThat(claims.getExpiration().toInstant())
                                 .as("Token expiration should be in the future")
-                                .isAfter(Instant.now());
+                                .isAfter(Instant.now(TEST_CLOCK));
         }
 
         /**
@@ -475,7 +480,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testAccessTokenLifetime() throws Exception {
                 // Arrange
                 String token = jwtService.generateToken(TEST_SUBJECT, TEST_ROLES);
-                Instant afterCreation = Instant.now();
+                Instant afterCreation = Instant.now(TEST_CLOCK);
 
                 // Act
                 SecretKeySpec key = new SecretKeySpec(

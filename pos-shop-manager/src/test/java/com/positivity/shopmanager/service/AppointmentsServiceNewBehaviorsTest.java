@@ -55,6 +55,8 @@ import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
 class AppointmentsServiceNewBehaviorsTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private AppointmentRepository appointmentRepository;
@@ -108,8 +110,8 @@ class AppointmentsServiceNewBehaviorsTest {
         appointment = new Appointment();
         appointment.setAppointmentId(appointmentId);
         appointment.setStatus(AppointmentStatus.SCHEDULED);
-        appointment.setStartAt(Instant.now().plus(24, ChronoUnit.HOURS));
-        appointment.setEndAt(Instant.now().plus(25, ChronoUnit.HOURS));
+        appointment.setStartAt(Instant.now(TEST_CLOCK).plus(24, ChronoUnit.HOURS));
+        appointment.setEndAt(Instant.now(TEST_CLOCK).plus(25, ChronoUnit.HOURS));
         lenient().when(crmCustomerClient.getCustomerById(any(UUID.class))).thenReturn(Map.of());
         lenient().when(crmVehicleClient.getVehicleById(any(UUID.class))).thenReturn(Map.of());
         lenient().when(appointmentServiceRequestRepository.findByAppointmentId(any(UUID.class))).thenReturn(List.of());
@@ -121,8 +123,8 @@ class AppointmentsServiceNewBehaviorsTest {
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(i -> i.getArgument(0));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
-        Instant newStart = Instant.now().plus(48, ChronoUnit.HOURS);
-        Instant newEnd = Instant.now().plus(49, ChronoUnit.HOURS);
+        Instant newStart = Instant.now(TEST_CLOCK).plus(48, ChronoUnit.HOURS);
+        Instant newEnd = Instant.now(TEST_CLOCK).plus(49, ChronoUnit.HOURS);
         request.setNewStartAt(newStart);
         request.setNewEndAt(newEnd);
         request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
@@ -144,8 +146,8 @@ class AppointmentsServiceNewBehaviorsTest {
             appointmentsService.rescheduleAppointment(appointmentId, request);
         });
 
-        request.setNewStartAt(Instant.now());
-        request.setNewEndAt(Instant.now().minus(1, ChronoUnit.HOURS));
+        request.setNewStartAt(Instant.now(TEST_CLOCK));
+        request.setNewEndAt(Instant.now(TEST_CLOCK).minus(1, ChronoUnit.HOURS));
         assertThrows(AppointmentValidationException.class, () -> {
             appointmentsService.rescheduleAppointment(appointmentId, request);
         });
@@ -156,8 +158,8 @@ class AppointmentsServiceNewBehaviorsTest {
         appointment.setStatus(AppointmentStatus.CANCELLED);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
-        request.setNewStartAt(Instant.now());
-        request.setNewEndAt(Instant.now().plus(1, ChronoUnit.HOURS));
+        request.setNewStartAt(Instant.now(TEST_CLOCK));
+        request.setNewEndAt(Instant.now(TEST_CLOCK).plus(1, ChronoUnit.HOURS));
 
         assertThrows(AppointmentStateException.class, () -> {
             appointmentsService.rescheduleAppointment(appointmentId, request);

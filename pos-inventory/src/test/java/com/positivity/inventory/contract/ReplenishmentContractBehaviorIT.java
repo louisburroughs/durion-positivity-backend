@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -44,6 +47,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Replenishment Contract Behavior")
 class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private MockMvc mockMvc;
@@ -80,7 +85,7 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
                                 .status("PENDING")
                                 .triggerType("MIN_LEVEL")
                                 .decisionReason("Stock below minimum threshold")
-                                .createdAt(Instant.now().toString())
+                                .createdAt(Instant.now(TEST_CLOCK).toString())
                                 .build();
 
                 when(replenishmentService.getReplenishmentTasks()).thenReturn(List.of(task));
@@ -131,7 +136,7 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
                                 .itemSKU("SKU-BOLT-M5")
                                 .minimumQuantity(20)
                                 .maximumQuantity(100)
-                                .createdAt(Instant.now().toString())
+                                .createdAt(Instant.now(TEST_CLOCK).toString())
                                 .build();
 
                 when(replenishmentService.getReplenishmentPolicies()).thenReturn(List.of(policy));
@@ -164,7 +169,7 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
                                 .itemSKU("SKU-NUT-M5")
                                 .minimumQuantity(10)
                                 .maximumQuantity(50)
-                                .createdAt(Instant.now().toString())
+                                .createdAt(Instant.now(TEST_CLOCK).toString())
                                 .build();
 
                 when(replenishmentService.createReplenishmentPolicy(any(CreateReplenishmentPolicyRequest.class)))

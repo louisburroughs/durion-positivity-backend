@@ -1,5 +1,9 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.*;
 
 import java.math.BigDecimal;
@@ -36,6 +40,8 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 @ActiveProfiles("test")
 @Transactional
 class PromotionValidationServiceIT {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private PromotionValidationService validationService;
@@ -78,7 +84,7 @@ class PromotionValidationServiceIT {
         void testBlockPromotionDueToExpiredApproval() {
                 // Given an estimate with expired approval
                 Estimate estimate = createApprovedEstimate();
-                estimate.setExpiresAt(LocalDateTime.now().minusDays(1)); // Expired yesterday
+                estimate.setExpiresAt(LocalDateTime.now(TEST_CLOCK).minusDays(1)); // Expired yesterday
                 estimateRepository.save(estimate);
                 createApprovedItem(estimate.getId(), "Brake service", BigDecimal.valueOf(200.00));
 
@@ -211,7 +217,7 @@ class PromotionValidationServiceIT {
         void testNonThrowingValidationReturnsFailure() {
                 // Given an estimate with expired approval
                 Estimate estimate = createApprovedEstimate();
-                estimate.setExpiresAt(LocalDateTime.now().minusDays(1));
+                estimate.setExpiresAt(LocalDateTime.now(TEST_CLOCK).minusDays(1));
                 estimateRepository.save(estimate);
                 createApprovedItem(estimate.getId(), "Air filter", BigDecimal.valueOf(25.00));
 
@@ -260,9 +266,9 @@ class PromotionValidationServiceIT {
                                 .vehicleId(testVehicleId)
                                 .locationId(testLocationId)
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now())
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK))
                                 .approvedBy(testCustomerId)
-                                .expiresAt(LocalDateTime.now().plusDays(30)) // Valid for 30 days
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30)) // Valid for 30 days
                                 .currencyUomId("USD")
                                 .createdById("test-user")
                                 .build();
@@ -277,7 +283,7 @@ class PromotionValidationServiceIT {
                                 .quantity(BigDecimal.ONE)
                                 .unitPrice(price)
                                 .approvalStatus(ApprovalStatus.APPROVED)
-                                .approvalTimestamp(LocalDateTime.now())
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK))
                                 .createdById("test-user")
                                 .build();
                 return estimateItemRepository.save(item);

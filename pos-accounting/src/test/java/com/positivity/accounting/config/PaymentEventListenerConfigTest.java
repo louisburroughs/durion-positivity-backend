@@ -1,5 +1,8 @@
 package com.positivity.accounting.config;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -24,6 +27,8 @@ import com.positivity.accounting.service.PaymentApplicationService;
 import tools.jackson.databind.ObjectMapper;
 
 class PaymentEventListenerConfigTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final PaymentApplicationService paymentApplicationService =
@@ -47,7 +52,7 @@ class PaymentEventListenerConfigTest {
             UUID paymentId = UUID.randomUUID();
             UUID customerId = UUID.randomUUID();
             UUID organizationId = UUID.randomUUID();
-            Instant clearedAt = Instant.now();
+            Instant clearedAt = Instant.now(TEST_CLOCK);
             BigDecimal amount = new BigDecimal("150.00");
             String currencyCode = "USD";
 
@@ -131,7 +136,7 @@ class PaymentEventListenerConfigTest {
                     .amount(new BigDecimal("50.00"))
                     .currencyCode("USD")
                     .paymentMethod("ACH")
-                    .clearedAt(Instant.now())
+                    .clearedAt(Instant.now(TEST_CLOCK))
                     .build();
 
             String message = objectMapper.writeValueAsString(event);

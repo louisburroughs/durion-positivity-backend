@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.ZoneOffset;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -40,6 +41,8 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 class CycleCountServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Mock
         private CycleCountTaskRepository taskRepository;
@@ -68,7 +71,7 @@ class CycleCountServiceImplTest {
                 when(countEntryRepository.save(any(CountEntry.class))).thenAnswer(invocation -> {
                         CountEntry entry = invocation.getArgument(0);
                         entry.setCountEntryId(UUID.randomUUID());
-                        entry.setCountedAt(Instant.now());
+                        entry.setCountedAt(Instant.now(TEST_CLOCK));
                         return entry;
                 });
                 when(taskRepository.save(any(CycleCountTask.class)))
@@ -201,7 +204,7 @@ class CycleCountServiceImplTest {
                 when(countEntryRepository.save(any(CountEntry.class))).thenAnswer(invocation -> {
                         CountEntry entry = invocation.getArgument(0);
                         entry.setCountEntryId(UUID.randomUUID());
-                        entry.setCountedAt(Instant.now());
+                        entry.setCountedAt(Instant.now(TEST_CLOCK));
                         return entry;
                 });
                 when(taskRepository.save(any(CycleCountTask.class)))
@@ -275,7 +278,7 @@ class CycleCountServiceImplTest {
                 when(countEntryRepository.save(any(CountEntry.class))).thenAnswer(invocation -> {
                         CountEntry entry = invocation.getArgument(0);
                         entry.setCountEntryId(UUID.randomUUID());
-                        entry.setCountedAt(Instant.now());
+                        entry.setCountedAt(Instant.now(TEST_CLOCK));
                         return entry;
                 });
                 when(taskRepository.save(any(CycleCountTask.class)))
@@ -309,7 +312,7 @@ class CycleCountServiceImplTest {
                                 .expectedQuantity(10)
                                 .variance(0)
                                 .recountSequenceNumber(recountSequence)
-                                .countedAt(Instant.now().minus(5, java.time.temporal.ChronoUnit.MINUTES))
+                                .countedAt(Instant.now(TEST_CLOCK).minus(5, java.time.temporal.ChronoUnit.MINUTES))
                                 .build();
         }
 }

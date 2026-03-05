@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.audit.entity;
 
+import java.time.Clock;
+
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import lombok.*;
@@ -7,6 +9,10 @@ import lombok.*;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import com.positivity.shared.id.UUIDv7Id;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 /**
  * Configuration for refund authorization policies.
  * 
@@ -15,6 +21,7 @@ import java.util.UUID;
  * and authorization requirements.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "refund_policy_config")
 @Data
 @NoArgsConstructor
@@ -23,19 +30,10 @@ import java.util.UUID;
 public class RefundPolicyConfig {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "config_id", updatable = false, nullable = false, columnDefinition = "UUID")
     private UUID configId;
-
-    @PrePersist
-    public void onPrePersist() {
-        if (configId == null) {
-            configId = UUIDv7Generator.generate();
-        }
-        Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
-    }
-
     /**
      * Whether refund requires separate authorization from original sale.
      */
@@ -71,13 +69,10 @@ public class RefundPolicyConfig {
     private Boolean active = true;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
+    @LastModifiedDate
     private Instant updatedAt;
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = Instant.now();
-    }
 }

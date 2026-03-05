@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.service;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -57,6 +58,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
         private final CommercialPartyRepository partyRepository;
         private final PersonPartyRepository personRepository;
         private final ContactPointRepository contactPointRepository;
+        private final Clock clock;
 
         /**
          * Creates a new party relationship between a commercial account and an
@@ -95,7 +97,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                                                 "Person not found"));
 
                 // Check for overlapping relationships
-                LocalDate today = LocalDate.now();
+                LocalDate today = LocalDate.now(clock);
                 for (PartyRelationshipRole role : request.getRoles()) {
                         List<PartyRelationship> overlapping = partyRelationshipRepository.findOverlappingRelationships(
                                         partyId, person.getPersonPartyId(), role, today);
@@ -183,7 +185,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                         throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found");
                 }
 
-                LocalDate today = LocalDate.now();
+                LocalDate today = LocalDate.now(clock);
                 List<PartyRelationship> relationships;
 
                 if ("ACTIVE".equalsIgnoreCase(status) || status == null) {
@@ -218,7 +220,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                                                         .individualId(person.getPersonId())
                                                         .roles(rel.getRoles())
                                                         .isPrimaryBilling(rel.isPrimaryBillingContact())
-                                                        .status(rel.isActive() ? "ACTIVE" : "INACTIVE")
+                                                        .status(rel.isActive(today) ? "ACTIVE" : "INACTIVE")
                                                         .effectiveFrom(rel.getEffectiveStartDate())
                                                         .effectiveTo(rel.getEffectiveEndDate())
                                                         .individual(GetCommercialAccountContactsResponse.IndividualDetails
@@ -252,7 +254,8 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "Relationship not found"));
 
-                relationship.deactivate();
+                LocalDate today = LocalDate.now(clock);
+                relationship.deactivate(today);
                 relationship.setUpdatedBy(userId);
                 partyRelationshipRepository.save(relationship);
 
@@ -292,7 +295,8 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                                         "Relationship must have BILLING role to be designated as primary billing contact");
                 }
 
-                if (!relationship.isActive()) {
+                LocalDate today = LocalDate.now(clock);
+                if (!relationship.isActive(today)) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Cannot designate inactive relationship as primary billing contact");
                 }

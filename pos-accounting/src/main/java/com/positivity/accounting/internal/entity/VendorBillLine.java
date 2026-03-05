@@ -11,6 +11,7 @@ import lombok.ToString;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * Vendor Bill Line Item - individual line on a vendor bill.
  * Stores SKU, quantity, price for three-way matching against invoice and PO.
@@ -25,6 +26,7 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "vendor_bill_line", uniqueConstraints = @UniqueConstraint(columnNames = { "vendor_bill_id",
         "line_number" }), indexes = {
                 @Index(name = "idx_vendor_bill_line_bill", columnList = "vendor_bill_id"),
@@ -38,11 +40,6 @@ public class VendorBillLine {
     @UUIDv7Id
     @Column(name = "line_id", nullable = false, columnDefinition = "UUID")
     private UUID lineId;
-
-    @PrePersist
-    public void generateId() {
-    }
-
     @Column(name = "vendor_bill_id", nullable = false)
     private UUID vendorBillId;
 

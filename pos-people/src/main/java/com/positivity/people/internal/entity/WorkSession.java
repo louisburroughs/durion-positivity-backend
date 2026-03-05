@@ -15,6 +15,8 @@ import java.time.Instant;
 import java.util.UUID;
 import com.positivity.shared.id.UUIDv7Generator;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "work_session")
@@ -22,6 +24,8 @@ import com.positivity.shared.id.UUIDv7Generator;
 public class WorkSession {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "session_id", nullable = false, updatable = false, columnDefinition = "uuid")
     private UUID sessionId;
 
@@ -50,9 +54,6 @@ public class WorkSession {
 
     @PrePersist
     void ensureId() {
-        if (sessionId == null) {
-            sessionId = UUIDv7Generator.generate();
-        }
     }
 
 }

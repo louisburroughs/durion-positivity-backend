@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -43,6 +46,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Putaway Execution Contract Behavior")
 class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private MockMvc mockMvc;
@@ -82,7 +87,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .quantityMoved(5)
                                 .transactionType("PUTAWAY")
                                 .status("COMPLETED")
-                                .executedAt(Instant.now().toString())
+                                .executedAt(Instant.now(TEST_CLOCK).toString())
                                 .actorId("contract-test-user")
                                 .build();
 

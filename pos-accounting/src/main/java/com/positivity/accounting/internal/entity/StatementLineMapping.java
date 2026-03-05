@@ -24,6 +24,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
 /**
  * Configurable mapping from GL accounts to financial statement lines.
  * 
@@ -39,6 +41,7 @@ import lombok.Setter;
  * @see OperationType
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "statement_line_mappings", indexes = {
         @Index(name = "idx_statement_line_mapping_type", columnList = "statement_type"),
         @Index(name = "idx_statement_line_mapping_account", columnList = "gl_account_id"),
@@ -113,8 +116,4 @@ public class StatementLineMapping {
     @Enumerated(EnumType.STRING)
     @Column(name = "operation", length = 50, nullable = false)
     private OperationType operation;
-
-    @PrePersist
-    protected void onCreate() {
-    }
 }

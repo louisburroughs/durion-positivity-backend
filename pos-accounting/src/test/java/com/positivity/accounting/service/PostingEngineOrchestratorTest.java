@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
 import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +60,8 @@ import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PostingEngineOrchestrator Unit Tests")
 class PostingEngineOrchestratorTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private PostingRuleEvaluator postingRuleEvaluator;
@@ -119,16 +124,16 @@ class PostingEngineOrchestratorTest {
         testEvent.setEventId(testEventId);
         testEvent.setOrganizationId(testOrganizationId);
         testEvent.setEventType("INVOICE_RECEIVED");
-        testEvent.setTransactionDate(LocalDateTime.now());
+        testEvent.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
         testEvent.setPayload(testPayload);
         testEvent.setStatus(AccountingEventStatus.RECEIVED);
-        testEvent.setReceivedAt(Instant.now());
+        testEvent.setReceivedAt(Instant.now(TEST_CLOCK));
         testEvent.setSourceSystem("TEST_SYSTEM");
 
         // Setup test journal entry
         testJournalEntry = new JournalEntry();
         testJournalEntry.setJournalEntryId(testJournalEntryId);
-        testJournalEntry.setTransactionDate(LocalDateTime.now());
+        testJournalEntry.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
         testJournalEntry.setDescription("Test journal entry");
         testJournalEntry.setStatus(JournalEntryStatus.DRAFT);
         testJournalEntry.setLines(createBalancedLines());

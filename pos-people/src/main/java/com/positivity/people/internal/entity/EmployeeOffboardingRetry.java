@@ -1,9 +1,9 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
-import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
@@ -18,14 +18,19 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
+
 @Entity
-@jakarta.persistence.EntityListeners(AuditingEntityListener.class)
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "employee_offboarding_retry_queue")
 @Getter
 @Setter
 public class EmployeeOffboardingRetry {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -59,10 +64,4 @@ public class EmployeeOffboardingRetry {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    @PrePersist
-    void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 }

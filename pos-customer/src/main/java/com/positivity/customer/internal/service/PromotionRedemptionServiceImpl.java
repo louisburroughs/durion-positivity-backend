@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +28,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class PromotionRedemptionServiceImpl implements PromotionRedemptionService {
+    private final Clock clock;
+
 
     private final PromotionRedemptionRepository promotionRedemptionRepository;
     private final PromotionCounterRepository promotionCounterRepository;
@@ -55,7 +58,7 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
                 : RedemptionStatus.RECORDED);
         redemption.setRedemptionTimestamp(request.getRedemptionTimestamp() != null
                 ? request.getRedemptionTimestamp()
-                : LocalDateTime.now());
+                : LocalDateTime.now(clock));
 
         PromotionRedemption saved;
         try {

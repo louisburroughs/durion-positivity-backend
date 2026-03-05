@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -39,6 +41,8 @@ import com.positivity.workorder.service.WorkorderPartUsageService;
  */
 @Service
 public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService {
+    private final Clock clock;
+
     private static final String PART_NOT_FOUND = "Part not found: ";
     private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT = "Idempotency key already processed, returning existing event {}";
     private static final String EVENT_NOT_FOUND = "Event not found: ";
@@ -55,7 +59,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             WorkorderRepository workorderRepository,
             WorkorderPartRepository workorderPartRepository,
             WorkorderPartUsageEventRepository usageEventRepository,
-            IdempotencyService idempotencyService) {
+            IdempotencyService idempotencyService,
+            Clock clock) {
+        this.clock = clock;
         this.workorderRepository = workorderRepository;
         this.workorderPartRepository = workorderPartRepository;
         this.usageEventRepository = usageEventRepository;
@@ -121,7 +127,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
                 .eventType("ISSUE")
                 .quantity(quantity)
                 .performedBy(actorId)
-                .performedAt(Instant.now())
+                .performedAt(Instant.now(clock))
                 .notes(null)
                 .build();
 
@@ -207,7 +213,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
                 .eventType("CONSUME")
                 .quantity(quantity)
                 .performedBy(actorId)
-                .performedAt(Instant.now())
+                .performedAt(Instant.now(clock))
                 .notes(null)
                 .build();
 
@@ -299,7 +305,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
                 .eventType("RETURN")
                 .quantity(quantity)
                 .performedBy(actorId)
-                .performedAt(Instant.now())
+                .performedAt(Instant.now(clock))
                 .notes(null)
                 .build();
 

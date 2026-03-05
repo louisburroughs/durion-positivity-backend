@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.config;
 
+import java.time.Clock;
+
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryStateException;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,8 +29,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
+    private final Clock clock;
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
 
     @ExceptionHandler(WorkorderNotFoundException.class)
@@ -122,7 +127,7 @@ public class GlobalExceptionHandler {
         body.put("code", code);
         body.put("message", message);
         body.put("status", status.value());
-        body.put("timestamp", Instant.now().toString());
+        body.put("timestamp", Instant.now(clock).toString());
         body.put("correlationId", correlationId);
 
         HttpHeaders headers = new HttpHeaders();

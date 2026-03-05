@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.client.InvoiceServiceException;
 import com.positivity.accounting.internal.config.CreditMemoGLConfig;
@@ -57,6 +59,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class CreditMemoServiceImpl implements CreditMemoService {
+    private final Clock clock;
+
 
     private final CreditMemoRepository creditMemoRepository;
     private final InvoiceServiceClient invoiceServiceClient;
@@ -214,7 +218,7 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         creditMemo.setPriorPeriodAdjustment(priorPeriodInfo.priorPeriod());
         creditMemo.setOriginalPeriodId(priorPeriodInfo.originalPeriodId());
         creditMemo.setCurrency(invoice.getCurrency());
-        creditMemo.setPostedTimestamp(Instant.now());
+        creditMemo.setPostedTimestamp(Instant.now(clock));
         return creditMemo;
     }
 

@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
@@ -25,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class ReservationServiceImpl implements ReservationService {
+    private final Clock clock;
+
 
     private final ReservationRepository reservationRepository;
     private final AllocationRepository allocationRepository;
@@ -33,7 +37,9 @@ public class ReservationServiceImpl implements ReservationService {
     public ReservationServiceImpl(
             ReservationRepository reservationRepository,
             AllocationRepository allocationRepository,
-            InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            Clock clock) {
+        this.clock = clock;
         this.reservationRepository = reservationRepository;
         this.allocationRepository = allocationRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
@@ -76,7 +82,7 @@ public class ReservationServiceImpl implements ReservationService {
         }
 
         allocation.setAllocationState(AllocationState.HARD);
-        allocation.setHardenedAt(Instant.now());
+        allocation.setHardenedAt(Instant.now(clock));
         allocation.setHardenedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
         allocation.setHardenedReason(request.getHardenedReason());
         allocationRepository.save(allocation);

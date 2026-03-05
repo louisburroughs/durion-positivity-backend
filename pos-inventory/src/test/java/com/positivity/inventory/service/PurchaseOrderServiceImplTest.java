@@ -96,10 +96,10 @@ class PurchaseOrderServiceImplTest {
                                 1000L, "TAX-10", "GL-ACCOUNT-01");
                 CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
                                 UUID.randomUUID(),
-                                LocalDate.now(),
+                                LocalDate.now(fixedClock),
                                 "USD",
                                 "NET30",
-                                LocalDate.now().plusDays(30),
+                                LocalDate.now(fixedClock).plusDays(30),
                                 UUID.randomUUID(), // shipToLocationId
                                 "test-user",
                                 "Test PO",
@@ -227,8 +227,8 @@ class PurchaseOrderServiceImplTest {
                 when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(po));
                 when(purchaseOrderRepository.save(any(PurchaseOrderEntity.class))).thenAnswer(i -> i.getArgument(0));
 
-                RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest(LocalDate.now(), "NET60",
-                                LocalDate.now().plusDays(60), null, "req", "comment", Collections.emptyList(),
+                RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest(LocalDate.now(fixedClock), "NET60",
+                                LocalDate.now(fixedClock).plusDays(60), null, "req", "comment", Collections.emptyList(),
                                 "reason");
 
                 // Act

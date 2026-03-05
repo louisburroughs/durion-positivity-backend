@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
+import java.time.Clock;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
@@ -46,15 +48,4 @@ public class User {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
-
 }

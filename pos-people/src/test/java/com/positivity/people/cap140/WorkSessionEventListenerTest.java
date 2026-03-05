@@ -1,5 +1,8 @@
 package com.positivity.people.cap140;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.people.internal.config.WorkSessionEventListener;
 import com.positivity.people.internal.dto.WorkSessionCompletedEvent;
 import com.positivity.people.internal.dto.WorkSessionCorrectedEvent;
@@ -26,6 +29,8 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S100")
 class WorkSessionEventListenerTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     TimekeepingIngestionService timekeepingIngestionService;
@@ -42,7 +47,7 @@ class WorkSessionEventListenerTest {
         // Issue #58: AC6 — listener must call ingestWorkSession exactly once
         WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now().minusSeconds(3600), Instant.now(), UUID.randomUUID());
+                Instant.now(TEST_CLOCK).minusSeconds(3600), Instant.now(TEST_CLOCK), UUID.randomUUID());
 
         workSessionEventListener.onWorkSessionCompleted(event);
 
@@ -58,7 +63,7 @@ class WorkSessionEventListenerTest {
         // Issue #58: AC7 — listener must call recordCorrection exactly once
         WorkSessionCorrectedEvent event = new WorkSessionCorrectedEvent(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now().minusSeconds(3600), Instant.now(), null, "Test correction");
+                Instant.now(TEST_CLOCK).minusSeconds(3600), Instant.now(TEST_CLOCK), null, "Test correction");
 
         workSessionEventListener.onWorkSessionCorrected(event);
 

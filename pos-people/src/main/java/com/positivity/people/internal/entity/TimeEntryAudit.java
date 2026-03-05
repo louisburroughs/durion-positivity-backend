@@ -1,5 +1,7 @@
 package com.positivity.people.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -8,12 +10,15 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_audit")
 public class TimeEntryAudit {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "audit_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID auditId;
 
@@ -45,11 +50,8 @@ public class TimeEntryAudit {
 
     @PrePersist
     public void generateIdAndTimestamp() {
-        if (auditId == null) {
-            auditId = UUIDv7Generator.generate();
-        }
         if (timestamp == null) {
-            timestamp = Instant.now();
+            timestamp = Instant.now(Clock.systemUTC());
         }
     }
 
@@ -115,14 +117,12 @@ public class TimeEntryAudit {
     }
 
     public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+}
 
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+}
 }

@@ -1,5 +1,8 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -51,7 +54,8 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
  *      #128</a>
  */
 @DisplayName("AP Payment Backend Contract Behavioral Tests (CAP-053)")
- class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
+class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private APPaymentRepository apPaymentRepository;
@@ -84,8 +88,8 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 bill1 = new VendorBill();
                 bill1.setVendorId(testVendorId);
                 bill1.setBillNumber("BILL-001");
-                bill1.setBillDate(LocalDate.now().minusDays(40).atStartOfDay());
-                bill1.setDueDate(LocalDate.now().minusDays(10).atStartOfDay());
+                bill1.setBillDate(LocalDate.now(TEST_CLOCK).minusDays(40).atStartOfDay());
+                bill1.setDueDate(LocalDate.now(TEST_CLOCK).minusDays(10).atStartOfDay());
                 bill1.setTotalAmount(new BigDecimal("500.00"));
                 bill1.setStatus(VendorBillStatus.APPROVED);
                 bill1.setCreatedBy("test-setup");
@@ -96,8 +100,8 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 bill2 = new VendorBill();
                 bill2.setVendorId(testVendorId);
                 bill2.setBillNumber("BILL-002");
-                bill2.setBillDate(LocalDate.now().minusDays(10).atStartOfDay());
-                bill2.setDueDate(LocalDate.now().plusDays(15).atStartOfDay());
+                bill2.setBillDate(LocalDate.now(TEST_CLOCK).minusDays(10).atStartOfDay());
+                bill2.setDueDate(LocalDate.now(TEST_CLOCK).plusDays(15).atStartOfDay());
                 bill2.setTotalAmount(new BigDecimal("300.00"));
                 bill2.setStatus(VendorBillStatus.APPROVED);
                 bill2.setCreatedBy("test-setup");
@@ -188,7 +192,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 request.setAllocations(List.of(allocation));
 
                 // Act: POST /v1/accounting/ap/payments
-              mockMvc.perform(withAuth(post(API_V1_AP_PAYMENTS))
+                mockMvc.perform(withAuth(post(API_V1_AP_PAYMENTS))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
@@ -270,8 +274,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
 
                 // Assert: Verify ordering (oldest due first)
                 String responseJson = result.getResponse().getContentAsString();
-                assertThat(responseJson).contains("BILL-001");
-                assertThat(responseJson).contains("BILL-002");
+                assertThat(responseJson).contains("BILL-001").contains("BILL-002");
         }
 
         @Test
@@ -290,7 +293,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 payment.setPaymentMethod(PaymentMethod.ACH);
                 payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
                 payment.setGatewayTransactionId("TXN-12345");
-                payment.setGatewayTimestamp(Instant.now());
+                payment.setGatewayTimestamp(Instant.now(TEST_CLOCK));
                 payment.setCreatedBy("test-user");
                 payment = apPaymentRepository.save(payment);
 
@@ -321,9 +324,9 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 payment.setPaymentMethod(PaymentMethod.CHECK);
                 payment.setStatus(APPaymentStatus.GL_POSTED);
                 payment.setGatewayTransactionId("TXN-67890");
-                payment.setGatewayTimestamp(Instant.now());
+                payment.setGatewayTimestamp(Instant.now(TEST_CLOCK));
                 payment.setGlJournalEntryId(UUID.randomUUID());
-                payment.setGlPostedAt(Instant.now());
+                payment.setGlPostedAt(Instant.now(TEST_CLOCK));
                 payment.setCreatedBy("test-user");
                 payment = apPaymentRepository.save(payment);
 

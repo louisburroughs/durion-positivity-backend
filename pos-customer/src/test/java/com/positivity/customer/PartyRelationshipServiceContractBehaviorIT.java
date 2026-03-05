@@ -1,31 +1,44 @@
 package com.positivity.customer;
 
-import com.positivity.customer.internal.enums.ContactPointType;
-import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
-import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
-import com.positivity.customer.internal.dto.CreatePersonRequest;
-import com.positivity.customer.internal.dto.CreatePersonResponse;
-import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
-import com.positivity.customer.internal.enums.PartyRelationshipRole;
-import com.positivity.customer.internal.enums.PreferredContactMethod;
-import com.positivity.customer.internal.entity.*;
-import com.positivity.customer.internal.enums.AccountStatus;
-import com.positivity.customer.internal.repository.*;
-import com.positivity.customer.service.PartyRelationshipService;
-import com.positivity.customer.service.PersonService;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import org.junit.jupiter.api.*;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.server.ResponseStatusException;
-
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
+import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
+import com.positivity.customer.internal.dto.CreatePersonRequest;
+import com.positivity.customer.internal.dto.CreatePersonResponse;
+import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.Contact;
+import com.positivity.customer.internal.entity.PartyRelationship;
+import com.positivity.customer.internal.entity.PersonParty;
+import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.ContactPointType;
+import com.positivity.customer.internal.enums.PartyRelationshipRole;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ContactPointRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.customer.service.PartyRelationshipService;
+import com.positivity.customer.service.PersonService;
 
 /**
  * Contract behavior integration tests for PartyRelationshipService.
@@ -43,6 +56,9 @@ import static org.assertj.core.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegrationTest {
+
+        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+                        java.time.ZoneOffset.UTC);
 
         @Autowired
         private PartyRelationshipService partyRelationshipService;
@@ -139,7 +155,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 // When: creating relationship
@@ -164,7 +180,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING, PartyRelationshipRole.APPROVER))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 // When: creating relationship
@@ -187,7 +203,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
 
@@ -211,7 +227,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request1 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
                 CreatePartyRelationshipResponse response1 = partyRelationshipService.createRelationship(
@@ -222,7 +238,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson2.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
                 CreatePartyRelationshipResponse response2 = partyRelationshipService.createRelationship(
@@ -248,7 +264,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT)) // No BILLING role
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
 
@@ -273,7 +289,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request1 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
                 partyRelationshipService.createRelationship(testParty.getPartyId(), request1, UUID.randomUUID());
 
@@ -281,7 +297,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT)) // Same role
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 assertThatThrownBy(() -> partyRelationshipService.createRelationship(
@@ -305,7 +321,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 // When/Then: expect not found
@@ -330,7 +346,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(nonExistentPersonId)
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 // When/Then: expect not found
@@ -354,7 +370,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request1 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
                 partyRelationshipService.createRelationship(testParty.getPartyId(), request1, UUID.randomUUID());
@@ -362,7 +378,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson2.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.TECHNICAL))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
                 partyRelationshipService.createRelationship(testParty.getPartyId(), request2, UUID.randomUUID());
 
@@ -387,14 +403,14 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request1 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
                 partyRelationshipService.createRelationship(testParty.getPartyId(), request1, UUID.randomUUID());
 
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson2.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.TECHNICAL))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
                 partyRelationshipService.createRelationship(testParty.getPartyId(), request2, UUID.randomUUID());
 
@@ -419,7 +435,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now().minusDays(30))
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK).minusDays(30))
                                 .build();
                 CreatePartyRelationshipResponse created = partyRelationshipService.createRelationship(
                                 testParty.getPartyId(), request, UUID.randomUUID());
@@ -430,8 +446,8 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 // Then: end date set to today
                 PartyRelationship relationship = partyRelationshipRepository
                                 .findById(created.getRelationshipId()).orElseThrow();
-                assertThat(relationship.getEffectiveEndDate()).isEqualTo(LocalDate.now());
-                assertThat(relationship.isActive()).isFalse();
+                assertThat(relationship.getEffectiveEndDate()).isEqualTo(LocalDate.now(FIXED_CLOCK));
+                assertThat(relationship.isActive(LocalDate.now(FIXED_CLOCK))).isFalse();
         }
 
         // ==========================================================================
@@ -445,7 +461,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(false)
                                 .build();
                 CreatePartyRelationshipResponse created = partyRelationshipService.createRelationship(
@@ -468,7 +484,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.TECHNICAL)) // Not BILLING
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
                 CreatePartyRelationshipResponse created = partyRelationshipService.createRelationship(
                                 testParty.getPartyId(), request, UUID.randomUUID());

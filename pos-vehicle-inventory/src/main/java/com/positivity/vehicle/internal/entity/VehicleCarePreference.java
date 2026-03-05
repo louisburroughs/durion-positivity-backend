@@ -26,6 +26,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Vehicle care preferences entity for CAP:091 Story #102.
  * Stores structured and unstructured vehicle care preferences using JSONB.
@@ -42,16 +44,10 @@ import lombok.NoArgsConstructor;
 public class VehicleCarePreference {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
-
     @NonNull
     @Column(name = "vehicle_id", nullable = false, unique = true)
     private UUID vehicleId;

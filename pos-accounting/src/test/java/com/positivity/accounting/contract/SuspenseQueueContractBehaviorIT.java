@@ -1,5 +1,8 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.accounting.BaseContractIntegrationTest;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -47,6 +50,8 @@ import java.time.Instant;
  */
 @DisplayName("Suspense Queue Reprocessing Contract Behavioral Tests (CAP:055)")
 public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         private static final String REPROCESS_SUCCESS_EVENT_TYPE = "INVOICE_RECEIVED_SUCCESS";
         private static final String REPROCESS_FAILURE_EVENT_TYPE = "INVOICE_RECEIVED_FAILURE";
@@ -84,7 +89,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                 submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
                 submitRequest.setOrganizationId(UUID.randomUUID());
                 submitRequest.setSourceSystem("TEST_SYSTEM");
-                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
                                 "invoiceId", "INV-001",
                                 "amount", 100.00,
@@ -126,7 +131,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                 submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
                 submitRequest.setOrganizationId(UUID.randomUUID());
                 submitRequest.setSourceSystem("TEST_SYSTEM");
-                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
                                 "invoiceId", "INV-001-PENDING",
                                 "amount", 100.00,
@@ -190,7 +195,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                 submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
                 submitRequest.setOrganizationId(UUID.randomUUID());
                 submitRequest.setSourceSystem("TEST_SYSTEM");
-                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
                                 "invoiceId", "INV-002",
                                 "amount", 200.00,
@@ -234,7 +239,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                 submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
                 submitRequest.setOrganizationId(UUID.randomUUID());
                 submitRequest.setSourceSystem("TEST_SYSTEM");
-                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
                                 "invoiceId", "INV-002-FAIL",
                                 "amount", 200.00,
@@ -381,13 +386,13 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                 event.setEventType("INVOICE_RECEIVED");
                 event.setOrganizationId(UUID.randomUUID());
                 event.setSourceSystem("TEST_SYSTEM");
-                event.setTransactionDate(LocalDateTime.now());
+                event.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 event.setPayload(Map.of(
                                 "invoiceId", "INV-PROCESSED",
                                 "amount", 100.00,
                                 "description", "Already processed invoice"));
                 event.setStatus(AccountingEventStatus.PROCESSED);
-                event.setProcessedAt(Instant.now());
+                event.setProcessedAt(Instant.now(TEST_CLOCK));
                 event.setJournalEntryId(UUID.randomUUID()); // Simulate JE was created
 
                 AccountingEvent saved = accountingEventRepository.save(event);
@@ -399,7 +404,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                 debitAccount.setAccountCode("11" + UUID.randomUUID().toString().substring(0, 8));
                 debitAccount.setAccountName("Suspense Test Debit");
                 debitAccount.setAccountType(AccountType.ASSET);
-                debitAccount.setActivationDate(LocalDateTime.now().minusDays(1));
+                debitAccount.setActivationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
                 debitAccount.setCreatedBy("test-user");
                 debitAccount.setModifiedBy("test-user");
                 debitAccount = glAccountRepository.save(debitAccount);
@@ -408,7 +413,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                 creditAccount.setAccountCode("41" + UUID.randomUUID().toString().substring(0, 8));
                 creditAccount.setAccountName("Suspense Test Credit");
                 creditAccount.setAccountType(AccountType.REVENUE);
-                creditAccount.setActivationDate(LocalDateTime.now().minusDays(1));
+                creditAccount.setActivationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
                 creditAccount.setCreatedBy("test-user");
                 creditAccount.setModifiedBy("test-user");
                 creditAccount = glAccountRepository.save(creditAccount);

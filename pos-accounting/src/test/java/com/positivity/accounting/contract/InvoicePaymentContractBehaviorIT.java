@@ -1,5 +1,8 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -45,6 +48,8 @@ import com.positivity.accounting.internal.repository.PaymentAppliedEventReposito
  */
 @DisplayName("Invoice Payment Backend Contract Behavioral Tests")
 class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     private static final String API_V1_INVOICES = "/v1/accounting/invoices";
     private static final String API_V1_INVOICE = "/v1/accounting/invoice";
@@ -86,7 +91,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     "paymentDate": "%s",
                     "idempotencyKey": "%s"
                 }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+                """.formatted(testInvoiceId, testPaymentId, Instant.now(TEST_CLOCK).toString(), testIdempotencyKey);
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
@@ -117,7 +122,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     "paymentDate": "%s",
                     "idempotencyKey": "%s"
                 }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+                """.formatted(testInvoiceId, testPaymentId, Instant.now(TEST_CLOCK).toString(), testIdempotencyKey);
 
         // When - submit first payment
         MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
@@ -194,7 +199,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     "paymentDate": "%s",
                     "idempotencyKey": "%s"
                 }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+                """.formatted(testInvoiceId, testPaymentId, Instant.now(TEST_CLOCK).toString(), testIdempotencyKey);
 
         // When/Then - should return 400 for mismatch
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + pathInvoiceId + "/pay"))
@@ -240,7 +245,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     "paymentDate": "%s",
                     "idempotencyKey": "%s"
                 }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+                """.formatted(testInvoiceId, testPaymentId, Instant.now(TEST_CLOCK).toString(), testIdempotencyKey);
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
@@ -332,7 +337,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     "paymentDate": "%s",
                     "idempotencyKey": "%s"
                 }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+                """.formatted(testInvoiceId, testPaymentId, Instant.now(TEST_CLOCK).toString(), testIdempotencyKey);
 
         // When/Then - should return 403 Forbidden
         mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"), "accounting:je:view")
@@ -387,7 +392,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     "paymentDate": "%s",
                     "idempotencyKey": "%s"
                 }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), UUID.randomUUID().toString());
+                """.formatted(testInvoiceId, testPaymentId, Instant.now(TEST_CLOCK).toString(), UUID.randomUUID().toString());
 
         MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -410,7 +415,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                     "paymentDate": "%s",
                     "idempotencyKey": "%s"
                 }
-                """.formatted(testInvoiceId, UUID.randomUUID(), Instant.now().toString(), UUID.randomUUID().toString());
+                """.formatted(testInvoiceId, UUID.randomUUID(), Instant.now(TEST_CLOCK).toString(), UUID.randomUUID().toString());
 
         MvcResult secondResult = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
                 .contentType(MediaType.APPLICATION_JSON)

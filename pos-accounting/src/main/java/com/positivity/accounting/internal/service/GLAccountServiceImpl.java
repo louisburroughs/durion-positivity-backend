@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -43,6 +45,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional
 public class GLAccountServiceImpl implements GLAccountService {
+    private final Clock clock;
+
 
     private static final String GL_ACCOUNT_NOT_FOUND = "GL account not found: ";
 
@@ -85,7 +89,7 @@ public class GLAccountServiceImpl implements GLAccountService {
         if (request.getActivationDate() != null) {
             account.setActivationDate(request.getActivationDate());
         } else {
-            account.setActivationDate(LocalDateTime.now());
+            account.setActivationDate(LocalDateTime.now(clock));
         }
 
         // Set audit fields from authenticated user (falls back to SYSTEM for
@@ -161,7 +165,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      */
     @Override
     public GLAccountResponse activateGLAccount(@NonNull UUID glAccountId) {
-        return activateGLAccount(glAccountId, LocalDateTime.now());
+        return activateGLAccount(glAccountId, LocalDateTime.now(clock));
     }
 
     /**
@@ -218,7 +222,7 @@ public class GLAccountServiceImpl implements GLAccountService {
             throw new AccountNotZeroBalanceException(msg);
         }
 
-        account.setDeactivationDate(LocalDateTime.now());
+        account.setDeactivationDate(LocalDateTime.now(clock));
         account.setModifiedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM));
 
         account = glAccountRepository.save(account);
@@ -292,7 +296,7 @@ public class GLAccountServiceImpl implements GLAccountService {
         response.setAccountCode(account.getAccountCode());
         response.setAccountName(account.getAccountName());
         response.setBalance(balance);
-        response.setAsOfDate(Instant.now());
+        response.setAsOfDate(Instant.now(clock));
 
         return response;
     }

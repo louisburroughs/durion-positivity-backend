@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.domain.TravelSegmentStartedEvent;
 import com.positivity.workorder.internal.domain.TravelSegmentStoppedEvent;
@@ -34,6 +36,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class TravelSegmentServiceImpl implements TravelSegmentService {
+    private final Clock clock;
+
 
     private final TravelSegmentRepository travelSegmentRepository;
     private final TravelSegmentAdjustmentRepository travelSegmentAdjustmentRepository;
@@ -62,7 +66,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
                 .actedForPersonId(request.getActedForPersonId())
                 .actedByUserId(request.getActedForPersonId() != null ? actor : null)
                 .onBehalfReasonCode(request.getOnBehalfReasonCode())
-                .startAt(Instant.now())
+                .startAt(Instant.now(clock))
                 .status(TravelSegmentStatus.IN_PROGRESS)
                 .createdBy(actor)
                 .build();
@@ -82,7 +86,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
             throw new TravelSegmentConflictException("Cannot stop a segment that is not IN_PROGRESS");
         }
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
-        Instant endAt = Instant.now();
+        Instant endAt = Instant.now(clock);
         int minutes = (int) Duration.between(segment.getStartAt(), endAt).toMinutes();
         segment.setEndAt(endAt);
         if (request.getToLocationId() != null) {

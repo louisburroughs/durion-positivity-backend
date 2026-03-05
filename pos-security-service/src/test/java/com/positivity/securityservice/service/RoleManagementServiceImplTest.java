@@ -1,5 +1,9 @@
 package com.positivity.securityservice.service;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +40,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class RoleManagementServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Mock
         private RoleRepository roleRepository;
@@ -105,14 +111,14 @@ class RoleManagementServiceImplTest {
                 assignment.setUser(user);
                 assignment.setRole(role);
                 assignment.setScopeType(ScopeType.GLOBAL);
-                assignment.setEffectiveStartDate(LocalDateTime.now().minusDays(1));
+                assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
                 RoleAssignmentRequest request = new RoleAssignmentRequest(
                                 userId,
                                 roleId,
                                 ScopeType.GLOBAL,
                                 Set.of(),
-                                LocalDateTime.now().minusHours(1),
+                                LocalDateTime.now(TEST_CLOCK).minusHours(1),
                                 null);
 
                 when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -126,7 +132,7 @@ class RoleManagementServiceImplTest {
 
                 var createdAssignment = roleManagementService.createRoleAssignment(request);
                 boolean hasPermission = roleManagementService.userHasPermission(userId, "security:role:grant", "loc-1");
-                roleManagementService.revokeRoleAssignment(assignmentId, LocalDateTime.now().plusDays(1));
+                roleManagementService.revokeRoleAssignment(assignmentId, LocalDateTime.now(TEST_CLOCK).plusDays(1));
 
                 assertThat(createdAssignment.getRoleId()).isEqualTo(roleId);
                 assertThat(hasPermission).isTrue();
@@ -142,7 +148,7 @@ class RoleManagementServiceImplTest {
                                 roleId,
                                 ScopeType.LOCATION,
                                 Set.of(),
-                                LocalDateTime.now(),
+                                LocalDateTime.now(TEST_CLOCK),
                                 null);
 
                 assertThatThrownBy(() -> roleManagementService.createRoleAssignment(invalidLocationRequest))

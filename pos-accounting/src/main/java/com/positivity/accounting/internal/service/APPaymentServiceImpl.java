@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -45,6 +47,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class APPaymentServiceImpl implements APPaymentService {
+    private final Clock clock;
+
 
     private static final Logger log = LoggerFactory.getLogger(APPaymentServiceImpl.class);
     private static final UUID DEFAULT_ORGANIZATION_ID = UUID.fromString("00000000-0000-4000-a000-000000000010");
@@ -109,7 +113,7 @@ public class APPaymentServiceImpl implements APPaymentService {
 
             // Capture gateway response
             payment.setGatewayTransactionId(gatewayResponse.getTransactionId());
-            payment.setGatewayTimestamp(Instant.now());
+            payment.setGatewayTimestamp(Instant.now(clock));
             payment.setGatewayResponse(gatewayResponse.getRawResponse());
 
             // Map gateway status to payment status
@@ -386,7 +390,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
 
         payment.setGlJournalEntryId(journalEntryId);
-        payment.setGlPostedAt(Instant.now());
+        payment.setGlPostedAt(Instant.now(clock));
         payment.setStatus(APPaymentStatus.GL_POSTED);
         paymentRepository.save(payment);
 

@@ -1,5 +1,8 @@
 package com.positivity.location.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -37,6 +40,8 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @ExtendWith(MockitoExtension.class)
 class TravelBufferPolicyServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Mock
     private TravelBufferPolicyRepository repository;
@@ -53,8 +58,8 @@ class TravelBufferPolicyServiceTest {
                 .bufferType("FLAT_MINUTES")
                 .bufferValue(new BigDecimal("15"))
                 .notes("default policy")
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
+                .createdAt(Instant.now(TEST_CLOCK))
+                .updatedAt(Instant.now(TEST_CLOCK))
                 .build();
         when(repository.save(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
 

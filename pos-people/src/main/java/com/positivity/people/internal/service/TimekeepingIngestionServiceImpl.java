@@ -1,5 +1,7 @@
 package com.positivity.people.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.people.internal.dto.WorkSessionCompletedEvent;
 import com.positivity.people.internal.dto.WorkSessionCorrectedEvent;
 import com.positivity.people.internal.entity.TimekeepingEntry;
@@ -16,12 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimekeepingIngestionServiceImpl implements TimekeepingIngestionService {
+    private final Clock clock;
+
 
     private static final Logger log = LoggerFactory.getLogger(TimekeepingIngestionServiceImpl.class);
 
     private final TimekeepingEntryRepository timekeepingEntryRepository;
 
-    public TimekeepingIngestionServiceImpl(TimekeepingEntryRepository timekeepingEntryRepository) {
+    public TimekeepingIngestionServiceImpl(TimekeepingEntryRepository timekeepingEntryRepository, Clock clock) {
+        this.clock = clock;
         this.timekeepingEntryRepository = timekeepingEntryRepository;
     }
 
@@ -53,7 +58,7 @@ public class TimekeepingIngestionServiceImpl implements TimekeepingIngestionServ
         entry.setSessionEndTime(event.endTime());
         entry.setApprovalStatus(ApprovalStatus.PENDING_APPROVAL);
         entry.setAssociatedWorkOrderId(event.workOrderId());
-        entry.setCreatedAt(Instant.now());
+        entry.setCreatedAt(Instant.now(clock));
 
         timekeepingEntryRepository.save(entry);
     }
@@ -74,7 +79,7 @@ public class TimekeepingIngestionServiceImpl implements TimekeepingIngestionServ
         correctionEntry.setSessionEndTime(event.endTime());
         correctionEntry.setApprovalStatus(ApprovalStatus.PENDING_APPROVAL);
         correctionEntry.setAssociatedWorkOrderId(event.workOrderId());
-        correctionEntry.setCreatedAt(Instant.now());
+        correctionEntry.setCreatedAt(Instant.now(clock));
 
         timekeepingEntryRepository.save(correctionEntry);
     }

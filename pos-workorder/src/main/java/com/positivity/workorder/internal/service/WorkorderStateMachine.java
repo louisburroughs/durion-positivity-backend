@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,6 +40,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderStateMachine {
+    private final Clock clock;
+
     private final WorkorderRepository workorderRepository;
     private final WorkorderStateTransitionRepository transitionRepository;
     private final WorkorderSnapshotRepository snapshotRepository;
@@ -247,7 +251,7 @@ public class WorkorderStateMachine {
         captureBillableScopeSnapshot(workorder, actorId, completionNotes);
 
         // Set completion fields
-        Instant completedAt = Instant.now();
+        Instant completedAt = Instant.now(clock);
         workorder.setCompletedAt(completedAt);
         workorder.setCompletedBy(actorId);
         workorder.setCompletionNotes(completionNotes);
@@ -283,7 +287,7 @@ public class WorkorderStateMachine {
 
         captureSnapshot(workorder, actorId, "BILLABLE_SCOPE_SUPERSEDED", reopenReason);
 
-        Instant reopenedAt = Instant.now();
+        Instant reopenedAt = Instant.now(clock);
         workorder.setIsReopened(true);
         workorder.setReopenedAt(reopenedAt);
         workorder.setReopenedBy(actorId);
@@ -315,7 +319,7 @@ public class WorkorderStateMachine {
                         || COMPLETION_ELIGIBLE_STATUSES.contains(workorder.getStatus()));
 
         WorkorderStatus snapshotStatus = invoiceReady ? WorkorderStatus.COMPLETED : workorder.getStatus();
-        Instant workorderCompletedAt = workorder.getCompletedAt() != null ? workorder.getCompletedAt() : Instant.now();
+        Instant workorderCompletedAt = workorder.getCompletedAt() != null ? workorder.getCompletedAt() : Instant.now(clock);
 
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
                 .findByWorkOrder_Id(workorder.getId());
@@ -367,7 +371,7 @@ public class WorkorderStateMachine {
         payload.put("partTotal", partTotal);
         payload.put("grandTotal", serviceTotal.add(partTotal));
         payload.put("completionNotes", completionNotes);
-        payload.put("capturedAt", Instant.now());
+        payload.put("capturedAt", Instant.now(clock));
 
         captureStructuredSnapshot(workorder, actorId, "BILLABLE_SCOPE_FINALIZED", payload,
                 "Final billable scope snapshot before completion");
@@ -389,7 +393,7 @@ public class WorkorderStateMachine {
                     .snapshotType(snapshotType)
                     .snapshotData(snapshotData)
                     .reason(reason)
-                    .capturedAt(Instant.now())
+                    .capturedAt(Instant.now(clock))
                     .build();
 
             snapshotRepository.save(snapshot);
@@ -406,7 +410,7 @@ public class WorkorderStateMachine {
         payload.put("estimateId", workorder.getEstimateId());
         payload.put("customerId", workorder.getCustomerId());
         payload.put(STATUS_FIELD, workorder.getStatus());
-        payload.put("capturedAt", Instant.now());
+        payload.put("capturedAt", Instant.now(clock));
         payload.put("reason", reason);
         captureStructuredSnapshot(workorder, actorId, snapshotType, payload, reason);
     }
@@ -419,7 +423,7 @@ public class WorkorderStateMachine {
                 .toStatus(toStatus)
                 .transitionedBy(actorId)
                 .reason(reason)
-                .transitionedAt(Instant.now())
+                .transitionedAt(Instant.now(clock))
                 .build();
 
         transitionRepository.save(transition);
@@ -495,7 +499,7 @@ public class WorkorderStateMachine {
                 .eventType(eventType)
                 .userId(actorId)
                 .details(details)
-                .eventTimestamp(Instant.now())
+                .eventTimestamp(Instant.now(clock))
                 .build();
 
         auditEventRepository.save(auditEvent);

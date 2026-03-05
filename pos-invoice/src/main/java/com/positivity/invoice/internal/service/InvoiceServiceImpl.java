@@ -1,5 +1,7 @@
 package com.positivity.invoice.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -34,13 +36,17 @@ import java.util.UUID;
 @Service
 @Transactional
 public class InvoiceServiceImpl implements InvoiceService {
+    private final Clock clock;
+
 
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
 
     public InvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
-            @NonNull TaxServiceClient taxServiceClient) {
+            @NonNull TaxServiceClient taxServiceClient,
+            Clock clock) {
+        this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
     }
@@ -222,7 +228,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         String idPart = invoice.getId() == null
                 ? UUID.randomUUID().toString().substring(0, 8)
                 : invoice.getId().toString().substring(0, 8);
-        return "INV-" + Instant.now().toEpochMilli() + "-" + idPart;
+        return "INV-" + Instant.now(clock).toEpochMilli() + "-" + idPart;
     }
 
     @NonNull

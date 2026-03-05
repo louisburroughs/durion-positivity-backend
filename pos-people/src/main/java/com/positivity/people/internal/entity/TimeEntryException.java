@@ -1,5 +1,7 @@
 package com.positivity.people.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.people.internal.enums.ExceptionSeverity;
 import com.positivity.people.internal.enums.ExceptionStatus;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -14,6 +16,7 @@ import jakarta.persistence.EnumType;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_exception")
@@ -21,6 +24,8 @@ import java.util.UUID;
 public class TimeEntryException {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "exception_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID exceptionId;
 
@@ -66,11 +71,8 @@ public class TimeEntryException {
 
     @PrePersist
     public void generateIdAndTimestamp() {
-        if (exceptionId == null) {
-            exceptionId = UUIDv7Generator.generate();
-        }
         if (detectedAt == null) {
-            detectedAt = Instant.now();
+            detectedAt = Instant.now(Clock.systemUTC());
         }
     }
 
@@ -168,14 +170,12 @@ public class TimeEntryException {
     }
 
     public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+}
 
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+}
 }

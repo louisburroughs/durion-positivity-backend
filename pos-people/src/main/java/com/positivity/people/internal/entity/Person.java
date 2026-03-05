@@ -1,5 +1,7 @@
 package com.positivity.people.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 import com.positivity.people.internal.enums.EmployeeStatus;
 
+import com.positivity.shared.id.UUIDv7Id;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Data
@@ -21,16 +24,15 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 @Builder
 public class Person {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
     @PrePersist
     public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
         if (status != null && statusEffectiveAt == null) {
-            statusEffectiveAt = Instant.now();
+            statusEffectiveAt = Instant.now(Clock.systemUTC());
         }
     }
 
@@ -82,7 +84,7 @@ public class Person {
     @PreUpdate
     public void ensureStatusEffectiveAt() {
         if (status != null && statusEffectiveAt == null) {
-            statusEffectiveAt = Instant.now();
+            statusEffectiveAt = Instant.now(Clock.systemUTC());
         }
     }
 }

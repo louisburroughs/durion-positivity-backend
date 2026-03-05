@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,6 +57,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Picking Contract Behavior — Story #179")
 class PickingContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
         @Autowired
         private MockMvc mockMvc;
@@ -91,8 +96,8 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
                                 PickListStatus.READY_TO_PICK,
                                 0,
                                 null,
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 // BLOCKED: releasePickList does not exist on PickListService
                 when(pickListService.releasePickList(eq(pickListId))).thenReturn(mockResponse);

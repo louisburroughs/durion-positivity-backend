@@ -9,9 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Slf4j
 @Data
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "dimensions")
 @AllArgsConstructor
 @NoArgsConstructor

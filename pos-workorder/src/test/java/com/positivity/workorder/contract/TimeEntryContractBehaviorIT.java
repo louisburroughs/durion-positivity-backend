@@ -1,5 +1,8 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.equalTo;
 
 import java.time.Instant;
@@ -54,6 +57,8 @@ import io.restassured.http.ContentType;
 @DisplayName("TimeEntry Approve/Reject Contract Behavior Tests — GREEN phase (CAP-139 Story #66)")
 @Import(ContractTestConfiguration.class)
 class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
 
     @Autowired
     private TimeEntryRepository timeEntryRepository;
@@ -234,8 +239,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
         return TimeEntry.builder()
                 .personId(UUID.randomUUID())
                 .workOrderId(UUID.randomUUID())
-                .startAt(Instant.now().minusSeconds(3600))
-                .endAt(Instant.now())
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
+                .endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.SUBMITTED)
                 .build();
     }
@@ -244,8 +249,8 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
         return TimeEntry.builder()
                 .personId(UUID.randomUUID())
                 .workOrderId(UUID.randomUUID())
-                .startAt(Instant.now().minusSeconds(3600))
-                .endAt(Instant.now())
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
+                .endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.APPROVED)
                 .build();
     }

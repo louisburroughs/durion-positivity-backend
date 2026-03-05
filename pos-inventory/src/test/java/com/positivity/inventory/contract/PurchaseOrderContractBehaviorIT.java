@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -65,6 +68,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Purchase Order Contract Behavior — Story #572")
 class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -284,8 +288,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 1, null, "Widget A", BigDecimal.valueOf(5), 10_000L, "TAX-10", null);
 
                 CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
-                                vendorId, LocalDate.now(), "USD", "NET30",
-                                LocalDate.now().plusDays(30), null, "procurement-agent", "Test PO",
+                                vendorId, LocalDate.now(TEST_CLOCK), "USD", "NET30",
+                                LocalDate.now(TEST_CLOCK).plusDays(30), null, "procurement-agent", "Test PO",
                                 List.of(line));
 
                 PurchaseOrderResponse mockResponse = PurchaseOrderResponse.builder()
@@ -299,8 +303,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 .taxMinor(5_000L)
                                 .grandTotalMinor(55_000L) // subtotal + tax
                                 .openBalanceMinor(55_000L)
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .lines(List.of(buildLineResponse(UUID.randomUUID(), 1, BigDecimal.valueOf(5), 10_000L,
                                                 50_000L, 5_000L, BigDecimal.valueOf(5))))
                                 .build();
@@ -374,7 +378,7 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 1, null, "Widget A revised", BigDecimal.valueOf(5), 12_000L, null, null);
 
                 RevisePurchaseOrderRequest reviseRequest = new RevisePurchaseOrderRequest(
-                                LocalDate.now(), "NET45", LocalDate.now().plusDays(45),
+                                LocalDate.now(TEST_CLOCK), "NET45", LocalDate.now(TEST_CLOCK).plusDays(45),
                                 null, "procurement-agent", "Revised due to price update",
                                 List.of(revisedLine), "Vendor price adjustment");
 
@@ -389,8 +393,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 .taxMinor(0L)
                                 .grandTotalMinor(60_000L)
                                 .openBalanceMinor(60_000L)
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(purchaseOrderService.revisePurchaseOrder(eq(poId), any(RevisePurchaseOrderRequest.class),
@@ -441,10 +445,10 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 .grandTotalMinor(220_000L)
                                 .openBalanceMinor(220_000L)
                                 .approverId("approver-user")
-                                .approvalTimestamp(Instant.now())
+                                .approvalTimestamp(Instant.now(TEST_CLOCK))
                                 .approvalNotes("Reviewed and approved")
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .lines(List.of(buildLineResponse(UUID.randomUUID(), 1,
                                                 BigDecimal.valueOf(10), 20_000L, 200_000L, 20_000L,
                                                 BigDecimal.valueOf(10))))
@@ -497,7 +501,7 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                         "poId", poId.toString(),
                                         "failureReason", "GL encumbrance post failed: ledger unavailable",
                                         "retryCount", 3,
-                                        "timestamp", Instant.now().toString()));
+                                        "timestamp", Instant.now(TEST_CLOCK).toString()));
                         throw new RuntimeException("GL encumbrance post failed: ledger unavailable");
                 }).when(purchaseOrderService).approvePurchaseOrder(eq(poId), any(ApprovePurchaseOrderRequest.class),
                                 any(String.class));
@@ -536,7 +540,7 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         void createPo_missingAuthority_returns403() throws Exception {
                 // Issue #572: ADR-0011/ADR-0014 — missing PO create authority must yield 403
                 String requestBody = objectMapper.writeValueAsString(new CreatePurchaseOrderRequest(
-                                UUID.randomUUID(), LocalDate.now(), "USD", null, null, null, null, null,
+                                UUID.randomUUID(), LocalDate.now(TEST_CLOCK), "USD", null, null, null, null, null,
                                 List.of(new PurchaseOrderLineRequest(1, null, "Widget", BigDecimal.ONE, 1_000L, null,
                                                 null))));
 
@@ -603,9 +607,9 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 .openBalanceMinor(openBalanceMinor(grandTotalMinor))
                                 .encumbranceRef(encumbranceRef)
                                 .approverId("approver-user")
-                                .approvalTimestamp(Instant.now())
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .approvalTimestamp(Instant.now(TEST_CLOCK))
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
         }
 
