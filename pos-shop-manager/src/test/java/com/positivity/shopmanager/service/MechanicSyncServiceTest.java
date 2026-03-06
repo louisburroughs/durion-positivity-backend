@@ -1,4 +1,4 @@
-package com.positivity.shopmanager.cap138;
+package com.positivity.shopmanager.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -7,19 +7,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
-import com.positivity.shopmanager.service.dto.HrMechanicEvent;
-import com.positivity.shopmanager.internal.entity.HrIntegrationLog;
-import com.positivity.shopmanager.internal.entity.Mechanic;
-import com.positivity.shopmanager.internal.entity.MechanicSkill;
-import com.positivity.shopmanager.service.enums.HrEventType;
-import com.positivity.shopmanager.internal.enums.MechanicStatus;
-import com.positivity.shopmanager.internal.repository.HrIntegrationLogRepository;
-import com.positivity.shopmanager.internal.repository.MechanicAuditLogRepository;
-import com.positivity.shopmanager.internal.repository.MechanicRepository;
-import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
-import com.positivity.shopmanager.internal.service.MechanicSyncServiceImpl;
-import com.positivity.shopmanager.service.MechanicSyncService;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -35,6 +22,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.positivity.shopmanager.internal.entity.HrIntegrationLog;
+import com.positivity.shopmanager.internal.entity.Mechanic;
+import com.positivity.shopmanager.internal.entity.MechanicSkill;
+import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.repository.HrIntegrationLogRepository;
+import com.positivity.shopmanager.internal.repository.MechanicAuditLogRepository;
+import com.positivity.shopmanager.internal.repository.MechanicRepository;
+import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
+import com.positivity.shopmanager.internal.service.MechanicSyncServiceImpl;
+import com.positivity.shopmanager.service.dto.HrMechanicEvent;
+import com.positivity.shopmanager.service.enums.HrEventType;
 
 /**
  * Service-layer unit tests for {@link MechanicSyncService} — HR mechanic roster

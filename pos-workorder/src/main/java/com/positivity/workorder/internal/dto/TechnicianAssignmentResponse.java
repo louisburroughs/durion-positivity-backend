@@ -1,17 +1,18 @@
 package com.positivity.workorder.internal.dto;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Response DTO for technician assignment operations.
@@ -85,7 +86,7 @@ public class TechnicianAssignmentResponse {
                 .technicianId(assignment.getTechnicianId().toString())
                 .technicianName(null) // To be populated by controller if needed
                 .assignedAt(assignment.getAssignedAt())
-                .assignedBy(assignment.getAssignedBy().toString())
+                .assignedBy(assignment.getAssignedBy())
                 .previousTechnicianId(previousTechId)
                 .status(workorderStatus)
                 .message(message)
@@ -132,7 +133,7 @@ public class TechnicianAssignmentResponse {
                     .technicianId(assignment.getTechnicianId().toString())
                     .technicianName(null) // To be populated if needed
                     .assignedAt(assignment.getAssignedAt())
-                    .assignedBy(assignment.getAssignedBy().toString())
+                    .assignedBy(assignment.getAssignedBy())
                     .unassignedAt(assignment.getUnassignedAt())
                     .reason(assignment.getReassignmentReason())
                     .notes(assignment.getNotes())
@@ -156,7 +157,7 @@ public class TechnicianAssignmentResponse {
                 .workorderId(currentAssignment.getWorkorderId().toString())
                 .technicianId(currentAssignment.getTechnicianId().toString())
                 .assignedAt(currentAssignment.getAssignedAt())
-                .assignedBy(currentAssignment.getAssignedBy().toString())
+                .assignedBy(currentAssignment.getAssignedBy())
                 .currentStatus(currentWorkorderStatus)
                 .assignmentHistory(historyEntries)
                 .build();

@@ -95,7 +95,7 @@ public class PersonServiceImpl implements PersonService {
         person.setFirstName(request.getFirstName().trim());
         person.setLastName(request.getLastName().trim());
         person.setPersonId(peoplePersonId);
-        person.setCustomerNumber("CUST-PER-" + UUIDv7Generator.generate().toString().substring(0, 8));
+        person.setCustomerNumber("CUST-PER-" + UUIDv7Generator.generate());
         person.setPreferredContactMethod(request.getPreferredContactMethod());
 
         // Save person first to get ID

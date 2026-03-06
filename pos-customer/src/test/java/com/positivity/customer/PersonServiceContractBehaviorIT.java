@@ -96,7 +96,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 assertThat(response.getPreferredContactMethod()).isEqualTo(PreferredContactMethod.EMAIL);
 
                 // Verify in database
-                PersonParty savedPerson = personRepository.findById(response.getPersonId()).orElse(null);
+                PersonParty savedPerson = personRepository.findByPersonId(response.getPersonId()).orElse(null);
                 assertThat(savedPerson).isNotNull();
                 assertThat(savedPerson.getFirstName()).isEqualTo("John");
                 assertThat(savedPerson.getLastName()).isEqualTo("Doe");
@@ -144,7 +144,9 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 assertThat(response.getContactPointsCreated()).isEqualTo(4);
 
                 // Verify in database
-                List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(response.getPersonId());
+                PersonParty personParty = personRepository.findByPersonId(response.getPersonId()).orElseThrow();
+                List<ContactPoint> contactPoints = contactPointRepository
+                                .findByPersonPartyId(personParty.getPersonPartyId());
                 assertThat(contactPoints).hasSize(4);
 
                 // Verify email contact points
@@ -319,7 +321,9 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: email stored in lowercase
-                List<ContactPoint> contacts = contactPointRepository.findByPersonPartyId(response.getPersonId());
+                PersonParty personParty = personRepository.findByPersonId(response.getPersonId()).orElseThrow();
+                List<ContactPoint> contacts = contactPointRepository
+                                .findByPersonPartyId(personParty.getPersonPartyId());
                 assertThat(contacts).hasSize(1);
                 assertThat(contacts.get(0).getValue()).isEqualTo("test.user@example.com");
         }

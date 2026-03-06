@@ -75,6 +75,7 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
         party.setStatus(AccountStatus.ACTIVE);
 
         Contact contact = new Contact();
+        contact.setPersonId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
         contact.setFirstName("Test");
         contact.setLastName("Contact");
         contact.setActive(true);

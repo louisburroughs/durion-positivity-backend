@@ -63,6 +63,8 @@ import com.positivity.accounting.internal.service.DefaultGLMappingServiceImpl;
 @DisplayName("DefaultGLMappingServiceImpl Unit Tests")
 class DefaultGLMappingServiceTest {
 
+    private static final String DEFAULT_MAPPING_FOR_INVOICE_CREATION = "Default mapping for invoice creation";
+
     private static final AtomicInteger UUID_COUNTER = new AtomicInteger(1000);
 
     private static UUID nextUuid() {
@@ -105,7 +107,7 @@ class DefaultGLMappingServiceTest {
                 .organizationId(ORG_ID)
                 .debitAccountId(DEBIT_ACCOUNT_ID)
                 .creditAccountId(CREDIT_ACCOUNT_ID)
-                .description("Default mapping for invoice creation")
+                .description(DEFAULT_MAPPING_FOR_INVOICE_CREATION)
                 .active(true)
                 .build();
 
@@ -115,7 +117,7 @@ class DefaultGLMappingServiceTest {
         savedMapping.setOrganizationId(ORG_ID);
         savedMapping.setDebitAccountId(DEBIT_ACCOUNT_ID);
         savedMapping.setCreditAccountId(CREDIT_ACCOUNT_ID);
-        savedMapping.setDescription("Default mapping for invoice creation");
+        savedMapping.setDescription(DEFAULT_MAPPING_FOR_INVOICE_CREATION);
         savedMapping.setActive(true);
         savedMapping.setCreatedAt(Instant.now(TEST_CLOCK));
         savedMapping.setCreatedBy("test-user");
@@ -167,7 +169,7 @@ class DefaultGLMappingServiceTest {
             assertThat(response.getCreditAccountId()).isEqualTo(CREDIT_ACCOUNT_ID);
             assertThat(response.getCreditAccountCode()).isEqualTo("4000");
             assertThat(response.getCreditAccountName()).isEqualTo("Revenue");
-            assertThat(response.getDescription()).isEqualTo("Default mapping for invoice creation");
+            assertThat(response.getDescription()).isEqualTo(DEFAULT_MAPPING_FOR_INVOICE_CREATION);
             assertThat(response.getActive()).isTrue();
 
             verify(glAccountService).validateAccountForPosting(eq(DEBIT_ACCOUNT_ID), any(LocalDateTime.class));
@@ -194,7 +196,7 @@ class DefaultGLMappingServiceTest {
             assertThat(captured.getOrganizationId()).isEqualTo(ORG_ID);
             assertThat(captured.getDebitAccountId()).isEqualTo(DEBIT_ACCOUNT_ID);
             assertThat(captured.getCreditAccountId()).isEqualTo(CREDIT_ACCOUNT_ID);
-            assertThat(captured.getDescription()).isEqualTo("Default mapping for invoice creation");
+            assertThat(captured.getDescription()).isEqualTo(DEFAULT_MAPPING_FOR_INVOICE_CREATION);
             assertThat(captured.getActive()).isTrue();
         }
 

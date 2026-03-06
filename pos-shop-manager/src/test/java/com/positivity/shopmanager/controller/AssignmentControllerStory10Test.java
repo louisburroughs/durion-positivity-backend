@@ -1,4 +1,4 @@
-package com.positivity.shopmanager.cap249;
+package com.positivity.shopmanager.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;

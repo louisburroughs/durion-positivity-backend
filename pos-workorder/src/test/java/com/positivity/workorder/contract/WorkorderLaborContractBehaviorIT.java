@@ -1,15 +1,20 @@
 package com.positivity.workorder.contract;
 
-import java.time.ZoneOffset;
-import java.time.Instant;
-import java.time.Clock;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -20,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
-import com.positivity.workorder.entity.*;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
@@ -31,7 +35,11 @@ import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
-import com.positivity.workorder.internal.repository.*;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import io.restassured.http.ContentType;
