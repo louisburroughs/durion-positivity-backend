@@ -48,11 +48,11 @@ import com.positivity.price.internal.repository.PromotionOfferRepository;
 @DisplayName("Apply Promotion Integration Tests")
 class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
 
-        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-                        java.time.ZoneOffset.UTC);
-
         @Autowired
         private MockMvc mockMvc;
+
+        @Autowired
+        private Clock clock;
 
         @Autowired
         private PromotionOfferRepository promotionOfferRepository;
@@ -91,7 +91,7 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         @DisplayName("APT-001: ACTIVE PERCENT_LABOR promotion → 200 with negative adjustment and reduced total")
         void givenActivePromotion_whenApply_thenReturns200WithAdjustment() throws Exception {
                 seedActiveOffer("SUMMER20", DiscountType.PERCENT_LABOR, BigDecimal.valueOf(20),
-                                LocalDate.now(FIXED_CLOCK).minusDays(1), LocalDate.now(FIXED_CLOCK).plusDays(30));
+                                LocalDate.now(clock).minusDays(1), LocalDate.now(clock).plusDays(30));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -136,8 +136,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
                 offer.setName("Inactive Promo");
                 offer.setDiscountType(DiscountType.PERCENT_LABOR);
                 offer.setDiscountValue(BigDecimal.valueOf(10));
-                offer.setStartDate(LocalDate.now(FIXED_CLOCK).minusDays(10));
-                offer.setEndDate(LocalDate.now(FIXED_CLOCK).plusDays(10));
+                offer.setStartDate(LocalDate.now(clock).minusDays(10));
+                offer.setEndDate(LocalDate.now(clock).plusDays(10));
                 offer.setStatus(PromotionStatus.INACTIVE);
                 promotionOfferRepository.save(offer);
 
@@ -161,7 +161,7 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         @DisplayName("APT-004: Expired date window → 400 PROMO_NOT_APPLICABLE")
         void givenExpiredDateWindow_whenApply_thenReturns400WithNotApplicable() throws Exception {
                 seedActiveOffer("EXPIRED99", DiscountType.PERCENT_LABOR, BigDecimal.valueOf(10),
-                                LocalDate.now(FIXED_CLOCK).minusDays(30), LocalDate.now(FIXED_CLOCK).minusDays(1));
+                                LocalDate.now(clock).minusDays(30), LocalDate.now(clock).minusDays(1));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -185,7 +185,7 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         @DisplayName("APT-005: FIXED_INVOICE promotion → 200 with correct flat discount applied")
         void givenFixedInvoicePromo_whenApply_thenDiscountIsFixed() throws Exception {
                 seedActiveOffer("FIXED50", DiscountType.FIXED_INVOICE, BigDecimal.valueOf(50),
-                                LocalDate.now(FIXED_CLOCK).minusDays(1), LocalDate.now(FIXED_CLOCK).plusDays(30));
+                                LocalDate.now(clock).minusDays(1), LocalDate.now(clock).plusDays(30));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -208,8 +208,8 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         @DisplayName("APT-006: Eligibility rule rejects account → 400 PROMO_NOT_APPLICABLE")
         void givenEligibilityRuleRejectsAccount_whenApply_thenReturns400NotApplicable() throws Exception {
                 PromotionOffer offer = seedActiveOffer("FLEETONLY", DiscountType.PERCENT_LABOR,
-                                BigDecimal.valueOf(10), LocalDate.now(FIXED_CLOCK).minusDays(30),
-                                LocalDate.now(FIXED_CLOCK).plusDays(30));
+                                BigDecimal.valueOf(10), LocalDate.now(clock).minusDays(30),
+                                LocalDate.now(clock).plusDays(30));
 
                 PromotionEligibilityRule rule = new PromotionEligibilityRule();
                 rule.setPromotionId(offer.getPromotionOfferId());
@@ -259,7 +259,7 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         @DisplayName("APT-008: POST /v1/promotions/offers/apply with vehicleId passes vehicleId to eligibility evaluation")
         void applyPromotion_withVehicleId_passesVehicleIdToEligibilityCheck() throws Exception {
                 seedActiveOffer("VEHICLE20", DiscountType.PERCENT_LABOR, BigDecimal.valueOf(20),
-                                LocalDate.now(FIXED_CLOCK).minusDays(1), LocalDate.now(FIXED_CLOCK).plusDays(30));
+                                LocalDate.now(clock).minusDays(1), LocalDate.now(clock).plusDays(30));
                 UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/apply")
@@ -282,7 +282,7 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
         @DisplayName("APT-009: usageLimit reached after first apply → second apply returns 400 PROMO_NOT_APPLICABLE")
         void givenUsageLimitOne_whenApplyTwice_thenSecondAttemptReturns400() throws Exception {
                 PromotionOffer offer = seedActiveOffer("LIMIT1", DiscountType.PERCENT_LABOR, BigDecimal.valueOf(10),
-                                LocalDate.now(FIXED_CLOCK).minusDays(1), LocalDate.now(FIXED_CLOCK).plusDays(30));
+                                LocalDate.now(clock).minusDays(1), LocalDate.now(clock).plusDays(30));
                 offer.setUsageLimit(1);
                 promotionOfferRepository.save(offer);
 
