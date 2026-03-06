@@ -24,8 +24,7 @@ import com.positivity.catalog.internal.service.CatalogServiceImpl;
 @DisplayName("MSRP Contract Behavioral Tests")
 class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
 
-        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-                        java.time.ZoneOffset.UTC);
+        private static final Clock TEST_CLOCK = Clock.systemUTC();
 
         @Autowired
         private CatalogServiceImpl catalogService;
@@ -41,7 +40,7 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "amount", "199.9900",
                                                 "currency", "USD",
                                                 "effectiveStartDate",
-                                                LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
+                                                LocalDate.now(TEST_CLOCK).minusDays(1).toString(),
                                                 "createdByUserId",
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated())
@@ -49,7 +48,7 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(jsonPath("$.amount").value("199.9900"));
 
                 mockMvc.perform(withAuth(get("/v1/products/{productId}/msrp/active", productId)
-                                .param("asOf", LocalDate.now(FIXED_CLOCK).toString())))
+                                .param("asOf", LocalDate.now(TEST_CLOCK).toString())))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.productId").value(productId.toString()))
                                 .andExpect(jsonPath("$.amount").value("199.9900"));
@@ -65,8 +64,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "149.9900",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now(FIXED_CLOCK).toString(),
-                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
+                                                "effectiveStartDate", LocalDate.now(TEST_CLOCK).toString(),
+                                                "effectiveEndDate", LocalDate.now(TEST_CLOCK).minusDays(1).toString(),
                                                 "createdByUserId",
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isBadRequest());
@@ -83,8 +82,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "amount", "99.9900",
                                                 "currency", "USD",
                                                 "effectiveStartDate",
-                                                LocalDate.now(FIXED_CLOCK).minusDays(2).toString(),
-                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(2).toString(),
+                                                LocalDate.now(TEST_CLOCK).minusDays(2).toString(),
+                                                "effectiveEndDate", LocalDate.now(TEST_CLOCK).plusDays(2).toString(),
                                                 "createdByUserId",
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
@@ -94,8 +93,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "109.9900",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now(FIXED_CLOCK).plusDays(1).toString(),
-                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(4).toString(),
+                                                "effectiveStartDate", LocalDate.now(TEST_CLOCK).plusDays(1).toString(),
+                                                "effectiveEndDate", LocalDate.now(TEST_CLOCK).plusDays(4).toString(),
                                                 "createdByUserId",
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isConflict());
@@ -112,8 +111,8 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "amount", "79.9900",
                                                 "currency", "USD",
                                                 "effectiveStartDate",
-                                                LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
-                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(10).toString(),
+                                                LocalDate.now(TEST_CLOCK).minusDays(1).toString(),
+                                                "effectiveEndDate", LocalDate.now(TEST_CLOCK).plusDays(10).toString(),
                                                 "createdByUserId",
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated())
@@ -130,15 +129,15 @@ class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "amount", "84.9900",
                                                 "currency", "USD",
                                                 "effectiveStartDate",
-                                                LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
-                                                "effectiveEndDate", LocalDate.now(FIXED_CLOCK).plusDays(10).toString(),
+                                                LocalDate.now(TEST_CLOCK).minusDays(1).toString(),
+                                                "effectiveEndDate", LocalDate.now(TEST_CLOCK).plusDays(10).toString(),
                                                 "createdByUserId",
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.amount").value("84.9900"));
 
                 mockMvc.perform(withAuth(get("/v1/products/{productId}/msrp/active", productId)
-                                .param("asOf", LocalDate.now(FIXED_CLOCK).toString())))
+                                .param("asOf", LocalDate.now(TEST_CLOCK).toString())))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.amount").value("84.9900"));
         }

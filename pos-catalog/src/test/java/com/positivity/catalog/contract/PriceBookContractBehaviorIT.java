@@ -26,8 +26,7 @@ import com.positivity.catalog.internal.service.CatalogServiceImpl;
 @DisplayName("Price Book Contract Behavioral Tests")
 class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
 
-        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-                        java.time.ZoneOffset.UTC);
+        private static final Clock TEST_CLOCK = Clock.systemUTC();
 
         @Autowired
         private CatalogServiceImpl catalogService;
@@ -87,7 +86,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
-                                                "asOf", LocalDate.now(FIXED_CLOCK).toString())))))
+                                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("59.9900"));
@@ -133,7 +132,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
-                                                "asOf", LocalDate.now(FIXED_CLOCK).toString())))))
+                                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("39.9900"));
@@ -205,7 +204,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
                                                 "currency", "cad",
-                                                "asOf", LocalDate.now(FIXED_CLOCK).toString())))))
+                                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("79.9900"))
@@ -224,7 +223,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "amount", "88.8800",
                                                 "currency", "USD",
                                                 "effectiveStartDate",
-                                                LocalDate.now(FIXED_CLOCK).minusDays(1).toString(),
+                                                LocalDate.now(TEST_CLOCK).minusDays(1).toString(),
                                                 "createdByUserId",
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
@@ -261,7 +260,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
-                                                "asOf", LocalDate.now(FIXED_CLOCK).toString())))))
+                                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("MSRP"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("88.8800"));

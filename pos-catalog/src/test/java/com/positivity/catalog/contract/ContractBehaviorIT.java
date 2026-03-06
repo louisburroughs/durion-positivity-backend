@@ -686,7 +686,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 "name", name,
                                 "shortDescription", name + " short description",
                                 "longDescription", name + " long description",
-                                "sku", "SKU-" + UUID.fromString("00000000-0000-0000-0000-000000000001")));
+                                "sku", "SKU-" + UUID.randomUUID()));
         }
 
         private String guardrailPolicyPayload(UUID locationId, BigDecimal minMarginPercent,
