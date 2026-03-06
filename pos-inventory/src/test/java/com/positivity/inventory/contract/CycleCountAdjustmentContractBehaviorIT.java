@@ -117,16 +117,17 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
         /**
          * Verifies that approving a PENDING_APPROVAL adjustment returns 200 with
          * POSTED status and the approver's user ID resolved from the security context
-         * (ADR-0018: actor from X-User-Id header injected by gateway).
+         * (ADR-0018: actor from authenticated security context / X-User header).
          */
         @Test
-        @DisplayName("AC-26-3: approving pending adjustment returns 200 with POSTED status and approver ID")
+        @DisplayName("AC-26-3: approving pending adjustment returns 200 with POSTED status and actor from security context")
         void approveAdjustment_pendingApproval_returns200WithPostedStatusAndApproverId() throws Exception {
                 seedLowThreshold();
                 UUID adjustmentId = createPendingApprovalAdjustment(
                                 UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-                // Issue #26: approverUserId field, and X-User-Id sets ADR-0018 actor
+                // Issue #26: approverUserId field is accepted, but actor is sourced from
+                // authenticated security context (X-User).
                 String approveBody = objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
                                                 .put("approverUserId", "manager-1")
@@ -134,12 +135,11 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 mockMvc.perform(withGatewayAuth(
                                 post("/v1/inventory/cycleCountAdjustments/{adjustmentId}/approve", adjustmentId))
-                                .header("X-User-Id", "manager-1")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(approveBody))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.status").value("POSTED"))
-                                .andExpect(jsonPath("$.approvedByUserId").value("manager-1"));
+                                .andExpect(jsonPath("$.approvedByUserId").value("contract-test-user"));
         }
 
         // ─── AC-26-4: Reject pending adjustment ──────────────────────────────────

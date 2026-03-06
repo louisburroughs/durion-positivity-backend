@@ -35,8 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("Cycle Count Plan Contract Behavior")
 class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
 
-        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
-                        java.time.ZoneOffset.UTC);
+        private static final Clock TEST_CLOCK = Clock.systemUTC();
 
         @Autowired
         private MockMvc mockMvc;
@@ -67,7 +66,7 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
                                 List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001")),
                                 "Q1 Zone A Audit",
-                                LocalDate.now(FIXED_CLOCK).plusDays(7));
+                                LocalDate.now(TEST_CLOCK).plusDays(7));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountPlans"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -90,7 +89,7 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
                                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                 List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")),
                                 "Past date plan",
-                                LocalDate.now(FIXED_CLOCK).minusDays(1));
+                                LocalDate.now(TEST_CLOCK).minusDays(1));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountPlans"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -112,7 +111,7 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
                                                 .put("locationId",
                                                                 UUID.fromString("00000000-0000-0000-0000-000000000001")
                                                                                 .toString())
-                                                .put("scheduledDate", LocalDate.now(FIXED_CLOCK).plusDays(7).toString())
+                                                .put("scheduledDate", LocalDate.now(TEST_CLOCK).plusDays(7).toString())
                                                 .set("zoneIds", objectMapper.createArrayNode()));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountPlans"))
@@ -132,7 +131,7 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #176: locationId=null → 400
                 var node = objectMapper.createObjectNode();
                 node.putNull("locationId");
-                node.put("scheduledDate", LocalDate.now(FIXED_CLOCK).plusDays(7).toString());
+                node.put("scheduledDate", LocalDate.now(TEST_CLOCK).plusDays(7).toString());
                 var zoneArray = objectMapper.createArrayNode();
                 zoneArray.add(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
                 node.set("zoneIds", zoneArray);
@@ -152,7 +151,7 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("AC-176-5: get existing cycle count plan returns 200 with matching planId")
         void getCycleCountPlan_existingPlan_returns200() throws Exception {
-                UUID planId = createPlan("Q2 Zone B Audit", LocalDate.now(FIXED_CLOCK).plusDays(3));
+                UUID planId = createPlan("Q2 Zone B Audit", LocalDate.now(TEST_CLOCK).plusDays(3));
 
                 mockMvc.perform(withGatewayAuth(
                                 get("/v1/inventory/cycleCountPlans/{planId}", planId)))

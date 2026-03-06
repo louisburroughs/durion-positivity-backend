@@ -1,6 +1,5 @@
 package com.positivity.catalog.contract;
 
-import java.time.ZoneOffset;
 import java.time.Clock;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -40,7 +39,7 @@ import org.springframework.http.MediaType;
  */
 @DisplayName("Product Lifecycle Contract Behavioral Tests")
 class ProductLifecycleContractBehaviorIT extends BaseContractIntegrationTest {
-        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private static final Clock TEST_CLOCK = Clock.systemUTC();
 
         private static final String LIFECYCLE_STATE = "lifecycleState";
         @Autowired
