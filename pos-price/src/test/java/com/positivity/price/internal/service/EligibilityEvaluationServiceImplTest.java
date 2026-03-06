@@ -45,7 +45,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenAccountIdListRule_andMatchingAccount_whenEvaluate_thenEligible() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.IN,
                                 accountId.toString());
 
@@ -68,7 +68,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenVehicleTagRule_andTagPresent_whenEvaluate_thenEligible() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 PromotionEligibilityRule rule = rule(ConditionType.VEHICLE_TAG, RuleOperator.EQUALS, "tractor");
 
                 when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
@@ -90,7 +90,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenFleetSizeRule_andFleetTooSmall_whenEvaluate_thenFleetSizeTooSmall() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 PromotionEligibilityRule rule = rule(
                                 ConditionType.ACCOUNT_FLEET_SIZE,
                                 RuleOperator.GREATER_THAN_OR_EQUAL_TO,
@@ -115,7 +115,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenVehicleTagRule_andTagAbsent_whenEvaluate_thenVehicleTagNotPresent() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 PromotionEligibilityRule rule = rule(ConditionType.VEHICLE_TAG, RuleOperator.EQUALS, "tractor");
 
                 when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
@@ -144,8 +144,8 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenOrCombinationRules_andFirstFailsSecondPasses_whenEvaluate_thenEligible() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
                 PromotionEligibilityRule rule1 = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.IN, "other-uuid");
                 rule1.setRuleCombination(RuleCombination.OR);
@@ -191,8 +191,8 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenAccountIdListRule_andNonMatchingAccount_whenEvaluate_thenNotEligible() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID otherAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+                UUID otherAccountId = UUID.fromString("00000000-0000-0000-0000-000000000003");
                 PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.IN,
                                 otherAccountId.toString());
 
@@ -215,7 +215,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenAccountIdExclusionListRule_andMatchingAccount_whenEvaluate_thenNotEligible() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.NOT_IN,
                                 accountId.toString());
 
@@ -238,7 +238,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenAccountIdListRule_withUnsupportedOperator_whenEvaluate_thenEvaluationError() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.EQUALS,
                                 accountId.toString());
 
@@ -280,7 +280,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenVehicleTagRule_withUnsupportedOperator_whenEvaluate_thenEvaluationError() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000003");
                 PromotionEligibilityRule rule = rule(ConditionType.VEHICLE_TAG, RuleOperator.IN, "tractor");
 
                 when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
@@ -300,7 +300,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenMatchingPromotionAndRule_whenDeleteRule_thenDeletesScopedRule() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID ruleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID ruleId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 when(ruleRepo.deleteByRuleIdAndPromotionId(ruleId, promotionId)).thenReturn(1L);
 
                 EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
@@ -317,7 +317,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenRuleNotUnderPromotion_whenDeleteRule_thenThrowsNotFound() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID ruleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID ruleId = UUID.fromString("00000000-0000-0000-0000-000000000003");
                 when(ruleRepo.deleteByRuleIdAndPromotionId(ruleId, promotionId)).thenReturn(0L);
 
                 EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(

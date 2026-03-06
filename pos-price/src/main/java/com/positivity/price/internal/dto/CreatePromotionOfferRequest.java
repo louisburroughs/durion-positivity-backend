@@ -1,42 +1,62 @@
 package com.positivity.price.internal.dto;
 
 import com.positivity.price.internal.enums.DiscountType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.jspecify.annotations.Nullable;
 
 /** API request payload to create a promotion offer. Issue: #97 */
+@Schema(description = "Request payload for creating a promotion offer")
 public class CreatePromotionOfferRequest {
 
-    @NotBlank
+    @Schema(description = "Unique promotion code", requiredMode = Schema.RequiredMode.REQUIRED, example = "SUMMER20")
+    @NotBlank(message = "promoCode is required")
+    @Size(max = 64, message = "promoCode must not exceed 64 characters")
     private String promoCode;
 
-    @NotBlank
+    @Schema(description = "Display name for the promotion", requiredMode = Schema.RequiredMode.REQUIRED, example = "Summer Labor Discount")
+    @NotBlank(message = "name is required")
+    @Size(max = 255, message = "name must not exceed 255 characters")
     private String name;
 
+    @Schema(description = "Optional promotion description", example = "20% off labor for seasonal service", nullable = true)
     @Nullable
+    @Size(max = 255, message = "description must not exceed 255 characters")
     private String description;
 
-    @NotNull
+    @Schema(description = "Discount strategy to apply", requiredMode = Schema.RequiredMode.REQUIRED, example = "PERCENT_LABOR")
+    @NotNull(message = "discountType is required")
     private DiscountType discountType;
 
-    @NotNull
-    @DecimalMin("0.01")
+    @Schema(description = "Discount value based on selected discount type", requiredMode = Schema.RequiredMode.REQUIRED, example = "20.00")
+    @NotNull(message = "discountValue is required")
+    @DecimalMin(value = "0.01", message = "discountValue must be at least 0.01")
+    @Digits(integer = 10, fraction = 2, message = "discountValue must have up to 10 integer digits and 2 decimal places")
     private BigDecimal discountValue;
 
-    @NotNull
+    @Schema(description = "Date when promotion becomes valid", requiredMode = Schema.RequiredMode.REQUIRED, example = "2026-03-01")
+    @NotNull(message = "startDate is required")
     private LocalDate startDate;
 
-    @NotNull
+    @Schema(description = "Date when promotion expires", requiredMode = Schema.RequiredMode.REQUIRED, example = "2026-03-31")
+    @NotNull(message = "endDate is required")
     private LocalDate endDate;
 
+    @Schema(description = "Maximum number of times promotion can be applied", example = "100", nullable = true)
     @Nullable
+    @Positive(message = "usageLimit must be positive when provided")
     private Integer usageLimit;
 
+    @Schema(description = "Optional store/location code that scopes the promotion", example = "NYC-001", nullable = true)
     @Nullable
+    @Size(max = 255, message = "storeCode must not exceed 255 characters")
     private String storeCode;
 
     public String getPromoCode() {
