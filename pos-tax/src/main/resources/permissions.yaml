@@ -1,0 +1,8 @@
+domain: tax
+serviceName: pos-tax
+version: "1.0"
+permissions:
+  - name: "tax:calculate"
+    description: "Calculate tax for line items based on destination and jurisdiction rules"
+  - name: "tax:mode:view"
+    description: "View current tax service mode (test or production)"
