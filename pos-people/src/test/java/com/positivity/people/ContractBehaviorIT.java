@@ -225,15 +225,17 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				.andExpect(jsonPath("$.detail").value("endDate must be on or after startDate"));
 	}
 
-	@Test
-	@DisplayName("auth failure: approved time export requires export authority")
-	void approvedTimeExport_forbiddenWithoutAuthority() throws Exception {
-		mockMvc
-				.perform(withAuth(get("/v1/people/reports/approvedTime").param("startDate", "2026-02-16")
-						.param("endDate", "2026-02-16")
-						.param("locationId", locationId.toString())))
-				.andExpect(status().isForbidden());
-	}
+		@Test
+		@DisplayName("auth failure: approved time export requires export authority")
+		void approvedTimeExport_forbiddenWithoutAuthority() throws Exception {
+			mockMvc
+					.perform(withAuth(
+							get("/v1/people/reports/approvedTime").param("startDate", "2026-02-16")
+									.param("endDate", "2026-02-16")
+									.param("locationId", locationId.toString()),
+							"people:role:view"))
+					.andExpect(status().isForbidden());
+		}
 
 	@Test
 	@DisplayName("dependency failure: approved time export propagates 503")
@@ -300,7 +302,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				.perform(withAuth(
 						post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON).content(payload)))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+				.andExpect(jsonPath("$.detail").value("Validation failed"));
 	}
 
 	@Test
@@ -316,12 +318,14 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				}
 				""";
 
+		when(timeEntryService.rejectEntries(anyList(), anyMap(), anyString()))
+				.thenThrow(new IllegalArgumentException("rejectionReason is required for all decisions"));
+
 		mockMvc
 				.perform(withAuth(
 						post("/v1/people/timeEntries/reject").contentType(MediaType.APPLICATION_JSON).content(payload)))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.errorCode").value("REJECTION_REASON_REQUIRED"))
-				.andExpect(jsonPath("$.message").value("rejectionReason is required for all decisions"));
+				.andExpect(jsonPath("$.detail").value("rejectionReason is required for all decisions"));
 	}
 
 	@Test

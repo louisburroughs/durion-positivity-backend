@@ -76,7 +76,7 @@ class UserPersonLinkContractBehaviorIT extends BaseContractIntegrationTest {
 	void cp117021_getLinksByPerson_returns200() throws Exception {
 		UUID personId = createPerson();
 		UUID userIdOne = UUID.fromString("00000000-0000-0000-0000-000000000001");
-		UUID userIdTwo = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID userIdTwo = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
 		mockMvc
 				.perform(withAuth(post("/v1/people/user-links").contentType(MediaType.APPLICATION_JSON)

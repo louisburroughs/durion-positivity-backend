@@ -1,6 +1,9 @@
 package com.positivity.people.controller;
 
+import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
@@ -33,11 +36,23 @@ class UserPersonLinkControllerIT {
 	@Autowired
 	private TestRestTemplate restTemplate;
 
+	@Autowired
+	private PersonRepository personRepository;
+
+	@Autowired
+	private UserPersonLinkRepository userPersonLinkRepository;
+
+	@BeforeEach
+	void resetData() {
+		userPersonLinkRepository.deleteAll();
+		personRepository.deleteAll();
+	}
+
 	private HttpHeaders authenticatedHeaders() {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 		headers.add("X-User", "test-user");
-		headers.add("X-Authorities", "ROLE_USER");
+		headers.add("X-Authorities", "people:person:create,people:userLink:write,people:userLink:view");
 		return headers;
 	}
 
@@ -168,7 +183,7 @@ class UserPersonLinkControllerIT {
 	void findUserIdsByPersonId_success_returns200() {
 		UUID personId = createPerson("Dana", "Stone", "dana@example.com");
 		String userA = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-		String userB = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+		String userB = UUID.fromString("00000000-0000-0000-0000-000000000002").toString();
 		linkUser(userA, personId);
 		linkUser(userB, personId);
 
