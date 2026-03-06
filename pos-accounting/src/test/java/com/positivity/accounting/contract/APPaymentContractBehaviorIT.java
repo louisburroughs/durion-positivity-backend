@@ -450,7 +450,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("ERR-AP-005: List bills for non-existent vendor returns empty list")
         void testListEligibleBills_EmptyList() throws Exception {
                 // Arrange: Vendor with no bills
-                UUID nonExistentVendor = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID nonExistentVendor = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
                 // Act: GET /v1/accounting/ap/bills?vendorId={nonExistentVendor}
                 mockMvc.perform(withAuth(get(API_V1_AP_BILLS))

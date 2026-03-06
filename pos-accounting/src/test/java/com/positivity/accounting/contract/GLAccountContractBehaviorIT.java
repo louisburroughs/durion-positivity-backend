@@ -1,7 +1,5 @@
 package com.positivity.accounting.contract;
 
-import java.time.ZoneOffset;
-import java.time.Instant;
 import java.time.Clock;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,7 +39,7 @@ import com.positivity.accounting.service.GLAccountService;
  */
 @Transactional
 public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
-        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private static final Clock TEST_CLOCK = Clock.systemUTC();
 
         @Autowired
         private GLAccountService glAccountService;

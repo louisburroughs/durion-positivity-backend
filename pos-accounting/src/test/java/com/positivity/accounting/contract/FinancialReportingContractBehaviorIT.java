@@ -222,7 +222,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                                 .glAccountId(COGS_ACCOUNT_ID)
                                 .accountName("Cost of Goods Sold")
                                 .statementType(StatementType.INCOME_STATEMENT)
@@ -234,7 +234,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Balance Sheet Mappings
                 statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000003"))
                                 .glAccountId(CASH_ACCOUNT_ID)
                                 .accountName("Cash")
                                 .statementType(StatementType.BALANCE_SHEET)
@@ -245,7 +245,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000004"))
                                 .glAccountId(AP_ACCOUNT_ID)
                                 .accountName("Accounts Payable")
                                 .statementType(StatementType.BALANCE_SHEET)
@@ -256,7 +256,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 statementLineMappingRepository.save(StatementLineMapping.builder()
-                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000005"))
                                 .glAccountId(EQUITY_ACCOUNT_ID)
                                 .accountName("Owner's Equity")
                                 .statementType(StatementType.BALANCE_SHEET)

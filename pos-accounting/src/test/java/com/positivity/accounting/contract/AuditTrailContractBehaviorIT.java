@@ -389,7 +389,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
      */
     private void createTestAuditEntry(UUID orderId, UUID invoiceId, ExceptionType type) {
         AuditTrailEntry entry = new AuditTrailEntry();
-        entry.setAuditId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        entry.setAuditId(UUID.randomUUID());
         entry.setOrderId(orderId);
         entry.setInvoiceId(invoiceId);
         entry.setExceptionType(type);
