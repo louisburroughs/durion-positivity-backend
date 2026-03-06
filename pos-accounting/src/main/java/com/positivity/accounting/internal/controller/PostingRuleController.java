@@ -29,6 +29,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -39,6 +40,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/v1/accounting/posting-rules")
+@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Posting Rules", description = "Manage posting rule sets and their lifecycle.")
 @RequiredArgsConstructor
 @Validated

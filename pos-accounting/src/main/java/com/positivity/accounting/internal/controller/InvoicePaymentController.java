@@ -30,6 +30,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 
 /**
@@ -38,6 +39,7 @@ import jakarta.validation.Valid;
  */
 @RestController
 @Tag(name = "Invoice Payments", description = "Apply payments and query invoice status.")
+@SecurityRequirement(name = "bearerAuth")
 public class InvoicePaymentController {
 
     private static final Logger log = LoggerFactory.getLogger(InvoicePaymentController.class);

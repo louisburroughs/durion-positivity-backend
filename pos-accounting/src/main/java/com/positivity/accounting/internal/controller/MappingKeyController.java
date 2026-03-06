@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/v1/accounting")
+@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Mapping Keys", description = "Manage mapping keys for GL mapping taxonomy")
 public class MappingKeyController {
 

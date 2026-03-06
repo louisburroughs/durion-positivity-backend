@@ -93,7 +93,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                                 .totalPaid(BigDecimal.ZERO)
                                 .balanceDue(new BigDecimal("110.00"))
                                 .currency("USD")
-                                .invoiceDate(Instant.now(TEST_CLOCK))
+                                .invoiceDate(Instant.now(Clock.systemUTC()))
                                 .build();
                 when(invoiceServiceClient.getInvoiceDetails(any(UUID.class))).thenReturn(defaultInvoice);
 
