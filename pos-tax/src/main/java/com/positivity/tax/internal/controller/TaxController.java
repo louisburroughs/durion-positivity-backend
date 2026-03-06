@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -36,6 +37,7 @@ public class TaxController {
      * @return the calculated tax response
      */
     @PostMapping("/calculate")
+    @PreAuthorize("hasAuthority('tax:calculate')")
     @EmitEvent(id = "TAX_CALCULATE", apiVersion = "1")
     @Operation(summary = "Calculate tax", description = "Calculate tax for line items based on location. Routes to external service in production or test calculator in test mode.")
     @ApiResponse(responseCode = "200", description = "Tax calculated successfully")
@@ -60,6 +62,7 @@ public class TaxController {
      * @return response indicating test mode status
      */
     @GetMapping("/mode")
+    @PreAuthorize("hasAuthority('tax:mode:view')")
     @Operation(summary = "Get tax service mode", description = "Check if the tax service is currently in test mode or production mode")
     @ApiResponse(responseCode = "200", description = "Tax service mode retrieved successfully")
     public ResponseEntity<ModeResponse> getMode() {

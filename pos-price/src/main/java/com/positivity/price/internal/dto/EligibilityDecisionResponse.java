@@ -2,12 +2,17 @@ package com.positivity.price.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.price.internal.enums.EligibilityReasonCode;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /** API response payload for promotion eligibility evaluation. Issue: #96 */
+@Schema(description = "Eligibility evaluation result for a promotion and context")
 public class EligibilityDecisionResponse {
 
+    @Schema(description = "Whether the promotion is eligible for the provided context", example = "true")
     @JsonProperty("isEligible")
     private boolean isEligible;
+
+    @Schema(description = "Detailed ineligibility reason when eligibility is false", example = "MISSING_ACCOUNT_CONTEXT")
     private EligibilityReasonCode reasonCode;
 
     public boolean isEligible() {
