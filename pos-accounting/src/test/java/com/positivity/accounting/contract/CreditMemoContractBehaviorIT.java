@@ -93,7 +93,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                                 .totalPaid(BigDecimal.ZERO)
                                 .balanceDue(new BigDecimal("110.00"))
                                 .currency("USD")
-                                .invoiceDate(Instant.now(TEST_CLOCK).minus(10, ChronoUnit.DAYS))
+                                .invoiceDate(Instant.now(TEST_CLOCK))
                                 .build();
                 when(invoiceServiceClient.getInvoiceDetails(any(UUID.class))).thenReturn(defaultInvoice);
 
@@ -293,7 +293,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         void testListCreditMemos_FilterByInvoice() throws Exception {
                 // Arrange: Create credit memos for different invoices
                 UUID targetInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID otherInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID otherInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
                 for (int i = 0; i < 3; i++) {
                         CreditMemo cm = new CreditMemo();
