@@ -4,6 +4,11 @@ package com.positivity.poseventreceiver.internal.controller;
 import com.positivity.poseventreceiver.internal.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +45,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/v1/events")
+@Tag(name = "Event Emission", description = "Receive and persist emitted events from internal services")
 public class EmitEventController {
     private final EventDao eventDao;
 
@@ -56,10 +62,14 @@ public class EmitEventController {
      *
      * The pos-event-receiver module must NEVER emit events to itself.
      * This is an architectural invariant that must be preserved.
-     */
+    */
     @PostMapping
+    @Operation(summary = "Receive emitted event", description = "Stores a preregistered emitted event payload")
+    @ApiResponse(responseCode = "200", description = "Event stored successfully")
+    @ApiResponse(responseCode = "400", description = "Event type ID is not preregistered")
     // @EmitEvent - FORBIDDEN: See warning above. Would cause infinite recursion.
-    public ResponseEntity<String> receiveEvent(@RequestBody EmitEventRequest request) {
+    public ResponseEntity<String> receiveEvent(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event payload to persist", required = true, content = @Content(schema = @Schema(implementation = EmitEventRequest.class))) @RequestBody EmitEventRequest request) {
         if (!eventDao.isPreregistered(request.id())) {
             return ResponseEntity.badRequest().body("ID not preregistered");
         }

@@ -27,6 +27,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -122,10 +123,7 @@ public class JwtServiceImpl implements JwtService {
     @Override
     public boolean validateToken(String token) {
         try {
-            Jws<Claims> jws = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(token);
+            Jws<Claims> jws = jwtParser().parseSignedClaims(token);
 
             Claims claims = jws.getPayload();
             String jti = claims.getId();
@@ -158,9 +156,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public String getUsernameFromToken(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
+        return jwtParser()
                 .parseSignedClaims(token)
                 .getPayload()
                 .getSubject();
@@ -168,9 +164,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public String getPersonIdFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
+        Claims claims = jwtParser()
                 .parseSignedClaims(token)
                 .getPayload();
         String personId = claims.get(PERSON_ID, String.class);
@@ -182,9 +176,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public Set<String> getRolesFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
+        Claims claims = jwtParser()
                 .parseSignedClaims(token).getPayload();
         Object rolesObj = claims.get(ROLES);
         if (rolesObj instanceof List<?> rolesList) {
@@ -201,9 +193,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public Set<String> getAuthoritiesFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
+        Claims claims = jwtParser()
                 .parseSignedClaims(token).getPayload();
         Object authObj = claims.get(AUTHORITIES);
         if (authObj instanceof List<?> list) {
@@ -230,11 +220,7 @@ public class JwtServiceImpl implements JwtService {
         jwtTokenRepository.delete(existingToken.get());
 
         try {
-            Claims claims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+            Claims claims = jwtParser().parseSignedClaims(token).getPayload();
 
             String jti = claims.getId();
             Instant expiresAt = claims.getExpiration().toInstant();
@@ -327,10 +313,7 @@ public class JwtServiceImpl implements JwtService {
     @Override
     public boolean validateRefreshToken(String refreshToken) {
         try {
-            Jws<Claims> jws = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(refreshToken);
+            Jws<Claims> jws = jwtParser().parseSignedClaims(refreshToken);
 
             Claims claims = jws.getPayload();
             String jti = claims.getId();
@@ -378,11 +361,7 @@ public class JwtServiceImpl implements JwtService {
         Set<String> roles = getRolesFromToken(jwtToken.getToken());
 
         try {
-            Claims oldAccessClaims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(jwtToken.getToken())
-                    .getPayload();
+            Claims oldAccessClaims = jwtParser().parseSignedClaims(jwtToken.getToken()).getPayload();
             String oldAccessJti = oldAccessClaims.getId();
             if (oldAccessJti != null) {
                 tokenRevocationManager.revokeToken(oldAccessJti, ACCESS_TOKEN_EXPIRATION_SECONDS);
@@ -393,11 +372,7 @@ public class JwtServiceImpl implements JwtService {
         }
 
         try {
-            Claims oldRefreshClaims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(refreshToken)
-                    .getPayload();
+            Claims oldRefreshClaims = jwtParser().parseSignedClaims(refreshToken).getPayload();
             String oldRefreshJti = oldRefreshClaims.getId();
             if (oldRefreshJti != null) {
                 tokenRevocationManager.revokeToken(oldRefreshJti, REFRESH_TOKEN_EXPIRATION_SECONDS);
@@ -421,5 +396,12 @@ public class JwtServiceImpl implements JwtService {
             return username;
         }
         return personId;
+    }
+
+    private JwtParser jwtParser() {
+        return Jwts.parser()
+                .verifyWith(secretKey)
+                .clock(() -> Date.from(Instant.now(clock)))
+                .build();
     }
 }
