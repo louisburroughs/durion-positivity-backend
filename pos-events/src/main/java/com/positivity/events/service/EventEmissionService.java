@@ -1,10 +1,15 @@
-package com.positivity.events;
+package com.positivity.events.service;
 
 import java.time.Clock;
 import java.time.Instant;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+
+import com.positivity.events.EmitEvent;
+import com.positivity.events.EmitEventAspect;
+import com.positivity.events.EmitEventProxy;
+import com.positivity.events.EventEmitted;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,8 +41,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class EventEmissionService {
     private final Clock clock;
-
-
     private final ApplicationEventPublisher publisher;
 
     /**

@@ -38,7 +38,7 @@ public class ArchitectureTest {
                 }
         };
 
-        private static final String UUID_V7_GENERATOR_FQN = "com.positivity.shared.id.UUIDv7Generator";
+        private static final String UUID_V7_GENERATOR_FQN = "com.positivity.shared.id.UUIDv7Id";
 
         @ArchTest
         static final ArchRule controllers_should_not_access_repositories_directly = noClasses()

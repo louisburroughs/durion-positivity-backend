@@ -14,6 +14,7 @@ import com.positivity.shared.id.UUIDv7Id;
 @Data
 @Entity
 @EntityListeners(AuditingEntityListener.class)
+@Table(name = "make")
 public class Make {
     @Id
     @GeneratedValue

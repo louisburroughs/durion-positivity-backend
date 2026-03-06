@@ -1,7 +1,6 @@
 package com.positivity.vehiclefitment.internal.controller;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -18,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.vehiclefitment.internal.dto.CreateHintRequest;
+import com.positivity.vehiclefitment.internal.dto.FilterProductsRequest;
 import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
 import com.positivity.vehiclefitment.internal.dto.HintResponse;
 import com.positivity.vehiclefitment.internal.dto.UpdateHintRequest;
@@ -124,8 +124,8 @@ public class VehicleApplicabilityHintController {
     @EmitEvent(id = "FITMENT_PRODUCTS_FILTER", apiVersion = "1")
     @PostMapping("/filter-products")
     public ResponseEntity<FilterProductsResponse> filterProducts(
-            @RequestBody Map<String, String> vehicleAttributes) {
-        FilterProductsResponse response = hintService.filterProductsByVehicleAttributes(vehicleAttributes);
+            @Valid @RequestBody FilterProductsRequest request) {
+        FilterProductsResponse response = hintService.filterProductsByVehicleAttributes(request.getVehicleAttributes());
         return ResponseEntity.ok(response);
     }
 }

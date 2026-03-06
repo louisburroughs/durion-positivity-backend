@@ -7,6 +7,8 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 
+import com.positivity.events.service.EventEmissionService;
+
 /**
  * Auto-configuration for the pos-events shared library.
  * 
