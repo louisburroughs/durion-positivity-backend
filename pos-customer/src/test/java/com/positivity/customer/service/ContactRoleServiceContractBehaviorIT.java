@@ -64,6 +64,17 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         @BeforeEach
         void setUp() {
+                // Create test person (independent entity for contact role assignments)
+                PersonParty contactPerson = new PersonParty();
+                contactPerson.setPersonId(UUID.randomUUID());
+                contactPerson.setFirstName("John");
+                contactPerson.setLastName("Doe");
+                contactPerson.setCustomerNumber("CUST-PERSON-" + System.currentTimeMillis());
+                contactPerson.setPreferredContactMethod(
+                                com.positivity.customer.internal.enums.PreferredContactMethod.EMAIL);
+                contactPerson = personRepository.save(contactPerson);
+                testContactUuid = contactPerson.getPersonId();
+
                 // Create test party with a contact
                 testParty = new CommercialParty();
                 testParty.setPartyType(PartyType.COMMERCIAL);
@@ -76,6 +87,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 // Create and add a contact to the party before saving
                 Contact contact = new Contact();
                 contact.setCommercialParty(testParty);
+                contact.setPersonId(testContactUuid);
                 contact.setFirstName("John");
                 contact.setLastName("Doe");
                 contact.setActive(true);
@@ -83,16 +95,6 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
                 testParty = partyRepository.save(testParty);
                 testPartyUuid = testParty.getPartyId();
-
-                // Create test person (independent entity for contact role assignments)
-                PersonParty contactPerson = new PersonParty();
-                contactPerson.setFirstName("John");
-                contactPerson.setLastName("Doe");
-                contactPerson.setCustomerNumber("CUST-PERSON-" + System.currentTimeMillis());
-                contactPerson.setPreferredContactMethod(
-                                com.positivity.customer.internal.enums.PreferredContactMethod.EMAIL);
-                contactPerson = personRepository.save(contactPerson);
-                testContactUuid = contactPerson.getPersonId();
         }
 
         @Test
@@ -168,6 +170,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         void updateContactRoles_demotesExistingPrimary() {
                 // Create another contact
                 PersonParty contact2 = new PersonParty();
+                contact2.setPersonId(UUID.randomUUID());
                 contact2.setFirstName("Jane");
                 contact2.setLastName("Smith");
                 contact2.setCustomerNumber("CUST-PERSON2-" + System.currentTimeMillis());
@@ -261,7 +264,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 nonExistentContactUuid,
                                 request))
                                 .isInstanceOf(ResponseStatusException.class)
-                                .hasMessageContaining("PersonParty not found");
+                                .hasMessageContaining("Person not found");
         }
 
         @Test

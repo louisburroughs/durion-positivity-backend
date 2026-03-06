@@ -102,6 +102,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
 
                 Contact contact = new Contact();
                 contact.setCommercialParty(testParty);
+                contact.setPersonId(UUID.fromString("00000000-0000-0000-0000-000000000003"));
                 contact.setFirstName("Primary");
                 contact.setLastName("Contact");
                 contact.setActive(true);
@@ -128,7 +129,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                                 .build();
                 CreatePersonResponse response1 = personService.createPerson(personRequest1,
                                 UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                testPerson1 = personRepository.findById(response1.getPersonId()).orElseThrow();
+                testPerson1 = personRepository.findByPersonId(response1.getPersonId()).orElseThrow();
 
                 CreatePersonRequest personRequest2 = CreatePersonRequest.builder()
                                 .firstName("Bob")
@@ -142,7 +143,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                                 .build();
                 CreatePersonResponse response2 = personService.createPerson(personRequest2,
                                 UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                testPerson2 = personRepository.findById(response2.getPersonId()).orElseThrow();
+                testPerson2 = personRepository.findByPersonId(response2.getPersonId()).orElseThrow();
         }
 
         // ==========================================================================
@@ -465,8 +466,9 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 // Then: end date set to today
                 PartyRelationship relationship = partyRelationshipRepository
                                 .findById(created.getRelationshipId()).orElseThrow();
-                assertThat(relationship.getEffectiveEndDate()).isEqualTo(LocalDate.now(FIXED_CLOCK));
-                assertThat(relationship.isActive(LocalDate.now(FIXED_CLOCK))).isFalse();
+                LocalDate utcToday = LocalDate.now(java.time.Clock.systemUTC());
+                assertThat(relationship.getEffectiveEndDate()).isEqualTo(utcToday);
+                assertThat(relationship.isActive(utcToday)).isFalse();
         }
 
         // ==========================================================================

@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +42,8 @@ import com.positivity.customer.internal.repository.CommunicationPreferenceReposi
 @Transactional
 class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
+        private static final AtomicLong TEST_SEQUENCE = new AtomicLong(1L);
+
         @Autowired
         private CommunicationPreferenceService preferenceService;
 
@@ -56,16 +58,19 @@ class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractInteg
 
         @BeforeEach
         void setUp() {
+                long sequence = TEST_SEQUENCE.getAndIncrement();
+
                 // Create test party
                 testParty = new CommercialParty();
                 testParty.setLegalName("Test Party");
                 testParty.setDisplayName("Test Party");
-                testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());
-                testParty.setCustomerNumber("CUST-TEST-" + System.currentTimeMillis());
+                testParty.setPartyNumber("PARTY-TEST-" + sequence);
+                testParty.setCustomerNumber("CUST-TEST-" + sequence);
                 testParty.setStatus(AccountStatus.ACTIVE);
 
                 Contact contact = new Contact();
                 contact.setCommercialParty(testParty);
+                contact.setPersonId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 contact.setFirstName("Jane");
                 contact.setLastName("Doe");
                 contact.setActive(true);
@@ -73,12 +78,6 @@ class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractInteg
 
                 testParty = partyRepository.save(testParty);
                 testPartyUuid = testParty.getPartyId();
-        }
-
-        @AfterEach
-        void tearDown() {
-                preferenceRepository.deleteAll();
-                partyRepository.deleteAll();
         }
 
         // ========== getCommunicationPreferences ==========

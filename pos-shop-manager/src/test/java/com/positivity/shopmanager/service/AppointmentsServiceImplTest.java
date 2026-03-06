@@ -1,4 +1,4 @@
-package com.positivity.shopmanager.cap137;
+package com.positivity.shopmanager.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,15 +12,30 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shopmanager.internal.client.CrmCustomerClient;
 import com.positivity.shopmanager.internal.client.CrmVehicleClient;
 import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
-import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
+import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
@@ -31,6 +46,7 @@ import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
 import com.positivity.shopmanager.internal.enums.AppointmentAction;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.CancellationReasonCode;
+import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
@@ -42,22 +58,6 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
-import com.positivity.shopmanager.service.AppointmentLoadService;
-import com.positivity.shopmanager.service.SourceEligibilityService;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class AppointmentsServiceImplTest {
@@ -345,7 +345,7 @@ class AppointmentsServiceImplTest {
                                 .thenThrow(new RuntimeException("HR unavailable"));
 
                 ScheduleViewResponse response = appointmentsService.getScheduleView(request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                                UUID.fromString("00000000-0000-0000-0000-000000000011"));
 
                 assertEquals("UNAVAILABLE", response.getAvailabilityOverlayStatus());
                 assertEquals(List.of("HR_SYSTEM_UNAVAILABLE"), response.getWarnings());
@@ -357,10 +357,10 @@ class AppointmentsServiceImplTest {
         @Test
         void createAppointment_succeeds_andPersistsServiceRequests() {
                 UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID serviceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000021");
+                UUID serviceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000031");
 
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
                 request.setLocationId(locationId);
@@ -397,8 +397,8 @@ class AppointmentsServiceImplTest {
         void createAppointment_throwsValidation_whenServiceRequestIdsMissing() {
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
                 request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                request.setCrmCustomerId(UUID.fromString("10000000-0000-0000-0000-000000000001"));
+                request.setCrmVehicleId(UUID.fromString("11000000-0000-0000-0000-000000000001"));
                 request.setStartAt(Instant.parse("2026-03-10T10:00:00Z"));
                 request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
                 request.setServiceRequestIds(List.of());
@@ -411,18 +411,18 @@ class AppointmentsServiceImplTest {
         void createAppointment_throwsMismatch_whenVehicleOwnerDiffersFromCustomer() {
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
                 UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
                 request.setCrmCustomerId(customerId);
-                request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
                 request.setStartAt(Instant.parse("2026-03-10T10:00:00Z"));
                 request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
-                request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
+                request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000111")));
 
                 when(crmCustomerClient.getCustomerById(request.getCrmCustomerId()))
                                 .thenReturn(java.util.Map.of("firstName", "Jane"));
                 when(crmVehicleClient.getVehicleById(request.getCrmVehicleId()))
                                 .thenReturn(java.util.Map.of("ownerCustomerId",
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()));
+                                                UUID.fromString("00000000-0000-0000-0000-000000000002").toString()));
 
                 assertThrows(VehicleCustomerMismatchException.class,
                                 () -> appointmentsService.createAppointment(request, null, null));
@@ -431,10 +431,10 @@ class AppointmentsServiceImplTest {
         @Test
         void createAppointment_returnsExisting_whenIdempotencyKeyMatchesSameRequest() {
                 UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID serviceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+                UUID serviceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000111");
                 String idempotencyKey = "idem-123";
 
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
@@ -473,10 +473,10 @@ class AppointmentsServiceImplTest {
         @Test
         void createAppointment_throwsValidation_whenIdempotencyKeyReusedWithDifferentRequest() {
                 UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID existingServiceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+                UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+                UUID existingServiceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000111");
                 String idempotencyKey = "idem-123";
 
                 AppointmentCreateRequest request = new AppointmentCreateRequest();
@@ -486,7 +486,7 @@ class AppointmentsServiceImplTest {
                 request.setResourceId("tech-1");
                 request.setStartAt(Instant.parse("2026-03-10T10:30:00Z"));
                 request.setEndAt(Instant.parse("2026-03-10T11:30:00Z"));
-                request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
+                request.setServiceRequestIds(List.of(UUID.fromString("10000000-0000-0000-0000-000000000111")));
 
                 Appointment existing = new Appointment();
                 existing.setAppointmentId(appointmentId);
@@ -516,7 +516,7 @@ class AppointmentsServiceImplTest {
                 when(shopRepository.existsById(facilityId)).thenReturn(true);
                 when(sourceEligibilityService.getWorkOrderStatus("wo-1", facilityId.toString())).thenReturn("OPEN");
                 when(appointmentLoadService.getFacilityTimeZoneId(facilityId)).thenReturn("UTC");
-                UUID correlationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID correlationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 when(appointmentLoadService.loadCreateModel("WORKORDER", "wo-1", facilityId, correlationId))
                                 .thenReturn(expected);
 
@@ -570,8 +570,8 @@ class AppointmentsServiceImplTest {
                 appointment.setStatus(status);
                 appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 appointment.setResourceId("resource-1");
-                appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
+                appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
                 appointment.setStartAt(startAt);
                 appointment.setEndAt(endAt);
                 return appointment;

@@ -1,4 +1,4 @@
-package com.positivity.shopmanager.cap137;
+package com.positivity.shopmanager.contract;
 
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.Mockito.when;

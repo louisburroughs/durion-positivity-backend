@@ -64,14 +64,14 @@ class VendorBillServiceGLPostingTest {
 
     @BeforeEach
     void setUp() {
-        testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testPoId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testProductId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testProductId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        testPoId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        testProductId1 = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        testProductId2 = UUID.fromString("00000000-0000-0000-0000-000000000021");
 
         testEvent = GoodsReceivedEvent.builder()
-                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000031"))
+                .organizationId(UUID.fromString("00000000-0000-0000-0000-000000000041"))
                 .purchaseOrderId(testPoId)
                 .vendorId(testVendorId)
                 .vendorName("Test Vendor Inc")

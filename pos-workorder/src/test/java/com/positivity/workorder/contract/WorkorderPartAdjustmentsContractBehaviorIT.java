@@ -1,7 +1,8 @@
 package com.positivity.workorder.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -14,13 +15,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
-import com.positivity.workorder.entity.*;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
-import com.positivity.workorder.internal.repository.*;
+import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import io.restassured.http.ContentType;

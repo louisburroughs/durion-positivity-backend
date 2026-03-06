@@ -1,4 +1,4 @@
-package com.positivity.shopmanager.cap140;
+package com.positivity.shopmanager.events;
 
 import java.time.ZoneOffset;
 import java.time.Clock;

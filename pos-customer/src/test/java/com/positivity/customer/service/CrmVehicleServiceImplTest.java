@@ -210,7 +210,7 @@ class CrmVehicleServiceImplTest {
     @Test
     void transferVehicle_movesVinBetweenParties_andUpdatesInventoryAccount() {
         UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID targetId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID targetId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         CommercialParty source = commercialParty(sourceId);

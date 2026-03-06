@@ -165,7 +165,7 @@ class PartyServiceImplTest {
         CommercialParty p = party(partyId);
 
         Contact c = new Contact();
-        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
         c.setFirstName("Jane");
         c.setLastName("Doe");
         c.setPhoneNumber("555-1234");
@@ -192,7 +192,7 @@ class PartyServiceImplTest {
         CommercialParty p = party(partyId);
 
         Contact c = new Contact();
-        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
         c.setFirstName(" ");
         c.setLastName(null);
         c.setCommercialParty(p);
@@ -240,7 +240,7 @@ class PartyServiceImplTest {
     void findContactsByParty_delegatesToRepository() {
         CommercialParty p = party(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         Contact c = new Contact();
-        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
         c.setFirstName("Alex");
         c.setLastName("Rivera");
         when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
@@ -325,7 +325,7 @@ class PartyServiceImplTest {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
         Contact c = new Contact();
-        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
         c.setFirstName("Mary");
         c.setLastName("Jane");
         c.setEmail("mary@acme.com");
@@ -350,7 +350,7 @@ class PartyServiceImplTest {
         match.setDisplayName("Acme");
         match.setTaxId("T1");
 
-        CommercialParty miss = party(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        CommercialParty miss = party(UUID.fromString("00000000-0000-0000-0000-000000000002"));
         miss.setLegalName("Other Corp");
         miss.setDisplayName("Other");
         miss.setTaxId("T2");
@@ -371,12 +371,12 @@ class PartyServiceImplTest {
     @Test
     void mergeParties_mergesContactsIdentifiersAndVins() {
         UUID survivorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID loserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID loserId = UUID.fromString("00000000-0000-0000-0000-000000000009");
         CommercialParty survivor = party(survivorId);
         CommercialParty loser = party(loserId);
 
         Contact loserContact = new Contact();
-        loserContact.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        loserContact.setId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
         loserContact.setFirstName("Loser");
         loserContact.setLastName("Contact");
         loserContact.setCommercialParty(loser);
@@ -436,7 +436,7 @@ class PartyServiceImplTest {
     @Test
     void updateContactRoles_returnsSuccess_whenContactBelongsToParty() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000011");
         CommercialParty p = party(partyId);
         Contact c = new Contact();
         c.setId(contactId);
@@ -456,9 +456,9 @@ class PartyServiceImplTest {
     @Test
     void updateContactRoles_throwsBadRequest_whenContactNotInParty() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000011");
         CommercialParty p1 = party(partyId);
-        CommercialParty p2 = party(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        CommercialParty p2 = party(UUID.fromString("00000000-0000-0000-0000-000000000002"));
         Contact c = new Contact();
         c.setId(contactId);
         c.setCommercialParty(p2);
