@@ -17,6 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -93,19 +95,23 @@ class APPaymentControllerTest {
                         verify(apPaymentService).getPaymentByRef(validRef);
                 }
 
-                @Test
-                @DisplayName("Should reject CRLF injection attempt with newline (security S5145) - blocked by Spring Security firewall")
-                void shouldRejectNewlineInjection() throws Exception {
-                        // Given: Malicious reference with newline character (URL-encoded)
+                @ParameterizedTest
+                @ValueSource(strings = {
+                                "VALID_REF%0A[FAKE_LOG_ENTRY]", // newline
+                                "VALID_REF%0D[FAKE_LOG]", // carriage return
+                                "VALID%0D%0AFAKE_AUDIT_ENTRY" // CRLF
+                })
+                @DisplayName("Should reject CRLF injection attempts (security S5145) - blocked by Spring Security firewall")
+                void shouldRejectCRLFInjectionAttempts(String maliciousRef) throws Exception {
+                        // Given: Malicious reference with CRLF characters (URL-encoded)
                         // Note: Spring Security's StrictHttpFirewall will block this before it reaches
-                        // our validation
-                        String maliciousRef = "VALID_REF%0A[FAKE_LOG_ENTRY]";
+                        // our validation.
+                        // This is defense-in-depth: firewall + our validation both protect against log
+                        // injection.
 
                         // When: Request with CRLF injection
-                        // Then: Spring Security firewall blocks the request before it reaches
+                        // Then: Spring Security firewall blocks the request before it reaches the
                         // controller
-                        // This is defense-in-depth: firewall + our validation both protect against log
-                        // injection
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", maliciousRef)
                                         .header("X-Authorities", "accounting:ap:view")
                                         .header("X-User", "test-user"))
@@ -113,38 +119,6 @@ class APPaymentControllerTest {
                                         .andExpect(status().isBadRequest());
 
                         // Service should not be called when firewall blocks the request
-                        verify(apPaymentService, never()).getPaymentByRef(any());
-                }
-
-                @Test
-                @DisplayName("Should reject CRLF injection with carriage return (security S5145) - blocked by Spring Security firewall")
-                void shouldRejectCarriageReturnInjection() throws Exception {
-                        // Given: Malicious reference with carriage return (URL-encoded)
-                        String maliciousRef = "VALID_REF%0D[FAKE_LOG]";
-
-                        // When: Request with CRLF injection
-                        // Then: Firewall blocks before reaching controller
-                        mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", maliciousRef)
-                                        .header("X-Authorities", "accounting:ap:view")
-                                        .header("X-User", "test-user"))
-                                        .andExpect(status().isBadRequest());
-
-                        verify(apPaymentService, never()).getPaymentByRef(any());
-                }
-
-                @Test
-                @DisplayName("Should reject CRLF injection with both CR and LF - blocked by Spring Security firewall")
-                void shouldRejectCRLFCombination() throws Exception {
-                        // Given: Malicious reference with both CR and LF
-                        String maliciousRef = "VALID%0D%0AFAKE_AUDIT_ENTRY";
-
-                        // When: Request with CRLF injection
-                        // Then: Firewall blocks before reaching controller
-                        mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", maliciousRef)
-                                        .header("X-Authorities", "accounting:ap:view")
-                                        .header("X-User", "test-user"))
-                                        .andExpect(status().isBadRequest());
-
                         verify(apPaymentService, never()).getPaymentByRef(any());
                 }
 

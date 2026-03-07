@@ -195,13 +195,8 @@ class PickListServiceImplTest {
         @Test
         @DisplayName("SC5_getPickList_unknownId: unknown ID → ResourceNotFoundException")
         void SC5_getPickList_unknownId_throwsResourceNotFoundException() {
-                // Issue #28: SC5 — unknown pickListId must throw ResourceNotFoundException;
-                // UnsupportedOperationException is RED proof
-                // Arrange
+                // Issue #28: SC5 — unknown pickListId must throw ResourceNotFoundException
                 UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000007");
-
-                // Act + Assert — RED: impl throws UnsupportedOperationException, not
-                // ResourceNotFoundException
                 assertThatThrownBy(() -> service.getPickList(unknownId))
                                 .isInstanceOf(ResourceNotFoundException.class)
                                 .hasMessageContaining("PickList not found");

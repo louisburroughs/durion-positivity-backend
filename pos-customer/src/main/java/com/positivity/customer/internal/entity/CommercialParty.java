@@ -104,14 +104,9 @@ public class CommercialParty extends AbstractParty {
         }
     }
 
+    @PreUpdate
     @PrePersist
     public void onPersist() {
-        validateNames();
-        ensureContactsPresent();
-    }
-
-    @PreUpdate
-    private void onUpdate() {
         validateNames();
         ensureContactsPresent();
     }
@@ -129,6 +124,7 @@ public class CommercialParty extends AbstractParty {
     /**
      * Explicit dependency hook for ArchUnit UUIDv7 rule.
      */
+    @Override
     @Transient
     public Class<?> uuidv7Dependency() {
         return UUIDv7Generator.class;

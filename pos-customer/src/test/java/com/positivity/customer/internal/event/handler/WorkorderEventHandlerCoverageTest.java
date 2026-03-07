@@ -27,6 +27,7 @@ import com.positivity.customer.internal.event.EventEnvelope;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
+import com.positivity.customer.internal.repository.VehicleProjectionRepository;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -57,6 +58,9 @@ class WorkorderEventHandlerCoverageTest {
         private PersonPartyRepository personPartyRepository;
 
         @Mock
+        private VehicleProjectionRepository vehicleProjectionRepository;
+
+        @Mock
         private PersonParty personParty;
 
         private WorkorderEventHandler handler;
@@ -68,6 +72,7 @@ class WorkorderEventHandlerCoverageTest {
                                 processingLogRepository,
                                 communicationPreferenceRepository,
                                 personPartyRepository,
+                                vehicleProjectionRepository,
                                 new ObjectMapper());
         }
 
