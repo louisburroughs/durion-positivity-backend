@@ -35,9 +35,9 @@ class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBe
         @DisplayName("AC1: GET job-time-totals with valid params returns grouped totals by technicianId, locationId, localDate")
         void getJobTimeTotalsWithValidParamsReturnsGroupedTotals() throws Exception {
                 UUID locationA = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID locationB = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationB = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 UUID technicianA = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                UUID technicianB = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID technicianB = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
                 Workorder completedAtLocationA = seedWorkorder(locationA, WorkorderStatus.COMPLETED);
                 Workorder completedAtLocationB = seedWorkorder(locationB, WorkorderStatus.COMPLETED);

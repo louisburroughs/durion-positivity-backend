@@ -188,7 +188,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
         void testApproveEstimate_CustomerMismatch() {
                 UUID estimateId = seedPendingApprovalEstimate();
 
-                UUID wrongCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID wrongCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 String approvalPayload = buildApprovalPayload(wrongCustomerId, "Test Signer",
                                 "Wrong customer", null, null);
 

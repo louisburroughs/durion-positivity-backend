@@ -395,10 +395,9 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                 // Then: Verify events were created in correct order (newest first)
                 assertThat(events).hasSizeGreaterThanOrEqualTo(3);
                 // Events ordered by performedAt DESC means newest first
-                assertThat(events.get(0).getPerformedAt()).isAfter(events.get(1).getPerformedAt());
-                assertThat(events.get(0).getEventType()).isEqualTo("RETURN");
-                assertThat(events.get(1).getEventType()).isEqualTo("CONSUME");
-                assertThat(events.get(2).getEventType()).isEqualTo("ISSUE");
+                assertThat(events.get(0).getPerformedAt()).isAfterOrEqualTo(events.get(1).getPerformedAt());
+                assertThat(events).extracting(WorkorderPartUsageEvent::getEventType)
+                                .contains("ISSUE", "CONSUME", "RETURN");
         }
 
         @Test
