@@ -79,14 +79,14 @@ paths:
               $ref: "#/components/schemas/ApplyPriceOverrideRequest"
         required: true
       responses:
-        "201":
-          description: Override created
+        "403":
+          description: Insufficient permissions
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApplyPriceOverrideResponse"
-        "403":
-          description: Insufficient permissions
+        "201":
+          description: Override created
           content:
             '*/*':
               schema:
@@ -174,14 +174,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideView"
-        "200":
-          description: Override approved
+        "404":
+          description: Override not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideView"
-        "404":
-          description: Override not found
+        "200":
+          description: Override approved
           content:
             '*/*':
               schema:
@@ -209,14 +209,14 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "404":
-          description: Override not found
+        "200":
+          description: Override found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideView"
-        "200":
-          description: Override found
+        "404":
+          description: Override not found
           content:
             '*/*':
               schema:

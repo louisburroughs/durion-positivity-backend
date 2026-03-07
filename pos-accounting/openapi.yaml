@@ -2091,6 +2091,12 @@ paths:
           format: date
         example: 2024-12-31
       responses:
+        "200":
+          description: Income statement generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeStatementReport"
         "403":
           description: Forbidden - missing reporting:view:financial-statements
           content:
@@ -2099,12 +2105,6 @@ paths:
                 $ref: "#/components/schemas/IncomeStatementReport"
         "400":
           description: Invalid date range
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IncomeStatementReport"
-        "200":
-          description: Income statement generated successfully
           content:
             application/json:
               schema:
@@ -2266,14 +2266,14 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Balance sheet generated successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceSheetReport"
-        "200":
-          description: Balance sheet generated successfully
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
@@ -2453,12 +2453,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Invoice status returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceStatusResponse"
         "500":
           description: Error retrieving invoice status
           content:
@@ -2467,6 +2461,12 @@ paths:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
         "404":
           description: Invoice not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceStatusResponse"
+        "200":
+          description: Invoice status returned
           content:
             '*/*':
               schema:
@@ -2802,6 +2802,12 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2810,12 +2816,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range or exception type
           content:
@@ -2857,6 +2857,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2865,12 +2871,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/order/{orderId}:
     get:
       tags:
@@ -2896,6 +2896,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2904,12 +2910,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/invoice/{invoiceId}:
     get:
       tags:
@@ -2927,6 +2927,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Invoice not found
           content:
@@ -2943,12 +2949,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/actor/{actorId}:
     get:
       tags:
@@ -2990,6 +2990,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2998,12 +3004,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range or actor ID
           content:

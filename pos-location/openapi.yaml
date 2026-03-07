@@ -217,16 +217,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SiteDefaultsResponse"
         "200":
           description: Site defaults returned
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
         "404":
@@ -262,16 +262,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
-        "200":
-          description: Site defaults configured
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SiteDefaultsResponse"
         "403":
           description: Forbidden
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "200":
+          description: Site defaults configured
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
         "404":
@@ -1613,12 +1613,12 @@ components:
     PageMobileUnitResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         pageable:
           $ref: "#/components/schemas/Pageablenull"
         first:
@@ -1701,12 +1701,12 @@ components:
     PageStorageLocationResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         pageable:
           $ref: "#/components/schemas/Pageablenull"
         first:
@@ -1763,12 +1763,12 @@ components:
     PageBayResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         pageable:
           $ref: "#/components/schemas/Pageablenull"
         first:
@@ -1812,12 +1812,12 @@ components:
     PageLocationRef:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         pageable:
           $ref: "#/components/schemas/Pageablenull"
         first:

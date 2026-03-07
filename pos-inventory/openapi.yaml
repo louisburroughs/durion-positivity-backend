@@ -157,18 +157,6 @@ paths:
               $ref: "#/components/schemas/ReturnItemsRequest"
         required: true
       responses:
-        "201":
-          description: Return recorded
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReturnResponse"
-        "422":
-          description: Return quantity exceeds allowable amount
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "400":
           description: Validation failure
           content:
@@ -177,6 +165,18 @@ paths:
                 $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required return authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "201":
+          description: Return recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReturnResponse"
+        "422":
+          description: Return quantity exceeds allowable amount
           content:
             application/json:
               schema:
@@ -203,8 +203,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "422":
-          description: Business rule validation failed
+        "403":
+          description: User lacks required reservation authority
           content:
             application/json:
               schema:
@@ -215,8 +215,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReservationResponse"
-        "403":
-          description: User lacks required reservation authority
+        "422":
+          description: Business rule validation failed
           content:
             application/json:
               schema:
@@ -250,6 +250,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "200":
+          description: Allocation promoted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResponse"
         "404":
           description: Allocation or reservation not found
           content:
@@ -262,12 +268,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "200":
-          description: Allocation promoted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReservationResponse"
         "422":
           description: Insufficient ATP or business rule validation failed
           content:
@@ -337,12 +337,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required receiving:create authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "201":
           description: Receiving session created
           content:
@@ -351,6 +345,12 @@ paths:
                 $ref: "#/components/schemas/ReceivingSessionResponse"
         "400":
           description: Validation failure or source document already fully received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "403":
+          description: User lacks required receiving:create authority
           content:
             application/json:
               schema:
@@ -379,26 +379,26 @@ paths:
               $ref: "#/components/schemas/ReceiveItemsRequest"
         required: true
       responses:
-        "200":
-          description: Items received successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReceiveItemsResponse"
         "400":
           description: Validation failure
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Receiving session not found
+        "200":
+          description: Items received successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiveItemsResponse"
+        "403":
+          description: User lacks required receiving:complete authority
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required receiving:complete authority
+        "404":
+          description: Receiving session not found
           content:
             application/json:
               schema:
@@ -434,26 +434,26 @@ paths:
               $ref: "#/components/schemas/CrossDockRequest"
         required: true
       responses:
-        "200":
-          description: Cross-dock completed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CrossDockResponse"
-        "403":
-          description: User lacks required authority or part-match override permission
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "400":
           description: Invalid request or closed workorder
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "200":
+          description: Cross-dock completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrossDockResponse"
         "404":
           description: Receiving session or line not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "403":
+          description: User lacks required authority or part-match override permission
           content:
             application/json:
               schema:
@@ -486,6 +486,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
+        "200":
+          description: Putaway executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PutawayExecutionResponse"
         "404":
           description: Putaway task not found
           content:
@@ -496,12 +502,6 @@ paths:
           description: Forbidden - insufficient authority
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/PutawayExecutionResponse"
-        "200":
-          description: Putaway executed successfully
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
         "400":
@@ -651,14 +651,14 @@ paths:
               $ref: "#/components/schemas/RevisePurchaseOrderRequest"
         required: true
       responses:
-        "409":
-          description: Purchase order is in a conflicting state
+        "400":
+          description: Validation failure
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
+        "409":
+          description: Purchase order is in a conflicting state
           content:
             application/json:
               schema:
@@ -704,14 +704,14 @@ paths:
               $ref: "#/components/schemas/ReceivePurchaseOrderRequest"
         required: true
       responses:
-        "409":
-          description: Purchase order is in a conflicting state
+        "400":
+          description: Validation failure
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
+        "409":
+          description: Purchase order is in a conflicting state
           content:
             application/json:
               schema:
@@ -722,18 +722,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required purchase order receive authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Purchase order received
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReceivePurchaseOrderResponse"
+        "403":
+          description: User lacks required purchase order receive authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/purchase-orders/{poId}/cancel:
     post:
       tags:
@@ -762,18 +762,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required purchase order approval authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Purchase order cancelled
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PurchaseOrderResponse"
+        "403":
+          description: User lacks required purchase order approval authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/purchase-orders/{poId}/approve:
     post:
       tags:
@@ -796,20 +796,14 @@ paths:
               $ref: "#/components/schemas/ApprovePurchaseOrderRequest"
         required: true
       responses:
-        "409":
-          description: Purchase order is in a conflicting state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "400":
           description: Validation failure
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Purchase order not found
+        "409":
+          description: Purchase order is in a conflicting state
           content:
             application/json:
               schema:
@@ -820,6 +814,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PurchaseOrderResponse"
+        "404":
+          description: Purchase order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required purchase order approval authority
           content:
@@ -865,6 +865,12 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: User lacks required pick list authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Pick lists returned
           content:
@@ -875,12 +881,6 @@ paths:
                   $ref: "#/components/schemas/PickListResponse"
         "400":
           description: Invalid workorder identifier
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required pick list authority
           content:
             application/json:
               schema:
@@ -905,18 +905,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "201":
-          description: Pick list created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PickListResponse"
         "403":
           description: User lacks required pick list authority
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "201":
+          description: Pick list created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickListResponse"
   /v1/inventory/pick-lists/{pickListId}/tasks/{taskId}/confirm:
     post:
       tags:
@@ -947,20 +947,8 @@ paths:
               $ref: "#/components/schemas/ConfirmPickTaskRequest"
         required: true
       responses:
-        "403":
-          description: User lacks required pick task authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "400":
           description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Pick list or pick task not found
           content:
             application/json:
               schema:
@@ -977,6 +965,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PickTaskResponse"
+        "403":
+          description: User lacks required pick task authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "404":
+          description: Pick list or pick task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/pick-lists/{pickListId}/release:
     post:
       tags:
@@ -993,6 +993,12 @@ paths:
           type: string
           format: uuid
       responses:
+        "404":
+          description: Pick list not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required pick list authority
           content:
@@ -1005,12 +1011,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PickListResponse"
-        "404":
-          description: Pick list not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/goods-receipts:
     post:
       tags:
@@ -1032,14 +1032,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "409":
-          description: Goods receipt conflict
+        "403":
+          description: User lacks required goods receipt create authority
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required goods receipt create authority
+        "409":
+          description: Goods receipt conflict
           content:
             application/json:
               schema:
@@ -1245,12 +1245,6 @@ paths:
               $ref: "#/components/schemas/ConsumeItemsRequest"
         required: true
       responses:
-        "422":
-          description: Consumption business rule validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "400":
           description: Validation failure
           content:
@@ -1265,6 +1259,12 @@ paths:
                 $ref: "#/components/schemas/ConsumptionResponse"
         "403":
           description: User lacks required consumption authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "422":
+          description: Consumption business rule validation failed
           content:
             application/json:
               schema:
@@ -1285,18 +1285,18 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Availability returned
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LocationAvailabilityDto"
         "400":
           description: Invalid product identifier
           content:
             '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationAvailabilityDto"
+        "200":
+          description: Availability returned
+          content:
+            application/json:
               schema:
                 type: array
                 items:
@@ -1322,16 +1322,16 @@ paths:
           application/json:
             schema: {}
       responses:
-        "200":
-          description: Availability updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryAvailabilityResponse"
         "501":
           description: Not implemented
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/InventoryAvailabilityResponse"
+        "200":
+          description: Availability updated
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/InventoryAvailabilityResponse"
   /v1/inventory/asns:
@@ -1354,8 +1354,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required ASN create authority
+        "409":
+          description: ASN conflict (duplicate or state conflict)
           content:
             application/json:
               schema:
@@ -1366,8 +1366,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AsnResponse"
-        "409":
-          description: ASN conflict (duplicate or state conflict)
+        "403":
+          description: User lacks required ASN create authority
           content:
             application/json:
               schema:
@@ -1387,12 +1387,6 @@ paths:
               $ref: "#/components/schemas/ShortageResolutionRequest"
         required: true
       responses:
-        "200":
-          description: Resolution options returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShortageResolutionResponse"
         "400":
           description: Validation failure
           content:
@@ -1405,6 +1399,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "200":
+          description: Resolution options returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShortageResolutionResponse"
         "422":
           description: Unable to resolve shortage under current constraints
           content:
@@ -1426,6 +1426,12 @@ paths:
               $ref: "#/components/schemas/ReallocateRequest"
         required: true
       responses:
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required reallocation authority
           content:
@@ -1438,12 +1444,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReallocateResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "422":
           description: Reallocation failed business validation
           content:
@@ -1465,18 +1465,18 @@ paths:
               $ref: "#/components/schemas/CreateAdjustmentRequestDto"
         required: true
       responses:
-        "201":
-          description: Adjustment request created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdjustmentRequestResponse"
         "400":
           description: Validation failure
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "201":
+          description: Adjustment request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdjustmentRequestResponse"
         "403":
           description: User lacks required create permission
           content:
@@ -1505,12 +1505,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "422":
-          description: Business rule validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "404":
           description: Referenced resource not found
           content:
@@ -1527,6 +1521,12 @@ paths:
                 $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required approval permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "422":
+          description: Business rule validation failed
           content:
             application/json:
               schema:
@@ -1634,16 +1634,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CountResponse"
-        "200":
-          description: Recount submitted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CountResponse"
         "400":
           description: Invalid request or recount limit exceeded
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CountResponse"
+        "200":
+          description: Recount submitted successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CountResponse"
         "403":
@@ -1675,26 +1675,26 @@ paths:
               $ref: "#/components/schemas/UpdatePickListStatusRequest"
         required: true
       responses:
-        "200":
-          description: Pick list status updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PickListResponse"
         "400":
           description: Validation failure
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required pick list authority
+        "200":
+          description: Pick list status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickListResponse"
+        "404":
+          description: Pick list not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Pick list not found
+        "403":
+          description: User lacks required pick list authority
           content:
             application/json:
               schema:
@@ -1737,14 +1737,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReceivingSessionResponse"
-        "404":
-          description: Receiving session not found
+        "403":
+          description: User lacks required receiving:view authority
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required receiving:view authority
+        "404":
+          description: Receiving session not found
           content:
             application/json:
               schema:
@@ -1781,18 +1781,18 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Purchase order returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PurchaseOrderResponse"
         "404":
           description: Purchase order not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "200":
+          description: Purchase order returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrderResponse"
         "403":
           description: User lacks required purchase order view authority
           content:
@@ -1815,24 +1815,24 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Pick list returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PickListResponse"
-        "403":
-          description: User lacks required pick list authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "404":
           description: Pick list not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "403":
+          description: User lacks required pick list authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "200":
+          description: Pick list returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickListResponse"
     delete:
       tags:
       - Pick Lists
@@ -1850,14 +1850,14 @@ paths:
       responses:
         "204":
           description: Pick list cancelled
-        "403":
-          description: User lacks required pick list authority
+        "404":
+          description: Pick list not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Pick list not found
+        "403":
+          description: User lacks required pick list authority
           content:
             application/json:
               schema:
@@ -1878,6 +1878,18 @@ paths:
           type: string
           format: uuid
       responses:
+        "404":
+          description: Pick list not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "403":
+          description: User lacks required pick list authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Pick tasks returned
           content:
@@ -1886,18 +1898,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PickTaskResponse"
-        "403":
-          description: User lacks required pick list authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Pick list not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/locations/{locationId}/inventory-inquiry:
     get:
       tags:
@@ -2078,8 +2078,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: User lacks required read permission
+        "400":
+          description: Invalid request parameters
           content:
             application/json:
               schema:
@@ -2096,18 +2096,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "403":
+          description: User lacks required read permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Availability view returned
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AvailabilityView"
-        "400":
-          description: Invalid request parameters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/availability/lead-time:
     get:
       tags:
@@ -2131,6 +2131,18 @@ paths:
           type: string
           format: uuid
       responses:
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required read permission
           content:
@@ -2143,24 +2155,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "500":
-          description: Unexpected server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Lead-time view returned
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LeadTimeView"
-        "400":
-          description: Invalid request parameters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/asns/{asnId}:
     get:
       tags:
@@ -2183,14 +2183,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AsnResponse"
-        "404":
-          description: ASN not found
+        "403":
+          description: User lacks required ASN view authority
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required ASN view authority
+        "404":
+          description: ASN not found
           content:
             application/json:
               schema:
@@ -2212,16 +2212,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Task retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CycleCountTaskResponse"
         "404":
           description: Task not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CycleCountTaskResponse"
+        "200":
+          description: Task retrieved successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountTaskResponse"
   /api/inventory/cycleCount/task/{taskId}/history:
@@ -2289,14 +2289,14 @@ paths:
       responses:
         "204":
           description: Reservation cancelled
-        "403":
-          description: User lacks required reservation authority
+        "404":
+          description: Reservation not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Reservation not found
+        "403":
+          description: User lacks required reservation authority
           content:
             application/json:
               schema:
@@ -2364,6 +2364,25 @@ components:
       - items
       - returnReason
       - workorderId
+    InventoryErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          description: Timestamp when the error occurred
+          example: 2026-02-24T17:25:43.511Z
+        code:
+          type: string
+          description: Stable error code
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          description: Human-readable error message
+          example: reasonCode must not be blank
+        context:
+          type: object
+          additionalProperties: {}
+          description: Optional structured context for specific business errors
     ReturnResponse:
       type: object
       properties:
@@ -2386,25 +2405,6 @@ components:
           items:
             type: string
             format: uuid
-    InventoryErrorResponse:
-      type: object
-      properties:
-        timestamp:
-          type: string
-          description: Timestamp when the error occurred
-          example: 2026-02-24T17:25:43.511Z
-        code:
-          type: string
-          description: Stable error code
-          example: VALIDATION_ERROR
-        message:
-          type: string
-          description: Human-readable error message
-          example: reasonCode must not be blank
-        context:
-          type: object
-          additionalProperties: {}
-          description: Optional structured context for specific business errors
     CreateReservationRequest:
       type: object
       properties:
