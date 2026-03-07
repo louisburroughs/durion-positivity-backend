@@ -189,7 +189,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		seedTechnician(technicianId, "Jane", "Doe");
 
 		TimeEntry approved = new TimeEntry();
-		approved.setPersonId(technicianId.toString());
+		approved.setPerson(Person.builder().id(technicianId).build());
 		approved.setLocationId(locationId);
 		approved.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.APPROVED);
 		approved.setAttendanceStartAt(Instant.parse("2026-02-16T08:00:00Z"));
@@ -245,7 +245,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				.thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to fetch location"));
 
 		TimeEntry approved = new TimeEntry();
-		approved.setPersonId(technicianId.toString());
+		approved.setPerson(Person.builder().id(technicianId).build());
 		approved.setLocationId(locationId);
 		approved.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.APPROVED);
 		approved.setAttendanceStartAt(Instant.parse("2026-02-16T08:00:00Z"));
@@ -516,7 +516,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	private void seedAttendance(UUID technicianId, UUID locationId, Instant attendanceStartAt,
 			Instant attendanceEndAt) {
 		TimeEntry entry = new TimeEntry();
-		entry.setPersonId(technicianId.toString());
+		entry.setPerson(Person.builder().id(technicianId).build());
 		entry.setLocationId(locationId);
 		entry.setAttendanceStartAt(attendanceStartAt);
 		entry.setAttendanceEndAt(attendanceEndAt);

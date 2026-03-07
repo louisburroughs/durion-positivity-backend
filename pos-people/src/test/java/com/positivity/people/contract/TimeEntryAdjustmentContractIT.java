@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.people.BaseContractIntegrationTest;
+import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.repository.TimeEntryRepository;
@@ -78,7 +79,7 @@ class TimeEntryAdjustmentContractIT extends BaseContractIntegrationTest {
 
 	private UUID seedPendingApprovalTimeEntry() {
 		TimeEntry timeEntry = new TimeEntry();
-		timeEntry.setPersonId("person-1");
+		timeEntry.setPerson(Person.builder().id(UUID.fromString("00000000-0000-0000-0000-000000000001")).build());
 		timeEntry.setTimesheetId("timesheet-1");
 		timeEntry.setStatus(TimeEntryStatus.PENDING_APPROVAL);
 		return timeEntryRepository.save(timeEntry).getTimeEntryId();
