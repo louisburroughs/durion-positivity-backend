@@ -87,6 +87,19 @@ public final class InvoiceEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // ==================== STORY #9 — PAYMENT EVENTS ====================
+
+        public static final EventTypeRegistration INVOICE_PAYMENT_INITIATE = EventTypeRegistration
+                        .write("INVOICE_PAYMENT_INITIATE",
+                                        "Initiate card authorization or sale-capture for invoice payment")
+                        .apiVersion("1")
+                        .build();
+
+        public static final EventTypeRegistration INVOICE_PAYMENT_CAPTURE = EventTypeRegistration
+                        .write("INVOICE_PAYMENT_CAPTURE", "Explicit manual capture of an authorized payment hold")
+                        .apiVersion("1")
+                        .build();
+
         /**
          * Returns all event type registrations for the Invoice module.
          */
@@ -101,6 +114,8 @@ public final class InvoiceEventTypes {
                                 INVOICE_FINALIZED,
                                 INVOICE_POSTED_TO_GL,
                                 INVOICE_POSTING_FAILED,
-                                INVOICE_DRAFT_REVERT);
+                                INVOICE_DRAFT_REVERT,
+                                INVOICE_PAYMENT_INITIATE,
+                                INVOICE_PAYMENT_CAPTURE);
         }
 }
