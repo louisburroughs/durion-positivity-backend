@@ -10,12 +10,16 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: Pricing Snapshots
+  description: Read operations for immutable pricing snapshots
 - name: Promotion Offers
   description: Promotion offer lifecycle operations
 - name: Price Normalization
   description: Price normalization and standardization operations
 - name: Price Restrictions
   description: Price restriction evaluation and override operations
+- name: Promotion Eligibility Rules
+  description: Promotion eligibility rule management and evaluation operations
 - name: Price Quotes
   description: Contextual price quote operations
 paths:
@@ -23,6 +27,9 @@ paths:
     post:
       tags:
       - Promotion Offers
+      summary: Create promotion offer
+      description: "Creates a new promotion offer with code, lifecycle settings, and\
+        \ discount policy."
       operationId: createOffer
       requestBody:
         content:
@@ -31,8 +38,26 @@ paths:
               $ref: "#/components/schemas/CreatePromotionOfferRequest"
         required: true
       responses:
-        "200":
-          description: OK
+        "409":
+          description: Promotion code already exists.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "400":
+          description: Invalid promotion offer request.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "201":
+          description: Promotion offer created.
           content:
             '*/*':
               schema:
@@ -43,6 +68,9 @@ paths:
     get:
       tags:
       - Promotion Eligibility Rules
+      summary: List eligibility rules for promotion offer
+      description: Returns all eligibility rules configured for the specified promotion
+        offer.
       operationId: getRules
       parameters:
       - name: promotionId
@@ -53,7 +81,23 @@ paths:
           format: uuid
       responses:
         "200":
-          description: OK
+          description: Eligibility rules returned.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EligibilityRuleResponse"
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EligibilityRuleResponse"
+        "404":
+          description: Promotion offer not found.
           content:
             '*/*':
               schema:
@@ -65,6 +109,9 @@ paths:
     post:
       tags:
       - Promotion Eligibility Rules
+      summary: Add eligibility rule to promotion offer
+      description: Creates and attaches a new eligibility rule to the specified promotion
+        offer.
       operationId: addRule
       parameters:
       - name: promotionId
@@ -80,8 +127,26 @@ paths:
               $ref: "#/components/schemas/AddEligibilityRuleRequest"
         required: true
       responses:
-        "200":
-          description: OK
+        "201":
+          description: Eligibility rule created.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EligibilityRuleResponse"
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EligibilityRuleResponse"
+        "404":
+          description: Promotion offer not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EligibilityRuleResponse"
+        "400":
+          description: Invalid eligibility rule request.
           content:
             '*/*':
               schema:
@@ -92,6 +157,9 @@ paths:
     post:
       tags:
       - Promotion Eligibility Rules
+      summary: Evaluate promotion eligibility
+      description: Evaluates whether a promotion offer is eligible for the provided
+        evaluation context.
       operationId: evaluateEligibility
       parameters:
       - name: promotionId
@@ -107,8 +175,26 @@ paths:
               $ref: "#/components/schemas/EligibilityContext"
         required: true
       responses:
+        "400":
+          description: Invalid evaluation request.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EligibilityDecisionResponse"
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EligibilityDecisionResponse"
+        "404":
+          description: Promotion offer not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EligibilityDecisionResponse"
         "200":
-          description: OK
+          description: Eligibility evaluation result returned.
           content:
             '*/*':
               schema:
@@ -120,6 +206,8 @@ paths:
       tags:
       - Promotion Offers
       summary: Apply promotion offer during estimate pricing
+      description: Applies a promotion offer to pricing inputs and returns resulting
+        discount and adjusted totals.
       operationId: applyPromotion
       requestBody:
         content:
@@ -128,8 +216,26 @@ paths:
               $ref: "#/components/schemas/ApplyPromotionRequest"
         required: true
       responses:
+        "400":
+          description: Invalid promotion application request.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApplyPromotionResponse"
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApplyPromotionResponse"
+        "404":
+          description: Promotion offer not found or not eligible.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApplyPromotionResponse"
         "200":
-          description: OK
+          description: Promotion offer applied.
           content:
             '*/*':
               schema:
@@ -199,6 +305,9 @@ paths:
     post:
       tags:
       - Price Quotes
+      summary: Calculate contextual price quote
+      description: "Calculates a contextual price quote using request inputs such\
+        \ as product, location, customer tier, and pricing context."
       operationId: calculatePriceQuote
       requestBody:
         content:
@@ -207,8 +316,20 @@ paths:
               $ref: "#/components/schemas/PriceQuoteRequest"
         required: true
       responses:
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceQuoteResponse"
         "200":
-          description: OK
+          description: Price quote calculated successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceQuoteResponse"
+        "400":
+          description: Invalid quote request.
           content:
             '*/*':
               schema:
@@ -244,6 +365,8 @@ paths:
     patch:
       tags:
       - Promotion Offers
+      summary: Deactivate promotion offer
+      description: Deactivates a promotion offer so it is no longer eligible for application.
       operationId: deactivateOffer
       parameters:
       - name: id
@@ -253,8 +376,20 @@ paths:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "404":
+          description: Promotion offer not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
         "200":
-          description: OK
+          description: Promotion offer deactivated.
           content:
             '*/*':
               schema:
@@ -265,6 +400,8 @@ paths:
     patch:
       tags:
       - Promotion Offers
+      summary: Activate promotion offer
+      description: Activates a promotion offer so it becomes eligible for application.
       operationId: activateOffer
       parameters:
       - name: id
@@ -275,7 +412,25 @@ paths:
           format: uuid
       responses:
         "200":
-          description: OK
+          description: Promotion offer activated.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "404":
+          description: Promotion offer not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "409":
+          description: Promotion offer cannot be activated in current state.
           content:
             '*/*':
               schema:
@@ -286,6 +441,8 @@ paths:
     get:
       tags:
       - Promotion Offers
+      summary: Get promotion offer by ID
+      description: Retrieves a promotion offer using its unique identifier.
       operationId: getOfferById
       parameters:
       - name: id
@@ -296,7 +453,19 @@ paths:
           format: uuid
       responses:
         "200":
-          description: OK
+          description: Promotion offer returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "404":
+          description: Promotion offer not found.
           content:
             '*/*':
               schema:
@@ -307,6 +476,8 @@ paths:
     get:
       tags:
       - Promotion Offers
+      summary: Get promotion offer by code
+      description: Retrieves a promotion offer using its promotion code.
       operationId: getOfferByCode
       parameters:
       - name: promoCode
@@ -316,7 +487,19 @@ paths:
           type: string
       responses:
         "200":
-          description: OK
+          description: Promotion offer returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionOfferResponse"
+        "404":
+          description: Promotion offer not found.
           content:
             '*/*':
               schema:
@@ -326,7 +509,9 @@ paths:
   /v1/price/snapshots/{snapshotId}:
     get:
       tags:
-      - pricing-snapshot-controller
+      - Pricing Snapshots
+      summary: Get pricing snapshot by ID
+      description: Retrieves an immutable pricing snapshot using its snapshot identifier.
       operationId: getSnapshot
       parameters:
       - name: snapshotId
@@ -337,7 +522,19 @@ paths:
           format: uuid
       responses:
         "200":
-          description: OK
+          description: Pricing snapshot returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PricingSnapshotResponse"
+        "403":
+          description: Forbidden.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PricingSnapshotResponse"
+        "404":
+          description: Pricing snapshot not found.
           content:
             '*/*':
               schema:
@@ -346,6 +543,8 @@ paths:
     delete:
       tags:
       - Promotion Eligibility Rules
+      summary: Delete eligibility rule
+      description: Deletes an eligibility rule from the specified promotion offer.
       operationId: deleteRule
       parameters:
       - name: promotionId
@@ -361,41 +560,72 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: OK
+        "403":
+          description: Forbidden.
+        "204":
+          description: Eligibility rule deleted.
+        "404":
+          description: Promotion offer or rule not found.
       security:
       - BearerAuth: []
 components:
   schemas:
     CreatePromotionOfferRequest:
       type: object
+      description: Request payload for creating a promotion offer
       properties:
         promoCode:
           type: string
+          description: Unique promotion code
+          example: SUMMER20
+          maxLength: 64
+          minLength: 0
         name:
           type: string
+          description: Display name for the promotion
+          example: Summer Labor Discount
+          maxLength: 255
+          minLength: 0
         description:
           type: string
+          description: Optional promotion description
+          example: 20% off labor for seasonal service
+          maxLength: 255
+          minLength: 0
         discountType:
           type: string
+          description: Discount strategy to apply
           enum:
           - PERCENT_LABOR
           - PERCENT_PARTS
           - FIXED_INVOICE
+          example: PERCENT_LABOR
         discountValue:
           type: number
+          description: Discount value based on selected discount type
+          example: 20.0
           minimum: 0.01
         startDate:
           type: string
           format: date
+          description: Date when promotion becomes valid
+          example: 2026-03-01
         endDate:
           type: string
           format: date
+          description: Date when promotion expires
+          example: 2026-03-31
         usageLimit:
           type: integer
           format: int32
+          description: Maximum number of times promotion can be applied
+          example: 100
         storeCode:
           type: string
+          description: Optional store/location code that scopes the promotion
+          example: NYC-001
+          maxLength: 255
+          minLength: 0
       required:
       - discountType
       - discountValue
@@ -405,118 +635,174 @@ components:
       - startDate
     PromotionOfferResponse:
       type: object
+      description: Response payload representing a promotion offer
       properties:
         promotionOfferId:
           type: string
           format: uuid
+          description: Promotion offer identifier
+          example: f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6aa
         promoCode:
           type: string
+          description: Unique promotion code
+          example: SUMMER20
         name:
           type: string
+          description: Promotion display name
+          example: Summer Labor Discount
         description:
           type: string
+          description: Optional promotion description
         discountType:
           type: string
+          description: Discount strategy
           enum:
           - PERCENT_LABOR
           - PERCENT_PARTS
           - FIXED_INVOICE
+          example: PERCENT_LABOR
         discountValue:
           type: number
+          description: Discount value based on discount type
+          example: 20.0
         startDate:
           type: string
           format: date
+          description: Promotion validity start date
+          example: 2026-03-01
         endDate:
           type: string
           format: date
+          description: Promotion validity end date
+          example: 2026-03-31
         usageLimit:
           type: integer
           format: int32
+          description: Optional usage limit
+          example: 100
         usageCount:
           type: integer
           format: int32
+          description: Number of times the promotion has been applied
+          example: 14
         status:
           type: string
+          description: Current promotion status
           enum:
           - DRAFT
           - ACTIVE
           - INACTIVE
           - EXPIRED
+          example: ACTIVE
         storeCode:
           type: string
+          description: Optional store code scope
+          example: NYC-001
         createdAt:
           type: string
           format: date-time
+          description: Record creation timestamp
         updatedAt:
           type: string
           format: date-time
+          description: Record last update timestamp
         createdBy:
           type: string
+          description: User that created the record
     AddEligibilityRuleRequest:
       type: object
+      description: Request payload to add a new eligibility rule to a promotion
       properties:
         conditionType:
           type: string
+          description: Rule condition type to evaluate
           enum:
           - ACCOUNT_ID_LIST
           - VEHICLE_TAG
           - ACCOUNT_FLEET_SIZE
+          example: ACCOUNT_FLEET_SIZE
         operator:
           type: string
+          description: Comparison operator for the rule
           enum:
           - IN
           - NOT_IN
           - EQUALS
           - GREATER_THAN_OR_EQUAL_TO
+          example: GREATER_THAN_OR_EQUAL_TO
         value:
           type: string
+          description: Rule threshold or comparison value
+          example: 1000
+          maxLength: 255
+          minLength: 0
         ruleCombination:
           type: string
+          description: Logical combinator when multiple rules exist
           enum:
           - AND
           - OR
+          example: AND
       required:
       - conditionType
       - operator
       - value
     EligibilityRuleResponse:
       type: object
+      description: Response payload representing a stored promotion eligibility rule
       properties:
         ruleId:
           type: string
           format: uuid
+          description: Eligibility rule identifier
+          example: f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6ab
         promotionId:
           type: string
           format: uuid
+          description: Promotion identifier to which this rule belongs
+          example: f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6aa
         conditionType:
           type: string
+          description: Rule condition type
           enum:
           - ACCOUNT_ID_LIST
           - VEHICLE_TAG
           - ACCOUNT_FLEET_SIZE
+          example: ACCOUNT_FLEET_SIZE
         operator:
           type: string
+          description: Comparison operator
           enum:
           - IN
           - NOT_IN
           - EQUALS
           - GREATER_THAN_OR_EQUAL_TO
+          example: GREATER_THAN_OR_EQUAL_TO
         value:
           type: string
+          description: Rule threshold or value
+          example: 1000
     EligibilityContext:
       type: object
+      description: Optional account/vehicle context used to evaluate promotion eligibility
       properties:
         accountId:
           type: string
           format: uuid
+          description: Customer account identifier
+          example: 9fdaf7eb-b58f-4e4f-8c14-035e9368f7e8
         vehicleId:
           type: string
           format: uuid
+          description: Vehicle identifier used for vehicle-based eligibility rules
+          example: 0b4a9f7c-f5a8-4a5f-b3cb-2b7a3f4ec5a1
     EligibilityDecisionResponse:
       type: object
+      description: Eligibility evaluation result for a promotion and context
       properties:
         reasonCode:
           type: string
+          description: Detailed ineligibility reason when eligibility is false
           enum:
           - ELIGIBLE
           - ACCOUNT_NOT_IN_LIST
@@ -527,45 +813,70 @@ components:
           - MISSING_ACCOUNT_CONTEXT
           - MISSING_VEHICLE_CONTEXT
           - EVALUATION_ERROR
+          example: MISSING_ACCOUNT_CONTEXT
         eligible:
           type: boolean
         isEligible:
           type: boolean
+          description: Whether the promotion is eligible for the provided context
+          example: true
     ApplyPromotionRequest:
       type: object
+      description: Request payload for applying a promotion code to an estimate context
       properties:
         promotionCode:
           type: string
+          description: Promotion code to apply
+          example: SUMMER20
+          maxLength: 64
+          minLength: 0
         estimateContext:
           $ref: "#/components/schemas/EstimateContext"
+          description: Estimate context used for promotion evaluation
       required:
       - estimateContext
       - promotionCode
     EstimateContext:
       type: object
+      description: Estimate context used for applying promotion rules and calculations
       properties:
         estimateId:
           type: string
           format: uuid
+          description: Estimate identifier
+          example: 00000000-0000-0000-0000-000000000001
         customerId:
           type: string
           format: uuid
+          description: Customer identifier
+          example: 00000000-0000-0000-0000-000000000002
         vehicleId:
           type: string
           format: uuid
+          description: Optional vehicle identifier for vehicle-specific eligibility
+            checks
+          example: 00000000-0000-0000-0000-000000000003
         lineItems:
           type: array
+          description: Line items included in the estimate
           items:
             $ref: "#/components/schemas/LineItemContext"
           maxItems: 2147483647
           minItems: 1
         subtotal:
           type: number
+          description: Estimate subtotal before promotions
+          example: 500.0
           minimum: 0
         appliedPromoCodes:
           type: array
+          description: Promotion codes already applied to this estimate
+          example:
+          - SPRING10
           items:
             type: string
+            maxLength: 64
+            minLength: 0
       required:
       - customerId
       - estimateId
@@ -573,14 +884,23 @@ components:
       - subtotal
     LineItemContext:
       type: object
+      description: Single estimate line item used for promotion and pricing calculations
       properties:
         sku:
           type: string
+          description: Product SKU or identifier
+          example: P001
+          maxLength: 120
+          minLength: 0
         quantity:
           type: number
+          description: Line item quantity
+          example: 1
           minimum: 0
         unitPrice:
           type: number
+          description: Line item unit price
+          example: 100.0
           minimum: 0
       required:
       - quantity
@@ -588,47 +908,75 @@ components:
       - unitPrice
     ApplyPromotionResponse:
       type: object
+      description: Response payload after applying a promotion to an estimate
       properties:
         subtotal:
           type: number
+          description: Original estimate subtotal before promotions
+          example: 500.0
         total:
           type: number
+          description: Final estimate total after applying adjustments
+          example: 400.0
         appliedAdjustments:
           type: array
+          description: Adjustments applied during promotion evaluation
           items:
             $ref: "#/components/schemas/PricingAdjustment"
     PricingAdjustment:
       type: object
+      description: A single pricing adjustment applied to an estimate
       properties:
         type:
           type: string
+          description: Adjustment type
+          example: PROMOTION
         sourceId:
           type: string
           format: uuid
+          description: Source identifier that produced this adjustment
+          example: f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6aa
         label:
           type: string
+          description: Human-readable adjustment label
+          example: Summer Labor Discount
         amount:
           type: number
-        metadata: {}
+          description: Adjustment amount; negative values reduce total
+          example: -100.0
+        metadata:
+          description: Optional adjustment metadata bag
     PriceQuoteRequest:
       type: object
+      description: Request payload for calculating contextual price quotes
       properties:
         productId:
           type: string
           format: uuid
+          description: Product identifier
+          example: 7f3c35db-b908-42fa-83f1-2ef46a3c2149
         quantity:
           type: integer
           format: int32
+          description: Requested quantity
+          example: 2
           minimum: 1
         locationId:
           type: string
           format: uuid
+          description: Location identifier where quote applies
+          example: 6b2896a2-d456-4e22-ab5b-8a67f32c4f59
         customerTierId:
           type: string
           format: uuid
+          description: Customer tier identifier used for tier pricing rules
+          example: ea2f17ef-f06e-40ec-a9d6-c2d1b3e56d8a
         effectiveTimestamp:
           type: string
           format: date-time
+          description: Optional timestamp for effective pricing lookup; defaults to
+            current time if omitted
+          example: 2026-03-05T21:15:00Z
       required:
       - customerTierId
       - locationId
@@ -636,66 +984,105 @@ components:
       - quantity
     MoneyAmount:
       type: object
+      description: Monetary value object with amount and ISO-4217 currency code
       properties:
         amount:
           type: number
+          description: Numeric monetary amount
+          example: 125.5
         currency:
           type: string
+          description: ISO-4217 currency code
+          example: USD
     PriceQuoteResponse:
       type: object
+      description: Calculated contextual price quote response
       properties:
         productId:
           type: string
           format: uuid
+          description: Product identifier
+          example: 7f3c35db-b908-42fa-83f1-2ef46a3c2149
         quantity:
           type: integer
           format: int32
+          description: Quoted quantity
+          example: 2
         msrp:
           $ref: "#/components/schemas/MoneyAmount"
+          description: Manufacturer suggested retail price
         unitPrice:
           $ref: "#/components/schemas/MoneyAmount"
+          description: Final unit price after applying applicable rules
         extendedPrice:
           $ref: "#/components/schemas/MoneyAmount"
+          description: Extended price (unit price multiplied by quantity)
         priceSource:
           type: string
+          description: Source from which the final price was resolved
+          example: LOCATION_OVERRIDE
         pricingBreakdown:
           type: array
+          description: Per-rule pricing breakdown entries
           items:
             $ref: "#/components/schemas/PricingBreakdownEntry"
         warnings:
           type: array
+          description: Non-fatal warnings generated during quote calculation
           items:
             type: string
     PricingBreakdownEntry:
       type: object
+      description: Single pricing-rule application entry within a quote breakdown
       properties:
         ruleName:
           type: string
+          description: Rule name
+          example: Tier Discount Rule
         ruleType:
           type: string
+          description: Rule category/type
+          example: CUSTOMER_TIER
         adjustment:
           $ref: "#/components/schemas/MoneyAmount"
+          description: Amount adjusted by this rule
         resultingValue:
           $ref: "#/components/schemas/MoneyAmount"
+          description: Running value after this rule adjustment
     PricingSnapshotResponse:
       type: object
+      description: Response payload for immutable pricing snapshot retrieval
       properties:
         snapshotId:
           type: string
           format: uuid
+          description: Snapshot identifier
+          example: 4fd2de29-650f-4d97-9b80-01b476d9ce31
         createdAt:
           type: string
           format: date-time
+          description: Snapshot creation timestamp
+          example: 2026-03-05T21:38:21.752Z
         sourceContext:
           type: string
+          description: Optional source context
+          example: quote-checkout
         itemIdentifier:
           type: string
+          description: Identifier of the quoted item
+          example: SKU:P001
         quantity:
           type: integer
           format: int32
+          description: Quoted quantity
+          example: 1
         prices:
           type: string
+          description: Serialized prices payload
         appliedRules:
           type: string
+          description: Serialized applied-rule details
         policyVersion:
           type: string
+          description: Pricing policy version used
+          example: 2026.03.1
