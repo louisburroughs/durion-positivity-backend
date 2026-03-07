@@ -22,7 +22,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestControllerAdvice
 @RequiredArgsConstructor
 public class PeopleExceptionHandler {
@@ -129,6 +131,15 @@ public class PeopleExceptionHandler {
 	public ProblemDetail handleResponseStatusException(ResponseStatusException ex) {
 		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.valueOf(ex.getStatusCode().value()),
 				ex.getReason() == null ? ex.getMessage() : ex.getReason());
+		problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
+		return problem;
+	}
+
+	@ExceptionHandler(Exception.class)
+	public ProblemDetail handleUnexpectedException(Exception ex) {
+		log.error("Unhandled exception in People API", ex);
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+				"Internal server error");
 		problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
 		return problem;
 	}
