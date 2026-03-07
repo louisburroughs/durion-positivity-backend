@@ -45,3 +45,4 @@ components:
         type: string
         default: "1"
         example: "1"
+      x-purpose: Documented for gateway header routing; no local $ref expected

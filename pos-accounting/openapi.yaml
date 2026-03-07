@@ -71,6 +71,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingRuleSetResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Posting Rules
@@ -111,6 +113,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingRuleSetResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/posting-categories/{postingCategoryId}:
     get:
       tags:
@@ -139,6 +143,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingCategoryResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Posting Categories
@@ -178,6 +184,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingCategoryResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/mapping-keys/{mappingKeyId}:
     get:
       tags:
@@ -206,6 +214,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MappingKeyResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Mapping Keys
@@ -245,6 +255,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MappingKeyResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/journal-entries/{journalEntryId}:
     get:
       tags:
@@ -273,6 +285,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Journal Entries
@@ -306,6 +320,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/gl-accounts/{glAccountId}:
     get:
       tags:
@@ -334,6 +350,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - GL Accounts
@@ -367,6 +385,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/default-mappings/{id}:
     get:
       tags:
@@ -401,6 +421,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
+      security:
+      - bearerAuth: []
     put:
       tags:
       - Default GL Mappings
@@ -440,6 +462,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
+      security:
+      - bearerAuth: []
     delete:
       tags:
       - Default GL Mappings
@@ -461,6 +485,8 @@ paths:
           description: Default mapping not found
         "204":
           description: Default mapping deactivated
+      security:
+      - bearerAuth: []
   /v1/accounting/vendor-bills:
     post:
       tags:
@@ -487,6 +513,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/vendor-bills/{billId}/resolve-exception:
     post:
       tags:
@@ -522,6 +550,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/vendor-bills/match:
     post:
       tags:
@@ -549,6 +579,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/vendor-bills/match-candidates/{candidateId}/select:
     post:
       tags:
@@ -584,6 +616,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/posting-rules:
     get:
       tags:
@@ -628,6 +662,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingRuleSetListResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Posting Rules
@@ -653,6 +689,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingRuleSetResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/posting-rules/{postingRuleSetId}/publish:
     post:
       tags:
@@ -687,6 +725,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingRuleVersionResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/posting-rules/{postingRuleSetId}/archive:
     post:
       tags:
@@ -721,6 +761,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingRuleVersionResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/posting-categories:
     get:
       tags:
@@ -771,6 +813,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingCategoryListResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Posting Categories
@@ -796,6 +840,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PostingCategoryResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/posting-categories/{postingCategoryId}/deactivate:
     post:
       tags:
@@ -818,6 +864,8 @@ paths:
           description: Posting category deactivated
         "409":
           description: Cannot deactivate - active mappings exist
+      security:
+      - bearerAuth: []
   /v1/accounting/payments/{paymentId}/void:
     post:
       tags:
@@ -844,6 +892,8 @@ paths:
           description: Payment voided
         "404":
           description: Payment not found
+      security:
+      - bearerAuth: []
   /v1/accounting/payments/{paymentId}/reverse:
     post:
       tags:
@@ -872,6 +922,8 @@ paths:
           description: Payment has no applications to reverse
         "404":
           description: Payment not found
+      security:
+      - bearerAuth: []
   /v1/accounting/payments/{paymentId}/applications:
     post:
       tags:
@@ -918,6 +970,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PaymentApplicationResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/payment-applications/{applicationId}/reverse:
     post:
       tags:
@@ -947,6 +1001,8 @@ paths:
           description: Payment application not found
         "204":
           description: Payment application reversed
+      security:
+      - bearerAuth: []
   /v1/accounting/mappings:
     post:
       tags:
@@ -974,6 +1030,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLMappingCreateResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/mappings/resolve:
     post:
       tags:
@@ -990,18 +1048,20 @@ paths:
               $ref: "#/components/schemas/GLMappingResolveRequest"
         required: true
       responses:
-        "200":
-          description: GL mapping resolved
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GLMappingResolveResponse"
         "400":
           description: Invalid request payload
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLMappingResolveResponse"
+        "200":
+          description: GL mapping resolved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLMappingResolveResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/mapping-keys:
     post:
       tags:
@@ -1028,6 +1088,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MappingKeyResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/mapping-keys/{mappingKeyId}/deactivate:
     post:
       tags:
@@ -1050,6 +1112,8 @@ paths:
           description: Mapping key not found
         "409":
           description: Cannot deactivate - active mappings exist
+      security:
+      - bearerAuth: []
   /v1/accounting/journal-entries:
     get:
       tags:
@@ -1094,6 +1158,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PagedResponseJournalEntryResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Journal Entries
@@ -1119,6 +1185,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/journal-entries/{journalEntryId}/reverse:
     post:
       tags:
@@ -1153,6 +1221,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/journal-entries/{journalEntryId}/post:
     post:
       tags:
@@ -1185,6 +1255,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/invoice/invoices:
     post:
       tags:
@@ -1223,6 +1295,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceGenerationResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/gl-accounts:
     get:
       tags:
@@ -1274,6 +1348,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountListResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - GL Accounts
@@ -1299,6 +1375,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/gl-accounts/{glAccountId}/deactivate:
     post:
       tags:
@@ -1331,6 +1409,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/gl-accounts/{glAccountId}/archive:
     post:
       tags:
@@ -1363,6 +1443,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/gl-accounts/{glAccountId}/activate:
     post:
       tags:
@@ -1397,6 +1479,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/events:
     get:
       tags:
@@ -1447,6 +1531,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PagedResponseAccountingEventResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Accounting Events
@@ -1472,6 +1558,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AccountingEventResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/events/{eventId}/retry:
     post:
       tags:
@@ -1504,6 +1592,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AccountingEventResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/events/{eventId}/reprocess:
     post:
       tags:
@@ -1551,6 +1641,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AccountingEventResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/default-mappings:
     get:
       tags:
@@ -1588,6 +1680,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingListResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Default GL Mappings
@@ -1619,6 +1713,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/credit-memos:
     get:
       tags:
@@ -1672,6 +1768,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PageCreditMemoResponse"
+      security:
+      - bearerAuth: []
     post:
       tags:
       - Credit Memos
@@ -1712,6 +1810,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CreditMemoResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/audit/refund:
     post:
       tags:
@@ -1742,17 +1842,17 @@ paths:
           content:
             '*/*':
               schema: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema: {}
         "201":
           description: Refund recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
   /v1/accounting/audit/price-override:
     post:
       tags:
@@ -1809,17 +1909,17 @@ paths:
               $ref: "#/components/schemas/CancellationRequest"
         required: true
       responses:
+        "400":
+          description: Invalid request parameters
+          content:
+            '*/*':
+              schema: {}
         "201":
           description: Cancellation recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema: {}
         "500":
           description: Internal server error
           content:
@@ -1876,6 +1976,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/APPaymentResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/vendor-bills/{billId}:
     get:
       tags:
@@ -1905,6 +2007,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/vendor-bills/match-candidates/{invoiceEventId}:
     get:
       tags:
@@ -1928,6 +2032,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillMatchCandidateResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/vendor-bills/event/{eventId}:
     get:
       tags:
@@ -1957,6 +2063,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/reports/financial/income-statement:
     get:
       tags:
@@ -2232,6 +2340,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PostingRuleVersionResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/posting-categories/{postingCategoryId}/mapping-keys:
     get:
       tags:
@@ -2295,6 +2405,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MappingKeyListResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/journal-entries/{journalEntryId}/traceability:
     get:
       tags:
@@ -2323,6 +2435,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/JournalEntryTraceabilityResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/invoice/{invoiceId}/status:
     get:
       tags:
@@ -2339,6 +2453,12 @@ paths:
           type: string
           format: uuid
       responses:
+        "200":
+          description: Invoice status returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceStatusResponse"
         "500":
           description: Error retrieving invoice status
           content:
@@ -2351,12 +2471,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
-        "200":
-          description: Invoice status returned
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InvoiceStatusResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/invoice/rules/{customerId}:
     get:
       tags:
@@ -2391,6 +2507,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/BillingRuleRefResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/gl-accounts/{glAccountId}/balance:
     get:
       tags:
@@ -2419,6 +2537,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLAccountBalanceResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/events/{eventId}:
     get:
       tags:
@@ -2447,6 +2567,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AccountingEventResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/events/{eventId}/reprocessing-history:
     get:
       tags:
@@ -2472,6 +2594,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ReprocessingAttemptHistoryResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/events/{eventId}/processing-log:
     get:
       tags:
@@ -2500,6 +2624,8 @@ paths:
             '*/*':
               schema:
                 type: string
+      security:
+      - bearerAuth: []
   /v1/accounting/default-mappings/search:
     get:
       tags:
@@ -2538,6 +2664,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/DefaultGLMappingResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/default-mappings/resolve:
     get:
       tags:
@@ -2579,6 +2707,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DefaultGLMappingResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/default-mappings/global:
     get:
       tags:
@@ -2603,6 +2733,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/DefaultGLMappingResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/credit-memos/{creditMemoId}:
     get:
       tags:
@@ -2632,6 +2764,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CreditMemoResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/audit/type/{type}:
     get:
       tags:
@@ -2908,6 +3042,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/APPaymentResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/ap/payments/by-ref/{paymentRef}:
     get:
       tags:
@@ -2936,6 +3072,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/APPaymentResponse"
+      security:
+      - bearerAuth: []
   /v1/accounting/ap/bills:
     get:
       tags:
@@ -2971,6 +3109,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/VendorBillSummaryResponse"
+      security:
+      - bearerAuth: []
 components:
   schemas:
     PostingRuleSetCreateRequest:
@@ -3447,6 +3587,8 @@ components:
       type: object
       description: Line item received from vendor
       properties:
+        inventoryItem:
+          type: boolean
         productId:
           type: string
           format: uuid

@@ -4,6 +4,10 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shopmanager.service.ConflictOverrideService;
 import com.positivity.shopmanager.service.dto.ConflictOverrideRequest;
 import com.positivity.shopmanager.service.dto.ConflictOverrideResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
@@ -23,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/v1/appointments/{appointmentId}/conflict-override")
+@Tag(name = "Conflict Override API", description = "Operations for appointment conflict override decisions")
 public class ConflictOverrideController {
 
     private final ConflictOverrideService conflictOverrideService;
@@ -40,9 +45,16 @@ public class ConflictOverrideController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('shopmgr.appointment.override')")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE", apiVersion = "1")
+    @Operation(
+            summary = "Execute appointment conflict override",
+            description = "Executes a conflict override for the specified appointment when authorized.")
+    @ApiResponse(responseCode = "201", description = "Conflict override executed.")
+    @ApiResponse(responseCode = "400", description = "Invalid request or appointment ID mismatch.")
+    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(responseCode = "404", description = "Appointment not found.")
     public @NonNull ConflictOverrideResponse executeOverride(
-            @PathVariable @NonNull UUID appointmentId,
-            @RequestBody @NonNull ConflictOverrideRequest request) {
+            @Parameter(description = "Appointment ID", required = true) @PathVariable @NonNull UUID appointmentId,
+            @Parameter(description = "Conflict override request payload", required = true) @RequestBody @NonNull ConflictOverrideRequest request) {
         // Validate that path appointmentId is consistent with request body
         // appointmentId
         if (!appointmentId.equals(request.getAppointmentId())) {

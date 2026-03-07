@@ -4,6 +4,8 @@ import com.positivity.events.EmitEvent;
 import com.positivity.price.internal.dto.PriceQuoteRequest;
 import com.positivity.price.internal.dto.PriceQuoteResponse;
 import com.positivity.price.service.PriceQuoteService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +40,12 @@ public class PriceQuoteController {
     @PostMapping
     @EmitEvent(id = "PRICE_QUOTE_CALCULATE", apiVersion = "1")
     @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Calculate contextual price quote",
+            description = "Calculates a contextual price quote using request inputs such as product, location, customer tier, and pricing context.")
+    @ApiResponse(responseCode = "200", description = "Price quote calculated successfully.")
+    @ApiResponse(responseCode = "400", description = "Invalid quote request.")
+    @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<PriceQuoteResponse> calculatePriceQuote(@Valid @RequestBody PriceQuoteRequest request) {
         return ResponseEntity.ok(priceQuoteService.calculatePrice(request));
     }
