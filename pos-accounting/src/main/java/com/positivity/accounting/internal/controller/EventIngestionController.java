@@ -34,6 +34,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 
 /**
@@ -43,6 +44,7 @@ import jakarta.validation.Valid;
  */
 @RestController
 @RequestMapping("/v1/accounting/events")
+@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Accounting Events", description = "Ingest and manage accounting events for journal processing.")
 public class EventIngestionController {
 

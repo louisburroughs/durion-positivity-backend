@@ -13,6 +13,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,11 +28,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -38,7 +43,6 @@ import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -55,6 +59,11 @@ import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class WorkorderCompletionTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private WorkorderRepository workOrderRepository;
@@ -142,8 +151,8 @@ class WorkorderCompletionTest {
 
         // Re-inject mocks for WorkorderService since it has WorkorderStateMachine as
         // dependency
-        workOrderService = new WorkorderServiceImpl(workOrderRepository, estimateRepository, estimateItemRepository,
-                workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
+        workOrderService = new WorkorderServiceImpl(TEST_CLOCK, workOrderRepository, estimateRepository,
+                estimateItemRepository, workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
                 auditEventRepository, idempotencyService, promotionValidationService, shopmgrClient);
     }
 
@@ -273,7 +282,7 @@ class WorkorderCompletionTest {
         assertEquals("Workorder", auditEvent.getEntityType());
         assertEquals(testWorkorderId, auditEvent.getEntityId());
         assertEquals("StateTransition", auditEvent.getEventType());
-        assertEquals(userId.toString(), auditEvent.getUserId());
+        assertEquals(userId, auditEvent.getUserId());
         assertTrue(auditEvent.getDetails().contains("WORK_IN_PROGRESS"));
         assertTrue(auditEvent.getDetails().contains("COMPLETED"));
     }

@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 
@@ -27,7 +28,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import jakarta.persistence.PrePersist;
 
 @Entity
 @Data
@@ -130,15 +130,5 @@ public class Workorder {
     public boolean isLocked() {
         return status == WorkorderStatus.CANCELLED
                 || (status == WorkorderStatus.COMPLETED && !Boolean.TRUE.equals(isReopened));
-    }
-
-    @PrePersist
-    protected void prePersist() {
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
     }
 }

@@ -6,6 +6,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -32,6 +36,11 @@ import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GLPostingService Unit Tests")
 class GLPostingServiceTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    private Clock clock = TEST_CLOCK;
 
     @Mock
     private JournalEntryServiceImpl journalEntryService;

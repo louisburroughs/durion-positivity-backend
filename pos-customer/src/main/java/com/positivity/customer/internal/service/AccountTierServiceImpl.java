@@ -1,5 +1,7 @@
 package com.positivity.customer.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.customer.internal.dto.GetAccountTierResponse;
 import com.positivity.customer.internal.dto.ResolveAccountTierRequest;
 import com.positivity.customer.internal.dto.ResolveAccountTierResponse;
@@ -39,6 +41,8 @@ import java.util.UUID;
 @Slf4j
 @RequiredArgsConstructor
 public class AccountTierServiceImpl implements AccountTierService {
+    private final Clock clock;
+
 
     private final CommercialPartyRepository commercialPartyRepository;
 
@@ -200,7 +204,7 @@ public class AccountTierServiceImpl implements AccountTierService {
      */
     private void applyTierToParty(AbstractParty party, AccountTier tier, String reason, boolean forceRecalc) {
         party.setTier(tier);
-        party.setTierAssignedAt(Instant.now());
+        party.setTierAssignedAt(Instant.now(clock));
         party.setTierAssignedBy("SYSTEM"); // Could be enhanced to track actual user
 
         if (forceRecalc) {

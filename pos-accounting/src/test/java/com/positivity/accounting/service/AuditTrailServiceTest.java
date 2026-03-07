@@ -7,16 +7,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -43,8 +47,8 @@ import com.positivity.accounting.internal.enums.RefundType;
 import com.positivity.accounting.internal.exception.AuditTrailAuthorizationException;
 import com.positivity.accounting.internal.service.AuditTrailServiceImpl;
 import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl;
-import com.positivity.accounting.internal.service.RefundAuthorizationServiceImpl;
 import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl.AuthorizationResult;
+import com.positivity.accounting.internal.service.RefundAuthorizationServiceImpl;
 import com.positivity.accounting.internal.service.RefundAuthorizationServiceImpl.RefundAuthorizationResult;
 
 import tools.jackson.databind.ObjectMapper;
@@ -58,6 +62,13 @@ import tools.jackson.databind.ObjectMapper;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuditTrailService Unit Tests")
 class AuditTrailServiceTest {
+
+    private static final UUID _DEFAULT_UUID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    private Clock clock = TEST_CLOCK;
 
     @Mock
     private AuditTrailEntryRepository auditRepository;
@@ -85,11 +96,11 @@ class AuditTrailServiceTest {
 
     @BeforeEach
     void setUp() {
-        testActorId = UUID.randomUUID().toString();
-        testOrderId = UUID.randomUUID();
-        testInvoiceId = UUID.randomUUID();
-        testPaymentId = UUID.randomUUID();
-        testLineItemId = UUID.randomUUID();
+        testActorId = "system";
+        testOrderId = _DEFAULT_UUID;
+        testInvoiceId = _DEFAULT_UUID;
+        testPaymentId = _DEFAULT_UUID;
+        testLineItemId = _DEFAULT_UUID;
 
         TestingAuthenticationToken authentication = new TestingAuthenticationToken("test-user", null);
         authentication.setAuthenticated(true);
@@ -118,7 +129,7 @@ class AuditTrailServiceTest {
         when(overrideAuthService.validate(any(), any(), any(), any())).thenReturn(authResult);
         when(auditRepository.save(any(AuditTrailEntry.class))).thenAnswer(inv -> {
             AuditTrailEntry entry = inv.getArgument(0);
-            entry.setAuditId(UUID.randomUUID());
+            entry.setAuditId(_DEFAULT_UUID);
             return entry;
         });
 
@@ -197,7 +208,7 @@ class AuditTrailServiceTest {
         when(objectMapper.writeValueAsString(any())).thenReturn("{\"invoiceId\":\"test\"}");
         when(auditRepository.save(any(AuditTrailEntry.class))).thenAnswer(inv -> {
             AuditTrailEntry entry = inv.getArgument(0);
-            entry.setAuditId(UUID.randomUUID());
+            entry.setAuditId(_DEFAULT_UUID);
             return entry;
         });
 
@@ -325,7 +336,7 @@ class AuditTrailServiceTest {
 
         when(auditRepository.save(any(AuditTrailEntry.class))).thenAnswer(inv -> {
             AuditTrailEntry entry = inv.getArgument(0);
-            entry.setAuditId(UUID.randomUUID());
+            entry.setAuditId(_DEFAULT_UUID);
             return entry;
         });
 

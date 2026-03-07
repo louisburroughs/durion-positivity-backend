@@ -9,13 +9,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import lombok.Data;
+import jakarta.persistence.EntityListeners;
 @Entity
+@EntityListeners(AuditingEntityListener.class)
+@Data
 @Table(name = "invoice_items")
 public class InvoiceItem {
 
@@ -46,72 +49,4 @@ public class InvoiceItem {
 
     @Column(name = "workorder_item_id", columnDefinition = "UUID")
     private UUID workorderItemId;
-
-    @Nullable
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(@Nullable UUID id) {
-        this.id = id;
-    }
-
-    @Nullable
-    public Invoice getInvoice() {
-        return invoice;
-    }
-
-    public void setInvoice(@NonNull Invoice invoice) {
-        this.invoice = invoice;
-    }
-
-    @Nullable
-    public UUID getInvoiceId() {
-        return invoiceId;
-    }
-
-    @NonNull
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(@NonNull String description) {
-        this.description = description;
-    }
-
-    @NonNull
-    public BigDecimal getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(@NonNull BigDecimal quantity) {
-        this.quantity = quantity;
-    }
-
-    @NonNull
-    public BigDecimal getUnitPrice() {
-        return unitPrice;
-    }
-
-    public void setUnitPrice(@NonNull BigDecimal unitPrice) {
-        this.unitPrice = unitPrice;
-    }
-
-    @NonNull
-    public BigDecimal getLineTotal() {
-        return lineTotal;
-    }
-
-    public void setLineTotal(@NonNull BigDecimal lineTotal) {
-        this.lineTotal = lineTotal;
-    }
-
-    @Nullable
-    public UUID getWorkorderItemId() {
-        return workorderItemId;
-    }
-
-    public void setWorkorderItemId(@Nullable UUID workorderItemId) {
-        this.workorderItemId = workorderItemId;
-    }
 }

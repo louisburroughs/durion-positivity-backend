@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -140,10 +142,17 @@ public class Estimate {
      * Check if estimate can be reopened (transitioned from declined to draft).
      */
     public boolean canReopen(int configuredExpiryDays) {
+        return canReopen(configuredExpiryDays, LocalDateTime.now(Clock.systemUTC()));
+    }
+
+    /**
+     * Check if estimate can be reopened using the provided reference time.
+     */
+    public boolean canReopen(int configuredExpiryDays, LocalDateTime referenceTime) {
         if (status != EstimateStatus.DECLINED || declinedAt == null) {
             return false;
         }
         LocalDateTime expiryDate = declinedAt.plusDays(configuredExpiryDays);
-        return !LocalDateTime.now().isAfter(expiryDate);
+        return !referenceTime.isAfter(expiryDate);
     }
 }

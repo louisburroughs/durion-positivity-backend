@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,7 +14,6 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import jakarta.persistence.PrePersist;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -42,14 +42,4 @@ public class Customer {
     private String name;
     private String email;
     private String phone;
-
-    @PrePersist
-    protected void prePersist() {
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
 }

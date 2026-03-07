@@ -1,5 +1,8 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -43,6 +46,7 @@ import com.positivity.accounting.internal.audit.repository.AuditTrailEntryReposi
  */
 @DisplayName("Audit Trail Backend Contract Behavioral Tests")
 class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Autowired
     private AuditTrailEntryRepository auditTrailRepository;
@@ -59,8 +63,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
         auditTrailRepository.deleteAll();
 
         // Setup test IDs
-        testOrderId = UUID.randomUUID();
-        testInvoiceId = UUID.randomUUID();
+        testOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
     @AfterEach
@@ -85,7 +89,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "reason": "Customer loyalty discount",
                     "actorRole": "STORE_MANAGER"
                 }
-                """.formatted(testOrderId, UUID.randomUUID());
+                """.formatted(testOrderId, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_AUDIT + "/price-override"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -116,7 +120,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "reason": "Damaged goods returned",
                     "actorRole": "STORE_MANAGER"
                 }
-                """.formatted(testInvoiceId, UUID.randomUUID());
+                """.formatted(testInvoiceId, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_AUDIT + "/refund"))
@@ -193,8 +197,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
         // Given - audit trail entries of specific type
         createTestAuditEntry(testOrderId, null, ExceptionType.PRICE_OVERRIDE);
 
-        Instant startDate = Instant.now().minus(1, ChronoUnit.DAYS);
-        Instant endDate = Instant.now().plus(1, ChronoUnit.DAYS);
+        Instant startDate = Instant.now(TEST_CLOCK).minus(1, ChronoUnit.DAYS);
+        Instant endDate = Instant.now(TEST_CLOCK).plus(1, ChronoUnit.DAYS);
 
         // When/Then
         mockMvc.perform(withAuth(get(API_V1_AUDIT + "/type/PRICE_OVERRIDE")
@@ -212,8 +216,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
         // Given - audit trail entries for a specific actor
         createTestAuditEntry(testOrderId, null, ExceptionType.PRICE_OVERRIDE);
 
-        Instant startDate = Instant.now().minus(1, ChronoUnit.DAYS);
-        Instant endDate = Instant.now().plus(1, ChronoUnit.DAYS);
+        Instant startDate = Instant.now(TEST_CLOCK).minus(1, ChronoUnit.DAYS);
+        Instant endDate = Instant.now(TEST_CLOCK).plus(1, ChronoUnit.DAYS);
 
         // When/Then
         mockMvc.perform(withAuth(get(API_V1_AUDIT + "/actor/" + TEST_USER)
@@ -231,8 +235,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
         createTestAuditEntry(testOrderId, null, ExceptionType.PRICE_OVERRIDE);
         createTestAuditEntry(testOrderId, testInvoiceId, ExceptionType.REFUND);
 
-        Instant startDate = Instant.now().minus(1, ChronoUnit.DAYS);
-        Instant endDate = Instant.now().plus(1, ChronoUnit.DAYS);
+        Instant startDate = Instant.now(TEST_CLOCK).minus(1, ChronoUnit.DAYS);
+        Instant endDate = Instant.now(TEST_CLOCK).plus(1, ChronoUnit.DAYS);
 
         // When/Then
         mockMvc.perform(withAuth(get(API_V1_AUDIT + "/range")
@@ -299,7 +303,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "reason": "Large discount without approval",
                     "actorRole": "CASHIER"
                 }
-                """.formatted(testOrderId, UUID.randomUUID());
+                """.formatted(testOrderId, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then - should return 403 if authorization logic is implemented
         // For now, testing that endpoint is reachable
@@ -327,7 +331,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "reason": "Large refund requiring approval",
                     "actorRole": "CASHIER"
                 }
-                """.formatted(testInvoiceId, UUID.randomUUID());
+                """.formatted(testInvoiceId, UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then - should return 403 if authorization logic is implemented
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_AUDIT + "/refund"))
@@ -348,7 +352,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get audit entries - empty result for non-existent order")
     void testGetByOrderId_NotFound() throws Exception {
         // Given - non-existent order ID
-        UUID nonExistentOrderId = UUID.randomUUID();
+        UUID nonExistentOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then - should return empty array, not 404
         mockMvc.perform(withAuth(get(API_V1_AUDIT + "/order/" + nonExistentOrderId)))
@@ -361,8 +365,8 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get audit entries - invalid date range")
     void testGetByDateRange_InvalidRange() throws Exception {
         // Given - invalid date range (end before start)
-        Instant startDate = Instant.now();
-        Instant endDate = Instant.now().minus(7, ChronoUnit.DAYS);
+        Instant startDate = Instant.now(TEST_CLOCK);
+        Instant endDate = Instant.now(TEST_CLOCK).minus(7, ChronoUnit.DAYS);
 
         // When/Then - should return 400 for invalid range
         MvcResult result = mockMvc.perform(withAuth(get(API_V1_AUDIT + "/range")
@@ -391,7 +395,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
         entry.setExceptionType(type);
         entry.setActorId(TEST_USER);
         entry.setActorRole("STORE_MANAGER");
-        entry.setTimestamp(Instant.now());
+        entry.setTimestamp(Instant.now(TEST_CLOCK));
         entry.setReason("Test audit entry");
         entry.setAuthorizationLevel("STORE_MANAGER");
         entry.setPolicyVersion("1.0");

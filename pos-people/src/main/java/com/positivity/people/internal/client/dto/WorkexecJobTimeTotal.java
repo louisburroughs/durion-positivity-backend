@@ -4,40 +4,45 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 public class WorkexecJobTimeTotal {
-    private UUID technicianId;
-    private UUID locationId;
-    private LocalDate localDate;
-    private Integer totalJobMinutes;
 
-    public UUID getTechnicianId() {
-        return technicianId;
-    }
+	private UUID technicianId;
 
-    public void setTechnicianId(UUID technicianId) {
-        this.technicianId = technicianId;
-    }
+	private UUID locationId;
 
-    public UUID getLocationId() {
-        return locationId;
-    }
+	private LocalDate localDate;
 
-    public void setLocationId(UUID locationId) {
-        this.locationId = locationId;
-    }
+	private Integer totalJobMinutes;
 
-    public LocalDate getLocalDate() {
-        return localDate;
-    }
+	public UUID getTechnicianId() {
+		return technicianId;
+	}
 
-    public void setLocalDate(LocalDate localDate) {
-        this.localDate = localDate;
-    }
+	public void setTechnicianId(UUID technicianId) {
+		this.technicianId = technicianId;
+	}
 
-    public Integer getTotalJobMinutes() {
-        return totalJobMinutes;
-    }
+	public UUID getLocationId() {
+		return locationId;
+	}
 
-    public void setTotalJobMinutes(Integer totalJobMinutes) {
-        this.totalJobMinutes = totalJobMinutes;
-    }
+	public void setLocationId(UUID locationId) {
+		this.locationId = locationId;
+	}
+
+	public LocalDate getLocalDate() {
+		return localDate;
+	}
+
+	public void setLocalDate(LocalDate localDate) {
+		this.localDate = localDate;
+	}
+
+	public Integer getTotalJobMinutes() {
+		return totalJobMinutes;
+	}
+
+	public void setTotalJobMinutes(Integer totalJobMinutes) {
+		this.totalJobMinutes = totalJobMinutes;
+	}
+
 }

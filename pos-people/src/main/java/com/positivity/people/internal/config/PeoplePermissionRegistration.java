@@ -11,10 +11,10 @@ import org.springframework.web.client.RestClient;
 @Component
 public class PeoplePermissionRegistration extends PermissionRegistrationSupport {
 
-    public PeoplePermissionRegistration(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.security.base-url:http://pos-security-service:8086}") String securityServiceUrl,
-            @Value("${pos.security.permission-registration.enabled:true}") boolean enabled) {
-        super(restClientBuilder, securityServiceUrl, enabled, "permissions.yaml");
-    }
+	public PeoplePermissionRegistration(RestClient.Builder restClientBuilder,
+			@Value("${pos.security.base-url:http://pos-security-service:8086}") String securityServiceUrl,
+			@Value("${pos.security.permission-registration.enabled:true}") boolean enabled) {
+		super(restClientBuilder, securityServiceUrl, enabled, "permissions.yaml");
+	}
+
 }

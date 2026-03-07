@@ -7,9 +7,11 @@ import lombok.Setter;
 
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @Setter
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "non_inventory_product")
 public class NonInventoryProductEntity implements CatalogItem {
     @Id

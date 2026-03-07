@@ -54,11 +54,6 @@ public class GLMapping {
     @UUIDv7Id
     @Column(name = "gl_mapping_id", nullable = false, columnDefinition = "UUID")
     private UUID glMappingId;
-
-    @PrePersist
-    public void onPrePersist() {
-    }
-
     @Column(name = "source_system", length = 50, nullable = false)
     private String sourceSystem;
 

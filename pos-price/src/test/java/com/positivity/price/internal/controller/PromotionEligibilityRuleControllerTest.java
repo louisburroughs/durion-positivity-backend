@@ -156,7 +156,8 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
         UUID promotionId = seedPromotion();
 
         mockMvc.perform(withGatewayAuth(
-                delete("/v1/promotions/offers/{promotionId}/rules/{ruleId}", promotionId, UUID.randomUUID())))
+                delete("/v1/promotions/offers/{promotionId}/rules/{ruleId}", promotionId,
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ELIGIBILITY_RULE_NOT_FOUND"));
     }
@@ -191,7 +192,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
 
         mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules/evaluate", promotionId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(evaluatePayload(UUID.randomUUID(), null))))
+                .content(evaluatePayload(UUID.fromString("00000000-0000-0000-0000-000000000001"), null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reasonCode").exists());
     }
@@ -241,7 +242,8 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     @Test
     @DisplayName("ERC-008: POST /v1/promotions/offers/{promotionId}/rules with non-existent promotionId → 404")
     void givenNonExistentPromotion_whenAddRule_thenReturns404() throws Exception {
-        mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules", UUID.randomUUID())
+        mockMvc.perform(withGatewayAuth(post("/v1/promotions/offers/{promotionId}/rules",
+                UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validRulePayload())))
                 .andExpect(status().isNotFound());
@@ -318,7 +320,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     @Test
     @DisplayName("ERC-403: POST /v1/promotions/offers/{promotionId}/rules/evaluate without gateway auth \u2192 403 Forbidden")
     void evaluateEligibility_withoutAuth_returns403() throws Exception {
-        UUID promotionId = UUID.randomUUID();
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         mockMvc.perform(post("/v1/promotions/offers/{promotionId}/rules/evaluate", promotionId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"accountId\":null,\"vehicleId\":null}"))

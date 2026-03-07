@@ -6,7 +6,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -169,7 +168,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
 
                                         return builder.build();
                                 })
-                                .collect(Collectors.toList());
+                                .toList();
         }
 
         private List<WorkorderPartResponse> buildPartResponses(

@@ -1,5 +1,6 @@
 package com.positivity.price.internal.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
@@ -15,25 +16,32 @@ import org.jspecify.annotations.Nullable;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Estimate context used for applying promotion rules and calculations")
 public class EstimateContext {
 
-    @NotNull
+    @Schema(description = "Estimate identifier", requiredMode = Schema.RequiredMode.REQUIRED, example = "00000000-0000-0000-0000-000000000001")
+    @NotNull(message = "estimateId is required")
     private UUID estimateId;
 
-    @NotNull
+    @Schema(description = "Customer identifier", requiredMode = Schema.RequiredMode.REQUIRED, example = "00000000-0000-0000-0000-000000000002")
+    @NotNull(message = "customerId is required")
     private UUID customerId;
 
+    @Schema(description = "Optional vehicle identifier for vehicle-specific eligibility checks", example = "00000000-0000-0000-0000-000000000003", nullable = true)
     @Nullable
     private UUID vehicleId;
 
-    @NotNull
-    @Size(min = 1)
+    @Schema(description = "Line items included in the estimate", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "lineItems is required")
+    @Size(min = 1, message = "lineItems must contain at least one item")
     private List<@Valid LineItemContext> lineItems;
 
-    @NotNull
-    @DecimalMin("0")
+    @Schema(description = "Estimate subtotal before promotions", requiredMode = Schema.RequiredMode.REQUIRED, example = "500.00")
+    @NotNull(message = "subtotal is required")
+    @DecimalMin(value = "0", message = "subtotal must be zero or greater")
     private BigDecimal subtotal;
 
+    @Schema(description = "Promotion codes already applied to this estimate", nullable = true, example = "[\"SPRING10\"]")
     @Nullable
-    private List<String> appliedPromoCodes;
+    private List<@Size(max = 64, message = "applied promo code must not exceed 64 characters") String> appliedPromoCodes;
 }

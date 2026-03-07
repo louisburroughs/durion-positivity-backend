@@ -6,23 +6,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseContractIntegrationTest;
-import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
-import com.positivity.catalog.internal.service.CatalogServiceImpl;
-
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.positivity.catalog.BaseContractIntegrationTest;
+import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
+import com.positivity.catalog.internal.service.CatalogServiceImpl;
+
 @DisplayName("Price Book Contract Behavioral Tests")
 class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
+
+        private static final Clock TEST_CLOCK = Clock.systemUTC();
 
         @Autowired
         private CatalogServiceImpl catalogService;
@@ -44,7 +48,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-167-013: Create CUSTOMER_TIER price book when scopeId is provided")
         void createCustomerTierPriceBookWithScopeId() throws Exception {
-                UUID tierId = UUID.randomUUID();
+                UUID tierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 mockMvc.perform(withAuth(post("/v1/products/price-books"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(Map.of(
@@ -73,7 +77,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "priority", 10,
                                                 "effectiveStartAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
@@ -81,7 +86,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
-                                                "asOf", LocalDate.now().toString())))))
+                                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("59.9900"));
@@ -103,7 +108,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "priority", 1,
                                                 "effectiveStartAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/{priceBookId}/rules", priceBookId))
@@ -117,7 +123,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "priority", 1,
                                                 "effectiveStartAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
@@ -125,7 +132,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
-                                                "asOf", LocalDate.now().toString())))))
+                                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("39.9900"));
@@ -150,7 +157,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
                                                 "effectiveEndAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).plusDays(5).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/{priceBookId}/rules", priceBookId))
@@ -165,7 +173,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "effectiveStartAt", OffsetDateTime.now(ZoneOffset.UTC).toString(),
                                                 "effectiveEndAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).plusDays(8).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isConflict());
         }
 
@@ -185,7 +194,8 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "priority", 10,
                                                 "effectiveStartAt",
                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
@@ -194,7 +204,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
                                                 "currency", "cad",
-                                                "asOf", LocalDate.now().toString())))))
+                                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("79.9900"))
@@ -212,8 +222,10 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "amount", "88.8800",
                                                 "currency", "USD",
-                                                "effectiveStartDate", LocalDate.now().minusDays(1).toString(),
-                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                "effectiveStartDate",
+                                                LocalDate.now(TEST_CLOCK).minusDays(1).toString(),
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))))
                                 .andExpect(status().isCreated());
 
                 MvcResult ruleResult = mockMvc
@@ -228,12 +240,15 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                                                 "effectiveStartAt",
                                                                 OffsetDateTime.now(ZoneOffset.UTC).minusDays(1)
                                                                                 .toString(),
-                                                                "createdByUserId", UUID.randomUUID().toString()))))
+                                                                "createdByUserId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString()))))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
                 Map<String, Object> createdRule = objectMapper.readValue(ruleResult.getResponse().getContentAsString(),
-                                Map.class);
+                                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                });
                 String ruleId = String.valueOf(createdRule.get("ruleId"));
 
                 mockMvc.perform(withAuth(
@@ -245,7 +260,7 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .content(objectMapper.writeValueAsString(Map.of(
                                                 "productId", productId.toString(),
                                                 "priceBookId", priceBookId,
-                                                "asOf", LocalDate.now().toString())))))
+                                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.source").value("MSRP"))
                                 .andExpect(jsonPath("$.resolvedAmount").value("88.8800"));
@@ -266,7 +281,9 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
-                Map<String, Object> body = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+                Map<String, Object> body = objectMapper.readValue(result.getResponse().getContentAsString(),
+                                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                });
                 return String.valueOf(body.get("priceBookId"));
         }
 

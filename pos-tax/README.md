@@ -162,6 +162,14 @@ Returns the current operating mode (test or production).
 }
 ```
 
+## Authorization
+
+REST endpoints in this module use method-level `@PreAuthorize` checks with the
+following authorities:
+
+- `tax:calculate` for `POST /v1/tax/calculate`
+- `tax:mode:view` for `GET /v1/tax/mode`
+
 ## Programmatic Usage
 
 Other services can use the `TaxCalculationService` interface directly:

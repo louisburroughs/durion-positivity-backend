@@ -188,7 +188,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
         void testApproveEstimate_CustomerMismatch() {
                 UUID estimateId = seedPendingApprovalEstimate();
 
-                UUID wrongCustomerId = UUID.randomUUID();
+                UUID wrongCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 String approvalPayload = buildApprovalPayload(wrongCustomerId, "Test Signer",
                                 "Wrong customer", null, null);
 
@@ -236,7 +236,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .customerId(testCustomerId)
                                 .currencyUomId("USD")
-                                .taxRegionId(UUID.randomUUID())
+                                .taxRegionId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(EstimateStatus.DRAFT)
                                 .createdByUserId(SYSTEM_USER_ID.toString())
                                 .createdById(SYSTEM_USER_ID.toString())
@@ -267,7 +267,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .customerId(testCustomerId)
                                 .currencyUomId("USD")
-                                .taxRegionId(UUID.randomUUID())
+                                .taxRegionId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(EstimateStatus.DRAFT)
                                 .createdByUserId(SYSTEM_USER_ID.toString())
                                 .createdById(SYSTEM_USER_ID.toString())
@@ -288,7 +288,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .customerId(testCustomerId)
                                 .currencyUomId("USD")
-                                .taxRegionId(UUID.randomUUID())
+                                .taxRegionId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(EstimateStatus.DRAFT)
                                 .createdByUserId(SYSTEM_USER_ID.toString())
                                 .createdById(SYSTEM_USER_ID.toString())
@@ -315,7 +315,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .customerId(testCustomerId)
                                 .currencyUomId("USD")
-                                .taxRegionId(UUID.randomUUID())
+                                .taxRegionId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(EstimateStatus.APPROVED)
                                 .createdByUserId(SYSTEM_USER_ID.toString())
                                 .createdById(SYSTEM_USER_ID.toString())
@@ -345,7 +345,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .customerId(testCustomerId)
                                 .currencyUomId("USD")
-                                .taxRegionId(UUID.randomUUID())
+                                .taxRegionId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(EstimateStatus.PENDING_APPROVAL)
                                 .createdByUserId(SYSTEM_USER_ID.toString())
                                 .createdById(SYSTEM_USER_ID.toString())
@@ -377,7 +377,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                                 .vehicleId(testVehicleId)
                                 .customerId(testCustomerId)
                                 .currencyUomId("USD")
-                                .taxRegionId(UUID.randomUUID())
+                                .taxRegionId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(EstimateStatus.PENDING_APPROVAL)
                                 .createdByUserId(SYSTEM_USER_ID.toString())
                                 .createdById(SYSTEM_USER_ID.toString())
@@ -399,9 +399,9 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         private void initTestIds() {
-                testCustomerId = UUID.randomUUID();
-                testLocationId = UUID.randomUUID();
-                testVehicleId = UUID.randomUUID();
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         }
 
         private EstimateItem buildItem(UUID estimateId, EstimateItemType type, String description,

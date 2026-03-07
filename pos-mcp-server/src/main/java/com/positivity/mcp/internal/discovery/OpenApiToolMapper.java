@@ -7,12 +7,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+
+import com.positivity.shared.id.UUIDv7Generator;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -22,6 +23,8 @@ import io.swagger.v3.oas.models.Operation;
 @Component
 public class OpenApiToolMapper {
 
+    private static final String OBJECT = "object";
+    private static final String DESCRIPTION = "description";
     private final OperationProxyFactory proxyFactory;
 
     public OpenApiToolMapper(@NonNull OperationProxyFactory proxyFactory) {
@@ -84,28 +87,28 @@ public class OpenApiToolMapper {
         properties.put("httpMethod", Map.of(
                 "type", "string",
                 "const", method.name(),
-                "description", "HTTP method for the underlying API call"));
+                DESCRIPTION, "HTTP method for the underlying API call"));
         properties.put("path", Map.of(
                 "type", "string",
                 "const", path,
-                "description", "Path template for the API call"));
+                DESCRIPTION, "Path template for the API call"));
         properties.put("pathParams", Map.of(
-                "type", "object",
-                "description", "Path parameters keyed by template name"));
+                "type", OBJECT,
+                DESCRIPTION, "Path parameters keyed by template name"));
         properties.put("queryParams", Map.of(
-                "type", "object",
-                "description", "Query string parameters"));
+                "type", OBJECT,
+                DESCRIPTION, "Query string parameters"));
         properties.put("headers", Map.of(
-                "type", "object",
-                "description", "Additional HTTP headers to include"));
+                "type", OBJECT,
+                DESCRIPTION, "Additional HTTP headers to include"));
         if (operation.getRequestBody() != null) {
             properties.put("body", Map.of(
-                    "type", "object",
-                    "description", "Request body payload matching the operation schema"));
+                    "type", OBJECT,
+                    DESCRIPTION, "Request body payload matching the operation schema"));
         }
 
         return new McpSchema.JsonSchema(
-                "object",
+                OBJECT,
                 properties,
                 List.of("httpMethod", "path"),
                 Boolean.TRUE,
@@ -116,7 +119,7 @@ public class OpenApiToolMapper {
     private String sanitizeName(@NonNull String raw) {
         String sanitized = raw.toLowerCase(Locale.US).replaceAll("[^a-z0-9_\\-]", "_");
         if (!StringUtils.hasText(sanitized)) {
-            return "tool_" + UUID.randomUUID().toString().replace("-", "");
+            return "tool_" + UUIDv7Generator.generate().toString().replace("-", "");
         }
         return sanitized;
     }
@@ -128,6 +131,6 @@ public class OpenApiToolMapper {
         if (StringUtils.hasText(operation.getSummary())) {
             return operation.getSummary().replace(' ', '_');
         }
-        return "op_" + UUID.randomUUID();
+        return "op_" + UUIDv7Generator.generate();
     }
 }

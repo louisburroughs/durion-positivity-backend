@@ -1,5 +1,8 @@
 package com.positivity.invoice.internal.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
@@ -9,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -17,11 +21,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class InvoiceFinalizedEventHandlerTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
+    @Spy
+    Clock clock = TEST_CLOCK;
     @Mock
     private InvoiceRepository invoiceRepository;
 
@@ -34,16 +42,16 @@ class InvoiceFinalizedEventHandlerTest {
 
     @BeforeEach
     void setUp() {
-        invoiceId = UUID.randomUUID();
+        invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         invoice = new Invoice();
         invoice.setId(invoiceId);
         invoice.setStatus(InvoiceStatus.FINALIZED);
 
         event = new InvoiceFinalizedEvent(
                 invoiceId,
-                UUID.randomUUID(),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 "test-actor",
-                Instant.now(),
+                Instant.now(TEST_CLOCK),
                 BigDecimal.valueOf(100.00));
     }
 

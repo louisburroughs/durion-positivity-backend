@@ -22,7 +22,6 @@ public class AuthorizationDenied {
     private String actorRole;
     private String reasonDenied;
     private String policyVersion;
-    
-    @Builder.Default
-    private Instant timestamp = Instant.now();
+
+    private Instant timestamp;
 }

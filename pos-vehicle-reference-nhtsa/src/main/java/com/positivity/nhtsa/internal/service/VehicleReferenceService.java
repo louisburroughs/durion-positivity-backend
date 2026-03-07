@@ -1,5 +1,7 @@
 package com.positivity.nhtsa.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.nhtsa.internal.entity.*;
 import com.positivity.nhtsa.internal.exception.CarApiException;
 import com.positivity.nhtsa.internal.repository.*;
@@ -19,6 +21,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Service
 public class VehicleReferenceService {
+    private final Clock clock;
+
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
     private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
 
@@ -49,7 +53,7 @@ public class VehicleReferenceService {
                 VehicleVariable variable = new VehicleVariable();
                 variable.setName(node.path("Name").asString(""));
                 variable.setDescription(node.path("Description").asString(""));
-                variable.setCacheTimestamp(LocalDateTime.now());
+                variable.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleVariableRepository.save(variable);
             }
         } catch (Exception e) {
@@ -77,7 +81,7 @@ public class VehicleReferenceService {
                 value.setVariableId(variableId);
                 value.setValue(node.path("Value").asString(""));
                 value.setValueId(node.path("ValueId").asString(""));
-                value.setCacheTimestamp(LocalDateTime.now());
+                value.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleVariableValueRepository.save(value);
             }
         } catch (Exception e) {
@@ -106,7 +110,7 @@ public class VehicleReferenceService {
                 long nhtsaId = node.path("Mfr_ID").asLong();
                 m.setId(java.util.UUID.nameUUIDFromBytes(("manufacturer-" + nhtsaId).getBytes()));
                 m.setName(node.path("Mfr_CommonName").asString(""));
-                m.setCacheTimestamp(LocalDateTime.now());
+                m.setCacheTimestamp(LocalDateTime.now(clock));
                 manufacturerRepository.save(m);
             }
         } catch (Exception e) {
@@ -138,7 +142,7 @@ public class VehicleReferenceService {
                 make.setId(java.util.UUID.nameUUIDFromBytes(("make-" + nhtsaId).getBytes()));
                 make.setName(node.path("Make_Name").asString(""));
                 make.setManufacturer(manufacturer);
-                make.setCacheTimestamp(LocalDateTime.now());
+                make.setCacheTimestamp(LocalDateTime.now(clock));
                 makeRepository.save(make);
             }
         } catch (Exception e) {
@@ -170,7 +174,7 @@ public class VehicleReferenceService {
                 model.setId(java.util.UUID.nameUUIDFromBytes(("model-" + nhtsaId).getBytes()));
                 model.setName(node.path("Model_Name").asString(""));
                 model.setMake(make);
-                model.setCacheTimestamp(LocalDateTime.now());
+                model.setCacheTimestamp(LocalDateTime.now(clock));
                 modelRepository.save(model);
             }
         } catch (Exception e) {
@@ -200,7 +204,7 @@ public class VehicleReferenceService {
                 vt.setMake(make);
                 vt.setVehicleTypeId(node.path("VehicleTypeId").asString(""));
                 vt.setVehicleTypeName(node.path("VehicleTypeName").asString(""));
-                vt.setCacheTimestamp(LocalDateTime.now());
+                vt.setCacheTimestamp(LocalDateTime.now(clock));
                 vehicleTypeRepository.save(vt);
             }
         } catch (Exception e) {
@@ -210,6 +214,6 @@ public class VehicleReferenceService {
     }
 
     private boolean isCacheExpired(LocalDateTime cacheTimestamp) {
-        return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now());
+        return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now(clock));
     }
 }

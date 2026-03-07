@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -15,7 +17,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -95,24 +96,12 @@ public class TechnicianAssignment {
     @PrePersist
     public void prePersist() {
         if (assignedAt == null) {
-            assignedAt = LocalDateTime.now();
+            assignedAt = LocalDateTime.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = LocalDateTime.now();
-        }
-        if (current == null) {
+if (current == null) {
             current = true;
         }
     }
-
-    @PreUpdate
-    public void preUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
-
     /**
      * Mark this assignment as no longer current and set unassignment timestamp.
      * 

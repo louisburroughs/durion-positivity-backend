@@ -22,6 +22,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import org.springframework.data.annotation.CreatedDate;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "assignment")
@@ -65,6 +66,7 @@ public class Assignment {
     private String notes;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private Instant createdAt;
 
     @LastModifiedDate

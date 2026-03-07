@@ -1,5 +1,7 @@
 package com.positivity.vehiclereferencecarapi.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.vehiclereferencecarapi.internal.entity.CarApiMake;
 import com.positivity.vehiclereferencecarapi.internal.entity.CarApiModel;
 import com.positivity.vehiclereferencecarapi.internal.exception.CarApiException;
@@ -23,6 +25,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Service
 public class VehicleReferenceService {
+    private final Clock clock;
+
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
     private final CarApiMakeRepository makeRepository;
     private final CarApiModelRepository modelRepository;
@@ -51,7 +55,7 @@ public class VehicleReferenceService {
                 CarApiMake make = new CarApiMake();
                 make.setMakeId(node.path("id").asString(""));
                 make.setMakeName(node.path("name").asString(""));
-                make.setCacheTimestamp(LocalDateTime.now());
+                make.setCacheTimestamp(LocalDateTime.now(clock));
                 makes.add(makeRepository.save(make));
             }
             return makes;
@@ -80,7 +84,7 @@ public class VehicleReferenceService {
                 model.setModelId(UUID.fromString(node.path("id").asString()));
                 model.setModelName(node.path("name").asString(""));
                 model.setMakeId(makeId);
-                model.setCacheTimestamp(LocalDateTime.now());
+                model.setCacheTimestamp(LocalDateTime.now(clock));
                 models.add(modelRepository.save(model));
             }
             return models;
@@ -90,6 +94,6 @@ public class VehicleReferenceService {
     }
 
     private boolean isCacheExpired(LocalDateTime cacheTimestamp) {
-        return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now());
+        return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now(clock));
     }
 }

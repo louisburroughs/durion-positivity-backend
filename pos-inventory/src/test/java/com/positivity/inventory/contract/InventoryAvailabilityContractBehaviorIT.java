@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -24,6 +27,8 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 // satisfy repository access architecture rule for test seeding.
 @DisplayName("Inventory Availability Contract Behavior")
 class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
     private static final UUID LOC_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID LOC_2 = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID LOC_ATP = UUID.fromString("33333333-3333-3333-3333-333333333333");
@@ -42,7 +47,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     @Test
     @DisplayName("AC-1: getAvailability_returnsPerLocationList_whenProductHasStock")
     void getAvailability_returnsPerLocationList_whenProductHasStock() throws Exception {
-        UUID productId = UUID.randomUUID();
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         seedOnHand(productId, LOC_1, 40);
         seedOnHand(productId, LOC_2, 60);
@@ -64,7 +69,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     @Test
     @DisplayName("AC-2: getAvailability_returnsEmptyList_whenProductHasNoStock")
     void getAvailability_returnsEmptyList_whenProductHasNoStock() throws Exception {
-        UUID productId = UUID.randomUUID();
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", productId)))
                 .andExpect(status().isOk())
@@ -93,7 +98,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     @Test
     @DisplayName("AC-5: getAvailability_calculatesAtp_excludingInactiveReservations")
     void getAvailability_calculatesAtp_excludingInactiveReservations() throws Exception {
-        UUID productId = UUID.randomUUID();
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         seedOnHand(productId, LOC_ATP, 100);
 
@@ -118,7 +123,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
                 .changeInQuantity(quantity)
                 .quantityAfter(quantity)
                 .transactionUserId("contract-seed")
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed on-hand for " + locationId)
                 .build());
     }
@@ -131,7 +136,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
                 .changeInQuantity(quantity)
                 .quantityAfter(0)
                 .transactionUserId("contract-seed")
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed active reservation")
                 .build());
     }
@@ -144,7 +149,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
                 .changeInQuantity(quantity)
                 .quantityAfter(0)
                 .transactionUserId("contract-seed")
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed released reservation")
                 .build());
     }

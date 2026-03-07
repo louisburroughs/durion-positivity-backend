@@ -124,22 +124,25 @@ public class PartyRelationship {
     /**
      * Checks if this relationship is currently active.
      *
+     * @param today the current date from the calling service
      * @return true if the relationship is active (no end date or end date is in the
      *         future)
      */
     @Transient
-    public boolean isActive() {
+    public boolean isActive(LocalDate today) {
         if (effectiveEndDate == null) {
             return true;
         }
-        return effectiveEndDate.isAfter(LocalDate.now());
+        return effectiveEndDate.isAfter(today);
     }
 
     /**
      * Deactivates this relationship by setting the effective end date to today.
+     *
+     * @param today the current date from the calling service
      */
-    public void deactivate() {
-        this.effectiveEndDate = LocalDate.now();
+    public void deactivate(LocalDate today) {
+        this.effectiveEndDate = today;
     }
 
     /**

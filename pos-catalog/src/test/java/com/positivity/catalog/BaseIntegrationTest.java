@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -54,6 +55,9 @@ public abstract class BaseIntegrationTest {
     @Autowired
     protected ObjectMapper objectMapper;
 
+    @Autowired
+    protected JdbcTemplate jdbcTemplate;
+
     protected MockMvc mockMvc;
 
     protected static final String TEST_USER = "testuser";
@@ -67,10 +71,22 @@ public abstract class BaseIntegrationTest {
 
     @BeforeEach
     public void setUpMockMvc() {
+        resetDatabaseState();
         this.mockMvc = MockMvcBuilders
                 .webAppContextSetup(webApplicationContext)
                 .apply(springSecurity())
                 .build();
+    }
+
+    private void resetDatabaseState() {
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        try {
+            jdbcTemplate.queryForList(
+                    "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_TYPE = 'BASE TABLE'",
+                    String.class).forEach(table -> jdbcTemplate.execute("TRUNCATE TABLE \"" + table + "\""));
+        } finally {
+            jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
+        }
     }
 
     protected MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {

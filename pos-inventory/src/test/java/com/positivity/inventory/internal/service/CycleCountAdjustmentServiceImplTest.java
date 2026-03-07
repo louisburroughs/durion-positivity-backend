@@ -44,7 +44,6 @@ class CycleCountAdjustmentServiceImplTest {
     private static final String ACTOR_USER_ID = "actor-person-id-001";
     private static final String ACTOR_USERNAME = "manager-user";
 
-
     @Mock
     private CycleCountAdjustmentRepository adjustmentRepository;
     @Mock
@@ -93,7 +92,7 @@ class CycleCountAdjustmentServiceImplTest {
         @DisplayName("should create adjustment with PENDING_APPROVAL status when approval is required")
         void shouldCreatePendingAdjustmentWhenApprovalRequired() {
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
-                    .stockItemId(UUID.randomUUID())
+                    .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                     .countedQuantity(15)
                     .quantityOnHandBefore(10)
                     .costAtTimeOfAdjustment(BigDecimal.TEN)
@@ -119,7 +118,7 @@ class CycleCountAdjustmentServiceImplTest {
         @Test
         @DisplayName("should create AUTO_APPROVED adjustment and post to ledger when no approval is required")
         void shouldAutoApproveAdjustmentWhenNoApprovalRequired() {
-            UUID stockItemId = UUID.randomUUID();
+            UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
                     .stockItemId(stockItemId)
                     .countedQuantity(11)
@@ -134,7 +133,7 @@ class CycleCountAdjustmentServiceImplTest {
                     .thenAnswer(invocation -> {
                         CycleCountAdjustment saved = invocation.getArgument(0);
                         if (saved.getAdjustmentId() == null) {
-                            saved.setAdjustmentId(UUID.randomUUID());
+                            saved.setAdjustmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                         }
                         return saved;
                     });
@@ -143,7 +142,7 @@ class CycleCountAdjustmentServiceImplTest {
             when(ledgerRepository.save(any(InventoryLedgerEntry.class)))
                     .thenAnswer(invocation -> {
                         InventoryLedgerEntry entry = invocation.getArgument(0);
-                        entry.setLedgerEntryId(UUID.randomUUID());
+                        entry.setLedgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                         return entry;
                     });
 
@@ -171,7 +170,7 @@ class CycleCountAdjustmentServiceImplTest {
 
         @BeforeEach
         void setUp() {
-            adjustmentId = UUID.randomUUID();
+            adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             request = ApproveAdjustmentRequest.builder()
                     .notes("Test notes")
                     .build();
@@ -209,7 +208,7 @@ class CycleCountAdjustmentServiceImplTest {
 
         @BeforeEach
         void setUp() {
-            adjustmentId = UUID.randomUUID();
+            adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             request = new com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest("reject-user-id",
                     "Test rejection");
         }
@@ -241,7 +240,7 @@ class CycleCountAdjustmentServiceImplTest {
         void shouldRejectPendingAdjustment() {
             CycleCountAdjustment adjustment = CycleCountAdjustment.builder()
                     .adjustmentId(adjustmentId)
-                    .stockItemId(UUID.randomUUID())
+                    .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                     .reasonCode("CYCLE_COUNT_SHRINK")
                     .quantityChange(-2)
                     .costAtTimeOfAdjustment(BigDecimal.ONE)

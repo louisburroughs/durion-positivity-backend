@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -28,6 +29,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class OutboxServiceImpl implements OutboxService {
+    private final Clock clock;
+
 
     private final EventOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
@@ -92,7 +95,7 @@ public class OutboxServiceImpl implements OutboxService {
     public void markAsPublished(@NonNull UUID outboxId) {
         outboxRepository.findById(outboxId).ifPresent(outbox -> {
             outbox.setStatus(OutboxStatus.PUBLISHED);
-            outbox.setPublishedAt(Instant.now());
+            outbox.setPublishedAt(Instant.now(clock));
             outboxRepository.save(outbox);
 
             log.debug("Event marked as published | outboxId={} | eventId={}",
@@ -116,7 +119,7 @@ public class OutboxServiceImpl implements OutboxService {
         outboxRepository.findById(outboxId).ifPresent(outbox -> {
             outbox.setRetryCount(outbox.getRetryCount() + 1);
             outbox.setLastError(errorMsg);
-            outbox.setLastAttemptAt(Instant.now());
+            outbox.setLastAttemptAt(Instant.now(clock));
 
             if (outbox.getRetryCount() >= maxRetries) {
                 outbox.setStatus(OutboxStatus.FAILED);

@@ -1,29 +1,31 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.dto.returns.ReturnItemLine;
-import com.positivity.inventory.internal.dto.returns.ReturnItemsRequest;
-import com.positivity.inventory.internal.dto.returns.ReturnResponse;
-import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.entity.InventoryReturnEntity;
-import com.positivity.inventory.internal.entity.InventoryReturnLineEntity;
-import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
-import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
-import com.positivity.inventory.internal.repository.InventoryReturnRepository;
-import com.positivity.security.common.SecurityContextHelper;
-
-import lombok.RequiredArgsConstructor;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import com.positivity.inventory.service.ReturnService;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.inventory.internal.dto.returns.ReturnItemLine;
+import com.positivity.inventory.internal.dto.returns.ReturnItemsRequest;
+import com.positivity.inventory.internal.dto.returns.ReturnResponse;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.InventoryReturnEntity;
+import com.positivity.inventory.internal.entity.InventoryReturnLineEntity;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
+import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryReturnRepository;
+import com.positivity.inventory.service.ReturnService;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @Transactional
@@ -61,7 +63,7 @@ public class ReturnServiceImpl implements ReturnService {
                 .filter(Objects::nonNull)
                 .toList();
 
-        UUID returnId = savedReturn.getReturnId() != null ? savedReturn.getReturnId() : UUID.randomUUID();
+        UUID returnId = savedReturn.getReturnId() != null ? savedReturn.getReturnId() : UUIDv7Generator.generate();
         Instant createdAt = savedReturn.getCreatedAt() != null ? savedReturn.getCreatedAt()
                 : Instant.now(clock);
 

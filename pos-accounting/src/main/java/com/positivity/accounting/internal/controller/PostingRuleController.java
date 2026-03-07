@@ -29,6 +29,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -39,6 +40,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/v1/accounting/posting-rules")
+@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Posting Rules", description = "Manage posting rule sets and their lifecycle.")
 @RequiredArgsConstructor
 @Validated
@@ -83,7 +85,7 @@ public class PostingRuleController {
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_CREATE", apiVersion = "1")
         public ResponseEntity<PostingRuleSetResponse> createPostingRuleSet(
                         @Valid @RequestBody PostingRuleSetCreateRequest request) {
-                log.info("Create posting rule set - name={}, eventType={}", request.getName(), request.getEventType());
+
                 PostingRuleSetResponse response = postingRuleService.createPostingRuleSetWithVersion(request);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
@@ -112,7 +114,7 @@ public class PostingRuleController {
         public ResponseEntity<PostingRuleSetResponse> updatePostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
                         @Valid @RequestBody PostingRuleSetCreateRequest request) {
-                log.info("Update posting rule set - ruleSetId={}, name={}", postingRuleSetId, request.getName());
+
                 // Delegate to service layer which handles entity creation and updates
                 postingRuleService.updatePostingRuleSetFromRequest(postingRuleSetId, request);
                 PostingRuleSetResponse response = postingRuleService.getPostingRuleSetAsResponse(postingRuleSetId);

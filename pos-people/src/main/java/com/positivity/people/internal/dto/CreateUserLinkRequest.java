@@ -7,9 +7,11 @@ import java.util.UUID;
 
 @Data
 public class CreateUserLinkRequest {
-    @NotNull(message = "userId is required")
-    private UUID userId;
 
-    @NotNull(message = "personId is required")
-    private UUID personId;
+	@NotNull(message = "userId is required")
+	private UUID userId;
+
+	@NotNull(message = "personId is required")
+	private UUID personId;
+
 }

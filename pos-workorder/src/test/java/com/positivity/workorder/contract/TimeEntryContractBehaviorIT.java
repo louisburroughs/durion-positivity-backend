@@ -1,5 +1,8 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.equalTo;
 
 import java.time.Instant;
@@ -54,6 +57,7 @@ import io.restassured.http.ContentType;
 @DisplayName("TimeEntry Approve/Reject Contract Behavior Tests — GREEN phase (CAP-139 Story #66)")
 @Import(ContractTestConfiguration.class)
 class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Autowired
     private TimeEntryRepository timeEntryRepository;
@@ -69,7 +73,7 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
      * Generates a fresh random UUID path segment to avoid cross-test collisions.
      */
     private static String randomEntryPath(String suffix) {
-        return "/v1/workorders/timeEntries/" + UUID.randomUUID() + suffix;
+        return "/v1/workorders/timeEntries/" + UUID.fromString("00000000-0000-0000-0000-000000000001") + suffix;
     }
 
     private Map<String, String> validRejectBody() {
@@ -232,20 +236,20 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
 
     private TimeEntry buildSubmittedEntry() {
         return TimeEntry.builder()
-                .personId(UUID.randomUUID())
-                .workOrderId(UUID.randomUUID())
-                .startAt(Instant.now().minusSeconds(3600))
-                .endAt(Instant.now())
+                .personId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
+                .endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.SUBMITTED)
                 .build();
     }
 
     private TimeEntry buildApprovedEntry() {
         return TimeEntry.builder()
-                .personId(UUID.randomUUID())
-                .workOrderId(UUID.randomUUID())
-                .startAt(Instant.now().minusSeconds(3600))
-                .endAt(Instant.now())
+                .personId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
+                .endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.APPROVED)
                 .build();
     }

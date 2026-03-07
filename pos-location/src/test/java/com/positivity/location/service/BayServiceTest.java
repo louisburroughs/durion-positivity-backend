@@ -1,13 +1,45 @@
 package com.positivity.location.service;
 
-import static org.mockito.Mockito.*;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.lang.reflect.Method;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import com.positivity.location.internal.dto.BayPatchRequest;
+
 import com.positivity.location.internal.dto.BayCapacityRequest;
+import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.entity.BayEntity;
@@ -19,23 +51,6 @@ import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import com.positivity.location.internal.service.BayServiceImpl;
-import java.util.Collection;
-import java.util.Optional;
-import java.util.UUID;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-
-import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.List;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * RED tests for Bay service contract behaviors required by Story #77.
@@ -45,6 +60,11 @@ import org.springframework.dao.DataIntegrityViolationException;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("BayServiceTest")
 class BayServiceTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     BayRepository bayRepository;
@@ -65,7 +85,7 @@ class BayServiceTest {
             }
             return codes.stream()
                     .map(code -> ServiceLocationCapabilityEntity.builder()
-                            .id(UUID.randomUUID())
+                            .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                             .code(code)
                             .name("Capability " + code)
                             .active(true)
@@ -77,7 +97,7 @@ class BayServiceTest {
     @Test
     @DisplayName("listBays_variousFilters_coversAllBranches")
     void listBays_variousFilters_coversAllBranches() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Pageable pageable = mock(Pageable.class);
         when(locationRepository.existsById(locationId)).thenReturn(true);
         Page<BayEntity> mockPage = new PageImpl<>(List.of(defaultBay(locationId)));
@@ -100,8 +120,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_eachField_coversBranches")
     void patchBay_eachField_coversBranches() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationRepository.existsById(locationId)).thenReturn(true);
         BayEntity entity = BayEntity.builder().locationId(locationId).name("Bay1").bayType("GENERAL_SERVICE")
                 .status("ACTIVE")
@@ -132,8 +152,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_duplicateName_throwsConflict")
     void patchBay_duplicateName_throwsConflict() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationRepository.existsById(locationId)).thenReturn(true);
         BayEntity entity = BayEntity.builder().locationId(locationId).name("Bay1").bayType("GENERAL_SERVICE")
                 .status("ACTIVE")
@@ -150,8 +170,8 @@ class BayServiceTest {
     @Test
     @DisplayName("getBay_locationNotFound_throws404")
     void getBay_locationNotFound_throws404() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationRepository.existsById(locationId)).thenReturn(true);
         when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> bayService.getBay(locationId, bayId))
@@ -249,7 +269,7 @@ class BayServiceTest {
     @Test
     @DisplayName("createBay_duplicateNormalizedName_throwsDuplicateResourceException")
     void createBay_duplicateNormalizedName_throwsDuplicateResourceException() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
 
         when(locationRepository.existsById(locationId)).thenReturn(true);
@@ -265,7 +285,7 @@ class BayServiceTest {
     @Test
     @DisplayName("createBay_nameConstraintViolation_mapsToBayNameTaken")
     void createBay_nameConstraintViolation_mapsToBayNameTaken() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
 
         when(locationRepository.existsById(locationId)).thenReturn(true);
@@ -283,7 +303,7 @@ class BayServiceTest {
     @Test
     @DisplayName("createBay_invalidBayType_throwsIllegalArgumentException")
     void createBay_invalidBayType_throwsIllegalArgumentException() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
         request.setBayType("BAD_TYPE");
 
@@ -297,7 +317,7 @@ class BayServiceTest {
     @Test
     @DisplayName("createBay_invalidCapacity_throwsIllegalArgumentException")
     void createBay_invalidCapacity_throwsIllegalArgumentException() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
         request.setCapacity(BayCapacityRequest.builder().maxConcurrentVehicles(0).build());
 
@@ -311,7 +331,7 @@ class BayServiceTest {
     @Test
     @DisplayName("createBay_missingCapacityAndFallback_throwsIllegalArgumentException")
     void createBay_missingCapacityAndFallback_throwsIllegalArgumentException() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
         request.setCapacity(null);
         request.setMaxConcurrentVehicles(null);
@@ -326,7 +346,7 @@ class BayServiceTest {
     @Test
     @DisplayName("createBay_successWithCapabilitiesAndSkills_savesAndReturnsResponse")
     void createBay_successWithCapabilitiesAndSkills_savesAndReturnsResponse() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
         request.setServiceCapabilityIds(List.of("ALIGN", "TIRE"));
         request.setSkillRequirementIds(List.of("ASE-A1"));
@@ -338,7 +358,7 @@ class BayServiceTest {
                 .thenReturn(Optional.empty());
         when(bayRepository.save(any(BayEntity.class))).thenAnswer(invocation -> {
             BayEntity bay = invocation.getArgument(0, BayEntity.class);
-            bay.setId(UUID.randomUUID());
+            bay.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
             return bay;
         });
 
@@ -354,7 +374,7 @@ class BayServiceTest {
     @Test
     @DisplayName("createBay_invalidServiceCapabilityIds_throwsIllegalArgumentException")
     void createBay_invalidServiceCapabilityIds_throwsIllegalArgumentException() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
         request.setServiceCapabilityIds(List.of("ALIGN", "UNKNOWN_CAP"));
 
@@ -364,7 +384,7 @@ class BayServiceTest {
                 .thenReturn(Optional.empty());
         when(serviceLocationCapabilityRepository.findByCodeIn(any())).thenReturn(List.of(
                 ServiceLocationCapabilityEntity.builder()
-                        .id(UUID.randomUUID())
+                        .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                         .code("ALIGN")
                         .name("Align")
                         .active(true)
@@ -378,7 +398,7 @@ class BayServiceTest {
     @Test
     @DisplayName("createBay_successUsesFallbackMaxConcurrentVehiclesWhenCapacityNull")
     void createBay_successUsesFallbackMaxConcurrentVehiclesWhenCapacityNull() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
         request.setCapacity(null);
         request.setMaxConcurrentVehicles(4);
@@ -399,7 +419,7 @@ class BayServiceTest {
     @Test
     @DisplayName("listBays_noFilters_callsFindByLocationId")
     void listBays_noFilters_callsFindByLocationId() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 10);
         BayEntity entity = defaultBay(locationId);
 
@@ -415,7 +435,7 @@ class BayServiceTest {
     @Test
     @DisplayName("listBays_filterByStatus_callsFindByLocationIdAndStatus")
     void listBays_filterByStatus_callsFindByLocationIdAndStatus() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 10);
         BayEntity entity = defaultBay(locationId);
 
@@ -432,7 +452,7 @@ class BayServiceTest {
     @Test
     @DisplayName("listBays_filterByBayType_callsFindByLocationIdAndBayType")
     void listBays_filterByBayType_callsFindByLocationIdAndBayType() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 10);
         BayEntity entity = defaultBay(locationId);
 
@@ -449,7 +469,7 @@ class BayServiceTest {
     @Test
     @DisplayName("listBays_filterByBoth_callsFindByLocationIdAndStatusAndBayType")
     void listBays_filterByBoth_callsFindByLocationIdAndStatusAndBayType() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 10);
         BayEntity entity = defaultBay(locationId);
 
@@ -466,7 +486,7 @@ class BayServiceTest {
     @Test
     @DisplayName("listBays_blankFilters_treatedAsNoFilters")
     void listBays_blankFilters_treatedAsNoFilters() {
-        UUID locationId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 5);
         when(locationRepository.existsById(locationId)).thenReturn(true);
         when(bayRepository.findByLocationId(locationId, pageable))
@@ -480,8 +500,8 @@ class BayServiceTest {
     @Test
     @DisplayName("getBay_found_returnsBayResponse")
     void getBay_found_returnsBayResponse() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayEntity entity = defaultBay(locationId);
         entity.setId(bayId);
 
@@ -497,8 +517,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_locationNotFound_throwsResourceNotFoundException")
     void patchBay_locationNotFound_throwsResourceNotFoundException() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayPatchRequest patch = BayPatchRequest.builder().status("ACTIVE").build();
 
         when(locationRepository.existsById(locationId)).thenReturn(false);
@@ -511,8 +531,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_bayNotFound_throwsResourceNotFoundException")
     void patchBay_bayNotFound_throwsResourceNotFoundException() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayPatchRequest patch = BayPatchRequest.builder().status("ACTIVE").build();
 
         when(locationRepository.existsById(locationId)).thenReturn(true);
@@ -526,8 +546,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_nameSameIgnoringCase_doesNotCheckDuplicate")
     void patchBay_nameSameIgnoringCase_doesNotCheckDuplicate() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayEntity existing = defaultBay(locationId);
         existing.setId(bayId);
         existing.setName("Main Bay");
@@ -548,8 +568,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_invalidBayType_throwsIllegalArgumentException")
     void patchBay_invalidBayType_throwsIllegalArgumentException() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayEntity existing = defaultBay(locationId);
         existing.setId(bayId);
 
@@ -566,8 +586,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_invalidStatus_throwsIllegalArgumentException")
     void patchBay_invalidStatus_throwsIllegalArgumentException() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayEntity existing = defaultBay(locationId);
         existing.setId(bayId);
 
@@ -584,8 +604,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_capacityFromNestedObject_updatesMaxConcurrentVehicles")
     void patchBay_capacityFromNestedObject_updatesMaxConcurrentVehicles() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayEntity existing = defaultBay(locationId);
         existing.setId(bayId);
 
@@ -607,8 +627,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_invalidCapacity_throwsIllegalArgumentException")
     void patchBay_invalidCapacity_throwsIllegalArgumentException() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayEntity existing = defaultBay(locationId);
         existing.setId(bayId);
 
@@ -627,8 +647,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_updatesServiceAndSkillLists")
     void patchBay_updatesServiceAndSkillLists() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayEntity existing = defaultBay(locationId);
         existing.setId(bayId);
 
@@ -652,8 +672,8 @@ class BayServiceTest {
     @Test
     @DisplayName("patchBay_statusDeactivateThenReactivate_succeeds")
     void patchBay_statusDeactivateThenReactivate_succeeds() {
-        UUID locationId = UUID.randomUUID();
-        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayEntity existing = defaultBay(locationId);
         existing.setId(bayId);
 
@@ -682,7 +702,7 @@ class BayServiceTest {
 
     private BayEntity defaultBay(UUID locationId) {
         return BayEntity.builder()
-                .id(UUID.randomUUID())
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .locationId(locationId)
                 .name("Bay-1")
                 .normalizedName("bay-1")

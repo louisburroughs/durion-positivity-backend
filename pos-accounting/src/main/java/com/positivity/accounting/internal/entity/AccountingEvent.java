@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -27,6 +29,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
 /**
  * Accounting Event - canonical event ingestion for JE generation.
  * 
@@ -42,6 +46,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "accounting_event", indexes = {
         @Index(name = "idx_accounting_event_type", columnList = "event_type"),
         @Index(name = "idx_accounting_event_status", columnList = "status"),
@@ -73,9 +78,9 @@ public class AccountingEvent {
             sourceSystem = "POS_ACCOUNTING_API";
         }
         if (transactionDate == null) {
-            transactionDate = LocalDateTime.now();
+            transactionDate = LocalDateTime.now(Clock.systemUTC());
         }
-        this.receivedAt = Instant.now();
+        this.receivedAt = Instant.now(Clock.systemUTC());
     }
 
     @Column(name = "event_type", length = 100, nullable = false)

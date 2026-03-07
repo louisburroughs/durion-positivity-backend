@@ -1,5 +1,7 @@
 package com.positivity.accounting.contract;
 
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -37,6 +39,7 @@ import com.positivity.accounting.service.GLAccountService;
  */
 @Transactional
 public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.systemUTC();
 
         @Autowired
         private GLAccountService glAccountService;
@@ -114,7 +117,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("Retrieve GL account - not found")
         void testGetGLAccount_NotFound() {
                 // Given
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When/Then
                 assertThatThrownBy(() -> glAccountService.getGLAccount(nonExistentId))
@@ -156,7 +159,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .accountCode("5000")
                                 .accountName("Future Account")
                                 .accountType(AccountType.ASSET)
-                                .activationDate(LocalDateTime.now().plusDays(10))
+                                .activationDate(LocalDateTime.now(TEST_CLOCK).plusDays(10))
                                 .build();
                 GLAccountResponse created = glAccountService.createGLAccount(request);
                 assertThat(created.getStatus()).isEqualTo(GLAccountStatus.NOT_YET_ACTIVE);
@@ -166,7 +169,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Then
                 assertThat(activated.getStatus()).isEqualTo(GLAccountStatus.ACTIVE);
-                assertThat(activated.getActivationDate()).isBeforeOrEqualTo(LocalDateTime.now());
+                assertThat(activated.getActivationDate()).isBeforeOrEqualTo(LocalDateTime.now(TEST_CLOCK));
         }
 
         @Test
@@ -186,7 +189,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
                 // Then
                 assertThat(deactivated.getStatus()).isEqualTo(GLAccountStatus.INACTIVE);
                 assertThat(deactivated.getDeactivationDate()).isNotNull();
-                assertThat(deactivated.getDeactivationDate()).isBeforeOrEqualTo(LocalDateTime.now());
+                assertThat(deactivated.getDeactivationDate()).isBeforeOrEqualTo(LocalDateTime.now(TEST_CLOCK));
         }
 
         @Test
@@ -330,7 +333,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .accountCode("2100")
                                 .accountName("Currently Active")
                                 .accountType(AccountType.ASSET)
-                                .activationDate(LocalDateTime.now().minusDays(1))
+                                .activationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1))
                                 .build();
 
                 // When
@@ -348,7 +351,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .accountCode("2200")
                                 .accountName("Future Active")
                                 .accountType(AccountType.ASSET)
-                                .activationDate(LocalDateTime.now().plusDays(5))
+                                .activationDate(LocalDateTime.now(TEST_CLOCK).plusDays(5))
                                 .build();
 
                 // When
@@ -388,7 +391,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
                 GLAccountResponse created = glAccountService.createGLAccount(request);
 
                 // When/Then - should not throw
-                glAccountService.validateAccountForPosting(created.getGlAccountId(), LocalDateTime.now());
+                glAccountService.validateAccountForPosting(created.getGlAccountId(), LocalDateTime.now(TEST_CLOCK));
         }
 
         @Test
@@ -405,7 +408,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // When/Then - should throw
                 assertThatThrownBy(() -> glAccountService.validateAccountForPosting(
-                                created.getGlAccountId(), LocalDateTime.now().plusDays(1)))
+                                created.getGlAccountId(), LocalDateTime.now(TEST_CLOCK).plusDays(1)))
                                 .isInstanceOf(IllegalArgumentException.class)
                                 .hasMessageContaining("inactive");
         }

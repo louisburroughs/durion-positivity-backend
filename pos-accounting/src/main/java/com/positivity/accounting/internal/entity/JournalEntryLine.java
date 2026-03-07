@@ -6,16 +6,17 @@ import java.util.UUID;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.persistence.GeneratedValue;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -37,6 +38,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "journal_entry_line", indexes = {
         @Index(name = "idx_journal_entry_line_je", columnList = "journal_entry_id"),
         @Index(name = "idx_journal_entry_line_gl_account", columnList = "gl_account_id")
@@ -49,11 +51,6 @@ public class JournalEntryLine {
     @UUIDv7Id
     @Column(name = "line_id", nullable = false, columnDefinition = "UUID")
     private UUID lineId;
-
-    @PrePersist
-    public void generateId() {
-    }
-
     @Column(name = "journal_entry_id", nullable = false)
     private UUID journalEntryId;
 

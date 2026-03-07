@@ -1,5 +1,8 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -51,7 +54,8 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
  *      #128</a>
  */
 @DisplayName("AP Payment Backend Contract Behavioral Tests (CAP-053)")
- class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
+class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private APPaymentRepository apPaymentRepository;
@@ -78,14 +82,14 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 vendorBillRepository.deleteAll();
 
                 // Setup test vendor and bills
-                testVendorId = UUID.randomUUID();
+                testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Bill 1: Due oldest (30 days ago), $500
                 bill1 = new VendorBill();
                 bill1.setVendorId(testVendorId);
                 bill1.setBillNumber("BILL-001");
-                bill1.setBillDate(LocalDate.now().minusDays(40).atStartOfDay());
-                bill1.setDueDate(LocalDate.now().minusDays(10).atStartOfDay());
+                bill1.setBillDate(LocalDate.now(TEST_CLOCK).minusDays(40).atStartOfDay());
+                bill1.setDueDate(LocalDate.now(TEST_CLOCK).minusDays(10).atStartOfDay());
                 bill1.setTotalAmount(new BigDecimal("500.00"));
                 bill1.setStatus(VendorBillStatus.APPROVED);
                 bill1.setCreatedBy("test-setup");
@@ -96,8 +100,8 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 bill2 = new VendorBill();
                 bill2.setVendorId(testVendorId);
                 bill2.setBillNumber("BILL-002");
-                bill2.setBillDate(LocalDate.now().minusDays(10).atStartOfDay());
-                bill2.setDueDate(LocalDate.now().plusDays(15).atStartOfDay());
+                bill2.setBillDate(LocalDate.now(TEST_CLOCK).minusDays(10).atStartOfDay());
+                bill2.setDueDate(LocalDate.now(TEST_CLOCK).plusDays(15).atStartOfDay());
                 bill2.setTotalAmount(new BigDecimal("300.00"));
                 bill2.setStatus(VendorBillStatus.APPROVED);
                 bill2.setCreatedBy("test-setup");
@@ -122,7 +126,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
         void testExecutePayment_AutomaticAllocation_Success() throws Exception {
                 // Arrange: Payment of $600 with no explicit allocations (automatic allocation
                 // applies)
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request = new ExecuteAPPaymentRequest();
                 request.setVendorId(testVendorId);
                 request.setGrossAmount(new BigDecimal("600.00"));
@@ -170,7 +174,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
         @DisplayName("CP-AP-002: Execute payment with explicit allocations")
         void testExecutePayment_ExplicitAllocations_Success() throws Exception {
                 // Arrange: Payment of $400 with explicit allocation to bill2 only
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request = new ExecuteAPPaymentRequest();
                 request.setVendorId(testVendorId);
                 request.setGrossAmount(new BigDecimal("400.00"));
@@ -188,7 +192,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 request.setAllocations(List.of(allocation));
 
                 // Act: POST /v1/accounting/ap/payments
-              mockMvc.perform(withAuth(post(API_V1_AP_PAYMENTS))
+                mockMvc.perform(withAuth(post(API_V1_AP_PAYMENTS))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
@@ -213,7 +217,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
         @DisplayName("CP-AP-003: Execute payment is idempotent (same paymentRef returns existing)")
         void testExecutePayment_Idempotency_Success() throws Exception {
                 // Arrange: Execute payment once
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request = new ExecuteAPPaymentRequest();
                 request.setVendorId(testVendorId);
                 request.setGrossAmount(new BigDecimal("200.00"));
@@ -270,15 +274,14 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
 
                 // Assert: Verify ordering (oldest due first)
                 String responseJson = result.getResponse().getContentAsString();
-                assertThat(responseJson).contains("BILL-001");
-                assertThat(responseJson).contains("BILL-002");
+                assertThat(responseJson).contains("BILL-001").contains("BILL-002");
         }
 
         @Test
         @DisplayName("CP-AP-005: Get payment by ID")
         void testGetPaymentById_Success() throws Exception {
                 // Arrange: Create a payment first
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 APPayment payment = new APPayment();
                 payment.setVendorId(testVendorId);
                 payment.setPaymentRef(paymentRef);
@@ -290,7 +293,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 payment.setPaymentMethod(PaymentMethod.ACH);
                 payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
                 payment.setGatewayTransactionId("TXN-12345");
-                payment.setGatewayTimestamp(Instant.now());
+                payment.setGatewayTimestamp(Instant.now(TEST_CLOCK));
                 payment.setCreatedBy("test-user");
                 payment = apPaymentRepository.save(payment);
 
@@ -309,7 +312,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
         @DisplayName("CP-AP-006: Get payment by paymentRef")
         void testGetPaymentByRef_Success() throws Exception {
                 // Arrange: Create a payment first
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 APPayment payment = new APPayment();
                 payment.setVendorId(testVendorId);
                 payment.setPaymentRef(paymentRef);
@@ -321,9 +324,9 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 payment.setPaymentMethod(PaymentMethod.CHECK);
                 payment.setStatus(APPaymentStatus.GL_POSTED);
                 payment.setGatewayTransactionId("TXN-67890");
-                payment.setGatewayTimestamp(Instant.now());
-                payment.setGlJournalEntryId(UUID.randomUUID());
-                payment.setGlPostedAt(Instant.now());
+                payment.setGatewayTimestamp(Instant.now(TEST_CLOCK));
+                payment.setGlJournalEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                payment.setGlPostedAt(Instant.now(TEST_CLOCK));
                 payment.setCreatedBy("test-user");
                 payment = apPaymentRepository.save(payment);
 
@@ -351,7 +354,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
                 request.setFeeAmount(BigDecimal.ZERO);
                 request.setNetAmount(new BigDecimal("-100.00"));
                 request.setCurrency("USD");
-                request.setPaymentRef(UUID.randomUUID().toString());
+                request.setPaymentRef(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
                 request.setPaymentMethod(PaymentMethod.ACH);
                 request.setAllocations(List.of());
 
@@ -367,7 +370,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
         @DisplayName("ERR-AP-002: Execute payment with allocations exceeding gross amount fails")
         void testExecutePayment_AllocationsExceedGross_BadRequest() throws Exception {
                 // Arrange: Invalid request with allocations > grossAmount
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request = new ExecuteAPPaymentRequest();
                 request.setVendorId(testVendorId);
                 request.setGrossAmount(new BigDecimal("100.00"));
@@ -395,7 +398,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
         @DisplayName("ERR-AP-003: Execute payment with same paymentRef but different payload fails")
         void testExecutePayment_IdempotencyConflict_409() throws Exception {
                 // Arrange: Execute payment once
-                String paymentRef = UUID.randomUUID().toString();
+                String paymentRef = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 ExecuteAPPaymentRequest request1 = new ExecuteAPPaymentRequest();
                 request1.setVendorId(testVendorId);
                 request1.setGrossAmount(new BigDecimal("100.00"));
@@ -435,7 +438,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
         @DisplayName("ERR-AP-004: Get payment by invalid ID returns 404")
         void testGetPaymentById_NotFound() throws Exception {
                 // Arrange: Non-existent payment ID
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act & Assert: Expect 404 Not Found
                 mockMvc.perform(withAuth(get(API_V1_AP_PAYMENTS + "/" + nonExistentId)))
@@ -447,7 +450,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
         @DisplayName("ERR-AP-005: List bills for non-existent vendor returns empty list")
         void testListEligibleBills_EmptyList() throws Exception {
                 // Arrange: Vendor with no bills
-                UUID nonExistentVendor = UUID.randomUUID();
+                UUID nonExistentVendor = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
                 // Act: GET /v1/accounting/ap/bills?vendorId={nonExistentVendor}
                 mockMvc.perform(withAuth(get(API_V1_AP_BILLS))

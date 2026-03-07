@@ -1,5 +1,8 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+import java.time.Instant;
+
 import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
 import com.positivity.accounting.internal.audit.entity.PolicyValidationResult;
 import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
@@ -23,6 +26,7 @@ import java.util.Optional;
 @Slf4j
 public class PriceOverrideAuthorizationServiceImpl implements PriceOverrideAuthorizationService {
 
+        private final Clock clock;
         private final OverridePolicyThresholdRepository policyRepository;
 
         // Forbidden override categories
@@ -58,7 +62,8 @@ public class PriceOverrideAuthorizationServiceImpl implements PriceOverrideAutho
                 }
 
                 // Get active policy for role
-                Optional<OverridePolicyThreshold> policyOpt = policyRepository.findCurrentActiveByRole(role);
+                Optional<OverridePolicyThreshold> policyOpt = policyRepository.findActiveByRoleAtTime(role,
+                                Instant.now(clock));
                 if (policyOpt.isEmpty()) {
                         log.error("No active policy found for role: {}", role);
                         return AuthorizationResult.builder()

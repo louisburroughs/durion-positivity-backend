@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -43,6 +45,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderLaborServiceImpl implements WorkorderLaborService {
+    private final Clock clock;
+
 
     private final WorkorderLaborEntryRepository laborRepository;
     private final WorkorderRepository workorderRepository;
@@ -113,11 +117,11 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
                 .workorderId(workorderId)
                 .workorderServiceId(serviceId)
                 .technicianId(technicianId)
-                .startTime(LocalDateTime.now())
+                .startTime(LocalDateTime.now(clock))
                 .hoursWorked(BigDecimal.ZERO)
                 .notes(notes)
                 .createdBy(createdBy)
-                .createdAt(Instant.now())
+                .createdAt(Instant.now(clock))
                 .build();
 
         WorkorderLaborEntry saved = laborRepository.save(entry);
@@ -165,7 +169,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
             throw new IllegalStateException("Labor session already stopped");
         }
 
-        entry.stop(LocalDateTime.now());
+        entry.stop(LocalDateTime.now(clock));
         WorkorderLaborEntry saved = laborRepository.save(entry);
         log.info("Stopped labor session {} - {} hours worked", entryId, saved.getHoursWorked());
 

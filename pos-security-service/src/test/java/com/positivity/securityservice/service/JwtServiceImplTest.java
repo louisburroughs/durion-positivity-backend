@@ -1,5 +1,8 @@
 package com.positivity.securityservice.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -24,11 +27,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class JwtServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private JwtTokenRepository jwtTokenRepository;
@@ -67,9 +75,9 @@ class JwtServiceImplTest {
         JwtToken stored = new JwtToken();
         stored.setToken(token);
         stored.setRefreshToken("refresh");
-        stored.setIssuedAt(Instant.now());
-        stored.setExpiresAt(Instant.now().plusSeconds(300));
-        stored.setRefreshExpiresAt(Instant.now().plusSeconds(600));
+        stored.setIssuedAt(Instant.now(TEST_CLOCK));
+        stored.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(300));
+        stored.setRefreshExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(600));
         stored.setSubject("alice");
 
         when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
@@ -105,9 +113,9 @@ class JwtServiceImplTest {
         JwtToken stored = new JwtToken();
         stored.setToken(token);
         stored.setRefreshToken("refresh");
-        stored.setIssuedAt(Instant.now());
-        stored.setExpiresAt(Instant.now().plusSeconds(600));
-        stored.setRefreshExpiresAt(Instant.now().plusSeconds(1200));
+        stored.setIssuedAt(Instant.now(TEST_CLOCK));
+        stored.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(600));
+        stored.setRefreshExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(1200));
         stored.setSubject("alice");
 
         when(jwtTokenRepository.findByToken(token)).thenReturn(Optional.of(stored));
@@ -127,9 +135,9 @@ class JwtServiceImplTest {
         JwtToken stored = new JwtToken();
         stored.setToken(tokenPair.accessToken());
         stored.setRefreshToken(tokenPair.refreshToken());
-        stored.setIssuedAt(Instant.now());
-        stored.setExpiresAt(Instant.now().plusSeconds(600));
-        stored.setRefreshExpiresAt(Instant.now().plusSeconds(1200));
+        stored.setIssuedAt(Instant.now(TEST_CLOCK));
+        stored.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(600));
+        stored.setRefreshExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(1200));
         stored.setSubject("alice");
 
         when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);

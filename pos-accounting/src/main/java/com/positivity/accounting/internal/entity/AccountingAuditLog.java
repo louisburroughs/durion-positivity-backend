@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -18,6 +20,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
 /**
  * Accounting Audit Log - comprehensive audit trail for high-risk operations.
  * 
@@ -36,6 +40,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "accounting_audit_log", indexes = {
         @Index(name = "idx_audit_log_entity", columnList = "entity_type, entity_id"),
         @Index(name = "idx_audit_log_operation", columnList = "operation"),
@@ -54,7 +59,7 @@ public class AccountingAuditLog {
 
     @PrePersist
     public void onPrePersist() {
-        this.timestamp = Instant.now();
+        this.timestamp = Instant.now(Clock.systemUTC());
     }
 
     @Column(name = "entity_type", length = 50, nullable = false)

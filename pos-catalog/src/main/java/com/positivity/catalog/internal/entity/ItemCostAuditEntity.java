@@ -1,5 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.catalog.internal.enums.ChangeSourceType;
 import com.positivity.catalog.internal.enums.CostType;
 import com.positivity.shared.id.UUIDv7Id;
@@ -18,9 +20,12 @@ import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
 @Getter
 @Setter
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "item_cost_audit", indexes = {
         @Index(name = "idx_item_cost_audit_item_id", columnList = "item_id"),
         @Index(name = "idx_item_cost_audit_timestamp", columnList = "audit_timestamp")
@@ -65,7 +70,7 @@ public class ItemCostAuditEntity {
     @PrePersist
     void onCreate() {
         if (timestamp == null) {
-            timestamp = Instant.now();
+            timestamp = Instant.now(Clock.systemUTC());
         }
     }
 }

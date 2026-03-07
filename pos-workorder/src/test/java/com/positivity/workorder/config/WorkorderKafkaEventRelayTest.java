@@ -1,5 +1,8 @@
 package com.positivity.workorder.config;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -15,6 +18,7 @@ import com.positivity.workorder.internal.domain.WorkSessionStartedEvent;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 
 class WorkorderKafkaEventRelayTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     private final WorkorderKafkaProducer producer = org.mockito.Mockito.mock(WorkorderKafkaProducer.class);
     private final WorkorderKafkaEventRelay relay = new WorkorderKafkaEventRelay(producer);
@@ -22,7 +26,9 @@ class WorkorderKafkaEventRelayTest {
     @Test
     @DisplayName("Relays WorkSessionStartedEvent to Kafka with expected event type")
     void relaysWorkSessionStartedEvent() {
-        WorkSessionStartedEvent event = new WorkSessionStartedEvent(UUID.randomUUID(), UUID.randomUUID(), Instant.now());
+        WorkSessionStartedEvent event = new WorkSessionStartedEvent(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), Instant.now(TEST_CLOCK));
 
         relay.onWorkSessionStarted(event);
 
@@ -33,9 +39,9 @@ class WorkorderKafkaEventRelayTest {
     @DisplayName("Skips EstimateRevisedEvent publish when workorderId is null")
     void skipsEstimateRevisedWithNullWorkorderId() {
         EstimateRevisedEvent event = EstimateRevisedEvent.builder()
-                .estimateId(UUID.randomUUID())
+                .estimateId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderId(null)
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(TEST_CLOCK))
                 .build();
 
         relay.onEstimateRevised(event);

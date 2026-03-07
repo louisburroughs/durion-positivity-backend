@@ -8,7 +8,9 @@ import lombok.Setter;
 
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @Data

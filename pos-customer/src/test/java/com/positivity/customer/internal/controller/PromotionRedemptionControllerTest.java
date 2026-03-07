@@ -67,9 +67,9 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
         @Test
         @DisplayName("PRC-001: POST valid redemption request → 201 with response body fields")
         void givenValidRequest_whenRecordRedemption_thenReturns201() throws Exception {
-                UUID promotionId = UUID.randomUUID();
-                UUID customerId = UUID.randomUUID();
-                UUID workorderId = UUID.randomUUID();
+                UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/redemptions")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -96,9 +96,9 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
         @Test
         @DisplayName("PRC-002: POST same promotionId+workorderId when record exists → 409 DUPLICATE_REDEMPTION")
         void givenDuplicateRedemption_whenRecordAgain_thenReturns409() throws Exception {
-                UUID promotionId = UUID.randomUUID();
-                UUID customerId = UUID.randomUUID();
-                UUID workorderId = UUID.randomUUID();
+                UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Seed an existing redemption directly through the repository
                 promotionRedemptionRepository.saveAndFlush(
@@ -134,7 +134,8 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
                                   "discountType": "PERCENTAGE",
                                   "promotionCode": "SPRING25"
                                 }
-                                """.formatted(UUID.randomUUID(), UUID.randomUUID());
+                                """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/redemptions")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -156,9 +157,9 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
         @Test
         @DisplayName("PRC-004: GET by customerId with existing redemption → 200 non-empty list")
         void givenCustomerWithRedemptions_whenGetByCustomer_thenReturns200WithList() throws Exception {
-                UUID customerId = UUID.randomUUID();
-                UUID promotionId = UUID.randomUUID();
-                UUID workorderId = UUID.randomUUID();
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 promotionRedemptionRepository.saveAndFlush(
                                 buildRedemptionEntity(promotionId, customerId, workorderId, false));
@@ -183,9 +184,9 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
         @Test
         @DisplayName("PRC-005: POST with recordedOverLimit=true → 201 with flag propagated")
         void givenRecordedOverLimit_whenRecordRedemption_thenReturns201WithFlag() throws Exception {
-                UUID promotionId = UUID.randomUUID();
-                UUID customerId = UUID.randomUUID();
-                UUID workorderId = UUID.randomUUID();
+                UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/redemptions")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -209,9 +210,9 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
         @Test
         @DisplayName("PRC-006: POST /v1/promotions/redemptions populates recordedBy from security context")
         void recordRedemption_populatesRecordedByFromSecurityContext() throws Exception {
-                UUID promotionId = UUID.randomUUID();
-                UUID customerId = UUID.randomUUID();
-                UUID workorderId = UUID.randomUUID();
+                UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/promotions/redemptions")
                                 .contentType(MediaType.APPLICATION_JSON)

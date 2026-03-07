@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,6 +65,8 @@ import tools.jackson.databind.ObjectMapper;
 @ExtendWith(MockitoExtension.class)
 class PostingRuleEvaluatorDefaultMappingTest {
 
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
     @Mock
     private PostingRuleVersionRepository versionRepository;
 
@@ -89,7 +94,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
         defaultGLMappingProperties.setAllowGlobalDefaults(true);
         defaultGLMappingProperties.setRequireAmountField(false);
 
-        evaluator = new PostingRuleEvaluatorImpl(
+        evaluator = new PostingRuleEvaluatorImpl(TEST_CLOCK,
                 versionRepository,
                 ruleSetRepository,
                 glMappingResolver,
@@ -97,21 +102,21 @@ class PostingRuleEvaluatorDefaultMappingTest {
                 defaultGLMappingProperties,
                 new ObjectMapper());
 
-        testOrganizationId = UUID.randomUUID();
-        testDebitAccountId = UUID.randomUUID();
-        testCreditAccountId = UUID.randomUUID();
+        testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testDebitAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testCreditAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
     // ── Helper methods ──────────────────────────────────────────────────────
 
     private AccountingEvent createEvent(String eventType, Map<String, Object> payload) {
         AccountingEvent event = new AccountingEvent();
-        event.setEventId(UUID.randomUUID());
+        event.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         event.setOrganizationId(testOrganizationId);
         event.setEventType(eventType);
         event.setTransactionDate(LocalDateTime.of(2026, 1, 15, 10, 30));
         event.setPayload(payload != null ? payload : new HashMap<>());
-        event.setReceivedAt(Instant.now());
+        event.setReceivedAt(Instant.now(TEST_CLOCK));
         event.setSourceSystem("TEST_SYSTEM");
         return event;
     }
@@ -124,7 +129,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
 
     private DefaultGLMapping createDefaultMapping(String eventType, String description) {
         DefaultGLMapping mapping = new DefaultGLMapping();
-        mapping.setMappingId(UUID.randomUUID());
+        mapping.setMappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         mapping.setEventType(eventType);
         mapping.setOrganizationId(testOrganizationId);
         mapping.setDebitAccountId(testDebitAccountId);
@@ -587,13 +592,13 @@ class PostingRuleEvaluatorDefaultMappingTest {
         @DisplayName("Should prefer explicit posting rule over default mapping when rule exists")
         void shouldPreferExplicitPostingRule() {
             // Arrange: set up a posting rule set with a published version
-            UUID ruleSetId = UUID.randomUUID();
+            UUID ruleSetId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             PostingRuleSet ruleSet = new PostingRuleSet();
             ruleSet.setPostingRuleSetId(ruleSetId);
             ruleSet.setName("Invoice Rule Set");
             ruleSet.setEventType("billing.invoicePosted");
 
-            UUID versionId = UUID.randomUUID();
+            UUID versionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             PostingRuleVersion ruleVersion = new PostingRuleVersion();
             ruleVersion.setVersionId(versionId);
             ruleVersion.setPostingRuleSet(ruleSet);
@@ -612,7 +617,8 @@ class PostingRuleEvaluatorDefaultMappingTest {
                         }
                       ]
                     }
-                    """.formatted(UUID.randomUUID(), UUID.randomUUID()));
+                    """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                    UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
             when(ruleSetRepository.findByEventType("billing.invoicePosted"))
                     .thenReturn(List.of(ruleSet));
@@ -652,7 +658,7 @@ class PostingRuleEvaluatorDefaultMappingTest {
         @Test
         @DisplayName("Should fall back to default mapping when rule sets exist but no PUBLISHED versions")
         void shouldFallbackWhenNoPublishedVersions() {
-            UUID ruleSetId = UUID.randomUUID();
+            UUID ruleSetId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             PostingRuleSet ruleSet = new PostingRuleSet();
             ruleSet.setPostingRuleSetId(ruleSetId);
             ruleSet.setEventType("billing.invoicePosted");

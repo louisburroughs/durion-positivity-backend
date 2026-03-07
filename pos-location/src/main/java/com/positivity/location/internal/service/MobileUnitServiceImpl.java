@@ -1,5 +1,7 @@
 package com.positivity.location.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.location.service.MobileUnitService;
 
 import com.positivity.location.internal.dto.CoverageRuleRequest;
@@ -47,6 +49,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class MobileUnitServiceImpl implements MobileUnitService {
+    private final Clock clock;
+
     private static final String MOBILE_UNIT_NAME_TAKEN = "MOBILE_UNIT_NAME_TAKEN";
     private static final String MOBILE_UNIT_CONFLICT = "MOBILE_UNIT_CONFLICT";
 
@@ -61,7 +65,9 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             MobileUnitCoverageRuleRepository coverageRuleRepository,
             ServiceAreaRepository serviceAreaRepository,
             TravelBufferPolicyRepository travelBufferPolicyRepository,
-            ServiceLocationCapabilityRepository serviceLocationCapabilityRepository) {
+            ServiceLocationCapabilityRepository serviceLocationCapabilityRepository,
+            Clock clock) {
+        this.clock = clock;
         this.mobileUnitRepository = mobileUnitRepository;
         this.coverageRuleRepository = coverageRuleRepository;
         this.serviceAreaRepository = serviceAreaRepository;
@@ -246,7 +252,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                             : "INACTIVE")
                     .travelBufferPolicyId(parseUuid(patch.get("travelBufferPolicyId")))
                     .notes((String) patch.get("notes"))
-                    .updatedAt(Instant.now())
+                    .updatedAt(Instant.now(clock))
                     .build();
         }
 
@@ -262,7 +268,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         if (patch.containsKey("travelBufferPolicyId")) {
             entity.setTravelBufferPolicyId(parseUuid(patch.get("travelBufferPolicyId")));
         }
-        entity.setUpdatedAt(Instant.now());
+        entity.setUpdatedAt(Instant.now(clock));
 
         MobileUnitEntity saved = entity;
         if (mobileUnitRepository != null) {

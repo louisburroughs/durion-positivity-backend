@@ -12,6 +12,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Party alias entity for ID redirection after merge operations.
  * Ensures that all historical references to merged parties remain resolvable.
@@ -36,6 +37,8 @@ import java.util.UUID;
 public class PartyAlias {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "source_party_id", updatable = false, nullable = false)
     @Schema(description = "ID of the party that was merged (source)")
     private UUID sourcePartyId;

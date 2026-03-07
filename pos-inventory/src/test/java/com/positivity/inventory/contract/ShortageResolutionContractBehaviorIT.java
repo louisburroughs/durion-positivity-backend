@@ -36,7 +36,8 @@ import tools.jackson.databind.ObjectMapper;
  * {@code POST /v1/inventory/allocations/shortages/resolve} per:
  * <ul>
  * <li>ADR-0011: gateway auth headers (X-User, X-Authorities) required</li>
- * <li>ADR-0013: UUID.randomUUID() acceptable in tests</li>
+ * <li>ADR-0013: UUID.fromString("00000000-0000-0000-0000-000000000001")
+ * acceptable in tests</li>
  * <li>ADR-0017: HTTP response codes — 200 OK on success, 400 on missing
  * required fields,
  * 401 when auth headers are absent entirely</li>
@@ -93,7 +94,7 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /v1/inventory/allocations/shortages/resolve with valid request → 200 OK with response body")
         void resolveShortage_validRequest_returns200() throws Exception {
                 // Issue #25: valid request must return 200 with well-formed JSON structure
-                UUID allocationId = UUID.randomUUID();
+                UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ShortageResolutionResponse mockResponse = ShortageResolutionResponse.builder()
                                 .allocationId(allocationId)
@@ -165,7 +166,7 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /v1/inventory/allocations/shortages/resolve with missing sku → 400 Bad Request")
         void resolveShortage_missingSku_returns400() throws Exception {
                 // Issue #25: sku is @NotNull — missing field must produce 400
-                UUID allocationId = UUID.randomUUID();
+                UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String requestBody = String.format("""
                                 {"allocationId":"%s","shortQuantity":2}
                                 """, allocationId);
@@ -196,7 +197,7 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #25: no X-User/X-Authorities — gateway security returns 403 for
                 // unauthenticated requests
                 ShortageResolutionRequest request = ShortageResolutionRequest.builder()
-                                .allocationId(UUID.randomUUID())
+                                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .sku("PART-001")
                                 .shortQuantity(2)
                                 .build();
@@ -221,7 +222,7 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
         void resolveShortage_zeroShortQuantity_returns400() throws Exception {
                 // Issue #25: shortQuantity=0 violates @Positive — must return 400, service not
                 // called
-                UUID allocationId = UUID.randomUUID();
+                UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String requestBody = String.format(
                                 "{\"allocationId\":\"%s\",\"sku\":\"PART-001\",\"shortQuantity\":0}",
                                 allocationId);
@@ -244,7 +245,7 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
         void resolveShortage_negativeShortQuantity_returns400() throws Exception {
                 // Issue #25: shortQuantity=-1 violates @Positive — must return 400, service not
                 // called
-                UUID allocationId = UUID.randomUUID();
+                UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String requestBody = String.format(
                                 "{\"allocationId\":\"%s\",\"sku\":\"PART-001\",\"shortQuantity\":-1}",
                                 allocationId);
@@ -271,7 +272,7 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
         void resolveShortage_partialBannerResponse_returns200WithBannerTrue() throws Exception {
                 // Issue #25: Scenario 4 — partner client failure must surface as
                 // partialResultsBanner=true
-                UUID allocationId = UUID.randomUUID();
+                UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ShortageResolutionResponse partialResponse = ShortageResolutionResponse.builder()
                                 .allocationId(allocationId)

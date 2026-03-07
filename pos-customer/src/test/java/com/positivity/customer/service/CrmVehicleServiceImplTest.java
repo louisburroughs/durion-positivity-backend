@@ -19,6 +19,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +37,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CrmVehicleServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private VehicleInventoryClient vehicleInventoryClient;
@@ -46,7 +50,8 @@ class CrmVehicleServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CrmVehicleServiceImpl(vehicleInventoryClient, personPartyRepository, commercialPartyRepository);
+        service = new CrmVehicleServiceImpl(TEST_CLOCK, vehicleInventoryClient, personPartyRepository,
+                commercialPartyRepository);
     }
 
     private CommercialParty commercialParty(UUID id) {
@@ -86,7 +91,7 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void createVehicle_associatesVin_andSavesCommercialParty() {
-        UUID customerId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty party = commercialParty(customerId);
         CreateVehicleForPartyRequest request = CreateVehicleForPartyRequest.builder()
                 .vinNumber("VIN-001")
@@ -99,7 +104,7 @@ class CrmVehicleServiceImplTest {
         when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
         when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
         when(vehicleInventoryClient.createVehicle(any(CreateVehicleRequest.class)))
-                .thenReturn(vehicle(UUID.randomUUID(), "VIN-001"));
+                .thenReturn(vehicle(UUID.fromString("00000000-0000-0000-0000-000000000001"), "VIN-001"));
 
         VehicleResponse result = service.createVehicle(customerId, request);
 
@@ -110,7 +115,7 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void createVehicle_doesNotSaveParty_whenClientReturnsNull() {
-        UUID customerId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty party = commercialParty(customerId);
 
         when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
@@ -127,8 +132,8 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void getVehicleForCustomer_returnsEmpty_whenVinNotOwned() {
-        UUID customerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty party = commercialParty(customerId);
 
         when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
@@ -142,8 +147,8 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void updateVehicle_mergesRequestWithExistingData() {
-        UUID customerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty party = commercialParty(customerId);
         party.getVehicleVins().add("VIN-OLD");
 
@@ -170,8 +175,8 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void updateVehicle_throws_whenVehicleNotOwned() {
-        UUID customerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty party = commercialParty(customerId);
 
         when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
@@ -186,8 +191,8 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void deleteVehicle_removesVinAndSaves() {
-        UUID customerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty party = commercialParty(customerId);
         party.getVehicleVins().add("VIN-1");
 
@@ -204,9 +209,9 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void transferVehicle_movesVinBetweenParties_andUpdatesInventoryAccount() {
-        UUID sourceId = UUID.randomUUID();
-        UUID targetId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
+        UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID targetId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         CommercialParty source = commercialParty(sourceId);
         CommercialParty target = commercialParty(targetId);
@@ -244,14 +249,15 @@ class CrmVehicleServiceImplTest {
                 .targetCustomerId("not-a-uuid")
                 .build();
 
-        assertThatThrownBy(() -> service.transferVehicle(UUID.randomUUID(), UUID.randomUUID(), badRequest))
+        assertThatThrownBy(() -> service.transferVehicle(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), badRequest))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid customer ID format");
     }
 
     @Test
     void findPartyByVehicleId_returnsNull_whenVehicleMissing() {
-        UUID vehicleId = UUID.randomUUID();
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.empty());
 
         CommercialParty result = service.findPartyByVehicleId(vehicleId);
@@ -261,8 +267,8 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void findPartyByVehicleId_returnsOwner_whenVinMatchesCommercialParty() {
-        UUID vehicleId = UUID.randomUUID();
-        CommercialParty owner = commercialParty(UUID.randomUUID());
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CommercialParty owner = commercialParty(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         owner.getVehicleVins().add("VIN-OWNER");
 
         when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(vehicle(vehicleId, "VIN-OWNER")));
@@ -275,7 +281,7 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void fetchVehicleSummaryByVin_returnsSummary_whenVehicleExists() {
-        UUID vehicleId = UUID.randomUUID();
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         VehicleResponse vehicle = vehicle(vehicleId, "VIN-SUM");
         when(vehicleInventoryClient.getVehicleByVin("VIN-SUM")).thenReturn(Optional.of(vehicle));
 
@@ -298,8 +304,8 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void buildSnapshotForVehicleOwner_andCollectVehicles_filtersMissingVehicles() {
-        UUID ownerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
+        UUID ownerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         CommercialParty owner = commercialParty(ownerId);
         owner.getVehicleVins().add("VIN-OK");
@@ -310,7 +316,7 @@ class CrmVehicleServiceImplTest {
         when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(vehicle(vehicleId, "VIN-OK")));
         when(commercialPartyRepository.findAll()).thenReturn(List.of(owner));
         when(vehicleInventoryClient.getVehicleByVin("VIN-OK"))
-                .thenReturn(Optional.of(vehicle(UUID.randomUUID(), "VIN-OK")));
+                .thenReturn(Optional.of(vehicle(UUID.fromString("00000000-0000-0000-0000-000000000001"), "VIN-OK")));
         when(vehicleInventoryClient.getVehicleByVin("VIN-MISS")).thenReturn(Optional.empty());
 
         CrmSnapshotDTO snapshot = service.buildSnapshotForVehicleOwner(vehicleId);
@@ -323,11 +329,11 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void createVehicle_savesPersonParty_whenCustomerIsPerson() {
-        UUID customerId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PersonParty person = personParty(customerId);
         when(personPartyRepository.findById(customerId)).thenReturn(Optional.of(person));
         when(vehicleInventoryClient.createVehicle(any(CreateVehicleRequest.class)))
-                .thenReturn(vehicle(UUID.randomUUID(), "VIN-PER"));
+                .thenReturn(vehicle(UUID.fromString("00000000-0000-0000-0000-000000000001"), "VIN-PER"));
 
         service.createVehicle(customerId, CreateVehicleForPartyRequest.builder().vinNumber("VIN-PER").build());
 

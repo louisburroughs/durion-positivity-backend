@@ -16,29 +16,28 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class UserPersonTranslationServiceImpl implements UserPersonTranslationService {
 
-    private final UserPersonLinkRepository userPersonLinkRepository;
+	private final UserPersonLinkRepository userPersonLinkRepository;
 
-    public UserPersonTranslationServiceImpl(@NonNull UserPersonLinkRepository userPersonLinkRepository) {
-        this.userPersonLinkRepository = userPersonLinkRepository;
-    }
+	public UserPersonTranslationServiceImpl(@NonNull UserPersonLinkRepository userPersonLinkRepository) {
+		this.userPersonLinkRepository = userPersonLinkRepository;
+	}
 
-    @Override
-    @NonNull
-    public UUID getPersonUuidForUser(@NonNull UUID userId) {
-        return userPersonLinkRepository.findByUserId(userId)
-                .map(link -> link.getPersonId())
-                .orElseThrow(() -> new EntityNotFoundException("No person link found for userId: " + userId));
-    }
+	@Override
+	@NonNull public UUID getPersonUuidForUser(@NonNull UUID userId) {
+		return userPersonLinkRepository.findByUserId(userId)
+			.map(link -> link.getPersonId())
+			.orElseThrow(() -> new EntityNotFoundException("No person link found for userId: " + userId));
+	}
 
-    @Override
-    @NonNull
-    public Optional<UUID> getUserIdForPerson(@NonNull UUID personUuid) {
-        return userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE)
-                .map(UserPersonLink::getUserId);
-    }
+	@Override
+	@NonNull public Optional<UUID> getUserIdForPerson(@NonNull UUID personUuid) {
+		return userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE)
+			.map(UserPersonLink::getUserId);
+	}
 
-    @Override
-    public boolean isUserLinkedToPerson(@NonNull UUID userId, @NonNull UUID personUuid) {
-        return userPersonLinkRepository.existsByUserIdAndPersonId(userId, personUuid);
-    }
+	@Override
+	public boolean isUserLinkedToPerson(@NonNull UUID userId, @NonNull UUID personUuid) {
+		return userPersonLinkRepository.existsByUserIdAndPersonId(userId, personUuid);
+	}
+
 }

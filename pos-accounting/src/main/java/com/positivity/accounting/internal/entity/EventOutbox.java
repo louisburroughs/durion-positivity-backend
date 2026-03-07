@@ -131,9 +131,7 @@ public class EventOutbox {
 
     @PrePersist
     protected void onCreate() {
-        if (createdAt == null) {
-            }
-        if (status == null) {
+if (status == null) {
             status = OutboxStatus.PENDING;
         }
     }

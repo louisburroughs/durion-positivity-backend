@@ -52,9 +52,9 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-102: Create override exceeding auto-approval threshold -> PENDING_APPROVAL")
         void cp102_createOverrideExceedingAutoApprovalThreshold() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CAP168-CP102-Product");
-                UUID actorUserId = UUID.randomUUID();
+                UUID actorUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
@@ -76,7 +76,7 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-101: Create override violating min margin hard limit -> 400")
         void ve101_minMarginViolation() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CAP168-VE101-Product");
 
                 upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
@@ -89,7 +89,8 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "basePrice", 100.00,
                                                 "cost", 90.00,
                                                 "overridePrice", 92.00,
-                                                "createdByUserId", UUID.randomUUID()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001")))))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(content().string(containsString("MIN_MARGIN_VIOLATION")));
         }
@@ -97,7 +98,7 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-102: Create override violating max discount hard limit -> 400")
         void ve102_maxDiscountViolation() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CAP168-VE102-Product");
 
                 upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
@@ -110,7 +111,8 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "basePrice", 100.00,
                                                 "cost", 50.00,
                                                 "overridePrice", 60.00,
-                                                "createdByUserId", UUID.randomUUID()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001")))))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(content().string(containsString("MAX_DISCOUNT_EXCEEDED")));
         }
@@ -118,10 +120,10 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("LC-101: Pending override approve lifecycle -> ACTIVE and effective override price")
         void lc101_approveLifecycle() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CAP168-LC101-Product");
-                UUID createdBy = UUID.randomUUID();
-                UUID approver = UUID.randomUUID();
+                UUID createdBy = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID approver = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
@@ -165,10 +167,10 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("LC-102: Pending override reject lifecycle -> REJECTED")
         void lc102_rejectLifecycle() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CAP168-LC102-Product");
-                UUID createdBy = UUID.randomUUID();
-                UUID approver = UUID.randomUUID();
+                UUID createdBy = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID approver = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
@@ -208,7 +210,7 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("ID-101: Effective price with ACTIVE override returns override price")
         void id101_effectivePriceUsesActiveOverride() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CAP168-ID101-Product");
 
                 upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
@@ -221,7 +223,8 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
                                                 "basePrice", 100.00,
                                                 "cost", 50.00,
                                                 "overridePrice", 95.00,
-                                                "createdByUserId", UUID.randomUUID()))))
+                                                "createdByUserId",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001")))))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.status").value("ACTIVE"));
 
@@ -237,7 +240,7 @@ class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("ID-102: Effective price with no override returns 404")
         void id102_effectivePriceWithoutOverrideReturns404() throws Exception {
-                UUID locationId = UUID.randomUUID();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID productId = createProductAndReturnId("CAP168-ID102-Product");
 
                 mockMvc.perform(

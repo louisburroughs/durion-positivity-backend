@@ -1,5 +1,9 @@
 package com.positivity.accounting.internal.controller;
 
+import java.time.Clock;
+import java.time.Instant;
+
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -23,9 +27,11 @@ import com.positivity.accounting.internal.exception.PaymentGatewayException;
  * - IllegalArgumentException → 400 Bad Request (validation errors)
  */
 @RestControllerAdvice(basePackages = "com.positivity.accounting.internal.controller")
+@RequiredArgsConstructor
 public class APPaymentExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(APPaymentExceptionHandler.class);
+    private final Clock clock;
 
     @ExceptionHandler(EventNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleEventNotFound(EventNotFoundException ex) {
@@ -33,6 +39,7 @@ public class APPaymentExceptionHandler {
         ErrorResponse body = ErrorResponse.builder()
                 .errorCode("EVENT_NOT_FOUND")
                 .message(ex.getMessage())
+                .timestamp(Instant.now(clock).toEpochMilli())
                 .build();
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
@@ -43,6 +50,7 @@ public class APPaymentExceptionHandler {
         ErrorResponse body = ErrorResponse.builder()
                 .errorCode("IDEMPOTENCY_CONFLICT")
                 .message(ex.getMessage())
+                .timestamp(Instant.now(clock).toEpochMilli())
                 .build();
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
@@ -57,6 +65,7 @@ public class APPaymentExceptionHandler {
         ErrorResponse body = ErrorResponse.builder()
                 .errorCode("PAYMENT_GATEWAY_FAILURE")
                 .message(ex.getMessage())
+                .timestamp(Instant.now(clock).toEpochMilli())
                 .build();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
@@ -67,6 +76,7 @@ public class APPaymentExceptionHandler {
         ErrorResponse body = ErrorResponse.builder()
                 .errorCode("VALIDATION_ERROR")
                 .message(ex.getMessage())
+                .timestamp(Instant.now(clock).toEpochMilli())
                 .build();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }

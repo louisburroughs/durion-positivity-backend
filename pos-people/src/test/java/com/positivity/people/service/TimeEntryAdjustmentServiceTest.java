@@ -1,5 +1,7 @@
 package com.positivity.people.service;
 
+import java.time.Clock;
+
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.entity.TimeEntryAdjustment;
 import com.positivity.people.internal.entity.TimeEntryAudit;
@@ -26,125 +28,126 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-@SuppressWarnings("java:S100") // Test class is allowed to have non-camel-case method names for readability
+@SuppressWarnings("java:S100") // Test class is allowed to have non-camel-case method
+								// names for readability
 class TimeEntryAdjustmentServiceTest {
 
-    private TimeEntryAdjustmentRepository adjustmentRepository;
-    private TimeEntryAuditRepository auditRepository;
-    private TimeEntryRepository timeEntryRepository;
-    private TimeEntryAdjustmentService service;
+	private TimeEntryAdjustmentRepository adjustmentRepository;
 
-    @BeforeEach
-    void setup() {
-        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
-                "test-user", "password", "ROLE_USER");
-        authentication.setDetails(java.util.Map.of(
-                GatewaySecurityConstants.DETAIL_USER_ID, "22222222-2222-2222-2222-222222222222",
-                GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
-        authentication.setAuthenticated(true);
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+	private TimeEntryAuditRepository auditRepository;
 
-        adjustmentRepository = mock(TimeEntryAdjustmentRepository.class);
-        auditRepository = mock(TimeEntryAuditRepository.class);
-        timeEntryRepository = mock(TimeEntryRepository.class);
-        service = new TimeEntryAdjustmentServiceImpl(adjustmentRepository, auditRepository, timeEntryRepository);
-    }
+	private TimeEntryRepository timeEntryRepository;
 
-    @AfterEach
-    void clearAuth() {
-        SecurityContextHolder.clearContext();
-    }
+	private TimeEntryAdjustmentService service;
 
-    @Test
-    void approveAdjustment_withPermission_succeeds() {
-        UUID id = UUID.randomUUID();
-        TimeEntryAdjustment adj = new TimeEntryAdjustment();
-        adj.setAdjustmentId(id);
-        adj.setTimeEntryId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
-        adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
+	@BeforeEach
+	void setup() {
+		TestingAuthenticationToken authentication = new TestingAuthenticationToken("test-user", "password",
+				"ROLE_USER");
+		authentication.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USER_ID,
+				"22222222-2222-2222-2222-222222222222", GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
+		authentication.setAuthenticated(true);
+		SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
-        when(adjustmentRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+		adjustmentRepository = mock(TimeEntryAdjustmentRepository.class);
+		auditRepository = mock(TimeEntryAuditRepository.class);
+		timeEntryRepository = mock(TimeEntryRepository.class);
+		service = new TimeEntryAdjustmentServiceImpl(adjustmentRepository, auditRepository, timeEntryRepository,
+				Clock.systemUTC());
+	}
 
-        boolean ok = service.approveAdjustment(id, "manager1", Set.of("people:timeAdjustment:approve"), "cid-1");
-        assertTrue(ok);
+	@AfterEach
+	void clearAuth() {
+		SecurityContextHolder.clearContext();
+	}
 
-        ArgumentCaptor<TimeEntryAdjustment> captor = ArgumentCaptor.forClass(TimeEntryAdjustment.class);
-        verify(adjustmentRepository).save(captor.capture());
-        TimeEntryAdjustment saved = captor.getValue();
-        assertEquals(com.positivity.people.internal.enums.AdjustmentStatus.APPROVED, saved.getStatus());
-        assertEquals("manager1", saved.getDecidedBy());
+	@Test
+	void approveAdjustment_withPermission_succeeds() {
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		TimeEntryAdjustment adj = new TimeEntryAdjustment();
+		adj.setAdjustmentId(id);
+		adj.setTimeEntryId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+		adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
 
-        verify(auditRepository).save(any(TimeEntryAudit.class));
-    }
+		when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
+		when(adjustmentRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    @Test
-    void approveAdjustment_withoutPermission_fails() {
-        UUID id = UUID.randomUUID();
-        TimeEntryAdjustment adj = new TimeEntryAdjustment();
-        adj.setAdjustmentId(id);
-        adj.setTimeEntryId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
-        adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
+		boolean ok = service.approveAdjustment(id, "manager1", Set.of("people:timeAdjustment:approve"), "cid-1");
+		assertTrue(ok);
 
-        when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
-        Set<String> permissions = Set.of("people:timeEntry:approve");
+		ArgumentCaptor<TimeEntryAdjustment> captor = ArgumentCaptor.forClass(TimeEntryAdjustment.class);
+		verify(adjustmentRepository).save(captor.capture());
+		TimeEntryAdjustment saved = captor.getValue();
+		assertEquals(com.positivity.people.internal.enums.AdjustmentStatus.APPROVED, saved.getStatus());
+		assertEquals("manager1", saved.getDecidedBy());
 
-        assertThrows(AccessDeniedException.class,
-                () -> service.approveAdjustment(id, "user1", permissions, "cid-2"));
-        verify(adjustmentRepository, never()).save(any());
-        verify(auditRepository).save(any(TimeEntryAudit.class));
-    }
+		verify(auditRepository).save(any(TimeEntryAudit.class));
+	}
 
-    @Test
-    void createAdjustment_missingTimeEntryId_throwsBadRequest() {
-        TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
-        request.setReasonCode("RC1");
-        request.setMinutesDelta(5);
+	@Test
+	void approveAdjustment_withoutPermission_fails() {
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		TimeEntryAdjustment adj = new TimeEntryAdjustment();
+		adj.setAdjustmentId(id);
+		adj.setTimeEntryId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
+		adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> service.createAdjustment(request));
-        assertEquals("timeEntryId is required", ex.getMessage());
-    }
+		when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
+		Set<String> permissions = Set.of("people:timeEntry:approve");
 
-    @Test
-    void createAdjustment_timeEntryNotFound_throwsNotFound() {
-        UUID timeEntryId = UUID.randomUUID();
-        TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
-        request.setReasonCode("RC1");
-        request.setTimeEntryId(timeEntryId);
-        request.setMinutesDelta(5);
+		assertThrows(AccessDeniedException.class, () -> service.approveAdjustment(id, "user1", permissions, "cid-2"));
+		verify(adjustmentRepository, never()).save(any());
+		verify(auditRepository).save(any(TimeEntryAudit.class));
+	}
 
-        when(timeEntryRepository.findById(timeEntryId)).thenReturn(Optional.empty());
+	@Test
+	void createAdjustment_missingTimeEntryId_throwsBadRequest() {
+		TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
+		request.setReasonCode("RC1");
+		request.setMinutesDelta(5);
 
-        NotFoundException ex = assertThrows(NotFoundException.class,
-                () -> service.createAdjustment(request));
-        assertEquals("Time entry not found", ex.getMessage());
-    }
+		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+				() -> service.createAdjustment(request));
+		assertEquals("timeEntryId is required", ex.getMessage());
+	}
 
-    @Test
-    void createAdjustment_invalidState_throwsConflict() {
-        UUID timeEntryId = UUID.randomUUID();
-        TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
-        request.setReasonCode("RC1");
-        request.setTimeEntryId(timeEntryId);
-        request.setMinutesDelta(5);
+	@Test
+	void createAdjustment_timeEntryNotFound_throwsNotFound() {
+		UUID timeEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
+		request.setReasonCode("RC1");
+		request.setTimeEntryId(timeEntryId);
+		request.setMinutesDelta(5);
 
-        TimeEntry entry = new TimeEntry();
-        entry.setStatus(TimeEntryStatus.APPROVED);
-        when(timeEntryRepository.findById(timeEntryId)).thenReturn(Optional.of(entry));
+		when(timeEntryRepository.findById(timeEntryId)).thenReturn(Optional.empty());
 
-        IllegalStateException ex = assertThrows(IllegalStateException.class,
-                () -> service.createAdjustment(request));
-        assertTrue(ex.getMessage().contains("PENDING_APPROVAL"));
-    }
+		NotFoundException ex = assertThrows(NotFoundException.class, () -> service.createAdjustment(request));
+		assertEquals("Time entry not found", ex.getMessage());
+	}
 
-    @Test
-    void approveAdjustment_notFound_throwsNotFound() {
-        UUID id = UUID.randomUUID();
-        when(adjustmentRepository.findById(id)).thenReturn(Optional.empty());
-        Set<String> permissions = Set.of("people:timeAdjustment:approve");
+	@Test
+	void createAdjustment_invalidState_throwsConflict() {
+		UUID timeEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		TimeEntryAdjustmentRequest request = new TimeEntryAdjustmentRequest();
+		request.setReasonCode("RC1");
+		request.setTimeEntryId(timeEntryId);
+		request.setMinutesDelta(5);
 
-        assertThrows(NotFoundException.class,
-                () -> service.approveAdjustment(id, "manager1", permissions, "cid-1"));
-    }
+		TimeEntry entry = new TimeEntry();
+		entry.setStatus(TimeEntryStatus.APPROVED);
+		when(timeEntryRepository.findById(timeEntryId)).thenReturn(Optional.of(entry));
+
+		IllegalStateException ex = assertThrows(IllegalStateException.class, () -> service.createAdjustment(request));
+		assertTrue(ex.getMessage().contains("PENDING_APPROVAL"));
+	}
+
+	@Test
+	void approveAdjustment_notFound_throwsNotFound() {
+		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(adjustmentRepository.findById(id)).thenReturn(Optional.empty());
+		Set<String> permissions = Set.of("people:timeAdjustment:approve");
+
+		assertThrows(NotFoundException.class, () -> service.approveAdjustment(id, "manager1", permissions, "cid-1"));
+	}
+
 }

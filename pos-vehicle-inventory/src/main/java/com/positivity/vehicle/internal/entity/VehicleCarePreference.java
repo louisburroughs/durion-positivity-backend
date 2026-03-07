@@ -11,14 +11,12 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.positivity.shared.id.UUIDv7Generator;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
@@ -26,6 +24,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Vehicle care preferences entity for CAP:091 Story #102.
  * Stores structured and unstructured vehicle care preferences using JSONB.
@@ -42,16 +42,10 @@ import lombok.NoArgsConstructor;
 public class VehicleCarePreference {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
-
     @NonNull
     @Column(name = "vehicle_id", nullable = false, unique = true)
     private UUID vehicleId;

@@ -69,11 +69,13 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
         party.setPartyType(PartyType.COMMERCIAL);
         party.setLegalName("Snapshot Test Corp");
         party.setDisplayName("Snapshot Corp");
-        party.setPartyNumber("SNAP-" + UUID.randomUUID());
-        party.setCustomerNumber("CUST-SNAP-" + UUID.randomUUID().toString().substring(0, 8));
+        party.setPartyNumber("SNAP-" + UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        party.setCustomerNumber(
+                "CUST-SNAP-" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
         party.setStatus(AccountStatus.ACTIVE);
 
         Contact contact = new Contact();
+        contact.setPersonId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
         contact.setFirstName("Test");
         contact.setLastName("Contact");
         contact.setActive(true);
@@ -218,7 +220,7 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("SS-006: snapshot for unknown partyId returns 404")
     void snapshotByParty_unknownPartyId_returns404() throws Exception {
-        UUID unknownId = UUID.randomUUID();
+        UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}", unknownId)
                 .header("X-User", TEST_USER)
@@ -243,7 +245,8 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("SS-007: unauthenticated request to snapshot endpoint returns 403")
     void snapshotByParty_unauthenticated_returns403() throws Exception {
-        mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}", UUID.randomUUID()))
+        mockMvc.perform(
+                get("/v1/crm/snapshot/party/{partyId}", UUID.fromString("00000000-0000-0000-0000-000000000001")))
                 .andExpect(status().isForbidden());
     }
 }

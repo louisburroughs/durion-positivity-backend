@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.workorder.internal.dto.CreateTravelSegmentAdjustmentRequest;
 import com.positivity.workorder.internal.dto.StartTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.StopTravelSegmentRequest;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,232 +42,241 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("TravelSegmentServiceImpl Unit Tests")
 class TravelSegmentServiceImplTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    private static final UUID MOBILE_WORK_ASSIGNMENT_ID = UUID.randomUUID();
-    private static final UUID TECHNICIAN_ID = UUID.randomUUID();
-    private static final UUID SEGMENT_ID = UUID.randomUUID();
-    private static final UUID ACTED_FOR_PERSON_ID = UUID.randomUUID();
+        @Spy
+        Clock clock = TEST_CLOCK;
 
-    @Mock
-    private TravelSegmentRepository travelSegmentRepository;
+        private static final UUID MOBILE_WORK_ASSIGNMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        private static final UUID TECHNICIAN_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        private static final UUID SEGMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        private static final UUID ACTED_FOR_PERSON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-    @Mock
-    private TravelSegmentAdjustmentRepository travelSegmentAdjustmentRepository;
+        @Mock
+        private TravelSegmentRepository travelSegmentRepository;
 
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
+        @Mock
+        private TravelSegmentAdjustmentRepository travelSegmentAdjustmentRepository;
 
-    @InjectMocks
-    private TravelSegmentServiceImpl serviceImpl;
+        @Mock
+        private ApplicationEventPublisher eventPublisher;
 
-    @BeforeEach
-    void setUpSecurityContext() {
-        var context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(new UsernamePasswordAuthenticationToken(
-                TECHNICIAN_ID.toString(),
-                "N/A",
-                List.of()));
-        SecurityContextHolder.setContext(context);
-    }
+        @InjectMocks
+        private TravelSegmentServiceImpl serviceImpl;
 
-    @AfterEach
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
-    }
+        @BeforeEach
+        void setUpSecurityContext() {
+                var context = SecurityContextHolder.createEmptyContext();
+                context.setAuthentication(new UsernamePasswordAuthenticationToken(
+                                TECHNICIAN_ID.toString(),
+                                "N/A",
+                                List.of()));
+                SecurityContextHolder.setContext(context);
+        }
 
-    private StartTravelSegmentRequest validStartRequest() {
-        return StartTravelSegmentRequest.builder()
-                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
-                .technicianId(TECHNICIAN_ID)
-                .segmentType(TravelSegmentType.DEPART_SHOP)
-                .build();
-    }
+        @AfterEach
+        void clearSecurityContext() {
+                SecurityContextHolder.clearContext();
+        }
 
-    private CreateTravelSegmentAdjustmentRequest validAdjustmentRequest() {
-        return CreateTravelSegmentAdjustmentRequest.builder()
-                .adjustmentReason("Correcting times")
-                .build();
-    }
+        private StartTravelSegmentRequest validStartRequest() {
+                return StartTravelSegmentRequest.builder()
+                                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                                .technicianId(TECHNICIAN_ID)
+                                .segmentType(TravelSegmentType.DEPART_SHOP)
+                                .build();
+        }
 
-    @Test
-    @DisplayName("AC1: startTravelSegment creates IN_PROGRESS segment")
-    void startSegment_createsInProgressSegment() {
-        when(travelSegmentRepository.countByMobileWorkAssignmentIdAndStatus(
-                MOBILE_WORK_ASSIGNMENT_ID, TravelSegmentStatus.IN_PROGRESS)).thenReturn(0L);
-        when(travelSegmentRepository.save(any(TravelSegment.class))).thenAnswer(inv -> inv.getArgument(0));
+        private CreateTravelSegmentAdjustmentRequest validAdjustmentRequest() {
+                return CreateTravelSegmentAdjustmentRequest.builder()
+                                .adjustmentReason("Correcting times")
+                                .build();
+        }
 
-        TravelSegment result = serviceImpl.startTravelSegment(validStartRequest());
+        @Test
+        @DisplayName("AC1: startTravelSegment creates IN_PROGRESS segment")
+        void startSegment_createsInProgressSegment() {
+                when(travelSegmentRepository.countByMobileWorkAssignmentIdAndStatus(
+                                MOBILE_WORK_ASSIGNMENT_ID, TravelSegmentStatus.IN_PROGRESS)).thenReturn(0L);
+                when(travelSegmentRepository.save(any(TravelSegment.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(result.getStatus()).isEqualTo(TravelSegmentStatus.IN_PROGRESS);
-        assertThat(result.getStartAt()).isNotNull();
-        assertThat(result.getCreatedBy()).isNotNull();
-        verify(travelSegmentRepository).save(any(TravelSegment.class));
-    }
+                TravelSegment result = serviceImpl.startTravelSegment(validStartRequest());
 
-    @Test
-    @DisplayName("AC2: stopTravelSegment completes segment with duration")
-    void stopSegment_completesSegment() {
-        TravelSegment segment = TravelSegment.builder()
-                .travelSegmentId(SEGMENT_ID)
-                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
-                .technicianId(TECHNICIAN_ID)
-                .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(600))
-                .status(TravelSegmentStatus.IN_PROGRESS)
-                .createdBy("system")
-                .build();
+                assertThat(result.getStatus()).isEqualTo(TravelSegmentStatus.IN_PROGRESS);
+                assertThat(result.getStartAt()).isNotNull();
+                assertThat(result.getCreatedBy()).isNotNull();
+                verify(travelSegmentRepository).save(any(TravelSegment.class));
+        }
 
-        when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment));
-        when(travelSegmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        @Test
+        @DisplayName("AC2: stopTravelSegment completes segment with duration")
+        void stopSegment_completesSegment() {
+                TravelSegment segment = TravelSegment.builder()
+                                .travelSegmentId(SEGMENT_ID)
+                                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                                .technicianId(TECHNICIAN_ID)
+                                .segmentType(TravelSegmentType.DEPART_SHOP)
+                                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
+                                .status(TravelSegmentStatus.IN_PROGRESS)
+                                .createdBy("system")
+                                .build();
 
-        TravelSegment result = serviceImpl.stopTravelSegment(SEGMENT_ID, StopTravelSegmentRequest.builder().build());
+                when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment));
+                when(travelSegmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(result.getStatus()).isEqualTo(TravelSegmentStatus.COMPLETED);
-        assertThat(result.getEndAt()).isNotNull();
-        assertThat(result.getDurationMinutes()).isGreaterThan(0);
-        assertThat(result.getRawMinutes()).isEqualTo(result.getDurationMinutes());
-        assertThat(result.getBufferedMinutes()).isNull();
-    }
+                TravelSegment result = serviceImpl.stopTravelSegment(SEGMENT_ID,
+                                StopTravelSegmentRequest.builder().build());
 
-    @Test
-    @DisplayName("AC3: startTravelSegment throws conflict when active segment exists")
-    void startSegment_conflictWhenActiveExists() {
-        when(travelSegmentRepository.countByMobileWorkAssignmentIdAndStatus(
-                MOBILE_WORK_ASSIGNMENT_ID, TravelSegmentStatus.IN_PROGRESS)).thenReturn(1L);
+                assertThat(result.getStatus()).isEqualTo(TravelSegmentStatus.COMPLETED);
+                assertThat(result.getEndAt()).isNotNull();
+                assertThat(result.getDurationMinutes()).isGreaterThan(0);
+                assertThat(result.getRawMinutes()).isEqualTo(result.getDurationMinutes());
+                assertThat(result.getBufferedMinutes()).isNull();
+        }
 
-        assertThatThrownBy(() -> serviceImpl.startTravelSegment(validStartRequest()))
-                .isInstanceOf(TravelSegmentConflictException.class);
-    }
+        @Test
+        @DisplayName("AC3: startTravelSegment throws conflict when active segment exists")
+        void startSegment_conflictWhenActiveExists() {
+                when(travelSegmentRepository.countByMobileWorkAssignmentIdAndStatus(
+                                MOBILE_WORK_ASSIGNMENT_ID, TravelSegmentStatus.IN_PROGRESS)).thenReturn(1L);
 
-    @Test
-    @DisplayName("AC4: stopTravelSegment throws not found for unknown ID")
-    void stopSegment_notFoundThrows() {
-        when(travelSegmentRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
+                assertThatThrownBy(() -> serviceImpl.startTravelSegment(validStartRequest()))
+                                .isInstanceOf(TravelSegmentConflictException.class);
+        }
 
-        assertThatThrownBy(
-                () -> serviceImpl.stopTravelSegment(UUID.randomUUID(), StopTravelSegmentRequest.builder().build()))
-                .isInstanceOf(TravelSegmentNotFoundException.class);
-    }
+        @Test
+        @DisplayName("AC4: stopTravelSegment throws not found for unknown ID")
+        void stopSegment_notFoundThrows() {
+                when(travelSegmentRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
 
-    @Test
-    @DisplayName("AC4-guard: stopTravelSegment throws conflict when segment is not IN_PROGRESS")
-    void stopSegment_wrongStatusThrows() {
-        TravelSegment completedSegment = TravelSegment.builder()
-                .travelSegmentId(SEGMENT_ID)
-                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
-                .technicianId(TECHNICIAN_ID)
-                .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(600))
-                .status(TravelSegmentStatus.COMPLETED)
-                .createdBy("system")
-                .build();
+                assertThatThrownBy(
+                                () -> serviceImpl.stopTravelSegment(
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                StopTravelSegmentRequest.builder().build()))
+                                .isInstanceOf(TravelSegmentNotFoundException.class);
+        }
 
-        when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(completedSegment));
+        @Test
+        @DisplayName("AC4-guard: stopTravelSegment throws conflict when segment is not IN_PROGRESS")
+        void stopSegment_wrongStatusThrows() {
+                TravelSegment completedSegment = TravelSegment.builder()
+                                .travelSegmentId(SEGMENT_ID)
+                                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                                .technicianId(TECHNICIAN_ID)
+                                .segmentType(TravelSegmentType.DEPART_SHOP)
+                                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
+                                .status(TravelSegmentStatus.COMPLETED)
+                                .createdBy("system")
+                                .build();
 
-        assertThatThrownBy(() -> serviceImpl.stopTravelSegment(SEGMENT_ID, StopTravelSegmentRequest.builder().build()))
-                .isInstanceOf(TravelSegmentConflictException.class)
-                .hasMessageContaining("Cannot stop a segment that is not IN_PROGRESS");
-    }
+                when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(completedSegment));
 
-    @Test
-    @DisplayName("AC5: startTravelSegment throws when actedForPersonId set without onBehalfReasonCode")
-    void startSegment_onBehalfWithoutReasonThrows() {
-        StartTravelSegmentRequest req = StartTravelSegmentRequest.builder()
-                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
-                .technicianId(TECHNICIAN_ID)
-                .segmentType(TravelSegmentType.DEPART_SHOP)
-                .actedForPersonId(ACTED_FOR_PERSON_ID)
-                .onBehalfReasonCode(null)
-                .build();
+                assertThatThrownBy(() -> serviceImpl.stopTravelSegment(SEGMENT_ID,
+                                StopTravelSegmentRequest.builder().build()))
+                                .isInstanceOf(TravelSegmentConflictException.class)
+                                .hasMessageContaining("Cannot stop a segment that is not IN_PROGRESS");
+        }
 
-        assertThatThrownBy(() -> serviceImpl.startTravelSegment(req))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("onBehalfReasonCode is required");
-    }
+        @Test
+        @DisplayName("AC5: startTravelSegment throws when actedForPersonId set without onBehalfReasonCode")
+        void startSegment_onBehalfWithoutReasonThrows() {
+                StartTravelSegmentRequest req = StartTravelSegmentRequest.builder()
+                                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                                .technicianId(TECHNICIAN_ID)
+                                .segmentType(TravelSegmentType.DEPART_SHOP)
+                                .actedForPersonId(ACTED_FOR_PERSON_ID)
+                                .onBehalfReasonCode(null)
+                                .build();
 
-    @Test
-    @DisplayName("AC6: submitTravelSegments changes status to SUBMITTED")
-    void submitSegments_changesStatusToSubmitted() {
-        TravelSegment seg1 = TravelSegment.builder()
-                .travelSegmentId(UUID.randomUUID())
-                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
-                .technicianId(TECHNICIAN_ID)
-                .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(300))
-                .status(TravelSegmentStatus.IN_PROGRESS)
-                .createdBy("system")
-                .build();
-        TravelSegment seg2 = TravelSegment.builder()
-                .travelSegmentId(UUID.randomUUID())
-                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
-                .technicianId(TECHNICIAN_ID)
-                .segmentType(TravelSegmentType.ARRIVE_CUSTOMER_SITE)
-                .startAt(Instant.now().minusSeconds(600))
-                .endAt(Instant.now().minusSeconds(300))
-                .status(TravelSegmentStatus.COMPLETED)
-                .createdBy("system")
-                .build();
+                assertThatThrownBy(() -> serviceImpl.startTravelSegment(req))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("onBehalfReasonCode is required");
+        }
 
-        when(travelSegmentRepository.findByMobileWorkAssignmentIdAndTechnicianId(
-                MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID)).thenReturn(List.of(seg1, seg2));
-        when(travelSegmentRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        @Test
+        @DisplayName("AC6: submitTravelSegments changes status to SUBMITTED")
+        void submitSegments_changesStatusToSubmitted() {
+                TravelSegment seg1 = TravelSegment.builder()
+                                .travelSegmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                                .technicianId(TECHNICIAN_ID)
+                                .segmentType(TravelSegmentType.DEPART_SHOP)
+                                .startAt(Instant.now(TEST_CLOCK).minusSeconds(300))
+                                .status(TravelSegmentStatus.IN_PROGRESS)
+                                .createdBy("system")
+                                .build();
+                TravelSegment seg2 = TravelSegment.builder()
+                                .travelSegmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                                .technicianId(TECHNICIAN_ID)
+                                .segmentType(TravelSegmentType.ARRIVE_CUSTOMER_SITE)
+                                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
+                                .endAt(Instant.now(TEST_CLOCK).minusSeconds(300))
+                                .status(TravelSegmentStatus.COMPLETED)
+                                .createdBy("system")
+                                .build();
 
-        serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID);
+                when(travelSegmentRepository.findByMobileWorkAssignmentIdAndTechnicianId(
+                                MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID)).thenReturn(List.of(seg1, seg2));
+                when(travelSegmentRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(seg1.getStatus()).isEqualTo(TravelSegmentStatus.SUBMITTED);
-        assertThat(seg2.getStatus()).isEqualTo(TravelSegmentStatus.SUBMITTED);
-        verify(travelSegmentRepository).saveAll(any());
-    }
+                serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID);
 
-    @Test
-    @DisplayName("AC6-empty: submitTravelSegments throws not found when no segments exist")
-    void submitSegments_emptyListThrowsNotFound() {
-        when(travelSegmentRepository.findByMobileWorkAssignmentIdAndTechnicianId(
-                MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID)).thenReturn(List.of());
+                assertThat(seg1.getStatus()).isEqualTo(TravelSegmentStatus.SUBMITTED);
+                assertThat(seg2.getStatus()).isEqualTo(TravelSegmentStatus.SUBMITTED);
+                verify(travelSegmentRepository).saveAll(any());
+        }
 
-        assertThatThrownBy(() -> serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID))
-                .isInstanceOf(TravelSegmentNotFoundException.class);
-    }
+        @Test
+        @DisplayName("AC6-empty: submitTravelSegments throws not found when no segments exist")
+        void submitSegments_emptyListThrowsNotFound() {
+                when(travelSegmentRepository.findByMobileWorkAssignmentIdAndTechnicianId(
+                                MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID)).thenReturn(List.of());
 
-    @Test
-    @DisplayName("AC7: createAdjustment succeeds for APPROVED segment")
-    void createAdjustment_approvedSegmentSucceeds() {
-        TravelSegment segment = TravelSegment.builder()
-                .travelSegmentId(SEGMENT_ID)
-                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
-                .technicianId(TECHNICIAN_ID)
-                .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(600))
-                .status(TravelSegmentStatus.APPROVED)
-                .createdBy("system")
-                .build();
+                assertThatThrownBy(() -> serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID))
+                                .isInstanceOf(TravelSegmentNotFoundException.class);
+        }
 
-        when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment));
-        when(travelSegmentAdjustmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        @Test
+        @DisplayName("AC7: createAdjustment succeeds for APPROVED segment")
+        void createAdjustment_approvedSegmentSucceeds() {
+                TravelSegment segment = TravelSegment.builder()
+                                .travelSegmentId(SEGMENT_ID)
+                                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                                .technicianId(TECHNICIAN_ID)
+                                .segmentType(TravelSegmentType.DEPART_SHOP)
+                                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
+                                .status(TravelSegmentStatus.APPROVED)
+                                .createdBy("system")
+                                .build();
 
-        TravelSegmentAdjustment result = serviceImpl.createAdjustment(SEGMENT_ID, validAdjustmentRequest());
+                when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment));
+                when(travelSegmentAdjustmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(result.getApprovalStatus()).isEqualTo("PENDING");
-        assertThat(result.getAdjustedByUserId()).isNotNull();
-    }
+                TravelSegmentAdjustment result = serviceImpl.createAdjustment(SEGMENT_ID, validAdjustmentRequest());
 
-    @Test
-    @DisplayName("AC8: createAdjustment throws for DRAFT segment")
-    void createAdjustment_draftSegmentThrows() {
-        TravelSegment draftSegment = TravelSegment.builder()
-                .travelSegmentId(SEGMENT_ID)
-                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
-                .technicianId(TECHNICIAN_ID)
-                .segmentType(TravelSegmentType.DEPART_SHOP)
-                .startAt(Instant.now().minusSeconds(600))
-                .status(TravelSegmentStatus.DRAFT)
-                .createdBy("system")
-                .build();
+                assertThat(result.getApprovalStatus()).isEqualTo("PENDING");
+                assertThat(result.getAdjustedByUserId()).isNotNull();
+        }
 
-        when(travelSegmentRepository.findById(any())).thenReturn(Optional.of(draftSegment));
+        @Test
+        @DisplayName("AC8: createAdjustment throws for DRAFT segment")
+        void createAdjustment_draftSegmentThrows() {
+                TravelSegment draftSegment = TravelSegment.builder()
+                                .travelSegmentId(SEGMENT_ID)
+                                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                                .technicianId(TECHNICIAN_ID)
+                                .segmentType(TravelSegmentType.DEPART_SHOP)
+                                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
+                                .status(TravelSegmentStatus.DRAFT)
+                                .createdBy("system")
+                                .build();
 
-        assertThatThrownBy(() -> serviceImpl.createAdjustment(UUID.randomUUID(), validAdjustmentRequest()))
-                .isInstanceOf(TravelSegmentConflictException.class)
-                .hasMessageContaining("Adjustments can only be created for approved segments");
-    }
+                when(travelSegmentRepository.findById(any())).thenReturn(Optional.of(draftSegment));
+
+                assertThatThrownBy(() -> serviceImpl.createAdjustment(
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"), validAdjustmentRequest()))
+                                .isInstanceOf(TravelSegmentConflictException.class)
+                                .hasMessageContaining("Adjustments can only be created for approved segments");
+        }
 }

@@ -75,9 +75,7 @@ public final class AccountingEventTypes {
                                                 "Reprocess a suspended accounting event after mapping/rule correction")
                                                 .build(),
 
-                                // InvoicePaymentController / PaymentApplicationController - 4 events
-                                EventTypeRegistration.write("ACCOUNTING_INVOICE_PAY_LEGACY",
-                                                "Apply payment via legacy invoice-centric API").build(),
+                                // InvoicePaymentController / PaymentApplicationController - 3 events
                                 EventTypeRegistration.write("ACCOUNTING_PAYMENT_APPLY",
                                                 "Apply a payment to an invoice").build(),
                                 EventTypeRegistration.write("ACCOUNTING_PAYMENT_APPLICATION_REVERSE",

@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -44,6 +47,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Replenishment Contract Behavior")
 class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -66,10 +70,10 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC1: GET /replenishment/tasks with pending tasks returns 200 with task list")
         void getReplenishmentTasks_withPendingTasks_returns200WithTaskList() throws Exception {
                 // Issue #30: task list endpoint must return itemSKU for each queued task
-                String taskId = UUID.randomUUID().toString();
+                String taskId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 String itemSKU = "SKU-WIDGET-001";
-                UUID sourceLocationId = UUID.randomUUID();
-                UUID destinationLocationId = UUID.randomUUID();
+                UUID sourceLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReplenishmentTaskResponse task = ReplenishmentTaskResponse.builder()
                                 .taskId(taskId)
@@ -80,7 +84,7 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
                                 .status("PENDING")
                                 .triggerType("MIN_LEVEL")
                                 .decisionReason("Stock below minimum threshold")
-                                .createdAt(Instant.now().toString())
+                                .createdAt(Instant.now(TEST_CLOCK).toString())
                                 .build();
 
                 when(replenishmentService.getReplenishmentTasks()).thenReturn(List.of(task));
@@ -122,8 +126,8 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC3: GET /replenishment/policies returns 200 with policy list")
         void getReplenishmentPolicies_withExistingPolicies_returns200WithPolicyList() throws Exception {
                 // Issue #30: policy list must include locationId for each configured policy
-                String policyId = UUID.randomUUID().toString();
-                UUID locationId = UUID.randomUUID();
+                String policyId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReplenishmentPolicyResponse policy = ReplenishmentPolicyResponse.builder()
                                 .policyId(policyId)
@@ -131,7 +135,7 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
                                 .itemSKU("SKU-BOLT-M5")
                                 .minimumQuantity(20)
                                 .maximumQuantity(100)
-                                .createdAt(Instant.now().toString())
+                                .createdAt(Instant.now(TEST_CLOCK).toString())
                                 .build();
 
                 when(replenishmentService.getReplenishmentPolicies()).thenReturn(List.of(policy));
@@ -155,8 +159,8 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
         void createReplenishmentPolicy_withValidRequest_returns201WithCreatedPolicy() throws Exception {
                 // Issue #30: ADR-0017 — resource creation must return 201 with new resource ID
                 // ADR-0018 — actor header X-User populated from gateway into response actor
-                String policyId = UUID.randomUUID().toString();
-                UUID locationId = UUID.randomUUID();
+                String policyId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReplenishmentPolicyResponse created = ReplenishmentPolicyResponse.builder()
                                 .policyId(policyId)
@@ -164,7 +168,7 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
                                 .itemSKU("SKU-NUT-M5")
                                 .minimumQuantity(10)
                                 .maximumQuantity(50)
-                                .createdAt(Instant.now().toString())
+                                .createdAt(Instant.now(TEST_CLOCK).toString())
                                 .build();
 
                 when(replenishmentService.createReplenishmentPolicy(any(CreateReplenishmentPolicyRequest.class)))

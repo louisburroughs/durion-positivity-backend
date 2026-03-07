@@ -7,11 +7,10 @@ import java.util.UUID;
 
 public interface UserPersonTranslationService {
 
-    @NonNull
-    UUID getPersonUuidForUser(@NonNull UUID userId);
+	@NonNull UUID getPersonUuidForUser(@NonNull UUID userId);
 
-    @NonNull
-    Optional<UUID> getUserIdForPerson(@NonNull UUID personUuid);
+	@NonNull Optional<UUID> getUserIdForPerson(@NonNull UUID personUuid);
 
-    boolean isUserLinkedToPerson(@NonNull UUID userId, @NonNull UUID personUuid);
+	boolean isUserLinkedToPerson(@NonNull UUID userId, @NonNull UUID personUuid);
+
 }

@@ -14,7 +14,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.vehicle.internal.enums.OdometerUnit;
 
 import jakarta.persistence.Column;
@@ -22,7 +21,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
@@ -30,6 +28,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Vehicle record entity for CAP:091 - Vehicle Registry.
  * Supports VIN normalization, global uniqueness, and vehicle-account
@@ -50,16 +50,10 @@ import lombok.NoArgsConstructor;
 public class VehicleRecord {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "vehicle_id", updatable = false, nullable = false)
     private UUID vehicleId;
-
-    @PrePersist
-    public void generateId() {
-        if (vehicleId == null) {
-            vehicleId = UUIDv7Generator.generate();
-        }
-    }
-
     @NonNull
     @Column(name = "account_id", nullable = false)
     private UUID accountId;

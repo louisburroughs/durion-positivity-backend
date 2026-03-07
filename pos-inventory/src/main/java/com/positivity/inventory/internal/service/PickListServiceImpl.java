@@ -1,5 +1,13 @@
 package com.positivity.inventory.internal.service;
 
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.positivity.inventory.internal.dto.picklist.CreatePickListRequest;
 import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.dto.picklist.PickTaskResponse;
@@ -12,17 +20,13 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.PickListRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.service.PickListService;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import com.positivity.shared.id.UUIDv7Generator;
 
 @Service
 @Transactional
 public class PickListServiceImpl implements PickListService {
 
+    private static final String PICK_LIST = "PickList";
     private final PickListRepository pickListRepository;
     private final PickTaskRepository pickTaskRepository;
 
@@ -45,11 +49,8 @@ public class PickListServiceImpl implements PickListService {
                 .build();
 
         PickListEntity savedPickList = pickListRepository.save(pickList);
-        if (savedPickList == null) {
-            savedPickList = pickList;
-        }
         if (savedPickList.getPickListId() == null) {
-            savedPickList.setPickListId(UUID.randomUUID());
+            savedPickList.setPickListId(UUIDv7Generator.generate());
         }
 
         if (request.getReservationId() != null) {
@@ -62,7 +63,7 @@ public class PickListServiceImpl implements PickListService {
     @Override
     public @NonNull PickListResponse getPickList(@NonNull UUID pickListId) {
         PickListEntity pickList = pickListRepository.findById(pickListId)
-                .orElseThrow(() -> new ResourceNotFoundException("PickList", pickListId.toString()));
+                .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
         return toResponse(pickList);
     }
 
@@ -71,7 +72,7 @@ public class PickListServiceImpl implements PickListService {
         return pickListRepository.findByWorkorderId(workorderId)
                 .stream()
                 .map(this::toResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -85,20 +86,16 @@ public class PickListServiceImpl implements PickListService {
 
         pickList.setStatus(status);
         PickListEntity saved = pickListRepository.save(pickList);
-        if (saved == null) {
-            saved = pickList;
-        }
-
         return toResponse(saved);
     }
 
     @Override
     public @NonNull PickListResponse releasePickList(@NonNull UUID pickListId) {
         PickListEntity pickList = pickListRepository.findById(pickListId)
-                .orElseThrow(() -> new ResourceNotFoundException("PickList", pickListId.toString()));
+                .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
         pickList.setStatus(PickListStatus.READY_TO_PICK);
         PickListEntity saved = pickListRepository.save(pickList);
-        return toResponse(saved == null ? pickList : saved);
+        return toResponse(saved);
     }
 
     @Override
@@ -109,7 +106,7 @@ public class PickListServiceImpl implements PickListService {
             @NonNull UUID scannedLocationId,
             int quantityPicked) {
         PickListEntity pickList = pickListRepository.findById(pickListId)
-                .orElseThrow(() -> new ResourceNotFoundException("PickList", pickListId.toString()));
+                .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
         PickTaskEntity task = pickTaskRepository.findById(pickTaskId)
                 .orElseThrow(() -> new ResourceNotFoundException("PickTask", pickTaskId.toString()));
 
@@ -141,7 +138,7 @@ public class PickListServiceImpl implements PickListService {
             pickListRepository.save(pickList);
         }
 
-        return toTaskResponse(savedTask == null ? task : savedTask);
+        return toTaskResponse(savedTask);
     }
 
     @Override
@@ -149,7 +146,7 @@ public class PickListServiceImpl implements PickListService {
         return pickTaskRepository.findByPickList_PickListId(pickListId)
                 .stream()
                 .map(this::toTaskResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override

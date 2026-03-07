@@ -43,7 +43,7 @@ public class InventoryPermissionInitializer extends PermissionRegistrationSuppor
             List<Map<String, String>> permList = (List<Map<String, String>>) manifest.get("permissions");
             return permList.stream()
                     .map(p -> PermissionDefinition.of(p.get("name"), p.get("description")))
-                    .collect(Collectors.toList());
+                    .toList();
         } catch (Exception e) {
             throw new IllegalStateException("Failed to load permissions.yaml", e);
         }

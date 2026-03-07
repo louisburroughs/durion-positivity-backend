@@ -2,6 +2,8 @@ package com.positivity.events;
 
 import org.springframework.stereotype.Component;
 
+import com.positivity.events.service.EventEmissionService;
+
 import lombok.RequiredArgsConstructor;
 
 /**

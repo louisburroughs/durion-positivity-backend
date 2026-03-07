@@ -1,5 +1,7 @@
 package com.positivity.order.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.order.service.PriceOverrideService;
 
 import com.positivity.order.internal.dto.*;
@@ -32,6 +34,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PriceOverrideServiceImpl implements PriceOverrideService {
+    private final Clock clock;
+
 
         private final PriceOverrideRepository priceOverrideRepository;
         private final ApprovalRecordRepository approvalRecordRepository;
@@ -76,7 +80,7 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
                 // Auto-approve if no approval required
                 if (!requiresApproval) {
-                        override.setApprovedAt(Instant.now());
+                        override.setApprovedAt(Instant.now(clock));
                         override.setApprovedByUserId(UUID.fromString(userId)); // Self-approved within authority
                 }
 
@@ -133,7 +137,7 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 // Update override status
                 override.setStatus(OverrideStatus.APPROVED);
                 override.setApprovedByUserId(approverUserId);
-                override.setApprovedAt(Instant.now());
+                override.setApprovedAt(Instant.now(clock));
 
                 override = priceOverrideRepository.save(override);
 
@@ -179,7 +183,7 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 override.setStatus(OverrideStatus.REJECTED);
                 override.setRejectedByUserId(reviewerUserId);
                 override.setRejectionReason(request.getReason());
-                override.setRejectedAt(Instant.now());
+                override.setRejectedAt(Instant.now(clock));
 
                 override = priceOverrideRepository.save(override);
 

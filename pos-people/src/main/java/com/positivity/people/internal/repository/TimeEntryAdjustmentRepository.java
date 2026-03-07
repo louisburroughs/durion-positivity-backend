@@ -8,5 +8,7 @@ import java.util.UUID;
 
 @Repository
 public interface TimeEntryAdjustmentRepository extends JpaRepository<TimeEntryAdjustment, UUID> {
-    java.util.List<TimeEntryAdjustment> findByTimeEntryId(UUID timeEntryId);
+
+	java.util.List<TimeEntryAdjustment> findByTimeEntryId(UUID timeEntryId);
+
 }

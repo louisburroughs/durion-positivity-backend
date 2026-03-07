@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 
@@ -71,13 +73,7 @@ public class WorkorderSnapshot {
     @PrePersist
     protected void prePersist() {
         if (capturedAt == null) {
-            capturedAt = Instant.now();
+            capturedAt = Instant.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 }

@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 
@@ -72,13 +74,7 @@ public class WorkorderStateTransition {
     @PrePersist
     protected void prePersist() {
         if (transitionedAt == null) {
-            transitionedAt = Instant.now();
+            transitionedAt = Instant.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 }

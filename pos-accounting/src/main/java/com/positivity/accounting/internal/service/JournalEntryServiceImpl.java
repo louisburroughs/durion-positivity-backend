@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -22,6 +23,7 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.service.GLAccountService;
 import com.positivity.accounting.service.JournalEntryService;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Transactional
 public class JournalEntryServiceImpl implements JournalEntryService {
+    private final Clock clock;
 
     private final JournalEntryRepository journalEntryRepository;
     private final GLAccountService glAccountService;
@@ -66,7 +69,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     public JournalEntry createJournalEntry(JournalEntry entry) {
         // Generate ID if not present
         if (entry.getJournalEntryId() == null) {
-            entry.setJournalEntryId(UUID.randomUUID());
+            entry.setJournalEntryId(UUIDv7Generator.generate());
         }
         initializeLineMetadata(entry);
 
@@ -81,8 +84,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         // Set entry metadata
         entry.setStatus(JournalEntryStatus.DRAFT);
-        entry.setCreatedAt(Instant.now());
-        entry.setUpdatedAt(Instant.now());
+        entry.setCreatedAt(Instant.now(clock));
+        entry.setUpdatedAt(Instant.now(clock));
 
         JournalEntry saved = journalEntryRepository.save(entry);
         log.info("Created journal entry {} in DRAFT status with {} lines",
@@ -116,7 +119,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         } else {
             relatedEntries = journalEntryRepository.findBySourceEvent(entry.getSourceEventId()).stream()
                     .sorted(Comparator
-                            .comparing(JournalEntry::getTransactionDate, Comparator.nullsLast(Comparator.naturalOrder()))
+                            .comparing(JournalEntry::getTransactionDate,
+                                    Comparator.nullsLast(Comparator.naturalOrder()))
                             .thenComparing(JournalEntry::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
                     .map(JournalEntryMapper::toResponse)
                     .toList();
@@ -131,7 +135,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         JournalEntryResponse reversalEntry = toResponseOrNull(entry.getReversedByJournalEntryId());
         if (reversalEntry == null && entry.getReversalJournalEntryId() != null &&
-                (originalEntry == null || !entry.getReversalJournalEntryId().equals(originalEntry.getJournalEntryId()))) {
+                (originalEntry == null
+                        || !entry.getReversalJournalEntryId().equals(originalEntry.getJournalEntryId()))) {
             reversalEntry = toResponseOrNull(entry.getReversalJournalEntryId());
         }
 
@@ -187,7 +192,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         // Allow description updates only
         entry.setDescription(updates.getDescription());
-        entry.setUpdatedAt(Instant.now());
+        entry.setUpdatedAt(Instant.now(clock));
 
         // Lines can be updated (add/remove as long as entry remains balanced)
         // For now, disallow line updates; require delete + recreate for complex changes
@@ -229,8 +234,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         }
 
         entry.setStatus(JournalEntryStatus.POSTED);
-        entry.setPostedAt(Instant.now());
-        entry.setUpdatedAt(Instant.now());
+        entry.setPostedAt(Instant.now(clock));
+        entry.setUpdatedAt(Instant.now(clock));
 
         JournalEntry saved = journalEntryRepository.save(entry);
         log.info("Posted journal entry {} with total debits/credits: {}",
@@ -260,20 +265,20 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         // Create reversal entry with inverted debits/credits
         JournalEntry reversal = new JournalEntry();
-        reversal.setJournalEntryId(UUID.randomUUID());
-        reversal.setTransactionDate(LocalDateTime.now());
+        reversal.setJournalEntryId(UUIDv7Generator.generate());
+        reversal.setTransactionDate(LocalDateTime.now(clock));
         reversal.setDescription("REVERSAL of " + original.getJournalEntryId() + " - Reason: " + reversalReason);
         reversal.setSourceEventId(original.getSourceEventId());
         reversal.setStatus(JournalEntryStatus.POSTED); // Reversals post immediately
-        reversal.setPostedAt(Instant.now());
-        reversal.setCreatedAt(Instant.now());
-        reversal.setUpdatedAt(Instant.now());
+        reversal.setPostedAt(Instant.now(clock));
+        reversal.setCreatedAt(Instant.now(clock));
+        reversal.setUpdatedAt(Instant.now(clock));
 
         // Invert all lines: debits become credits and vice versa
         List<JournalEntryLine> reversalLines = new java.util.ArrayList<>();
         for (JournalEntryLine line : original.getLines()) {
             JournalEntryLine reversalLine = new JournalEntryLine();
-            reversalLine.setLineId(UUID.randomUUID());
+            reversalLine.setLineId(UUIDv7Generator.generate());
             reversalLine.setJournalEntryId(reversal.getJournalEntryId());
             reversalLine.setGlAccountId(line.getGlAccountId());
             reversalLine.setDebitAmount(line.getCreditAmount()); // Swap

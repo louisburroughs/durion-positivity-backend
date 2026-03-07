@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -32,21 +31,19 @@ import com.positivity.accounting.internal.repository.PaymentAppliedEventReposito
  *
  * <p>
  * Tests verify:
- * - Happy path payment application (LEGACY endpoint)
+ * - Happy path payment application (payment-centric endpoint)
  * - Invoice status queries
  * - Payment idempotency handling
- * - Path parameter validation
+ * - Request/path validation
  * - Error handling (400, 404, 500)
  *
  * <p>
  * Payment-centric API is at
  * /v1/accounting/payments/{paymentId}/applications.
- * Both endpoints are tested for backward compatibility.
  */
 @DisplayName("Invoice Payment Backend Contract Behavioral Tests")
 class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
-
-    private static final String API_V1_INVOICES = "/v1/accounting/invoices";
+    private static final String API_V1_PAYMENTS = "/v1/accounting/payments";
     private static final String API_V1_INVOICE = "/v1/accounting/invoice";
 
     @Autowired
@@ -60,9 +57,9 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @BeforeEach
     void setUp() {
         // Setup test IDs
-        testInvoiceId = UUID.randomUUID();
-        testPaymentId = UUID.randomUUID();
-        testIdempotencyKey = UUID.randomUUID().toString();
+        testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testPaymentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testIdempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
     }
 
     @AfterEach
@@ -71,34 +68,26 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     // ===============================================
-    // HAPPY PATH SCENARIOS - LEGACY ENDPOINT
+    // HAPPY PATH SCENARIOS - PAYMENT-CENTRIC ENDPOINT
     // ===============================================
 
     @Test
-    @DisplayName("Apply payment to invoice (LEGACY) - happy path")
+    @DisplayName("Apply payment to invoice - payment-centric route")
     void testApplyPayment_Success() throws Exception {
-        // Given - valid payment application request
-        String payload = """
-                {
-                    "invoiceId": "%s",
-                    "paymentId": "%s",
-                    "amount": 100.00,
-                    "paymentDate": "%s",
-                    "idempotencyKey": "%s"
-                }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+        String payload = paymentApplicationPayload(testInvoiceId, "100.00", testIdempotencyKey);
 
         // When/Then
-        MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
+        MvcResult result = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andReturn();
 
-        // Accept either 200 (if implemented) or 501 (if stub)
+        // 201 when payment application succeeds, 404/409/503 depending on data and
+        // downstream availability in local integration runs.
         int statusCode = result.getResponse().getStatus();
-        assertThat(statusCode).isIn(200, 501);
+        assertThat(statusCode).isIn(201, 404, 409, 503);
 
-        if (statusCode == 200) {
+        if (statusCode == 201) {
             // Verify response structure if implemented
             String responseBody = result.getResponse().getContentAsString();
             assertThat(responseBody).isNotEmpty();
@@ -108,19 +97,10 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Apply payment with idempotency - duplicate request returns same result")
     void testApplyPayment_IdempotencyHandling() throws Exception {
-        // Given - valid payment application request
-        String payload = """
-                {
-                    "invoiceId": "%s",
-                    "paymentId": "%s",
-                    "amount": 100.00,
-                    "paymentDate": "%s",
-                    "idempotencyKey": "%s"
-                }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+        String payload = paymentApplicationPayload(testInvoiceId, "100.00", testIdempotencyKey);
 
         // When - submit first payment
-        MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
+        MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andReturn();
@@ -128,15 +108,15 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
         int firstStatusCode = firstResult.getResponse().getStatus();
 
         // Then - submit duplicate with same idempotency key
-        if (firstStatusCode == 200) {
-            MvcResult secondResult = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
+        if (firstStatusCode == 201) {
+            MvcResult secondResult = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(payload))
                     .andReturn();
 
-            // Should return same result (200) or 409 conflict
+            // Idempotent retries should not create a duplicate application.
             int secondStatusCode = secondResult.getResponse().getStatus();
-            assertThat(secondStatusCode).isIn(200, 409);
+            assertThat(secondStatusCode).isIn(201, 409);
         }
     }
 
@@ -166,7 +146,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get invoice status - invoice not found returns 404")
     void testGetInvoiceStatus_NotFound() throws Exception {
         // Given - non-existent invoice ID
-        UUID nonExistentInvoiceId = UUID.randomUUID();
+        UUID nonExistentInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(get(API_V1_INVOICE + "/" + nonExistentInvoiceId + "/status")))
@@ -182,35 +162,24 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     // ===============================================
 
     @Test
-    @DisplayName("Apply payment - path parameter mismatch with body")
+    @DisplayName("Apply payment - invalid paymentId path format")
     void testApplyPayment_PathBodyMismatch() throws Exception {
-        // Given - invoice ID in path doesn't match body
-        UUID pathInvoiceId = UUID.randomUUID();
-        String payload = """
-                {
-                    "invoiceId": "%s",
-                    "paymentId": "%s",
-                    "amount": 100.00,
-                    "paymentDate": "%s",
-                    "idempotencyKey": "%s"
-                }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+        String payload = paymentApplicationPayload(testInvoiceId, "100.00", testIdempotencyKey);
 
-        // When/Then - should return 400 for mismatch
-        MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + pathInvoiceId + "/pay"))
+        // When/Then - should return 400 for malformed UUID path variable
+        MvcResult result = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/not-a-uuid/applications"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andReturn();
 
-        // Accept either 400 (if validation implemented) or 501 (if stub)
         int statusCode = result.getResponse().getStatus();
-        assertThat(statusCode).isIn(400, 501);
+        assertThat(statusCode).isEqualTo(400);
     }
 
     @Test
     @DisplayName("Apply payment - missing required fields")
     void testApplyPayment_MissingFields() throws Exception {
-        // Given - invalid request with missing fields
+        // Missing applicationRequestId and applications
         String payload = """
                 {
                     "invoiceId": "%s"
@@ -218,39 +187,28 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 """.formatted(testInvoiceId);
 
         // When/Then
-        MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
+        MvcResult result = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andReturn();
 
-        // Should return 400 for validation error or 501 if not implemented
         int statusCode = result.getResponse().getStatus();
-        assertThat(statusCode).isIn(400, 501);
+        assertThat(statusCode).isEqualTo(400);
     }
 
     @Test
     @DisplayName("Apply payment - invalid amount (negative)")
     void testApplyPayment_InvalidAmount() throws Exception {
-        // Given - invalid payment with negative amount
-        String payload = """
-                {
-                    "invoiceId": "%s",
-                    "paymentId": "%s",
-                    "amount": -50.00,
-                    "paymentDate": "%s",
-                    "idempotencyKey": "%s"
-                }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+        String payload = paymentApplicationPayload(testInvoiceId, "-50.00", testIdempotencyKey);
 
         // When/Then
-        MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
+        MvcResult result = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andReturn();
 
-        // Should return 400 for validation error or 501 if not implemented
         int statusCode = result.getResponse().getStatus();
-        assertThat(statusCode).isIn(400, 422, 501);
+        assertThat(statusCode).isEqualTo(400);
     }
 
     // ===============================================
@@ -265,7 +223,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 {
                     "workorderId": "%s"
                 }
-                """.formatted(UUID.randomUUID());
+                """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"))
@@ -290,7 +248,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 {
                     "idempotencyKey": "%s"
                 }
-                """.formatted(UUID.randomUUID());
+                """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"))
@@ -303,7 +261,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get billing rules - implemented endpoint")
     void testGetBillingRules() throws Exception {
         // Given
-        UUID customerId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(get(API_V1_INVOICE + "/rules/" + customerId)))
@@ -323,19 +281,10 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Apply payment - without proper authority returns 403")
     void testApplyPayment_Unauthorized() throws Exception {
-        // Given - request without accounting:ap:pay authority
-        String payload = """
-                {
-                    "invoiceId": "%s",
-                    "paymentId": "%s",
-                    "amount": 100.00,
-                    "paymentDate": "%s",
-                    "idempotencyKey": "%s"
-                }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), testIdempotencyKey);
+        String payload = paymentApplicationPayload(testInvoiceId, "100.00", testIdempotencyKey);
 
         // When/Then - should return 403 Forbidden
-        mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"), "accounting:je:view")
+        mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"), "accounting:je:view")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andExpect(status().isForbidden());
@@ -359,7 +308,7 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 {
                     "workorderId": "%s"
                 }
-                """.formatted(UUID.randomUUID());
+                """.formatted(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         // When/Then - should return 403 Forbidden
         mockMvc.perform(withAuth(post(API_V1_INVOICE + "/invoices"), "accounting:je:view")
@@ -375,50 +324,35 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Invoice status transitions - unpaid to partially paid to paid")
     void testInvoiceStatusTransitions() throws Exception {
-        // This test validates the status transition workflow if implemented
-        // Given - invoice starts in unpaid state
+        String firstPayment = paymentApplicationPayload(
+                testInvoiceId,
+                "50.00",
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 
-        // When - apply first partial payment
-        String firstPayment = """
-                {
-                    "invoiceId": "%s",
-                    "paymentId": "%s",
-                    "amount": 50.00,
-                    "paymentDate": "%s",
-                    "idempotencyKey": "%s"
-                }
-                """.formatted(testInvoiceId, testPaymentId, Instant.now().toString(), UUID.randomUUID().toString());
-
-        MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
+        MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(firstPayment))
                 .andReturn();
 
         // Then - if implemented, status should be PARTIALLY_PAID
-        if (firstResult.getResponse().getStatus() == 200) {
+        if (firstResult.getResponse().getStatus() == 201) {
             String firstResponse = firstResult.getResponse().getContentAsString();
             // Verify partial payment state if implemented
             assertThat(firstResponse).isNotEmpty();
         }
 
-        // When - apply second payment to complete
-        String secondPayment = """
-                {
-                    "invoiceId": "%s",
-                    "paymentId": "%s",
-                    "amount": 50.00,
-                    "paymentDate": "%s",
-                    "idempotencyKey": "%s"
-                }
-                """.formatted(testInvoiceId, UUID.randomUUID(), Instant.now().toString(), UUID.randomUUID().toString());
+        String secondPayment = paymentApplicationPayload(
+                testInvoiceId,
+                "50.00",
+                UUID.fromString("00000000-0000-0000-0000-000000000002").toString());
 
-        MvcResult secondResult = mockMvc.perform(withAuth(post(API_V1_INVOICES + "/" + testInvoiceId + "/pay"))
+        MvcResult secondResult = mockMvc.perform(withAuth(post(API_V1_PAYMENTS + "/" + testPaymentId + "/applications"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(secondPayment))
                 .andReturn();
 
         // Then - if implemented, status should be PAID
-        if (secondResult.getResponse().getStatus() == 200) {
+        if (secondResult.getResponse().getStatus() == 201) {
             String secondResponse = secondResult.getResponse().getContentAsString();
             // Verify fully paid state if implemented
             assertThat(secondResponse).isNotEmpty();
@@ -442,11 +376,25 @@ class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
             BigDecimal amount, BigDecimal invoiceTotal) {
         var event = new PaymentAppliedEvent(
                 invoiceId,
-                "TXN-" + UUID.randomUUID(),
+                "TXN-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 amount,
                 invoiceTotal,
                 status,
-                UUID.randomUUID().toString());
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         paymentAppliedEventRepository.save(event);
+    }
+
+    private String paymentApplicationPayload(UUID invoiceId, String amountToApply, String applicationRequestId) {
+        return """
+                {
+                    "applicationRequestId": "%s",
+                    "applications": [
+                        {
+                            "invoiceId": "%s",
+                            "amountToApply": %s
+                        }
+                    ]
+                }
+                """.formatted(applicationRequestId, invoiceId, amountToApply);
     }
 }

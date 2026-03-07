@@ -4,59 +4,65 @@ import java.time.Instant;
 import java.util.Map;
 
 public class ErrorResponse {
-    private String errorCode;
-    private String message;
-    private String correlationId;
-    private Instant timestamp;
-    private Map<String, String> fieldErrors;
 
-    public ErrorResponse() {
-    }
+	private String errorCode;
 
-    public ErrorResponse(String errorCode, String message, String correlationId) {
-        this.errorCode = errorCode;
-        this.message = message;
-        this.correlationId = correlationId;
-        this.timestamp = Instant.now();
-    }
+	private String message;
 
-    public String getErrorCode() {
-        return errorCode;
-    }
+	private String correlationId;
 
-    public void setErrorCode(String errorCode) {
-        this.errorCode = errorCode;
-    }
+	private Instant timestamp;
 
-    public String getMessage() {
-        return message;
-    }
+	private Map<String, String> fieldErrors;
 
-    public void setMessage(String message) {
-        this.message = message;
-    }
+	public ErrorResponse() {
+	}
 
-    public String getCorrelationId() {
-        return correlationId;
-    }
+	public ErrorResponse(String errorCode, String message, String correlationId, Instant timestamp) {
+		this.errorCode = errorCode;
+		this.message = message;
+		this.correlationId = correlationId;
+		this.timestamp = timestamp;
+	}
 
-    public void setCorrelationId(String correlationId) {
-        this.correlationId = correlationId;
-    }
+	public String getErrorCode() {
+		return errorCode;
+	}
 
-    public Instant getTimestamp() {
-        return timestamp;
-    }
+	public void setErrorCode(String errorCode) {
+		this.errorCode = errorCode;
+	}
 
-    public void setTimestamp(Instant timestamp) {
-        this.timestamp = timestamp;
-    }
+	public String getMessage() {
+		return message;
+	}
 
-    public Map<String, String> getFieldErrors() {
-        return fieldErrors;
-    }
+	public void setMessage(String message) {
+		this.message = message;
+	}
 
-    public void setFieldErrors(Map<String, String> fieldErrors) {
-        this.fieldErrors = fieldErrors;
-    }
+	public String getCorrelationId() {
+		return correlationId;
+	}
+
+	public void setCorrelationId(String correlationId) {
+		this.correlationId = correlationId;
+	}
+
+	public Instant getTimestamp() {
+		return timestamp;
+	}
+
+	public void setTimestamp(Instant timestamp) {
+		this.timestamp = timestamp;
+	}
+
+	public Map<String, String> getFieldErrors() {
+		return fieldErrors;
+	}
+
+	public void setFieldErrors(Map<String, String> fieldErrors) {
+		this.fieldErrors = fieldErrors;
+	}
+
 }

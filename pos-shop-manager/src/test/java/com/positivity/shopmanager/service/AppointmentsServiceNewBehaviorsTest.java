@@ -55,6 +55,7 @@ import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
 class AppointmentsServiceNewBehaviorsTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private AppointmentRepository appointmentRepository;
@@ -104,12 +105,12 @@ class AppointmentsServiceNewBehaviorsTest {
                 sourceEligibilityService,
                 Clock.fixed(Instant.parse("2025-06-01T10:00:00Z"), ZoneOffset.UTC));
 
-        appointmentId = UUID.randomUUID();
+        appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         appointment = new Appointment();
         appointment.setAppointmentId(appointmentId);
         appointment.setStatus(AppointmentStatus.SCHEDULED);
-        appointment.setStartAt(Instant.now().plus(24, ChronoUnit.HOURS));
-        appointment.setEndAt(Instant.now().plus(25, ChronoUnit.HOURS));
+        appointment.setStartAt(Instant.now(TEST_CLOCK).plus(24, ChronoUnit.HOURS));
+        appointment.setEndAt(Instant.now(TEST_CLOCK).plus(25, ChronoUnit.HOURS));
         lenient().when(crmCustomerClient.getCustomerById(any(UUID.class))).thenReturn(Map.of());
         lenient().when(crmVehicleClient.getVehicleById(any(UUID.class))).thenReturn(Map.of());
         lenient().when(appointmentServiceRequestRepository.findByAppointmentId(any(UUID.class))).thenReturn(List.of());
@@ -121,8 +122,8 @@ class AppointmentsServiceNewBehaviorsTest {
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(i -> i.getArgument(0));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
-        Instant newStart = Instant.now().plus(48, ChronoUnit.HOURS);
-        Instant newEnd = Instant.now().plus(49, ChronoUnit.HOURS);
+        Instant newStart = Instant.now(TEST_CLOCK).plus(48, ChronoUnit.HOURS);
+        Instant newEnd = Instant.now(TEST_CLOCK).plus(49, ChronoUnit.HOURS);
         request.setNewStartAt(newStart);
         request.setNewEndAt(newEnd);
         request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
@@ -144,8 +145,8 @@ class AppointmentsServiceNewBehaviorsTest {
             appointmentsService.rescheduleAppointment(appointmentId, request);
         });
 
-        request.setNewStartAt(Instant.now());
-        request.setNewEndAt(Instant.now().minus(1, ChronoUnit.HOURS));
+        request.setNewStartAt(Instant.now(TEST_CLOCK));
+        request.setNewEndAt(Instant.now(TEST_CLOCK).minus(1, ChronoUnit.HOURS));
         assertThrows(AppointmentValidationException.class, () -> {
             appointmentsService.rescheduleAppointment(appointmentId, request);
         });
@@ -156,8 +157,8 @@ class AppointmentsServiceNewBehaviorsTest {
         appointment.setStatus(AppointmentStatus.CANCELLED);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
-        request.setNewStartAt(Instant.now());
-        request.setNewEndAt(Instant.now().plus(1, ChronoUnit.HOURS));
+        request.setNewStartAt(Instant.now(TEST_CLOCK));
+        request.setNewEndAt(Instant.now(TEST_CLOCK).plus(1, ChronoUnit.HOURS));
 
         assertThrows(AppointmentStateException.class, () -> {
             appointmentsService.rescheduleAppointment(appointmentId, request);
@@ -211,13 +212,13 @@ class AppointmentsServiceNewBehaviorsTest {
     @Test
     void createAppointment_Failure_InvalidCrmIdentifiers() {
         AppointmentCreateRequest request = new AppointmentCreateRequest();
-        request.setServiceRequestIds(List.of(UUID.randomUUID()));
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
         request.setCrmCustomerId(null);
         assertThrows(AppointmentValidationException.class, () -> {
             appointmentsService.createAppointment(request, null, null);
         });
 
-        request.setCrmCustomerId(UUID.randomUUID());
+        request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmVehicleId(null);
         assertThrows(AppointmentValidationException.class, () -> {
             appointmentsService.createAppointment(request, null, null);
@@ -228,13 +229,13 @@ class AppointmentsServiceNewBehaviorsTest {
     // successful create
     @Test
     void createAppointment_publishesAppointmentCreatedEvent() {
-        UUID customerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
-        UUID serviceRequestId = UUID.randomUUID();
-        UUID savedId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID serviceRequestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID savedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
-        request.setLocationId(UUID.randomUUID());
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(vehicleId);
         request.setResourceId("BAY-01");
@@ -264,18 +265,18 @@ class AppointmentsServiceNewBehaviorsTest {
     // entity
     @Test
     void createAppointment_persistsWorkorderLinkRef_whenSetInRequest() {
-        UUID customerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
-        UUID savedId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID savedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
-        request.setLocationId(UUID.randomUUID());
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(vehicleId);
         request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-06-10T14:00:00Z"));
         request.setEndAt(Instant.parse("2025-06-10T15:00:00Z"));
-        request.setServiceRequestIds(List.of(UUID.randomUUID()));
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
         request.setWorkorderLinkRef("WO-456");
 
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
@@ -297,25 +298,26 @@ class AppointmentsServiceNewBehaviorsTest {
     // resource
     @Test
     void createAppointment_throwsConflict_whenSlotOverlaps() {
-        UUID customerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         var conflictingAppointment = mock(Appointment.class);
         when(conflictingAppointment.getResourceId()).thenReturn("BAY-01");
         when(conflictingAppointment.getStatus()).thenReturn(AppointmentStatus.SCHEDULED);
         // Different customer so the de-duplicate filter does NOT exclude this record
-        when(conflictingAppointment.getCrmCustomerId()).thenReturn(UUID.randomUUID());
+        when(conflictingAppointment.getCrmCustomerId())
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
                 any(), any(), any())).thenReturn(List.of(conflictingAppointment));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
-        request.setLocationId(UUID.randomUUID());
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(vehicleId);
         request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
-        request.setServiceRequestIds(List.of(UUID.randomUUID()));
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
         assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
                 .isInstanceOf(AppointmentValidationException.class)
@@ -326,18 +328,18 @@ class AppointmentsServiceNewBehaviorsTest {
     // AppointmentCreatedEvent
     @Test
     void createAppointment_includesWorkorderLinkRefInCreatedEvent() {
-        UUID customerId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
-        UUID savedId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID savedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
-        request.setLocationId(UUID.randomUUID());
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(vehicleId);
         request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-06-10T14:00:00Z"));
         request.setEndAt(Instant.parse("2025-06-10T15:00:00Z"));
-        request.setServiceRequestIds(List.of(UUID.randomUUID()));
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
         request.setWorkorderLinkRef("WO-789");
 
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
@@ -356,18 +358,18 @@ class AppointmentsServiceNewBehaviorsTest {
     // PRCR-104: CRM customer 404 must surface as CrmCustomerNotFoundException
     @Test
     void createAppointment_throwsCrmCustomerNotFound_when404() {
-        UUID customerId = UUID.randomUUID();
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(crmCustomerClient.getCustomerById(any()))
                 .thenThrow(new CrmCustomerNotFoundException(customerId));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
-        request.setLocationId(UUID.randomUUID());
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(customerId);
-        request.setCrmVehicleId(UUID.randomUUID());
+        request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
-        request.setServiceRequestIds(List.of(UUID.randomUUID()));
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
         assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
                 .isInstanceOf(CrmCustomerNotFoundException.class);
@@ -376,19 +378,19 @@ class AppointmentsServiceNewBehaviorsTest {
     // PRCR-104: CRM vehicle 404 must surface as CrmVehicleNotFoundException
     @Test
     void createAppointment_throwsCrmVehicleNotFound_when404() {
-        UUID vehicleId = UUID.randomUUID();
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // customer call succeeds; vehicle call throws 404
         when(crmVehicleClient.getVehicleById(any()))
                 .thenThrow(new CrmVehicleNotFoundException(vehicleId));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
-        request.setLocationId(UUID.randomUUID());
-        request.setCrmCustomerId(UUID.randomUUID());
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmVehicleId(vehicleId);
         request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
-        request.setServiceRequestIds(List.of(UUID.randomUUID()));
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
         assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
                 .isInstanceOf(CrmVehicleNotFoundException.class);

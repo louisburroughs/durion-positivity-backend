@@ -1,5 +1,20 @@
 package com.positivity.invoice.internal.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -17,30 +32,21 @@ import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import com.positivity.shared.id.UUIDv7Generator;
 
 @Service
 @Transactional
 public class InvoiceServiceImpl implements InvoiceService {
+    private final Clock clock;
 
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
 
     public InvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
-            @NonNull TaxServiceClient taxServiceClient) {
+            @NonNull TaxServiceClient taxServiceClient,
+            Clock clock) {
+        this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
     }
@@ -220,9 +226,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     @NonNull
     private String generateInvoiceNumber(@NonNull Invoice invoice) {
         String idPart = invoice.getId() == null
-                ? UUID.randomUUID().toString().substring(0, 8)
+                ? UUIDv7Generator.generate().toString().substring(0, 8)
                 : invoice.getId().toString().substring(0, 8);
-        return "INV-" + Instant.now().toEpochMilli() + "-" + idPart;
+        return "INV-" + Instant.now(clock).toEpochMilli() + "-" + idPart;
     }
 
     @NonNull
@@ -262,7 +268,8 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setReversionReason(invoice.getReversionReason());
 
         List<InvoiceItemResponse> itemResponses = invoice.getItems().stream()
-                .sorted(Comparator.comparing(item -> Objects.requireNonNullElse(item.getId(), UUID.randomUUID())))
+                .sorted(Comparator
+                        .comparing(item -> Objects.requireNonNullElse(item.getId(), UUIDv7Generator.generate())))
                 .map(this::toItemResponse)
                 .toList();
         response.setItems(new ArrayList<>(itemResponses));

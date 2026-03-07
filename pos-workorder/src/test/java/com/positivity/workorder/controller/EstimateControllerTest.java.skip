@@ -1,5 +1,7 @@
 package com.positivity.workorder.controller;
 
+import java.time.Clock;
+
 import tools.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.controller.EstimateController;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -58,7 +60,7 @@ class EstimateControllerTest {
                                 .taxRegionId(UUID.fromString("550e8400-e29b-41d4-a716-446655440004"))
                                 .status("DRAFT")
                                 .createdByUserId(UUID.fromString("550e8400-e29b-41d4-a716-446655440005"))
-                                .createdAt(LocalDateTime.now())
+                                .createdAt(LocalDateTime.now(Clock.systemUTC()))
                                 .build();
 
                 when(estimateService.createEstimate(any(CreateEstimateRequest.class), any(UUID.class)))
@@ -163,7 +165,7 @@ class EstimateControllerTest {
                                 .status("DRAFT")
                                 .createdByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001")) // Default
                                                                                                           // userId
-                                .createdAt(LocalDateTime.now())
+                                .createdAt(LocalDateTime.now(Clock.systemUTC()))
                                 .build();
 
                 when(estimateService.createEstimate(any(CreateEstimateRequest.class), any(UUID.class)))

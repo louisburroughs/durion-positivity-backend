@@ -1,5 +1,7 @@
 package com.positivity.workorder.controller;
 
+import java.time.Clock;
+
 import tools.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.controller.WorkorderController;
 import com.positivity.workorder.internal.dto.ApproveWorkorderRequest;
@@ -244,7 +246,7 @@ class WorkorderControllerTest {
                                 .estimateId(estimateId)
                                 .customerId(customerId)
                                 .status(WorkorderStatus.APPROVED)
-                                .approvedAt(Instant.now())
+                                .approvedAt(Instant.now(Clock.systemUTC()))
                                 .build();
 
                 when(workorderService.approveWorkorder(
@@ -273,7 +275,7 @@ class WorkorderControllerTest {
                 UUID userId = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
                 UUID customerId = UUID.fromString("550e8400-e29b-41d4-a716-446655440002");
                 UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440003");
-                Instant completionTime = Instant.now();
+                Instant completionTime = Instant.now(Clock.systemUTC());
 
                 CompleteWorkorderRequest request = CompleteWorkorderRequest.builder()
                                 .userId(userId)

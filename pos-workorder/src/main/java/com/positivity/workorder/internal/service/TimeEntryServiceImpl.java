@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
@@ -27,6 +29,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class TimeEntryServiceImpl implements TimeEntryService {
+    private final Clock clock;
+
 
     private final TimeEntryRepository timeEntryRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -42,7 +46,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         String actor = SecurityContextHelper.getCurrentUsername().orElse("system");
         entry.setStatus(TimeEntryStatus.APPROVED);
         entry.setDecisionByUserId(actor);
-        entry.setDecisionAtUtc(Instant.now());
+        entry.setDecisionAtUtc(Instant.now(clock));
         entry = timeEntryRepository.save(entry);
         eventPublisher.publishEvent(new TimeEntryApprovedEvent(
                 entry.getTimeEntryId(), entry.getWorkOrderId(), entry.getDecisionByUserId(), entry.getDecisionAtUtc()));
@@ -61,7 +65,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         entry.setStatus(TimeEntryStatus.REJECTED);
         entry.setRejectionReason(request.getRejectionReason());
         entry.setDecisionByUserId(actor);
-        entry.setDecisionAtUtc(Instant.now());
+        entry.setDecisionAtUtc(Instant.now(clock));
         entry = timeEntryRepository.save(entry);
         eventPublisher.publishEvent(new TimeEntryRejectedEvent(
                 entry.getTimeEntryId(), entry.getWorkOrderId(), actor, entry.getDecisionAtUtc(),

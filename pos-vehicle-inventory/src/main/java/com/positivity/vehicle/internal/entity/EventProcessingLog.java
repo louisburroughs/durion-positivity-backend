@@ -1,5 +1,6 @@
 package com.positivity.vehicle.internal.entity;
 
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -12,7 +13,6 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.positivity.shared.id.UUIDv7Generator;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -21,13 +21,14 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Event processing log for CAP:091 Story #101.
  * Tracks VehicleUpdated event processing with idempotency and conflict
@@ -48,22 +49,10 @@ import lombok.NoArgsConstructor;
 public class EventProcessingLog {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "log_id", updatable = false, nullable = false)
     private UUID logId;
-
-    @PrePersist
-    public void generateId() {
-        if (logId == null) {
-            logId = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
-
     @NonNull
     @Column(name = "event_id", nullable = false, unique = true)
     private String eventId;

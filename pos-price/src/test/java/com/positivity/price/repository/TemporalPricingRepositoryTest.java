@@ -32,8 +32,8 @@ class TemporalPricingRepositoryTest {
         @Test
         @DisplayName("location override supports future schedule and resolves active window")
         void locationOverrideSupportsFutureScheduleAndResolvesActiveWindow() {
-                UUID productId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 LocationPriceOverride current = new LocationPriceOverride();
                 current.setProductId(productId);
@@ -70,8 +70,8 @@ class TemporalPricingRepositoryTest {
         @Test
         @DisplayName("location override overlap detection follows half-open interval semantics")
         void locationOverrideOverlapDetectionFollowsHalfOpenIntervalSemantics() {
-                UUID productId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 LocationPriceOverride existing = new LocationPriceOverride();
                 existing.setProductId(productId);
@@ -98,8 +98,8 @@ class TemporalPricingRepositoryTest {
         @Test
         @DisplayName("customer tier rule supports future schedule and overlap detection")
         void customerTierRuleSupportsFutureScheduleAndOverlapDetection() {
-                UUID productId = UUID.randomUUID();
-                UUID customerTierId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerTierId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 CustomerTierPricingRule current = new CustomerTierPricingRule();
                 current.setProductId(productId);

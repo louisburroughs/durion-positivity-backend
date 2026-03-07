@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.entity;
 
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -91,15 +92,4 @@ public class JwtToken {
      */
     @Version
     private Long version;
-
-    @PrePersist
-    protected void onCreate() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
-
 }

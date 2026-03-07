@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.shared.id.UUIDv7Id;
@@ -13,7 +14,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
-import jakarta.persistence.PrePersist;
 
 @Entity
 @Data
@@ -150,15 +150,5 @@ public class WorkorderPart {
      */
     public boolean canConsumeInventory() {
         return status != WorkorderItemStatus.PENDING_APPROVAL;
-    }
-
-    @PrePersist
-    protected void prePersist() {
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
     }
 }

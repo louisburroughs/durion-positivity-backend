@@ -5,7 +5,10 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,7 +21,6 @@ import org.springframework.context.annotation.Import;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
-import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
@@ -44,6 +46,7 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
 @DisplayName("Partial Approval Promotion Contract Behavior Tests (CAP:004 Story #29)")
 @Import(ContractTestConfiguration.class)
 class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -104,7 +107,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 UUID workorderId = UUID.fromString(workorderIdStr);
 
                 // Then: Verify only APPROVED items were copied to workorder
-                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+                workorderRepository.findById(workorderId).orElseThrow();
 
                 // Count total workorder items (labor + parts)
                 List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
@@ -329,8 +332,8 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .createdById("test-user")
                                 .createdByUserId("test-user")
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now().minusHours(1))
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK).minusHours(1))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .subtotal(BigDecimal.valueOf(500.00))
                                 .taxAmount(BigDecimal.valueOf(50.00))
                                 .total(BigDecimal.valueOf(550.00))
@@ -349,7 +352,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .taxCode("TAX_STANDARD")
                                 .createdById("test-user")
                                 .approvalStatus(ApprovalStatus.APPROVED)
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .build();
 
                 // Item 2: PART, APPROVED (Oil Filter)
@@ -363,7 +366,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .taxCode("TAX_STANDARD")
                                 .createdById("test-user")
                                 .approvalStatus(ApprovalStatus.APPROVED)
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .build();
 
                 // Item 3: LABOR, DECLINED (Tire Rotation)
@@ -378,7 +381,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .createdById("test-user")
                                 .approvalStatus(ApprovalStatus.DECLINED)
                                 .rejectionReason("CUSTOMER_DECLINED")
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .build();
 
                 // Item 4: PART, PENDING_APPROVAL (Air Filter)
@@ -414,8 +417,8 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .createdById("test-user")
                                 .createdByUserId("test-user")
                                 .status(EstimateStatus.APPROVED)
-                                .approvedAt(LocalDateTime.now().minusHours(1))
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK).minusHours(1))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .subtotal(BigDecimal.valueOf(300.00))
                                 .taxAmount(BigDecimal.valueOf(30.00))
                                 .total(BigDecimal.valueOf(330.00))
@@ -433,7 +436,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .taxCode("TAX_STANDARD")
                                 .createdById("test-user")
                                 .approvalStatus(ApprovalStatus.APPROVED)
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .build();
 
                 EstimateItem item2 = EstimateItem.builder()
@@ -446,7 +449,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .taxCode("TAX_STANDARD")
                                 .createdById("test-user")
                                 .approvalStatus(ApprovalStatus.APPROVED)
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .build();
 
                 EstimateItem item3 = EstimateItem.builder()
@@ -459,7 +462,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .taxCode("TAX_STANDARD")
                                 .createdById("test-user")
                                 .approvalStatus(ApprovalStatus.APPROVED)
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .build();
 
                 estimateItemRepository.saveAll(List.of(item1, item2, item3));
@@ -482,8 +485,8 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .createdById("test-user")
                                 .createdByUserId("test-user")
                                 .status(EstimateStatus.APPROVED) // Estimate approved but items declined
-                                .approvedAt(LocalDateTime.now().minusHours(1))
-                                .expiresAt(LocalDateTime.now().plusDays(30))
+                                .approvedAt(LocalDateTime.now(TEST_CLOCK).minusHours(1))
+                                .expiresAt(LocalDateTime.now(TEST_CLOCK).plusDays(30))
                                 .subtotal(BigDecimal.ZERO)
                                 .taxAmount(BigDecimal.ZERO)
                                 .total(BigDecimal.ZERO)
@@ -502,7 +505,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .createdById("test-user")
                                 .approvalStatus(ApprovalStatus.DECLINED)
                                 .rejectionReason("TOO_EXPENSIVE")
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .build();
 
                 EstimateItem item2 = EstimateItem.builder()
@@ -516,7 +519,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .createdById("test-user")
                                 .approvalStatus(ApprovalStatus.DECLINED)
                                 .rejectionReason("NOT_NECESSARY")
-                                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                                .approvalTimestamp(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .build();
 
                 estimateItemRepository.saveAll(List.of(item1, item2));

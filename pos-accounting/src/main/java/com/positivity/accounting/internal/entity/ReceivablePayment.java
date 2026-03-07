@@ -1,17 +1,34 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import jakarta.persistence.*;
-import lombok.*;
-import org.jspecify.annotations.NonNull;
+import com.positivity.shared.id.UUIDv7Id;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * ReceivablePayment - tracks cleared payments available for application to AR
@@ -40,31 +57,24 @@ import java.util.UUID;
 @ToString
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "receivable_payment", 
-    indexes = {
+@Table(name = "receivable_payment", indexes = {
         @Index(name = "idx_receivable_payment_customer", columnList = "customer_id"),
         @Index(name = "idx_receivable_payment_status", columnList = "status"),
         @Index(name = "idx_receivable_payment_cleared_at", columnList = "cleared_at")
-    },
-    uniqueConstraints = {
+}, uniqueConstraints = {
         @UniqueConstraint(name = "uk_receivable_payment_source_event", columnNames = "source_event_id")
-    }
-)
+})
 public class ReceivablePayment {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "payment_id", nullable = false, columnDefinition = "UUID")
     private UUID paymentId; // From Payment domain
 
     @PrePersist
     public void onPrePersist() {
-        if (paymentId == null) {
-            paymentId = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
         if (status == null) {
             status = ReceivablePaymentStatus.AVAILABLE;
         }
@@ -106,11 +116,6 @@ public class ReceivablePayment {
 
     @Column(name = "modified_by", length = 50)
     private String modifiedBy;
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
-    }
 
     /**
      * Check if this payment has sufficient funds for an application.

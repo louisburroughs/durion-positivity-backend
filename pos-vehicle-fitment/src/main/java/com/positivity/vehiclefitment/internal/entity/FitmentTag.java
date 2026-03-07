@@ -1,9 +1,9 @@
 package com.positivity.vehiclefitment.internal.entity;
 
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.positivity.shared.id.UUIDv7Generator;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,7 +14,6 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -23,6 +22,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.GeneratedValue;
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Represents a single fitment tag for vehicle applicability.
  * Each tag is a key-value pair associated with a vehicle applicability hint.
@@ -36,22 +37,10 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class FitmentTag {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TagType tagType;

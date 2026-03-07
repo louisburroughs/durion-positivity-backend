@@ -41,11 +41,6 @@ public class PostingCategory {
     @UUIDv7Id
     @Column(name = "posting_category_id", nullable = false, columnDefinition = "UUID")
     private UUID postingCategoryId;
-
-    @PrePersist
-    public void onPrePersist() {
-    }
-
     @Column(name = "category_name", length = 100, nullable = false)
     private String categoryName;
 

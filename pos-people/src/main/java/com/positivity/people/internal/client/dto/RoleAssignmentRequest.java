@@ -14,13 +14,17 @@ import java.util.UUID;
 @AllArgsConstructor
 public class RoleAssignmentRequest {
 
-    private UUID userId;
+	private UUID userId;
 
-    @NotNull(message = "roleId is required")
-    private UUID roleId;
+	@NotNull(message = "roleId is required")
+	private UUID roleId;
 
-    private ScopeType scopeType = ScopeType.GLOBAL;
-    private Set<String> scopeLocationIds;
-    private LocalDate effectiveStartDate;
-    private LocalDate effectiveEndDate;
+	private ScopeType scopeType = ScopeType.GLOBAL;
+
+	private Set<String> scopeLocationIds;
+
+	private LocalDate effectiveStartDate;
+
+	private LocalDate effectiveEndDate;
+
 }

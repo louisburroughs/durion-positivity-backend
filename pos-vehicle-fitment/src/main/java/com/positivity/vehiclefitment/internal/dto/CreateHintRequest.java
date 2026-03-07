@@ -1,8 +1,10 @@
 package com.positivity.vehiclefitment.internal.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,14 +18,19 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Request payload for creating a vehicle applicability hint")
 public class CreateHintRequest {
-    
+
+    @Schema(description = "Product identifier for the hint", requiredMode = Schema.RequiredMode.REQUIRED, example = "550e8400-e29b-41d4-a716-446655440000")
     @NotNull(message = "Product ID is required")
     private UUID productId;
-    
+
+    @Schema(description = "Fitment tags used to determine product applicability", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "At least one fitment tag is required")
     @Valid
     private List<FitmentTagDto> fitmentTags;
-    
+
+    @Schema(description = "User or system identity creating the hint", example = "tech.ops@durion.local")
+    @Size(max = 128, message = "createdBy must not exceed 128 characters")
     private String createdBy;
 }

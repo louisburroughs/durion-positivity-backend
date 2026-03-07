@@ -1,5 +1,20 @@
 package com.positivity.accounting.internal.service;
 
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.client.InvoiceServiceException;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceRequest;
@@ -8,28 +23,21 @@ import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.ReversePaymentApplicationRequest;
-import com.positivity.accounting.internal.entity.*;
+import com.positivity.accounting.internal.entity.CustomerCredit;
+import com.positivity.accounting.internal.entity.PaymentApplication;
+import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
+import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
-import com.positivity.accounting.internal.repository.*;
+import com.positivity.accounting.internal.repository.CustomerCreditRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
+import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.security.common.SecurityContextHelper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
 import com.positivity.shared.id.UUIDv7Generator;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for managing payment applications to invoices (AR).
@@ -51,7 +59,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class PaymentApplicationServiceImpl implements com.positivity.accounting.service.PaymentApplicationService {
+        private static final String PAYMENT_NOT_FOUND = "Payment not found: ";
 
+        private final Clock clock;
         private final ReceivablePaymentRepository receivablePaymentRepository;
         private final PaymentApplicationRepository paymentApplicationRepository;
         private final CustomerCreditRepository customerCreditRepository;
@@ -178,7 +188,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
                 // Capture current user early to avoid issues in exception handler
                 String currentUser = getCurrentUser();
-                Instant applicationTimestamp = Instant.now();
+                Instant applicationTimestamp = Instant.now(clock);
 
                 List<PaymentApplicationResponse.ApplicationDetail> applicationDetails = createApplicationsAndUpdateInvoices(
                                 paymentId,
@@ -254,7 +264,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         public void voidPayment(@NonNull UUID paymentId) {
                 ReceivablePayment payment = receivablePaymentRepository.findById(paymentId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Payment not found: " + paymentId));
+                                                PAYMENT_NOT_FOUND + paymentId));
 
                 List<PaymentApplication> existingApplications = paymentApplicationRepository.findByPaymentId(paymentId);
                 if (!existingApplications.isEmpty()) {
@@ -273,7 +283,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
                 payment.setUnappliedAmount(BigDecimal.ZERO);
                 payment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
-                payment.setUpdatedAt(Instant.now());
+                payment.setUpdatedAt(Instant.now(clock));
                 payment.setModifiedBy(getCurrentUser());
 
                 receivablePaymentRepository.save(payment);
@@ -293,7 +303,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         public void reversePayment(@NonNull UUID paymentId, @NonNull String reason) {
                 receivablePaymentRepository.findById(paymentId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Payment not found: " + paymentId));
+                                                PAYMENT_NOT_FOUND + paymentId));
 
                 List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(paymentId);
                 if (applications.isEmpty()) {
@@ -360,7 +370,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                 reversal.setAmount(original.getAppliedAmount());
                 reversal.setReason(reason);
                 reversal.setReversedBy(reversedBy);
-                reversal.setReversedAt(Instant.now());
+                reversal.setReversedAt(Instant.now(clock));
 
                 PaymentApplicationReversal saved = reversalRepository.save(reversal);
 
@@ -373,7 +383,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                                                                 + " not found"));
 
                 payment.reverseAmount(original.getAppliedAmount());
-                payment.setUpdatedAt(Instant.now());
+                payment.setUpdatedAt(Instant.now(clock));
                 payment.setModifiedBy(reversedBy);
                 receivablePaymentRepository.save(payment);
 
@@ -505,7 +515,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         private ReceivablePayment getAvailablePayment(UUID paymentId) {
                 ReceivablePayment payment = receivablePaymentRepository.findById(paymentId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Payment not found: " + paymentId));
+                                                PAYMENT_NOT_FOUND + paymentId));
                 if (payment.getStatus() != ReceivablePaymentStatus.AVAILABLE) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Payment " + paymentId + " is not available (status: " + payment.getStatus()

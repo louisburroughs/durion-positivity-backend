@@ -7,24 +7,35 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
-import com.positivity.securityservice.internal.entity.Permission;
-import com.positivity.securityservice.internal.repository.PermissionRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+
+import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
+import com.positivity.securityservice.internal.entity.Permission;
+import com.positivity.securityservice.internal.repository.PermissionRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PermissionServiceImpl")
 class PermissionServiceImplTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private PermissionRepository permissionRepository;
@@ -49,7 +60,7 @@ class PermissionServiceImplTest {
             when(permissionRepository.findByName("pricing:price_book:edit")).thenReturn(Optional.empty());
             when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> {
                 Permission permission = invocation.getArgument(0);
-                permission.setId(UUID.randomUUID());
+                permission.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 return permission;
             });
 
@@ -64,7 +75,7 @@ class PermissionServiceImplTest {
         @DisplayName("updates existing permission when key already exists")
         void registerPermissions_existingPermission_updates() {
             Permission existingPermission = new Permission();
-            existingPermission.setId(UUID.randomUUID());
+            existingPermission.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
             existingPermission.setName("pricing:price_book:edit");
             existingPermission.setDescription("Old description");
 
@@ -122,7 +133,7 @@ class PermissionServiceImplTest {
         @Test
         @DisplayName("returns mapped dto when permission exists")
         void getPermission_found_returnsDto() {
-            UUID permissionId = UUID.randomUUID();
+            UUID permissionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             Permission permission = new Permission();
             permission.setId(permissionId);
             permission.setName("pricing:price_book:edit");
@@ -140,7 +151,7 @@ class PermissionServiceImplTest {
         @Test
         @DisplayName("throws when permission does not exist")
         void getPermission_notFound_throws() {
-            UUID permissionId = UUID.randomUUID();
+            UUID permissionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(permissionRepository.findById(permissionId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> sut.getPermission(permissionId))

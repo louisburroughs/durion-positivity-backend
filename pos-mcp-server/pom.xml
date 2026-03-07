@@ -46,6 +46,13 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <!-- Lombok for boilerplate reduction -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Model Context Protocol Java SDK -->
         <dependency>
             <groupId>io.modelcontextprotocol.sdk</groupId>

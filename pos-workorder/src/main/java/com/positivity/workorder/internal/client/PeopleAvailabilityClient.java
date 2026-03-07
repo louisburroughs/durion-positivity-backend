@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.client;
 
+import java.time.Clock;
+
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +20,7 @@ import java.time.LocalDate;
 @RequiredArgsConstructor
 public class PeopleAvailabilityClient {
 
+    private final Clock clock;
     private final RestClient peopleServiceRestClient;
 
     /**
@@ -39,7 +42,7 @@ public class PeopleAvailabilityClient {
         } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
             log.warn("No availability data found for locationId={} date={}", locationId, date);
             return PeopleAvailabilityResponse.builder()
-                    .asOf(java.time.Instant.now())
+                    .asOf(java.time.Instant.now(clock))
                     .location(locationId)
                     .people(java.util.List.of())
                     .build();

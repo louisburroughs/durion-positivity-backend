@@ -1,5 +1,7 @@
 package com.positivity.price.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.price.internal.dto.MoneyAmount;
 import com.positivity.price.internal.dto.PriceQuoteRequest;
 import com.positivity.price.internal.dto.PriceQuoteResponse;
@@ -29,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class PriceQuoteServiceImpl implements PriceQuoteService {
+    private final Clock clock;
+
 
     private final ProductBasePriceRepository productPriceRepository;
     private final LocationPriceOverrideRepository locationOverrideRepository;
@@ -37,7 +41,9 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
     public PriceQuoteServiceImpl(
             ProductBasePriceRepository productPriceRepository,
             LocationPriceOverrideRepository locationOverrideRepository,
-            CustomerTierPricingRuleRepository customerTierPricingRuleRepository) {
+            CustomerTierPricingRuleRepository customerTierPricingRuleRepository,
+            Clock clock) {
+        this.clock = clock;
         this.productPriceRepository = productPriceRepository;
         this.locationOverrideRepository = locationOverrideRepository;
         this.customerTierPricingRuleRepository = customerTierPricingRuleRepository;
@@ -47,7 +53,7 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
     @NonNull
     @Transactional(readOnly = true)
     public PriceQuoteResponse calculatePrice(@NonNull PriceQuoteRequest request) {
-        Instant effectiveAt = request.getEffectiveTimestamp() != null ? request.getEffectiveTimestamp() : Instant.now();
+        Instant effectiveAt = request.getEffectiveTimestamp() != null ? request.getEffectiveTimestamp() : Instant.now(clock);
 
         ProductBasePrice basePrice = productPriceRepository.findActiveAt(request.getProductId(), effectiveAt)
                 .orElseThrow(() -> new ProductNotFoundException(request.getProductId()));

@@ -28,11 +28,4 @@ public interface OverridePolicyThresholdRepository extends JpaRepository<Overrid
         @Param("role") String role,
         @Param("atTime") Instant atTime
     );
-    
-    /**
-     * Find the current active policy for a role.
-     */
-    default Optional<OverridePolicyThreshold> findCurrentActiveByRole(String role) {
-        return findActiveByRoleAtTime(role, Instant.now());
-    }
 }

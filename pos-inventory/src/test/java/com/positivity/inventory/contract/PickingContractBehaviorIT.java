@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,6 +57,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Picking Contract Behavior — Story #179")
 class PickingContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -82,8 +86,8 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /v1/inventory/pick-lists/{id}/release with valid auth → 200 READY_TO_PICK")
         void CH1_releasePickList_validAuth_returns200WithReadyToPick() throws Exception {
                 // Issue #179: CH1 — release endpoint must return 200 with status=READY_TO_PICK
-                UUID pickListId = UUID.randomUUID();
-                UUID workorderId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PickListResponse mockResponse = new PickListResponse(
                                 pickListId,
@@ -91,8 +95,8 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
                                 PickListStatus.READY_TO_PICK,
                                 0,
                                 null,
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 // BLOCKED: releasePickList does not exist on PickListService
                 when(pickListService.releasePickList(eq(pickListId))).thenReturn(mockResponse);
@@ -116,7 +120,7 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /v1/inventory/pick-lists/{id}/release without gateway auth → 403")
         void CH2_releasePickList_missingGatewayAuth_returns403() throws Exception {
                 // Issue #179: ADR-0011/ADR-0014 — missing X-Authorities must yield 403
-                UUID pickListId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(post("/v1/inventory/pick-lists/{id}/release", pickListId)
                                 .header("X-User", "test-user")
@@ -144,10 +148,10 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /v1/inventory/pick-lists/{id}/tasks/{taskId}/confirm with valid scan → 200 PICKED")
         void CH3_confirmPickTask_validScan_returns200WithPickedStatus() throws Exception {
                 // Issue #179: CH3 — confirm endpoint must return 200 with task status=PICKED
-                UUID pickListId = UUID.randomUUID();
-                UUID taskId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PickTaskResponse mockResponse = new PickTaskResponse(
                                 taskId,
@@ -197,17 +201,18 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /v1/inventory/pick-lists/{id}/tasks/{taskId}/confirm with wrong SKU → 422")
         void CH4_confirmPickTask_wrongSkuId_returns422() throws Exception {
                 // Issue #179: CH4 — ADR-0017: scan mismatch is a domain-policy violation → 422
-                UUID pickListId = UUID.randomUUID();
-                UUID taskId = UUID.randomUUID();
-                UUID wrongSkuId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID wrongSkuId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // BLOCKED: confirmPickTask and PickScanMismatchException do not exist
                 // Issue #179: compile fix — constructor is (UUID expectedSkuId, UUID
                 // scannedSkuId)
                 when(pickListService.confirmPickTask(
                                 eq(pickListId), eq(taskId), eq(wrongSkuId), eq(locationId), eq(1)))
-                                .thenThrow(new PickScanMismatchException(UUID.randomUUID(), wrongSkuId));
+                                .thenThrow(new PickScanMismatchException(
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), wrongSkuId));
 
                 String requestBody = objectMapper.writeValueAsString(Map.of(
                                 "scannedSkuId", wrongSkuId.toString(),
@@ -239,10 +244,10 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("GET /v1/inventory/pick-lists/{id}/tasks with valid auth → 200 with task list")
         void CH5_getPickTasksForPickList_validAuth_returns200WithTaskList() throws Exception {
                 // Issue #179: CH5 — list-tasks endpoint must return 200 with task array
-                UUID pickListId = UUID.randomUUID();
-                UUID taskId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PickTaskResponse taskResponse = new PickTaskResponse(
                                 taskId,

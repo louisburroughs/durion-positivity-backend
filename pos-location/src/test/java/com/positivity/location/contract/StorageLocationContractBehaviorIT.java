@@ -62,7 +62,7 @@ class StorageLocationContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("#39 - POST /storage-locations with valid payload returns 201")
         void postStorageLocations_validPayload_returns201() throws Exception {
-                UUID newId = UUID.randomUUID();
+                UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(storageLocationService.createStorageLocation(eq(SITE_ID), any()))
                                 .thenReturn(response(newId, "Bin-A1", StorageLocationType.BIN, "ACTIVE"));
 
@@ -124,8 +124,10 @@ class StorageLocationContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("#39 - GET /storage-locations returns 200 with list")
         void getStorageLocations_returns200WithList() throws Exception {
                 Page<StorageLocationResponse> page = new PageImpl<>(List.of(
-                                response(UUID.randomUUID(), "Bin-A", StorageLocationType.BIN, "ACTIVE"),
-                                response(UUID.randomUUID(), "Shelf-B", StorageLocationType.SHELF, "ACTIVE")));
+                                response(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Bin-A",
+                                                StorageLocationType.BIN, "ACTIVE"),
+                                response(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Shelf-B",
+                                                StorageLocationType.SHELF, "ACTIVE")));
 
                 when(storageLocationService.listStorageLocations(eq(SITE_ID), any(), any(), any()))
                                 .thenReturn(page);
@@ -144,7 +146,8 @@ class StorageLocationContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("#39 - GET /storage-locations?type=BIN returns 200 filtered list")
         void getStorageLocations_filterByType_returns200() throws Exception {
                 Page<StorageLocationResponse> page = new PageImpl<>(
-                                List.of(response(UUID.randomUUID(), "Bin-A", StorageLocationType.BIN, "ACTIVE")));
+                                List.of(response(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Bin-A",
+                                                StorageLocationType.BIN, "ACTIVE")));
 
                 when(storageLocationService.listStorageLocations(eq(SITE_ID), eq(StorageLocationType.BIN), any(),
                                 any()))
@@ -186,7 +189,7 @@ class StorageLocationContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("#39 - GET /storage-locations/{id} when not found returns 404")
         void getStorageLocation_whenNotFound_returns404() throws Exception {
-                UUID missingId = UUID.randomUUID();
+                UUID missingId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(storageLocationService.getStorageLocation(SITE_ID, missingId))
                                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
 

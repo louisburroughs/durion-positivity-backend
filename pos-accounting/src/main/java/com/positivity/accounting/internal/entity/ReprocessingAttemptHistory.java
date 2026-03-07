@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -26,6 +28,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
 /**
  * Reprocessing Attempt History - tracks all attempts to reprocess a suspended
  * accounting event.
@@ -47,6 +51,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString(exclude = "accountingEvent")
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "reprocessing_attempt_history", indexes = {
         @Index(name = "idx_reprocessing_event_id", columnList = "event_id"),
         @Index(name = "idx_reprocessing_attempted_at", columnList = "attempted_at"),
@@ -64,7 +69,7 @@ public class ReprocessingAttemptHistory {
     @PrePersist
     public void onPrePersist() {
         if (attemptedAt == null) {
-            attemptedAt = Instant.now();
+            attemptedAt = Instant.now(Clock.systemUTC());
         }
     }
 

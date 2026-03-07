@@ -8,6 +8,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -44,6 +48,11 @@ import com.positivity.workorder.internal.service.EstimateServiceImpl;
  */
 @ExtendWith(MockitoExtension.class)
 class EstimateFromAppointmentServiceTest {
+
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+        @Spy
+        Clock clock = TEST_CLOCK;
 
         @Mock
         private EstimateRepository estimateRepository;
@@ -153,7 +162,7 @@ class EstimateFromAppointmentServiceTest {
         void createEstimateFromAppointment_setsStatusToDraft() {
                 // Given
                 Estimate savedEstimate = Estimate.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(EstimateStatus.DRAFT)
                                 .appointmentId(APPOINTMENT_ID)
                                 .build();

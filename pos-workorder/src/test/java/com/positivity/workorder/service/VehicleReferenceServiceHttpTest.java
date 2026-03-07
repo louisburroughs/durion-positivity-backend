@@ -20,7 +20,7 @@ class VehicleReferenceServiceHttpTest {
 
     @Test
     void resolve_parsesVehicleInfoAndVin_fromDataEnvelope() throws Exception {
-        UUID vehicleId = UUID.randomUUID();
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String payload = """
                 {"data":{"vehicleDescription":"2022 Honda Civic EX","vin":"1HGBH41JXMN109186"}}
                 """;
@@ -42,7 +42,7 @@ class VehicleReferenceServiceHttpTest {
 
     @Test
     void resolve_returnsFallback_whenRemoteReturns404() throws Exception {
-        UUID vehicleId = UUID.randomUUID();
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
         HttpServer server = startServer("/v1/vehicles/" + vehicleId, 404, "{}", callCount);
         try {
@@ -61,7 +61,7 @@ class VehicleReferenceServiceHttpTest {
 
     @Test
     void resolveAll_deDuplicatesRequests_forRepeatedIds() throws Exception {
-        UUID vehicleId = UUID.randomUUID();
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
         HttpServer server = startServer("/v1/vehicles/" + vehicleId, 200,
                 "{\"vehicleInfo\":\"2021 Ford F-150\",\"vehicleVin\":\"VIN-123\"}", callCount);

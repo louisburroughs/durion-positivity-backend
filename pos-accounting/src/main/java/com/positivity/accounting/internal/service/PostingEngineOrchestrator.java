@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -58,6 +60,7 @@ import lombok.extern.slf4j.Slf4j;
 @Transactional
 public class PostingEngineOrchestrator {
 
+    private final Clock clock;
     private final PostingRuleEvaluator postingRuleEvaluator;
     private final JournalEntryService journalEntryService;
     private final IdempotencyService idempotencyService;
@@ -165,7 +168,7 @@ public class PostingEngineOrchestrator {
             // 4. Update event status to PROCESSED
             event.setStatus(AccountingEventStatus.PROCESSED);
             event.setFinalPostingReferenceId(postingReference);
-            event.setProcessedAt(java.time.Instant.now());
+            event.setProcessedAt(java.time.Instant.now(clock));
             event.setResolvedByUserId(triggeredByUserId);
 
             attemptHistory.setOutcome(ReprocessingOutcome.SUCCESS);

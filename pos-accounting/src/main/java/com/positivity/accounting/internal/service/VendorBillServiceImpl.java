@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -30,6 +31,7 @@ import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRep
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.service.VendorBillService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +57,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class VendorBillServiceImpl implements VendorBillService {
+        private final Clock clock;
 
         private static final String SYSTEM_USER = "SYSTEM";
 
@@ -138,7 +141,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 // Dr Inventory (for inventory items) or Dr Expense (for non-inventory)
                 // Cr Accounts Payable
                 VendorBillGLPostingEvent glPostingEvent = VendorBillGLPostingEvent.builder()
-                                .eventId(UUID.randomUUID())
+                                .eventId(UUIDv7Generator.generate())
                                 .vendorBillId(savedBill.getVendorBillId())
                                 .vendorId(savedBill.getVendorId())
                                 .organizationId(event.getOrganizationId())
@@ -248,7 +251,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 bill.setDueDate(event.getDueDate());
                 bill.setModifiedBy(currentUser);
                 bill.setApprovedBy(currentUser);
-                bill.setApprovedAt(Instant.now());
+                bill.setApprovedAt(Instant.now(clock));
                 bill.setApprovalJustification("Auto-approved: three-way match successful");
                 billRepository.save(bill);
 
@@ -279,7 +282,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                                 // Operator accepts discrepancy - approve bill
                                 bill.setStatus(VendorBillStatus.APPROVED);
                                 bill.setApprovedBy(operatorId);
-                                bill.setApprovedAt(Instant.now());
+                                bill.setApprovedAt(Instant.now(clock));
                                 bill.setApprovalJustification("Match exception accepted: " + reason);
                                 bill.setModifiedBy(operatorId);
                                 break;
@@ -288,7 +291,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                                 // Void bill - requires reversal of GL posting
                                 bill.setStatus(VendorBillStatus.VOIDED);
                                 bill.setRejectedBy(operatorId);
-                                bill.setRejectedAt(Instant.now());
+                                bill.setRejectedAt(Instant.now(clock));
                                 bill.setRejectionReason("Match exception voided: " + reason);
                                 bill.setModifiedBy(operatorId);
                                 break;
@@ -584,7 +587,7 @@ public class VendorBillServiceImpl implements VendorBillService {
          */
         private @NonNull String generateBillNumber(@NonNull UUID vendorId) {
                 String vendorPrefix = vendorId.toString().substring(0, 8).toUpperCase();
-                String dateStamp = java.time.LocalDate.now().format(
+                String dateStamp = java.time.LocalDate.now(clock).format(
                                 java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
                 long sequence = billRepository.getNextBillSequence();
                 return String.format("BILL_%s_%s_%07d", vendorPrefix, dateStamp, sequence);
@@ -643,7 +646,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                                 .findByInvoiceEventIdAndResolvedFalseOrderByMatchScoreDesc(
                                                 selected.getInvoiceEventId());
 
-                Instant now = Instant.now();
+                Instant now = Instant.now(clock);
                 for (VendorBillMatchCandidate candidate : allCandidates) {
                         candidate.setResolved(true);
                         candidate.setResolvedBy(operatorId);

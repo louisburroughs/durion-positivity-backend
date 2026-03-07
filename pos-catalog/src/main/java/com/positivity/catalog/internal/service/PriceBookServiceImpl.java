@@ -24,8 +24,11 @@ import com.positivity.catalog.internal.repository.ProductMsrpRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.service.PriceBookService;
 import jakarta.persistence.OptimisticLockException;
+import lombok.RequiredArgsConstructor;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -43,30 +46,19 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+@RequiredArgsConstructor
 @Service
 public class PriceBookServiceImpl implements PriceBookService {
 
     private static final String PRICE_BASE_DATA_MISSING = "PRICE_BASE_DATA_MISSING";
     private static final Instant FAR_FUTURE_EFFECTIVE_END_AT = Instant.parse("2099-12-31T23:59:59Z");
 
+    private final Clock clock;
     private final PriceBookRepository priceBookRepository;
     private final PriceBookRuleRepository priceBookRuleRepository;
     private final ProductRepository productRepository;
     private final ProductMsrpRepository productMsrpRepository;
     private final ObjectMapper objectMapper;
-
-    public PriceBookServiceImpl(
-            PriceBookRepository priceBookRepository,
-            PriceBookRuleRepository priceBookRuleRepository,
-            ProductRepository productRepository,
-            ProductMsrpRepository productMsrpRepository,
-            ObjectMapper objectMapper) {
-        this.priceBookRepository = priceBookRepository;
-        this.priceBookRuleRepository = priceBookRuleRepository;
-        this.productRepository = productRepository;
-        this.productMsrpRepository = productMsrpRepository;
-        this.objectMapper = objectMapper;
-    }
 
     @Override
     @Transactional
@@ -191,7 +183,7 @@ public class PriceBookServiceImpl implements PriceBookService {
         ProductEntity product = productRepository.findById(request.getProductId())
                 .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + request.getProductId()));
 
-        LocalDate asOfDate = request.getAsOf() == null ? LocalDate.now() : request.getAsOf();
+        LocalDate asOfDate = request.getAsOf() == null ? LocalDate.now(clock) : request.getAsOf();
         Instant asOf = asOfDate.atStartOfDay().toInstant(ZoneOffset.UTC);
 
         List<UUID> priceBookIds = resolveCandidatePriceBookIds(request);

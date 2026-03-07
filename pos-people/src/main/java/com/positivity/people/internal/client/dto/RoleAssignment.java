@@ -15,13 +15,23 @@ import java.util.UUID;
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RoleAssignment {
-    private UUID id;
-    private User user;
-    private Role role;
-    private ScopeType scopeType;
-    private Set<UUID> scopeLocationIds;
-    private LocalDate effectiveStartDate;
-    private LocalDate effectiveEndDate;
-    private Instant createdAt;
-    private String createdBy;
+
+	private UUID id;
+
+	private User user;
+
+	private Role role;
+
+	private ScopeType scopeType;
+
+	private Set<UUID> scopeLocationIds;
+
+	private LocalDate effectiveStartDate;
+
+	private LocalDate effectiveEndDate;
+
+	private Instant createdAt;
+
+	private String createdBy;
+
 }

@@ -51,11 +51,6 @@ public class PostingRuleVersion {
     @UUIDv7Id
     @Column(name = "version_id", nullable = false, columnDefinition = "UUID")
     private UUID versionId;
-
-    @PrePersist
-    public void onPrePersist() {
-    }
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "posting_rule_set_id", nullable = false)
     private PostingRuleSet postingRuleSet;

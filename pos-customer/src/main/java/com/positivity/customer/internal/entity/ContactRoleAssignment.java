@@ -14,6 +14,7 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.positivity.shared.id.UUIDv7Id;
 /**
  * Contact role assignment entity linking contacts to customer accounts with
  * specific roles.
@@ -52,11 +53,15 @@ import java.util.UUID;
 public class ContactRoleAssignment {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "contact_id", nullable = false)
     @Schema(description = "Contact (Person) UUID", example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID contactId;
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "customer_account_id", nullable = false)
     @Schema(description = "Customer account UUID", example = "660e8400-e29b-41d4-a716-446655440000")
     private UUID customerAccountId;

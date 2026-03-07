@@ -1,5 +1,7 @@
 package com.positivity.catalog.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.catalog.internal.client.InventoryClient;
 import com.positivity.catalog.internal.client.PricingClient;
 import com.positivity.catalog.internal.dto.ProductDetailView;
@@ -33,6 +35,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ProductDetailServiceImpl implements ProductDetailService {
+    private final Clock clock;
+
 
     private final ProductRepository productRepository;
     private final ProductReplacementRepository productReplacementRepository;
@@ -57,7 +61,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     public ProductDetailView getProductDetail(UUID productId, UUID locationId) {
         log.info("Fetching product detail for productId={}, locationId={}", productId, locationId);
 
-        Instant requestTime = Instant.now();
+        Instant requestTime = Instant.now(clock);
 
         // Fetch product master data from catalog (this is required - fail if not found)
         Optional<ProductEntity> productOpt = productRepository.findById(productId);
@@ -275,7 +279,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             return List.of();
         }
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         try {
             return productReplacementRepository
                     .findByOriginalProductIdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId)

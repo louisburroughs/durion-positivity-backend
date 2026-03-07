@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -39,214 +40,218 @@ import com.positivity.inventory.internal.service.CycleCountPlanServiceImpl;
 @ExtendWith(MockitoExtension.class)
 class CycleCountPlanServiceTest {
 
-    @Mock
-    private CycleCountPlanRepository cycleCountPlanRepository;
+        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+                        java.time.ZoneOffset.UTC);
 
-    private CycleCountPlanServiceImpl service;
+        @Mock
+        private CycleCountPlanRepository cycleCountPlanRepository;
 
-    private static final String ACTOR_USER_ID = "test-user-001";
+        private CycleCountPlanServiceImpl service;
 
-    @BeforeEach
-    void setUp() {
-        service = new CycleCountPlanServiceImpl(cycleCountPlanRepository);
-    }
+        private static final String ACTOR_USER_ID = "test-user-001";
 
-    // ─── createPlan ────────────────────────────────────────────────────────────
+        @BeforeEach
+        void setUp() {
+                service = new CycleCountPlanServiceImpl(cycleCountPlanRepository, FIXED_CLOCK);
+        }
 
-    /**
-     * Verifies that a valid request with a future scheduledDate and non-empty
-     * zoneIds creates a plan with PLANNED status.
-     */
-    @Test
-    void createPlan_validRequest_returnsPlanResponseWithPlannedStatus() {
-        // Issue #176: happy path — future date, valid zones → PLANNED status
-        UUID locationId = UUID.randomUUID();
-        List<UUID> zoneIds = List.of(UUID.randomUUID(), UUID.randomUUID());
-        LocalDate scheduledDate = LocalDate.now().plusDays(7);
-        UUID generatedPlanId = UUID.randomUUID();
+        // ─── createPlan ────────────────────────────────────────────────────────────
 
-        CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                .locationId(locationId)
-                .zoneIds(zoneIds)
-                .planName("Annual Audit Q1")
-                .scheduledDate(scheduledDate)
-                .build();
+        /**
+         * Verifies that a valid request with a future scheduledDate and non-empty
+         * zoneIds creates a plan with PLANNED status.
+         */
+        @Test
+        void createPlan_validRequest_returnsPlanResponseWithPlannedStatus() {
+                // Issue #176: happy path — future date, valid zones → PLANNED status
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                List<UUID> zoneIds = List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                LocalDate scheduledDate = LocalDate.now(FIXED_CLOCK).plusDays(7);
+                UUID generatedPlanId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        when(cycleCountPlanRepository.save(any(CycleCountPlan.class))).thenAnswer(inv -> {
-            CycleCountPlan plan = inv.getArgument(0);
-            plan.setPlanId(generatedPlanId);
-            return plan;
-        });
+                CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
+                                .locationId(locationId)
+                                .zoneIds(zoneIds)
+                                .planName("Annual Audit Q1")
+                                .scheduledDate(scheduledDate)
+                                .build();
 
-        CycleCountPlanResponse response = service.createPlan(request, ACTOR_USER_ID);
+                when(cycleCountPlanRepository.save(any(CycleCountPlan.class))).thenAnswer(inv -> {
+                        CycleCountPlan plan = inv.getArgument(0);
+                        plan.setPlanId(generatedPlanId);
+                        return plan;
+                });
 
-        assertThat(response).isNotNull();
-        assertThat(response.getPlanId()).isEqualTo(generatedPlanId);
-        assertThat(response.getStatus()).isEqualTo("PLANNED");
-        assertThat(response.getLocationId()).isEqualTo(locationId);
-        assertThat(response.getZoneIds()).containsExactlyElementsOf(zoneIds);
-        verify(cycleCountPlanRepository).save(any(CycleCountPlan.class));
-    }
+                CycleCountPlanResponse response = service.createPlan(request, ACTOR_USER_ID);
 
-    /**
-     * Verifies that a scheduledDate in the past raises an
-     * {@link IllegalArgumentException} and no plan is persisted.
-     */
-    @Test
-    void createPlan_pastScheduledDate_throwsIllegalArgumentException() {
-        // Issue #176: scheduledDate yesterday → IAE → becomes 400 in controller
-        CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                .locationId(UUID.randomUUID())
-                .zoneIds(List.of(UUID.randomUUID()))
-                .scheduledDate(LocalDate.now().minusDays(1))
-                .build();
+                assertThat(response).isNotNull();
+                assertThat(response.getPlanId()).isEqualTo(generatedPlanId);
+                assertThat(response.getStatus()).isEqualTo("PLANNED");
+                assertThat(response.getLocationId()).isEqualTo(locationId);
+                assertThat(response.getZoneIds()).containsExactlyElementsOf(zoneIds);
+                verify(cycleCountPlanRepository).save(any(CycleCountPlan.class));
+        }
 
-        assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("past");
+        /**
+         * Verifies that a scheduledDate in the past raises an
+         * {@link IllegalArgumentException} and no plan is persisted.
+         */
+        @Test
+        void createPlan_pastScheduledDate_throwsIllegalArgumentException() {
+                // Issue #176: scheduledDate yesterday → IAE → becomes 400 in controller
+                CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                                .scheduledDate(LocalDate.now(FIXED_CLOCK).minusDays(1))
+                                .build();
 
-        verify(cycleCountPlanRepository, never()).save(any());
-    }
+                assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("past");
 
-    /**
-     * Verifies that an empty zoneIds list raises an
-     * {@link IllegalArgumentException} and no plan is persisted.
-     */
-    @Test
-    void createPlan_emptyZoneIds_throwsIllegalArgumentException() {
-        // Issue #176: no zones → IAE → becomes 400 in controller
-        CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                .locationId(UUID.randomUUID())
-                .zoneIds(List.of())
-                .scheduledDate(LocalDate.now().plusDays(1))
-                .build();
+                verify(cycleCountPlanRepository, never()).save(any());
+        }
 
-        assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("zone");
+        /**
+         * Verifies that an empty zoneIds list raises an
+         * {@link IllegalArgumentException} and no plan is persisted.
+         */
+        @Test
+        void createPlan_emptyZoneIds_throwsIllegalArgumentException() {
+                // Issue #176: no zones → IAE → becomes 400 in controller
+                CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .zoneIds(List.of())
+                                .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(1))
+                                .build();
 
-        verify(cycleCountPlanRepository, never()).save(any());
-    }
+                assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("zone");
 
-    /**
-     * Verifies that a null locationId raises an {@link IllegalArgumentException}
-     * and no plan is persisted.
-     */
-    @Test
-    void createPlan_nullLocationId_throwsIllegalArgumentException() {
-        CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                .locationId(null) // Test case: null locationId
-                .zoneIds(List.of(UUID.randomUUID()))
-                .scheduledDate(LocalDate.now().plusDays(1))
-                .build();
+                verify(cycleCountPlanRepository, never()).save(any());
+        }
 
-        assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("locationId");
+        /**
+         * Verifies that a null locationId raises an {@link IllegalArgumentException}
+         * and no plan is persisted.
+         */
+        @Test
+        void createPlan_nullLocationId_throwsIllegalArgumentException() {
+                CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
+                                .locationId(null) // Test case: null locationId
+                                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                                .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(1))
+                                .build();
 
-        verify(cycleCountPlanRepository, never()).save(any());
-    }
+                assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("locationId");
 
-    /**
-     * Verifies that a null zoneIds list raises an
-     * {@link IllegalArgumentException} and no plan is persisted.
-     */
-    @Test
-    void createPlan_nullZoneIds_throwsIllegalArgumentException() {
-        CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                .locationId(UUID.randomUUID())
-                .zoneIds(null) // Test case: null zoneIds
-                .scheduledDate(LocalDate.now().plusDays(1))
-                .build();
+                verify(cycleCountPlanRepository, never()).save(any());
+        }
 
-        assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("zoneIds");
+        /**
+         * Verifies that a null zoneIds list raises an
+         * {@link IllegalArgumentException} and no plan is persisted.
+         */
+        @Test
+        void createPlan_nullZoneIds_throwsIllegalArgumentException() {
+                CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .zoneIds(null) // Test case: null zoneIds
+                                .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(1))
+                                .build();
 
-        verify(cycleCountPlanRepository, never()).save(any());
-    }
+                assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("zoneIds");
 
-    /**
-     * Verifies that a null scheduledDate raises an
-     * {@link IllegalArgumentException} and no plan is persisted.
-     */
-    @Test
-    void createPlan_nullScheduledDate_throwsIllegalArgumentException() {
-        CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                .locationId(UUID.randomUUID())
-                .zoneIds(List.of(UUID.randomUUID()))
-                .scheduledDate(null) // Test case: null scheduledDate
-                .build();
+                verify(cycleCountPlanRepository, never()).save(any());
+        }
 
-        assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("scheduledDate");
+        /**
+         * Verifies that a null scheduledDate raises an
+         * {@link IllegalArgumentException} and no plan is persisted.
+         */
+        @Test
+        void createPlan_nullScheduledDate_throwsIllegalArgumentException() {
+                CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                                .scheduledDate(null) // Test case: null scheduledDate
+                                .build();
 
-        verify(cycleCountPlanRepository, never()).save(any());
-    }
+                assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("scheduledDate");
 
-    /**
-     * Verifies that a scheduledDate of today raises an
-     * {@link IllegalArgumentException} as it must be in the future.
-     */
-    @Test
-    void createPlan_todaysScheduledDate_throwsIllegalArgumentException() {
-        CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
-                .locationId(UUID.randomUUID())
-                .zoneIds(List.of(UUID.randomUUID()))
-                .scheduledDate(LocalDate.now()) // Test case: today's date
-                .build();
+                verify(cycleCountPlanRepository, never()).save(any());
+        }
 
-        assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("scheduledDate");
+        /**
+         * Verifies that a scheduledDate of today raises an
+         * {@link IllegalArgumentException} as it must be in the future.
+         */
+        @Test
+        void createPlan_todaysScheduledDate_throwsIllegalArgumentException() {
+                CreateCycleCountPlanRequest request = CreateCycleCountPlanRequest.builder()
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                                .scheduledDate(LocalDate.now(FIXED_CLOCK)) // Test case: today's date
+                                .build();
 
-        verify(cycleCountPlanRepository, never()).save(any());
-    }
+                assertThatThrownBy(() -> service.createPlan(request, ACTOR_USER_ID))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("scheduledDate");
 
-    // ─── getPlan ───────────────────────────────────────────────────────────────
+                verify(cycleCountPlanRepository, never()).save(any());
+        }
 
-    /**
-     * Verifies that an existing plan is returned correctly when found by ID.
-     */
-    @Test
-    void getPlan_existingId_returnsPlanResponse() {
-        // Issue #176: known planId → entity found → response populated
-        UUID planId = UUID.randomUUID();
-        UUID locationId = UUID.randomUUID();
-        List<UUID> zoneIds = List.of(UUID.randomUUID());
+        // ─── getPlan ───────────────────────────────────────────────────────────────
 
-        CycleCountPlan entity = CycleCountPlan.builder()
-                .planId(planId)
-                .locationId(locationId)
-                .zoneIds(zoneIds)
-                .planName("Test Plan")
-                .scheduledDate(LocalDate.now().plusDays(5))
-                .status(CycleCountPlanStatus.PLANNED)
-                .createdBy(ACTOR_USER_ID)
-                .build();
+        /**
+         * Verifies that an existing plan is returned correctly when found by ID.
+         */
+        @Test
+        void getPlan_existingId_returnsPlanResponse() {
+                // Issue #176: known planId → entity found → response populated
+                UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                List<UUID> zoneIds = List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-        when(cycleCountPlanRepository.findById(planId)).thenReturn(Optional.of(entity));
+                CycleCountPlan entity = CycleCountPlan.builder()
+                                .planId(planId)
+                                .locationId(locationId)
+                                .zoneIds(zoneIds)
+                                .planName("Test Plan")
+                                .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(5))
+                                .status(CycleCountPlanStatus.PLANNED)
+                                .createdBy(ACTOR_USER_ID)
+                                .build();
 
-        CycleCountPlanResponse response = service.getPlan(planId);
+                when(cycleCountPlanRepository.findById(planId)).thenReturn(Optional.of(entity));
 
-        assertThat(response).isNotNull();
-        assertThat(response.getPlanId()).isEqualTo(planId);
-        assertThat(response.getStatus()).isEqualTo("PLANNED");
-        assertThat(response.getCreatedBy()).isEqualTo(ACTOR_USER_ID);
-    }
+                CycleCountPlanResponse response = service.getPlan(planId);
 
-    /**
-     * Verifies that a non-existent planId causes an exception that will
-     * propagate to a 404 response.
-     */
-    @Test
-    void getPlan_nonExistentId_throwsException() {
-        // Issue #176: unknown planId → empty → CycleCountPlanNotFoundException → 404
-        UUID unknownId = UUID.randomUUID();
-        when(cycleCountPlanRepository.findById(unknownId)).thenReturn(Optional.empty());
+                assertThat(response).isNotNull();
+                assertThat(response.getPlanId()).isEqualTo(planId);
+                assertThat(response.getStatus()).isEqualTo("PLANNED");
+                assertThat(response.getCreatedBy()).isEqualTo(ACTOR_USER_ID);
+        }
 
-        assertThatThrownBy(() -> service.getPlan(unknownId))
-                .isInstanceOf(CycleCountPlanNotFoundException.class);
-    }
+        /**
+         * Verifies that a non-existent planId causes an exception that will
+         * propagate to a 404 response.
+         */
+        @Test
+        void getPlan_nonExistentId_throwsException() {
+                // Issue #176: unknown planId → empty → CycleCountPlanNotFoundException → 404
+                UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                when(cycleCountPlanRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+                assertThatThrownBy(() -> service.getPlan(unknownId))
+                                .isInstanceOf(CycleCountPlanNotFoundException.class);
+        }
 }

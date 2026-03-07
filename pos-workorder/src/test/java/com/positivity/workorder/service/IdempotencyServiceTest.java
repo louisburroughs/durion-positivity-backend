@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -16,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.workorder.internal.entity.IdempotencyKey;
@@ -31,6 +35,10 @@ import com.positivity.workorder.internal.service.IdempotencyServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("IdempotencyService Unit Tests")
 class IdempotencyServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private IdempotencyKeyRepository repository;
@@ -43,8 +51,8 @@ class IdempotencyServiceTest {
 
     @BeforeEach
     void setUp() {
-        testKeyValue = "test-key-" + UUID.randomUUID();
-        testWorkorderId = UUID.randomUUID();
+        testKeyValue = "test-key-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testWorkorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
     // ===== GET EXISTING WORKORDER ID TESTS =====
@@ -53,7 +61,7 @@ class IdempotencyServiceTest {
     @DisplayName("getExistingWorkorderId - returns workorder ID for existing non-expired key")
     void getExistingWorkorderId_existingNotExpired_returnsWorkorderId() {
         // Arrange
-        Instant futureExpiry = Instant.now().plus(1, ChronoUnit.HOURS);
+        Instant futureExpiry = Instant.now(TEST_CLOCK).plus(1, ChronoUnit.HOURS);
         IdempotencyKey key = new IdempotencyKey(testKeyValue, testWorkorderId, futureExpiry);
         when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
 
@@ -69,7 +77,7 @@ class IdempotencyServiceTest {
     @DisplayName("getExistingWorkorderId - returns empty for expired key")
     void getExistingWorkorderId_expired_returnsEmpty() {
         // Arrange
-        Instant pastExpiry = Instant.now().minus(1, ChronoUnit.HOURS);
+        Instant pastExpiry = Instant.now(TEST_CLOCK).minus(1, ChronoUnit.HOURS);
         IdempotencyKey key = new IdempotencyKey(testKeyValue, testWorkorderId, pastExpiry);
         when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
 
@@ -114,7 +122,7 @@ class IdempotencyServiceTest {
     @DisplayName("registerKey - sets expiration to 24 hours in future")
     void registerKey_setsCorrectExpiration() {
         // Arrange
-        Instant beforeCall = Instant.now();
+        Instant beforeCall = Instant.now(TEST_CLOCK);
         when(repository.save(any(IdempotencyKey.class))).thenAnswer(invocation -> {
             IdempotencyKey saved = invocation.getArgument(0);
             Instant expectedExpiry = beforeCall.plus(24, ChronoUnit.HOURS);
@@ -170,13 +178,13 @@ class IdempotencyServiceTest {
     @DisplayName("cleanupExpiredKeys - passes current time to repository")
     void cleanupExpiredKeys_passesCurrentTime() {
         // Arrange
-        Instant beforeCall = Instant.now();
+        Instant beforeCall = Instant.now(TEST_CLOCK);
         when(repository.deleteExpiredKeys(any(Instant.class))).thenAnswer(invocation -> {
             Instant passedTime = invocation.getArgument(0);
             // Allow 1 second tolerance
             assertThat(passedTime).isBetween(
                     beforeCall.minus(1, ChronoUnit.SECONDS),
-                    Instant.now().plus(1, ChronoUnit.SECONDS));
+                    Instant.now(TEST_CLOCK).plus(1, ChronoUnit.SECONDS));
             return 0;
         });
 

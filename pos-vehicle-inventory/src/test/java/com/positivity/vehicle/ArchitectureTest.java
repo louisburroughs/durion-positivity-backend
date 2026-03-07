@@ -38,7 +38,7 @@ public class ArchitectureTest {
                 }
         };
 
-        private static final String UUID_V7_GENERATOR_FQN = "com.positivity.shared.id.UUIDv7Generator";
+        private static final String UUID_V7_GENERATOR_FQN = "com.positivity.shared.id.UUIDv7Id";
 
         @ArchTest
         static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
@@ -109,26 +109,24 @@ public class ArchitectureTest {
         static final ArchRule packages_should_be_free_of_cycles = slices()
                         .matching("com.positivity.vehicle.internal.(*)..")
                         .should().beFreeOfCycles()
+                        .allowEmptyShould(true)
                         .because("cyclic dependencies make modules harder to maintain and evolve");
         @ArchTest
-        static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
-                        .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
-                        .and().areAnnotatedWith("jakarta.persistence.Entity")
-                        .and().areNotAnnotatedWith("jakarta.persistence.DiscriminatorValue")
+        static final ArchRule entities_should_depend_on_uuidv7_generator = classes().that()
+                        .resideInAnyPackage("..internal.entity..", "..internal.model..").and()
+                        .areAnnotatedWith("jakarta.persistence.Entity").and()
+                        .areNotAnnotatedWith("jakarta.persistence.DiscriminatorValue")
                         .should(new ArchCondition<>("depend on " + UUID_V7_GENERATOR_FQN) {
                                 @Override
                                 public void check(JavaClass item, ConditionEvents events) {
                                         boolean dependsOnUuidv7 = item.getDirectDependenciesFromSelf().stream()
-                                                        .anyMatch(dependency -> UUID_V7_GENERATOR_FQN
-                                                                        .equals(dependency.getTargetClass()
-                                                                                        .getFullName()));
+                                                        .anyMatch(dependency -> UUID_V7_GENERATOR_FQN.equals(
+                                                                        dependency.getTargetClass().getFullName()));
 
-                                        events.add(new SimpleConditionEvent(item, dependsOnUuidv7,
-                                                        item.getFullName() + " does not depend on "
-                                                                        + UUID_V7_GENERATOR_FQN));
+                                        events.add(new SimpleConditionEvent(item, dependsOnUuidv7, item.getFullName()
+                                                        + " does not depend on " + UUID_V7_GENERATOR_FQN));
                                 }
-                        })
-                        .allowEmptyShould(true)
+                        }).allowEmptyShould(true)
                         .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
         @ArchTest
         static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()

@@ -115,9 +115,9 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
         void crossDock_fullExactQuantity_returns200WithWorkorderAndQuantity() throws Exception {
                 // Issue #33: full cross-dock must return 200, crossDockedQuantity=10,
                 // workorderId present, sessionStatus not null
-                UUID sessionId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
-                UUID workorderLineId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 CrossDockResponse response = CrossDockResponse.builder()
                                 .lineId(lineId)
@@ -168,9 +168,9 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
         void crossDock_partialQuantity_returns200WithPartialCrossDockedQuantity() throws Exception {
                 // Issue #33: partial cross-dock (qty < expectedQty) must return 200,
                 // crossDockedQuantity=3
-                UUID sessionId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
-                UUID workorderLineId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 CrossDockResponse response = CrossDockResponse.builder()
                                 .lineId(lineId)
@@ -223,9 +223,9 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
         void crossDock_closedWorkorder_returns400WithWorkorderClosedError() throws Exception {
                 // Issue #33: cross-dock to a closed workorder must return 400, body contains
                 // WORKORDER_CLOSED
-                UUID sessionId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
-                UUID workorderLineId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(receivingService.crossDockLineToWorkorder(eq(sessionId), eq(lineId), any(), any()))
                                 .thenThrow(new WorkorderClosedException("Workorder WO-CLOSED is closed"));
@@ -271,9 +271,9 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
         void crossDock_missingIssuePartsAuthority_returns403Forbidden() throws Exception {
                 // Issue #33: missing inventory:issue:parts must cause @PreAuthorize to deny →
                 // 403
-                UUID sessionId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
-                UUID workorderLineId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // No mock needed: Spring Security rejects before service is invoked.
 
@@ -293,9 +293,9 @@ class CrossDockContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("AC5: POST cross-dock with part mismatch and no override permission returns 403")
         void crossDock_partMismatchWithoutOverridePermission_returns403() throws Exception {
-                UUID sessionId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
-                UUID workorderLineId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(receivingService.crossDockLineToWorkorder(eq(sessionId), eq(lineId), any(), any()))
                                 .thenThrow(new PartMatchPermissionException(

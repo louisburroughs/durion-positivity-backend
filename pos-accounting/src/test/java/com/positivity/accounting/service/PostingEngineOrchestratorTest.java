@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
 import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +60,7 @@ import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PostingEngineOrchestrator Unit Tests")
 class PostingEngineOrchestratorTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private PostingRuleEvaluator postingRuleEvaluator;
@@ -95,7 +99,7 @@ class PostingEngineOrchestratorTest {
     void setUp() {
         // Create orchestrator with all dependencies
         objectMapper = new ObjectMapper();
-        orchestrator = new PostingEngineOrchestrator(
+        orchestrator = new PostingEngineOrchestrator(TEST_CLOCK,
                 postingRuleEvaluator,
                 journalEntryService,
                 idempotencyService,
@@ -103,10 +107,10 @@ class PostingEngineOrchestratorTest {
                 reprocessingAttemptHistoryRepository,
                 objectMapper);
 
-        testOrganizationId = UUID.randomUUID();
-        testEventId = UUID.randomUUID();
-        testMappingVersion = UUID.randomUUID();
-        testJournalEntryId = UUID.randomUUID();
+        testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testEventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testMappingVersion = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testJournalEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testUserId = "test-user-123";
 
         // Setup test payload
@@ -119,16 +123,16 @@ class PostingEngineOrchestratorTest {
         testEvent.setEventId(testEventId);
         testEvent.setOrganizationId(testOrganizationId);
         testEvent.setEventType("INVOICE_RECEIVED");
-        testEvent.setTransactionDate(LocalDateTime.now());
+        testEvent.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
         testEvent.setPayload(testPayload);
         testEvent.setStatus(AccountingEventStatus.RECEIVED);
-        testEvent.setReceivedAt(Instant.now());
+        testEvent.setReceivedAt(Instant.now(TEST_CLOCK));
         testEvent.setSourceSystem("TEST_SYSTEM");
 
         // Setup test journal entry
         testJournalEntry = new JournalEntry();
         testJournalEntry.setJournalEntryId(testJournalEntryId);
-        testJournalEntry.setTransactionDate(LocalDateTime.now());
+        testJournalEntry.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
         testJournalEntry.setDescription("Test journal entry");
         testJournalEntry.setStatus(JournalEntryStatus.DRAFT);
         testJournalEntry.setLines(createBalancedLines());
@@ -138,7 +142,7 @@ class PostingEngineOrchestratorTest {
         List<JournalEntryLine> lines = new ArrayList<>();
 
         JournalEntryLine debitLine = new JournalEntryLine();
-        debitLine.setGlAccountId(UUID.randomUUID());
+        debitLine.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         debitLine.setAccountCode("1000");
         debitLine.setAccountName("Cash");
         debitLine.setDebitAmount(new BigDecimal("1000.00"));
@@ -146,7 +150,7 @@ class PostingEngineOrchestratorTest {
         lines.add(debitLine);
 
         JournalEntryLine creditLine = new JournalEntryLine();
-        creditLine.setGlAccountId(UUID.randomUUID());
+        creditLine.setGlAccountId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         creditLine.setAccountCode("2000");
         creditLine.setAccountName("Accounts Payable");
         creditLine.setDebitAmount(BigDecimal.ZERO);

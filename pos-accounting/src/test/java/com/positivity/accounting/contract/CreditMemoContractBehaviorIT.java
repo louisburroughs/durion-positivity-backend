@@ -1,5 +1,8 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -56,6 +59,7 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
  */
 @DisplayName("Credit Memo Backend Contract Behavioral Tests (CAP-052)")
 public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private CreditMemoRepository creditMemoRepository;
@@ -79,8 +83,8 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Setup default invoice service mocks
                 // Default invoice details for $110 balance
-                UUID invoiceId = UUID.randomUUID();
-                UUID customerId = UUID.randomUUID();
+                UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InvoiceDetails defaultInvoice = InvoiceDetails.builder()
                                 .invoiceId(invoiceId)
                                 .customerId(customerId)
@@ -89,13 +93,13 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                                 .totalPaid(BigDecimal.ZERO)
                                 .balanceDue(new BigDecimal("110.00"))
                                 .currency("USD")
-                                .invoiceDate(Instant.now().minus(10, ChronoUnit.DAYS))
+                                .invoiceDate(Instant.now(Clock.systemUTC()))
                                 .build();
                 when(invoiceServiceClient.getInvoiceDetails(any(UUID.class))).thenReturn(defaultInvoice);
 
                 // Default invoice update response
                 ApplyCreditMemoResponse defaultResponse = new ApplyCreditMemoResponse();
-                defaultResponse.setInvoiceId(UUID.randomUUID());
+                defaultResponse.setInvoiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 defaultResponse.setBalanceBefore(new BigDecimal("110.00"));
                 defaultResponse.setBalanceAfter(new BigDecimal("0.00"));
                 defaultResponse.setStatus(InvoiceStatus.PAID_IN_FULL);
@@ -114,10 +118,13 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         private void seedConfiguredGLAccounts() {
-                glAccountRepository.save(createGlAccount(REVENUE_ACCOUNT_ID, "4000-000", "Revenue", AccountType.REVENUE));
                 glAccountRepository
-                                .save(createGlAccount(TAX_PAYABLE_ACCOUNT_ID, "2200-000", "Tax Payable", AccountType.LIABILITY));
-                glAccountRepository.save(createGlAccount(AR_ACCOUNT_ID, "1200-000", "Accounts Receivable", AccountType.ASSET));
+                                .save(createGlAccount(REVENUE_ACCOUNT_ID, "4000-000", "Revenue", AccountType.REVENUE));
+                glAccountRepository
+                                .save(createGlAccount(TAX_PAYABLE_ACCOUNT_ID, "2200-000", "Tax Payable",
+                                                AccountType.LIABILITY));
+                glAccountRepository.save(
+                                createGlAccount(AR_ACCOUNT_ID, "1200-000", "Accounts Receivable", AccountType.ASSET));
         }
 
         private GLAccount createGlAccount(UUID id, String code, String name, AccountType accountType) {
@@ -126,7 +133,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                 account.setAccountCode(code);
                 account.setAccountName(name);
                 account.setAccountType(accountType);
-                account.setActivationDate(LocalDateTime.now().minusDays(1));
+                account.setActivationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
                 account.setCreatedBy(TEST_USER);
                 account.setModifiedBy(TEST_USER);
                 return account;
@@ -140,7 +147,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-CM-001: Create full credit memo (Contract Example 1)")
         void testCreateFullCreditMemo_Success() throws Exception {
                 // Arrange: Full credit for returned goods (per contract guide example)
-                UUID testInvoiceId = UUID.randomUUID();
+                UUID testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CreateCreditMemoRequest request = new CreateCreditMemoRequest();
                 request.setOriginalInvoiceId(testInvoiceId);
                 request.setCreditAmount(new BigDecimal("100.00"));
@@ -181,7 +188,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-CM-002: Create partial credit memo (Contract Example 2)")
         void testCreatePartialCreditMemo_Success() throws Exception {
                 // Arrange: Partial credit for pricing error
-                UUID testInvoiceId = UUID.randomUUID();
+                UUID testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CreateCreditMemoRequest request = new CreateCreditMemoRequest();
                 request.setOriginalInvoiceId(testInvoiceId);
                 request.setCreditAmount(new BigDecimal("25.00")); // Partial amount
@@ -214,11 +221,11 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-CM-003: List credit memos with pagination")
         void testListCreditMemos_Paginated() throws Exception {
                 // Arrange: Create multiple credit memos
-                UUID invoiceId = UUID.randomUUID();
+                UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 for (int i = 0; i < 5; i++) {
                         CreditMemo cm = new CreditMemo();
                         cm.setOriginalInvoiceId(invoiceId);
-                        cm.setCustomerId(UUID.randomUUID());
+                        cm.setCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                         cm.setCreditAmount(new BigDecimal("10.00"));
                         cm.setTaxAmountReversed(new BigDecimal("1.00"));
                         // totalAmount is now calculated: 10.00 + 1.00 = 11.00
@@ -247,9 +254,9 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         void testGetCreditMemo_Success() throws Exception {
                 // Arrange: Create a credit memo
                 CreditMemo cm = new CreditMemo();
-                UUID invoiceId = UUID.randomUUID();
+                UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 cm.setOriginalInvoiceId(invoiceId);
-                cm.setCustomerId(UUID.randomUUID());
+                cm.setCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 cm.setCreditAmount(new BigDecimal("50.00"));
                 cm.setTaxAmountReversed(new BigDecimal("5.00"));
                 // totalAmount is now calculated: 50.00 + 5.00 = 55.00
@@ -264,7 +271,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                 // Mock invoice details for balance lookup
                 InvoiceDetails invoice = InvoiceDetails.builder()
                                 .invoiceId(invoiceId)
-                                .customerId(UUID.randomUUID())
+                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(InvoiceStatus.OPEN)
                                 .totalAmount(new BigDecimal("110.00"))
                                 .balanceDue(new BigDecimal("55.00")) // Balance after credit applied
@@ -285,13 +292,13 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-CM-005: Filter credit memos by invoice ID")
         void testListCreditMemos_FilterByInvoice() throws Exception {
                 // Arrange: Create credit memos for different invoices
-                UUID targetInvoiceId = UUID.randomUUID();
-                UUID otherInvoiceId = UUID.randomUUID();
+                UUID targetInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID otherInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
                 for (int i = 0; i < 3; i++) {
                         CreditMemo cm = new CreditMemo();
                         cm.setOriginalInvoiceId(i < 2 ? targetInvoiceId : otherInvoiceId);
-                        cm.setCustomerId(UUID.randomUUID());
+                        cm.setCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                         cm.setCreditAmount(new BigDecimal("10.00"));
                         cm.setTaxAmountReversed(new BigDecimal("1.00"));
                         // totalAmount is now calculated: 10.00 + 1.00 = 11.00
@@ -322,7 +329,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CE-CM-001: Amount exceeds balance - 409 Conflict (Contract Example)")
         void testCreateCreditMemo_AmountExceedsBalance() throws Exception {
                 // Arrange: Credit amount exceeds stubbed invoice balance ($110)
-                UUID testInvoiceId = UUID.randomUUID();
+                UUID testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CreateCreditMemoRequest request = new CreateCreditMemoRequest();
                 request.setOriginalInvoiceId(testInvoiceId);
                 request.setCreditAmount(new BigDecimal("200.00")); // Exceeds balance
@@ -343,7 +350,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CE-CM-002: Missing reason code - 400 Bad Request (Contract Example)")
         void testCreateCreditMemo_MissingReasonCode() throws Exception {
                 // Arrange: No reason code provided
-                UUID testInvoiceId = UUID.randomUUID();
+                UUID testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CreateCreditMemoRequest request = new CreateCreditMemoRequest();
                 request.setOriginalInvoiceId(testInvoiceId);
                 request.setCreditAmount(new BigDecimal("50.00"));
@@ -362,7 +369,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CE-CM-003: Credit memo not found - 404 Not Found")
         void testGetCreditMemo_NotFound() throws Exception {
                 // Arrange: Non-existent credit memo ID
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act & Assert: Expect 404 Not Found
                 mockMvc.perform(withAuth(get(API_V1_CREDIT_MEMOS + "/" + nonExistentId)))
@@ -375,7 +382,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CE-CM-004: Invalid credit amount - 400 Bad Request")
         void testCreateCreditMemo_InvalidAmount() throws Exception {
                 // Arrange: Negative credit amount
-                UUID testInvoiceId = UUID.randomUUID();
+                UUID testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CreateCreditMemoRequest request = new CreateCreditMemoRequest();
                 request.setOriginalInvoiceId(testInvoiceId);
                 request.setCreditAmount(new BigDecimal("-10.00")); // Invalid
@@ -393,8 +400,8 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CE-CM-005: Fully paid invoice - 409 Conflict")
         void testCreateCreditMemo_FullyPaidInvoice() throws Exception {
                 // Arrange: Invoice is fully paid (zero balance remaining)
-                UUID testInvoiceId = UUID.randomUUID();
-                UUID customerId = UUID.randomUUID();
+                UUID testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Mock a fully-paid invoice with zero balance
                 InvoiceDetails fullyPaidInvoice = InvoiceDetails.builder()
@@ -405,7 +412,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                                 .totalPaid(new BigDecimal("110.00"))
                                 .balanceDue(BigDecimal.ZERO)
                                 .currency("USD")
-                                .invoiceDate(Instant.now().minus(5, ChronoUnit.DAYS))
+                                .invoiceDate(Instant.now(TEST_CLOCK).minus(5, ChronoUnit.DAYS))
                                 .build();
                 when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(fullyPaidInvoice);
 
@@ -434,7 +441,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AUTH-CM-001: Missing authorities - 403 Forbidden")
         void testCreateCreditMemo_NoAuthorities() throws Exception {
                 // Arrange: Request without authorities
-                UUID testInvoiceId = UUID.randomUUID();
+                UUID testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CreateCreditMemoRequest request = new CreateCreditMemoRequest();
                 request.setOriginalInvoiceId(testInvoiceId);
                 request.setCreditAmount(new BigDecimal("50.00"));

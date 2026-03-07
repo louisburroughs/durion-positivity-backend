@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,6 +27,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -58,6 +62,11 @@ import com.positivity.accounting.internal.service.PaymentApplicationServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PaymentApplicationService Unit Tests")
 class PaymentApplicationServiceTest {
+
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+        @Spy
+        private Clock clock = TEST_CLOCK;
 
         @Mock
         private ReceivablePaymentRepository receivablePaymentRepository;
@@ -95,11 +104,11 @@ class PaymentApplicationServiceTest {
 
         @BeforeEach
         void setUp() {
-                testPaymentId = UUID.randomUUID();
-                testCustomerId = UUID.randomUUID();
-                testInvoiceId = UUID.randomUUID();
-                testSourceEventId = UUID.randomUUID();
-                testApplicationRequestId = UUID.randomUUID().toString();
+                testPaymentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testSourceEventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testApplicationRequestId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 
                 testPayment = new ReceivablePayment();
                 testPayment.setPaymentId(testPaymentId);
@@ -108,9 +117,9 @@ class PaymentApplicationServiceTest {
                 testPayment.setUnappliedAmount(new BigDecimal("1000.00"));
                 testPayment.setCurrency("USD");
                 testPayment.setStatus(ReceivablePaymentStatus.AVAILABLE);
-                testPayment.setClearedAt(Instant.now());
+                testPayment.setClearedAt(Instant.now(TEST_CLOCK));
                 testPayment.setSourceEventId(testSourceEventId);
-                testPayment.setCreatedAt(Instant.now());
+                testPayment.setCreatedAt(Instant.now(TEST_CLOCK));
         }
 
         // ========================================
@@ -130,7 +139,7 @@ class PaymentApplicationServiceTest {
                                 testCustomerId,
                                 "USD",
                                 new BigDecimal("1000.00"),
-                                Instant.now(),
+                                Instant.now(TEST_CLOCK),
                                 testSourceEventId);
 
                 // Assert
@@ -159,7 +168,7 @@ class PaymentApplicationServiceTest {
                                 testCustomerId,
                                 "USD",
                                 new BigDecimal("1000.00"),
-                                Instant.now(),
+                                Instant.now(TEST_CLOCK),
                                 testSourceEventId);
 
                 // Assert
@@ -223,8 +232,8 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should apply payment to multiple invoices successfully")
         void testApplyPaymentToInvoices_MultipleInvoices_Success() {
                 // Arrange
-                UUID invoice1 = UUID.randomUUID();
-                UUID invoice2 = UUID.randomUUID();
+                UUID invoice1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID invoice2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplicationRequest request = createApplicationRequest(
                                 testApplicationRequestId,
                                 List.of(
@@ -239,9 +248,9 @@ class PaymentApplicationServiceTest {
                 when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
-                                createTestInvoiceDetails(UUID.randomUUID(), InvoiceStatus.OPEN, "USD", "1000.00"));
+                                createTestInvoiceDetails(UUID.fromString("00000000-0000-0000-0000-000000000001"), InvoiceStatus.OPEN, "USD", "1000.00"));
                 when(invoiceServiceClient.applyPaymentToInvoice(any(), any())).thenReturn(
-                                createApplyPaymentResponse(UUID.randomUUID(), "1000.00", "500.00"));
+                                createApplyPaymentResponse(UUID.fromString("00000000-0000-0000-0000-000000000001"), "1000.00", "500.00"));
 
                 // Act
                 PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
@@ -307,14 +316,14 @@ class PaymentApplicationServiceTest {
         void testApplyPaymentToInvoices_Idempotent() {
                 // Arrange
                 PaymentApplication existingApplication = new PaymentApplication();
-                existingApplication.setPaymentApplicationId(UUID.randomUUID());
+                existingApplication.setPaymentApplicationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 existingApplication.setPaymentId(testPaymentId);
                 existingApplication.setCustomerId(testCustomerId);
                 existingApplication.setInvoiceId(testInvoiceId);
                 existingApplication.setAppliedAmount(new BigDecimal("500.00"));
                 existingApplication.setCurrency("USD");
                 existingApplication.setApplicationRequestId(testApplicationRequestId);
-                existingApplication.setApplicationTimestamp(Instant.now());
+                existingApplication.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 // Balance snapshot persisted from original application
                 existingApplication.setInvoiceBalanceBefore(new BigDecimal("1000.00"));
                 existingApplication.setInvoiceBalanceAfter(new BigDecimal("500.00"));
@@ -439,14 +448,14 @@ class PaymentApplicationServiceTest {
                 // Arrange — simulate a retry where the application already exists with balance
                 // data
                 PaymentApplication existingApplication = new PaymentApplication();
-                existingApplication.setPaymentApplicationId(UUID.randomUUID());
+                existingApplication.setPaymentApplicationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 existingApplication.setPaymentId(testPaymentId);
                 existingApplication.setCustomerId(testCustomerId);
                 existingApplication.setInvoiceId(testInvoiceId);
                 existingApplication.setAppliedAmount(new BigDecimal("500.00"));
                 existingApplication.setCurrency("USD");
                 existingApplication.setApplicationRequestId(testApplicationRequestId);
-                existingApplication.setApplicationTimestamp(Instant.now());
+                existingApplication.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 existingApplication.setInvoiceBalanceBefore(new BigDecimal("2000.00"));
                 existingApplication.setInvoiceBalanceAfter(new BigDecimal("1500.00"));
                 existingApplication.setInvoiceStatus(InvoiceStatus.PARTIALLY_PAID);
@@ -580,7 +589,7 @@ class PaymentApplicationServiceTest {
         void testVoidPayment_ConflictWhenApplied() {
                 // Arrange
                 PaymentApplication existing = new PaymentApplication();
-                existing.setPaymentApplicationId(UUID.randomUUID());
+                existing.setPaymentApplicationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 existing.setPaymentId(testPaymentId);
                 existing.setInvoiceId(testInvoiceId);
                 existing.setAppliedAmount(new BigDecimal("100.00"));
@@ -606,7 +615,7 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should reverse payment by reusing payment-application reversal")
         void testReversePayment_Success() {
                 // Arrange
-                UUID applicationId = UUID.randomUUID();
+                UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
                 application.setPaymentId(testPaymentId);
@@ -615,7 +624,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
@@ -628,7 +637,7 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.randomUUID());
+                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });
@@ -679,7 +688,7 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should no-op reversePayment when all applications are already reversed")
         void testReversePayment_AllAlreadyReversed_NoOp() {
                 // Arrange
-                UUID applicationId = UUID.randomUUID();
+                UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
                 application.setPaymentId(testPaymentId);
@@ -708,7 +717,7 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should reverse payment application successfully")
         void testReversePaymentApplication_Success() {
                 // Arrange
-                UUID applicationId = UUID.randomUUID();
+                UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
                 application.setPaymentId(testPaymentId);
@@ -717,7 +726,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00")); // Already had some applied
 
@@ -729,7 +738,7 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.randomUUID());
+                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });
@@ -765,7 +774,7 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should use authenticated user from SecurityContext for reversal audit")
         void testReversePaymentApplication_WithAuthenticatedUser() {
                 // Arrange
-                UUID applicationId = UUID.randomUUID();
+                UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
                 application.setPaymentId(testPaymentId);
@@ -774,7 +783,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
@@ -786,7 +795,7 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.randomUUID());
+                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });
@@ -824,7 +833,7 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should fail when application not found")
         void testReversePaymentApplication_ApplicationNotFound() {
                 // Arrange
-                UUID applicationId = UUID.randomUUID();
+                UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.empty());
 
                 // Act & Assert
@@ -841,7 +850,7 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should fail when application already reversed")
         void testReversePaymentApplication_AlreadyReversed() {
                 // Arrange
-                UUID applicationId = UUID.randomUUID();
+                UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
                 application.setPaymentId(testPaymentId);
@@ -850,7 +859,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 // Note: No isReversed field - check via repository
 
                 when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
@@ -870,7 +879,7 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should prevent duplicate reversals via repository check")
         void testReversePaymentApplication_DuplicateReversalPrevented() {
                 // Arrange
-                UUID applicationId = UUID.randomUUID();
+                UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
                 application.setPaymentId(testPaymentId);
@@ -879,7 +888,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
                                 .thenReturn(true); // Already reversed
@@ -900,7 +909,7 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should fail and roll back local changes when invoice service fails during reversal")
         void testReversePaymentApplication_InvoiceServiceFailure() {
                 // Arrange
-                UUID applicationId = UUID.randomUUID();
+                UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
                 application.setPaymentId(testPaymentId);
@@ -909,7 +918,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
@@ -921,7 +930,7 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.randomUUID());
+                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });
@@ -949,7 +958,7 @@ class PaymentApplicationServiceTest {
         @DisplayName("Should propagate 4xx status from invoice service during reversal")
         void testReversePaymentApplication_InvoiceServiceClientError() {
                 // Arrange
-                UUID applicationId = UUID.randomUUID();
+                UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
                 application.setPaymentId(testPaymentId);
@@ -958,7 +967,7 @@ class PaymentApplicationServiceTest {
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
                 application.setApplicationRequestId(testApplicationRequestId);
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
@@ -970,7 +979,7 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.randomUUID());
+                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });

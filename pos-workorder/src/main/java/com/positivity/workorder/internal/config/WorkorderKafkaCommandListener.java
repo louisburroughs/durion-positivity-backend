@@ -1,8 +1,8 @@
 package com.positivity.workorder.internal.config;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
-import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -10,6 +10,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 
 import lombok.RequiredArgsConstructor;
@@ -33,8 +34,10 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class WorkorderKafkaCommandListener {
 
+    private static final String PAYLOAD = "payload";
     private static final String COMMAND_ASSIGNMENT_UPDATED = "ASSIGNMENT_UPDATED";
 
+    private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
 
@@ -45,7 +48,7 @@ public class WorkorderKafkaCommandListener {
             boolean hasCommandType = root.hasNonNull("commandType");
             String commandType = COMMAND_ASSIGNMENT_UPDATED;
             if (hasCommandType) {
-                String rawCommandType = root.get("commandType").textValue();
+                String rawCommandType = root.get("commandType").stringValue();
                 if (rawCommandType != null && !rawCommandType.isBlank()) {
                     commandType = rawCommandType.toUpperCase(Locale.ROOT);
                 }
@@ -57,9 +60,9 @@ public class WorkorderKafkaCommandListener {
             }
 
             JsonNode payloadNode = hasCommandType
-                    && root.has("payload")
-                    && !root.get("payload").isNull()
-                            ? root.get("payload")
+                    && root.has(PAYLOAD)
+                    && !root.get(PAYLOAD).isNull()
+                            ? root.get(PAYLOAD)
                             : root;
 
             AssignmentUpdatedEvent event = objectMapper.treeToValue(payloadNode, AssignmentUpdatedEvent.class);
@@ -69,10 +72,10 @@ public class WorkorderKafkaCommandListener {
             }
 
             if (event.getEventId() == null) {
-                event.setEventId(UUID.randomUUID());
+                event.setEventId(UUIDv7Generator.generate());
             }
             if (event.getTimestamp() == null) {
-                event.setTimestamp(Instant.now());
+                event.setTimestamp(Instant.now(clock));
             }
 
             applicationEventPublisher.publishEvent(event);

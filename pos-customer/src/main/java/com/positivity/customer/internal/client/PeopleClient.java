@@ -8,6 +8,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import com.positivity.shared.id.UUIDv7Generator;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -54,7 +56,7 @@ public class PeopleClient {
             return response.getPersonId();
         } catch (Exception exception) {
             if (allowLocalFallback) {
-                UUID fallback = UUID.randomUUID();
+                UUID fallback = UUIDv7Generator.generate();
                 log.warn("Falling back to generated personId={} because pos-people resolve failed: {}",
                         fallback, exception.getMessage());
                 return fallback;

@@ -1,5 +1,8 @@
 package com.positivity.accounting.controller;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,6 +51,7 @@ import tools.jackson.databind.ObjectMapper;
 @ActiveProfiles("test")
 @DisplayName("DefaultGLMappingController Tests")
 class DefaultGLMappingControllerTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private WebApplicationContext context;
@@ -104,9 +108,9 @@ class DefaultGLMappingControllerTest {
                                 .creditAccountName("Revenue")
                                 .description("Default mapping for invoice creation")
                                 .active(true)
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .createdBy("test-user")
-                                .modifiedAt(Instant.now())
+                                .modifiedAt(Instant.now(TEST_CLOCK))
                                 .modifiedBy("test-user")
                                 .build();
         }
@@ -214,7 +218,7 @@ class DefaultGLMappingControllerTest {
                 @DisplayName("should return 404 when mapping not found")
                 void shouldReturn404WhenMappingNotFound() throws Exception {
                         // Arrange
-                        UUID unknownId = UUID.randomUUID();
+                        UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         when(service.updateDefaultMapping(eq(unknownId), any(DefaultGLMappingRequest.class)))
                                         .thenThrow(new IllegalArgumentException(
                                                         "Default GL mapping not found: " + unknownId));
@@ -250,7 +254,7 @@ class DefaultGLMappingControllerTest {
                 @DisplayName("should return 404 when mapping not found for deactivation")
                 void shouldReturn404WhenMappingNotFoundForDeactivation() throws Exception {
                         // Arrange
-                        UUID unknownId = UUID.randomUUID();
+                        UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         doThrow(new IllegalArgumentException("Default GL mapping not found: " + unknownId))
                                         .when(service).deactivateDefaultMapping(unknownId);
 
@@ -286,7 +290,7 @@ class DefaultGLMappingControllerTest {
                 @DisplayName("should return 404 when mapping not found")
                 void shouldReturn404WhenMappingNotFound() throws Exception {
                         // Arrange
-                        UUID unknownId = UUID.randomUUID();
+                        UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                         when(service.getDefaultMapping(unknownId))
                                         .thenThrow(new IllegalArgumentException(
                                                         "Default GL mapping not found: " + unknownId));
@@ -418,13 +422,13 @@ class DefaultGLMappingControllerTest {
                         // Arrange
                         validResponse.setOrganizationId(null);
                         DefaultGLMappingResponse anotherGlobal = DefaultGLMappingResponse.builder()
-                                        .mappingId(UUID.randomUUID())
+                                        .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                         .eventType("REFUND_ISSUED")
                                         .organizationId(null)
                                         .debitAccountId(DEBIT_ACCOUNT_ID)
                                         .creditAccountId(CREDIT_ACCOUNT_ID)
                                         .active(true)
-                                        .createdAt(Instant.now())
+                                        .createdAt(Instant.now(TEST_CLOCK))
                                         .createdBy("system")
                                         .build();
 

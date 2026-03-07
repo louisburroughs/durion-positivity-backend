@@ -1,37 +1,44 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
-import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
-import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
-import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.entity.PickTaskEntity;
-import com.positivity.inventory.internal.enums.PickTaskStatus;
-import com.positivity.inventory.internal.exception.ResourceNotFoundException;
-import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
-import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
-import com.positivity.inventory.internal.repository.PickTaskRepository;
-import com.positivity.security.common.SecurityContextHelper;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import com.positivity.inventory.service.ConsumptionService;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
+import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
+import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.PickTaskEntity;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.PickTaskStatus;
+import com.positivity.inventory.internal.exception.ResourceNotFoundException;
+import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
+import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.PickTaskRepository;
+import com.positivity.inventory.service.ConsumptionService;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
+
 @Service
 @Transactional
 public class ConsumptionServiceImpl implements ConsumptionService {
+    private final Clock clock;
 
     private final PickTaskRepository pickTaskRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     public ConsumptionServiceImpl(
             PickTaskRepository pickTaskRepository,
-            InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            Clock clock) {
+        this.clock = clock;
         this.pickTaskRepository = pickTaskRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
     }
@@ -70,11 +77,11 @@ public class ConsumptionServiceImpl implements ConsumptionService {
         int totalItemsConsumed = items.stream().mapToInt(ConsumeItemLine::getQuantity).sum();
 
         return new ConsumptionResponse(
-                UUID.randomUUID(),
+                UUIDv7Generator.generate(),
                 request.getWorkorderId(),
                 request.getPickListId(),
                 totalItemsConsumed,
-                Instant.now(),
+                Instant.now(clock),
                 ledgerEntryIds);
     }
 

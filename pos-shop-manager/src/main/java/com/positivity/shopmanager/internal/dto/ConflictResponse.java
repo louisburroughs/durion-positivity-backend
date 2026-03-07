@@ -20,20 +20,25 @@ public class ConflictResponse {
     public ConflictResponse() {
     }
 
-    public ConflictResponse(String errorCode, String message, String correlationId, List<Conflict> conflicts) {
+    public ConflictResponse(
+            String errorCode,
+            String message,
+            String correlationId,
+            Instant timestamp,
+            List<Conflict> conflicts) {
         this.errorCode = errorCode;
         this.message = message;
         this.correlationId = correlationId;
-        this.timestamp = Instant.now();
+        this.timestamp = timestamp;
         this.conflicts = conflicts;
     }
 
-    public ConflictResponse(String errorCode, String message, String correlationId,
+    public ConflictResponse(String errorCode, String message, String correlationId, Instant timestamp,
             List<Conflict> conflicts, List<SuggestedAlternative> suggestedAlternatives) {
         this.errorCode = errorCode;
         this.message = message;
         this.correlationId = correlationId;
-        this.timestamp = Instant.now();
+        this.timestamp = timestamp;
         this.conflicts = conflicts;
         this.suggestedAlternatives = suggestedAlternatives;
     }

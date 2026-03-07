@@ -1,24 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
-import com.positivity.securityservice.internal.entity.JwtToken;
-import com.positivity.securityservice.internal.repository.JwtTokenRepository;
-import com.positivity.securityservice.service.JwtService;
-import com.positivity.securityservice.service.RoleAuthorityService;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
@@ -27,7 +10,28 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
+
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.securityservice.internal.entity.JwtToken;
+import com.positivity.securityservice.internal.repository.JwtTokenRepository;
+import com.positivity.securityservice.service.JwtService;
+import com.positivity.securityservice.service.RoleAuthorityService;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
+import io.jsonwebtoken.Jwts;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for handling JWT token operations such as generation, validation,
@@ -37,6 +41,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class JwtServiceImpl implements JwtService {
+    private final Clock clock;
+
     private static final long ACCESS_TOKEN_EXPIRATION_SECONDS = 3600L;
     private static final long REFRESH_TOKEN_EXPIRATION_SECONDS = 604800L;
 
@@ -77,50 +83,13 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public String generateToken(String username, String personId, Set<String> roles) {
-        if (username == null || username.isBlank()) {
-            throw new IllegalArgumentException("Username cannot be blank");
-        }
-        if (roles == null || roles.isEmpty()) {
-            throw new IllegalArgumentException("Roles cannot be empty");
-        }
-        String resolvedPersonId = resolvePersonId(username, personId);
-
-        Instant now = Instant.now();
-        Instant expiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
-        String jti = UUID.randomUUID().toString();
-        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(roles);
-
-        String token = Jwts.builder()
-                .id(jti)
-                .subject(username)
-                .claim(PERSON_ID, resolvedPersonId)
-                .claim(ROLES, roles)
-                .claim(AUTHORITIES, authorities)
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(expiry))
-                .signWith(secretKey)
-                .compact();
-
-        JwtToken jwtToken = new JwtToken();
-        jwtToken.setToken(token);
-        jwtToken.setIssuedAt(now);
-        jwtToken.setExpiresAt(expiry);
-        jwtToken.setSubject(username);
-        jwtTokenRepository.save(jwtToken);
-
-        log.debug("Generated JWT token: username={}, personId={}, jti={}, expiresAt={}",
-                username, resolvedPersonId, jti, expiry);
-
-        return token;
+        return generateTokenPair(username, personId, roles).accessToken();
     }
 
     @Override
     public boolean validateToken(String token) {
         try {
-            Jws<Claims> jws = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(token);
+            Jws<Claims> jws = jwtParser().parseSignedClaims(token);
 
             Claims claims = jws.getPayload();
             String jti = claims.getId();
@@ -131,7 +100,7 @@ public class JwtServiceImpl implements JwtService {
             }
 
             Instant expiresAt = claims.getExpiration().toInstant();
-            if (expiresAt.isBefore(Instant.now())) {
+            if (expiresAt.isBefore(Instant.now(clock))) {
                 log.debug("Token validation failed: token is expired. jti={}", jti);
                 return false;
             }
@@ -153,9 +122,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public String getUsernameFromToken(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
+        return jwtParser()
                 .parseSignedClaims(token)
                 .getPayload()
                 .getSubject();
@@ -163,9 +130,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public String getPersonIdFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
+        Claims claims = jwtParser()
                 .parseSignedClaims(token)
                 .getPayload();
         String personId = claims.get(PERSON_ID, String.class);
@@ -177,9 +142,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public Set<String> getRolesFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
+        Claims claims = jwtParser()
                 .parseSignedClaims(token).getPayload();
         Object rolesObj = claims.get(ROLES);
         if (rolesObj instanceof List<?> rolesList) {
@@ -196,9 +159,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public Set<String> getAuthoritiesFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
+        Claims claims = jwtParser()
                 .parseSignedClaims(token).getPayload();
         Object authObj = claims.get(AUTHORITIES);
         if (authObj instanceof List<?> list) {
@@ -225,17 +186,13 @@ public class JwtServiceImpl implements JwtService {
         jwtTokenRepository.delete(existingToken.get());
 
         try {
-            Claims claims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+            Claims claims = jwtParser().parseSignedClaims(token).getPayload();
 
             String jti = claims.getId();
             Instant expiresAt = claims.getExpiration().toInstant();
 
             if (jti != null && expiresAt != null) {
-                long secondsUntilExpiry = ChronoUnit.SECONDS.between(Instant.now(), expiresAt);
+                long secondsUntilExpiry = ChronoUnit.SECONDS.between(Instant.now(clock), expiresAt);
                 if (secondsUntilExpiry > 0) {
                     tokenRevocationManager.revokeToken(jti, secondsUntilExpiry);
                     log.debug("Token deleted and revoked: jti={}", jti);
@@ -274,12 +231,12 @@ public class JwtServiceImpl implements JwtService {
         }
         String resolvedPersonId = resolvePersonId(username, personId);
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         Instant accessExpiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
         Instant refreshExpiry = now.plusSeconds(REFRESH_TOKEN_EXPIRATION_SECONDS);
 
-        String accessJti = UUID.randomUUID().toString();
-        String refreshJti = UUID.randomUUID().toString();
+        String accessJti = UUIDv7Generator.generate().toString();
+        String refreshJti = UUIDv7Generator.generate().toString();
 
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(roles);
 
@@ -322,10 +279,7 @@ public class JwtServiceImpl implements JwtService {
     @Override
     public boolean validateRefreshToken(String refreshToken) {
         try {
-            Jws<Claims> jws = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(refreshToken);
+            Jws<Claims> jws = jwtParser().parseSignedClaims(refreshToken);
 
             Claims claims = jws.getPayload();
             String jti = claims.getId();
@@ -336,7 +290,7 @@ public class JwtServiceImpl implements JwtService {
             }
 
             Instant expiresAt = claims.getExpiration().toInstant();
-            if (expiresAt.isBefore(Instant.now())) {
+            if (expiresAt.isBefore(Instant.now(clock))) {
                 log.debug("Refresh token validation failed: token is expired. jti={}", jti);
                 return false;
             }
@@ -373,11 +327,7 @@ public class JwtServiceImpl implements JwtService {
         Set<String> roles = getRolesFromToken(jwtToken.getToken());
 
         try {
-            Claims oldAccessClaims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(jwtToken.getToken())
-                    .getPayload();
+            Claims oldAccessClaims = jwtParser().parseSignedClaims(jwtToken.getToken()).getPayload();
             String oldAccessJti = oldAccessClaims.getId();
             if (oldAccessJti != null) {
                 tokenRevocationManager.revokeToken(oldAccessJti, ACCESS_TOKEN_EXPIRATION_SECONDS);
@@ -388,11 +338,7 @@ public class JwtServiceImpl implements JwtService {
         }
 
         try {
-            Claims oldRefreshClaims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(refreshToken)
-                    .getPayload();
+            Claims oldRefreshClaims = jwtParser().parseSignedClaims(refreshToken).getPayload();
             String oldRefreshJti = oldRefreshClaims.getId();
             if (oldRefreshJti != null) {
                 tokenRevocationManager.revokeToken(oldRefreshJti, REFRESH_TOKEN_EXPIRATION_SECONDS);
@@ -416,5 +362,12 @@ public class JwtServiceImpl implements JwtService {
             return username;
         }
         return personId;
+    }
+
+    private JwtParser jwtParser() {
+        return Jwts.parser()
+                .verifyWith(secretKey)
+                .clock(() -> Date.from(Instant.now(clock)))
+                .build();
     }
 }

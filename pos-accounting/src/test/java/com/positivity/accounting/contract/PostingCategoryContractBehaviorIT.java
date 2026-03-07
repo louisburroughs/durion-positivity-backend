@@ -102,7 +102,7 @@ public class PostingCategoryContractBehaviorIT extends BaseContractIntegrationTe
         @DisplayName("Retrieve posting category - not found")
         void testGetPostingCategory_NotFound() {
                 // Given
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When/Then
                 assertThatThrownBy(() -> postingCategoryService.getPostingCategory(nonExistentId))

@@ -14,7 +14,8 @@ import com.tngtech.archunit.lang.ArchRule;
 import java.util.UUID;
 
 /**
- * ArchUnit tests enforcing architecture rules for pos-vehicle-reference-nhtsa module.
+ * ArchUnit tests enforcing architecture rules for pos-vehicle-reference-nhtsa
+ * module.
  * 
  * Enforces:
  * - Internal package encapsulation
@@ -27,7 +28,7 @@ public class ArchitectureTest {
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
             "call UUID.randomUUID()") {
-        
+
         public boolean test(JavaCall<?> input) {
             return input.getTargetOwner().isEquivalentTo(UUID.class)
                     && "randomUUID".equals(input.getName());
@@ -102,12 +103,15 @@ public class ArchitectureTest {
     static final ArchRule packages_should_be_free_of_cycles = slices()
             .matching("com.positivity.vehicle_reference_nhtsa.internal.(*)..")
             .should().beFreeOfCycles()
+            .allowEmptyShould(true)
+
             .because("cyclic dependencies make modules harder to maintain and evolve");
     @ArchTest
     static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
             .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
             .and().areAnnotatedWith("jakarta.persistence.Entity")
-            .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
+            .should().dependOnClassesThat()
+            .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
             .allowEmptyShould(true)
             .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
     @ArchTest

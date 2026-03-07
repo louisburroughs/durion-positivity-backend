@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.ZoneOffset;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -40,6 +41,7 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 class CycleCountServiceImplTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Mock
         private CycleCountTaskRepository taskRepository;
@@ -56,7 +58,7 @@ class CycleCountServiceImplTest {
 
         @Test
         void submitCount_persistsEntryAndTransitionsTaskToPendingReview() {
-                UUID taskId = UUID.randomUUID();
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CycleCountTask task = assignedTask(taskId, "auditor-1", 10, 0, null);
                 SubmitCountRequest request = SubmitCountRequest.builder()
                                 .taskId(taskId)
@@ -67,8 +69,8 @@ class CycleCountServiceImplTest {
                 when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
                 when(countEntryRepository.save(any(CountEntry.class))).thenAnswer(invocation -> {
                         CountEntry entry = invocation.getArgument(0);
-                        entry.setCountEntryId(UUID.randomUUID());
-                        entry.setCountedAt(Instant.now());
+                        entry.setCountEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                        entry.setCountedAt(Instant.now(TEST_CLOCK));
                         return entry;
                 });
                 when(taskRepository.save(any(CycleCountTask.class)))
@@ -89,7 +91,7 @@ class CycleCountServiceImplTest {
         @Test
         void submitCount_rejectsNegativeQuantity() {
                 SubmitCountRequest request = SubmitCountRequest.builder()
-                                .taskId(UUID.randomUUID())
+                                .taskId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .auditorId("auditor-1")
                                 .actualQuantity(-1)
                                 .build();
@@ -102,7 +104,7 @@ class CycleCountServiceImplTest {
 
         @Test
         void submitCount_rejectsTaskWhenStatusIsNotAssigned() {
-                UUID taskId = UUID.randomUUID();
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CycleCountTask task = assignedTask(taskId, "auditor-1", 10, 0, null);
                 task.setStatus(TaskStatus.COUNTED_PENDING_REVIEW);
 
@@ -121,8 +123,9 @@ class CycleCountServiceImplTest {
 
         @Test
         void submitRecount_marksTaskForInvestigationWhenLimitExceeded() {
-                UUID taskId = UUID.randomUUID();
-                CycleCountTask task = assignedTask(taskId, "auditor-1", 10, 3, UUID.randomUUID());
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                CycleCountTask task = assignedTask(taskId, "auditor-1", 10, 3,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 SubmitRecountRequest request = SubmitRecountRequest.builder()
                                 .taskId(taskId)
@@ -144,8 +147,8 @@ class CycleCountServiceImplTest {
 
         @Test
         void submitRecount_rejectsWhenAuditorIsNotOriginalAssignee() {
-                UUID taskId = UUID.randomUUID();
-                UUID previousEntryId = UUID.randomUUID();
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID previousEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CycleCountTask task = assignedTask(taskId, "auditor-1", 10, 1, previousEntryId);
 
                 SubmitRecountRequest request = SubmitRecountRequest.builder()
@@ -164,8 +167,8 @@ class CycleCountServiceImplTest {
 
         @Test
         void submitRecount_rejectsInvalidPermissionValue() {
-                UUID taskId = UUID.randomUUID();
-                UUID previousEntryId = UUID.randomUUID();
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID previousEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CycleCountTask task = assignedTask(taskId, "auditor-1", 10, 1, previousEntryId);
 
                 SubmitRecountRequest request = SubmitRecountRequest.builder()
@@ -184,8 +187,8 @@ class CycleCountServiceImplTest {
 
         @Test
         void submitRecount_withManagerPermissionReachesLimitAndReturnsLimitExceededFlag() {
-                UUID taskId = UUID.randomUUID();
-                UUID previousEntryId = UUID.randomUUID();
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID previousEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CycleCountTask task = assignedTask(taskId, "auditor-1", 10, 2, previousEntryId);
                 CountEntry previousEntry = previousEntry(taskId, previousEntryId, 1);
 
@@ -200,8 +203,8 @@ class CycleCountServiceImplTest {
                 when(countEntryRepository.findById(previousEntryId)).thenReturn(Optional.of(previousEntry));
                 when(countEntryRepository.save(any(CountEntry.class))).thenAnswer(invocation -> {
                         CountEntry entry = invocation.getArgument(0);
-                        entry.setCountEntryId(UUID.randomUUID());
-                        entry.setCountedAt(Instant.now());
+                        entry.setCountEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                        entry.setCountedAt(Instant.now(TEST_CLOCK));
                         return entry;
                 });
                 when(taskRepository.save(any(CycleCountTask.class)))
@@ -217,7 +220,7 @@ class CycleCountServiceImplTest {
 
         @Test
         void getTask_returnsTaskResponse() {
-                UUID taskId = UUID.randomUUID();
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CycleCountTask task = assignedTask(taskId, "auditor-1", 10, 0, null);
                 when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
 
@@ -229,9 +232,9 @@ class CycleCountServiceImplTest {
 
         @Test
         void getCountHistory_returnsListOfCountEntries() {
-                UUID taskId = UUID.randomUUID();
-                CountEntry entry1 = previousEntry(taskId, UUID.randomUUID(), 0);
-                CountEntry entry2 = previousEntry(taskId, UUID.randomUUID(), 1);
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                CountEntry entry1 = previousEntry(taskId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 0);
+                CountEntry entry2 = previousEntry(taskId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 1);
                 when(countEntryRepository.findByCycleCountTaskIdOrderByRecountSequenceNumberAsc(taskId))
                                 .thenReturn(List.of(entry1, entry2));
 
@@ -245,8 +248,10 @@ class CycleCountServiceImplTest {
         @Test
         void getTasksByAuditor_returnsListOfTasks() {
                 String auditorId = "auditor-1";
-                CycleCountTask task1 = assignedTask(UUID.randomUUID(), auditorId, 10, 0, null);
-                CycleCountTask task2 = assignedTask(UUID.randomUUID(), auditorId, 20, 0, null);
+                CycleCountTask task1 = assignedTask(UUID.fromString("00000000-0000-0000-0000-000000000001"), auditorId,
+                                10, 0, null);
+                CycleCountTask task2 = assignedTask(UUID.fromString("00000000-0000-0000-0000-000000000001"), auditorId,
+                                20, 0, null);
                 when(taskRepository.findByAuditorId(auditorId)).thenReturn(List.of(task1, task2));
 
                 List<CycleCountTaskResponse> tasks = service.getTasksByAuditor(auditorId);
@@ -258,8 +263,8 @@ class CycleCountServiceImplTest {
 
         @Test
         void submitRecount_succeedsOnSecondCountWithManagerPermission() {
-                UUID taskId = UUID.randomUUID();
-                UUID previousEntryId = UUID.randomUUID();
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID previousEntryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CycleCountTask task = assignedTask(taskId, "auditor-1", 10, 1, previousEntryId);
                 CountEntry previousEntry = previousEntry(taskId, previousEntryId, 0);
 
@@ -274,8 +279,8 @@ class CycleCountServiceImplTest {
                 when(countEntryRepository.findById(previousEntryId)).thenReturn(Optional.of(previousEntry));
                 when(countEntryRepository.save(any(CountEntry.class))).thenAnswer(invocation -> {
                         CountEntry entry = invocation.getArgument(0);
-                        entry.setCountEntryId(UUID.randomUUID());
-                        entry.setCountedAt(Instant.now());
+                        entry.setCountEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                        entry.setCountedAt(Instant.now(TEST_CLOCK));
                         return entry;
                 });
                 when(taskRepository.save(any(CycleCountTask.class)))
@@ -309,7 +314,7 @@ class CycleCountServiceImplTest {
                                 .expectedQuantity(10)
                                 .variance(0)
                                 .recountSequenceNumber(recountSequence)
-                                .countedAt(Instant.now().minus(5, java.time.temporal.ChronoUnit.MINUTES))
+                                .countedAt(Instant.now(TEST_CLOCK).minus(5, java.time.temporal.ChronoUnit.MINUTES))
                                 .build();
         }
 }

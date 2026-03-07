@@ -1,5 +1,9 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import com.positivity.accounting.BaseContractIntegrationTest;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -49,6 +53,8 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
 @ActiveProfiles("test")
 @DisplayName("Accounting Backend Contract Behavioral Tests")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
         @Autowired
         private JournalEntryRepository journalEntryRepository;
         @Autowired
@@ -85,6 +91,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
          * Adds gateway authentication headers to a request builder.
          * Mirrors the headers injected by pos-api-gateway after JWT validation.
          */
+        @Override
         protected MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
                 return builder
                                 .header("X-User", TEST_USER)
@@ -104,7 +111,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 request.setAccountCode("1000-000");
                 request.setAccountName("Cash - Operating");
                 request.setAccountType(AccountType.ASSET);
-                request.setActivationDate(LocalDateTime.now());
+                request.setActivationDate(LocalDateTime.now(TEST_CLOCK));
                 request.setDescription("Primary operating cash account");
 
                 // Act: POST to GL Account endpoint
@@ -184,7 +191,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Extract journal entry ID for GET request
                 String responseBody = result.getResponse().getContentAsString();
-                Map<String, Object> response = objectMapper.readValue(responseBody, Map.class);
+                Map<String, Object> response = objectMapper.readValue(responseBody,
+                                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                });
                 String journalEntryId = (String) response.get("journalEntryId");
 
                 // Assert: GET the created entry to verify audit fields persisted
@@ -210,7 +219,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 request.setAccountCode("INVALID"); // Not in format ####-###
                 request.setAccountName("Invalid Account");
                 request.setAccountType(AccountType.ASSET);
-                request.setActivationDate(LocalDateTime.now());
+                request.setActivationDate(LocalDateTime.now(TEST_CLOCK));
 
                 // Act & Assert: Expect validation error
                 mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
@@ -247,7 +256,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 first.setAccountCode("1000-000");
                 first.setAccountName("Cash");
                 first.setAccountType(AccountType.ASSET);
-                first.setActivationDate(LocalDateTime.now());
+                first.setActivationDate(LocalDateTime.now(TEST_CLOCK));
 
                 createGLAccountDirect(first);
 
@@ -256,7 +265,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 duplicate.setAccountCode("1000-000"); // Same code
                 duplicate.setAccountName("Another Cash");
                 duplicate.setAccountType(AccountType.ASSET);
-                duplicate.setActivationDate(LocalDateTime.now());
+                duplicate.setActivationDate(LocalDateTime.now(TEST_CLOCK));
 
                 // Act & Assert: Expect conflict error
                 mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
@@ -408,7 +417,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 request.setAccountCode(code);
                 request.setAccountName(name);
                 request.setAccountType(type);
-                request.setActivationDate(LocalDateTime.now());
+                request.setActivationDate(LocalDateTime.now(TEST_CLOCK));
                 return request;
         }
 
@@ -431,7 +440,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         String description,
                         String sourceEventType) {
                 return JournalEntryCreateRequest.builder()
-                                .transactionDate(LocalDateTime.now())
+                                .transactionDate(LocalDateTime.now(TEST_CLOCK))
                                 .description(description)
                                 .sourceEventType(sourceEventType)
                                 .lines(List.of(
