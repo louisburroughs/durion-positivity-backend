@@ -119,44 +119,47 @@ class PaymentControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
-            @Test
-            void initiatePayment_returns404_whenPaymentIntentNotFound() throws Exception {
-            when(paymentService.initiatePayment(any(), any()))
+    @Test
+    void initiatePayment_returns404_whenPaymentIntentNotFound() throws Exception {
+        when(paymentService.initiatePayment(any(), any()))
                 .thenThrow(new PaymentIntentNotFoundException("not found"));
 
-            mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
+        mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                    {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
-                    """))
+                .content(
+                        """
+                                {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
+                                """))
                 .andExpect(status().isNotFound());
-            }
+    }
 
-            @Test
-            void initiatePayment_returns409_whenInvalidPaymentState() throws Exception {
-            when(paymentService.initiatePayment(any(), any()))
+    @Test
+    void initiatePayment_returns409_whenInvalidPaymentState() throws Exception {
+        when(paymentService.initiatePayment(any(), any()))
                 .thenThrow(new InvalidPaymentStateException("invalid state"));
 
-            mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
+        mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                    {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
-                    """))
+                .content(
+                        """
+                                {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
+                                """))
                 .andExpect(status().isConflict());
-            }
+    }
 
-            @Test
-            void initiatePayment_returns422_whenPaymentDeclined() throws Exception {
-            when(paymentService.initiatePayment(any(), any()))
+    @Test
+    void initiatePayment_returns422_whenPaymentDeclined() throws Exception {
+        when(paymentService.initiatePayment(any(), any()))
                 .thenThrow(new PaymentDeclinedException("declined"));
 
-            mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
+        mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                    {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
-                    """))
+                .content(
+                        """
+                                {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
+                                """))
                 .andExpect(status().is(422));
-            }
+    }
 
     // -------------------------------------------------------------------------
     // POST /v1/invoices/{invoiceId}/payments/{paymentId}/capture — explicit capture
