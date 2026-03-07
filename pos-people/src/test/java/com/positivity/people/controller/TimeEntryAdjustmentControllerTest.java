@@ -83,20 +83,20 @@ class TimeEntryAdjustmentControllerTest {
 	void approveAdjustment_notFound_throwsExceptionForHandler() {
 		UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		doThrow(new NotFoundException("Adjustment not found")).when(service)
-				.approveAdjustment(eq(adjustmentId), anyString(), any(), any());
+				.approveAdjustment(eq(adjustmentId), anyString(), any());
 
 		assertThrows(NotFoundException.class,
-				() -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));
+				() -> controller.approveAdjustment(adjustmentId, "cid-1"));
 	}
 
 	@Test
 	void approveAdjustment_forbidden_throwsExceptionForHandler() {
 		UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		doThrow(new AccessDeniedException("Permission denied")).when(service)
-				.approveAdjustment(eq(adjustmentId), anyString(), any(), any());
+				.approveAdjustment(eq(adjustmentId), anyString(), any());
 
 		assertThrows(AccessDeniedException.class,
-				() -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));
+				() -> controller.approveAdjustment(adjustmentId, "cid-1"));
 	}
 
 }

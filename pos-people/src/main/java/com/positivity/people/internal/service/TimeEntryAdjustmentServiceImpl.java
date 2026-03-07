@@ -10,14 +10,11 @@ import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.service.TimeEntryAdjustmentService;
-import com.positivity.security.common.SecurityContextHelper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,34 +96,13 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 
 	@Override
 	@Transactional
-	public boolean approveAdjustment(java.util.UUID adjustmentId, String approverUserId, Set<String> permissions,
-			String correlationId) {
-		String auditActorId = SecurityContextHelper.getCurrentUsername()
-			.orElseThrow(() -> new IllegalStateException("No current user"));
+	public boolean approveAdjustment(java.util.UUID adjustmentId, String approverUserId, String correlationId) {
 		Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt = adjustmentRepository
 			.findById(adjustmentId);
 		if (opt.isEmpty()) {
 			throw new NotFoundException("Adjustment not found: " + adjustmentId);
 		}
 		com.positivity.people.internal.entity.TimeEntryAdjustment adj = opt.get();
-
-		boolean allowed = permissions != null
-				&& (permissions.contains("people:timeAdjustment:approve") || permissions.contains("admin"));
-		if (!allowed) {
-			try {
-				TimeEntryAudit audit = new TimeEntryAudit();
-				audit.setTimeEntryId(adj.getTimeEntryId().toString());
-				audit.setAction("ADJUSTMENT_APPROVE_FORBIDDEN");
-				audit.setActorId(auditActorId);
-				audit.setCorrelationId(correlationId);
-				audit.setDetails("Permission denied for adjustment approval");
-				auditRepository.save(audit);
-			}
-			catch (Exception ignore) {
-				// Audit logging failure should not prevent adjustment approval flow.
-			}
-			throw new AccessDeniedException("Permission denied for adjustment approval");
-		}
 
 		adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.APPROVED);
 		adj.setDecidedBy(approverUserId);
@@ -137,7 +113,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 			TimeEntryAudit audit = new TimeEntryAudit();
 			audit.setTimeEntryId(adj.getTimeEntryId().toString());
 			audit.setAction("ADJUSTMENT_APPROVED");
-			audit.setActorId(auditActorId);
+			audit.setActorId(approverUserId);
 			audit.setCorrelationId(correlationId);
 			audit.setDetails("Adjustment approved");
 			auditRepository.save(audit);
