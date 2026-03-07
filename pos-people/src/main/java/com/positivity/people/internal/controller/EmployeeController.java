@@ -35,7 +35,8 @@ public class EmployeeController {
 
 	@PostMapping
 	@EmitEvent(id = "PEOPLE_EMPLOYEE_CREATE", apiVersion = "1")
-	@Operation(summary = "Create employee profile")
+	@Operation(summary = "Create employee profile",
+			description = "Creates a new employee profile with identity, employment, and role-related attributes.")
 	@ApiResponse(responseCode = "201", description = "Employee created")
 	@ApiResponse(responseCode = "400", description = "Invalid request")
 	@ApiResponse(responseCode = "409", description = "Duplicate employee")
@@ -48,7 +49,8 @@ public class EmployeeController {
 
 	@PutMapping("/{employeeId}")
 	@EmitEvent(id = "PEOPLE_EMPLOYEE_UPDATE", apiVersion = "1")
-	@Operation(summary = "Update employee profile")
+	@Operation(summary = "Update employee profile",
+			description = "Updates an existing employee profile using the provided employee ID.")
 	@ApiResponse(responseCode = "200", description = "Employee updated")
 	@ApiResponse(responseCode = "400", description = "Invalid request")
 	@ApiResponse(responseCode = "404", description = "Employee not found")
@@ -62,7 +64,8 @@ public class EmployeeController {
 
 	@GetMapping("/{employeeId}")
 	@EmitEvent(id = "PEOPLE_EMPLOYEE_GET", apiVersion = "1")
-	@Operation(summary = "Get employee profile")
+	@Operation(summary = "Get employee profile",
+			description = "Retrieves an employee profile by employee ID.")
 	@ApiResponse(responseCode = "200", description = "Employee found")
 	@ApiResponse(responseCode = "404", description = "Employee not found")
 	@PreAuthorize("hasAuthority('people:employee:view')")
@@ -72,7 +75,8 @@ public class EmployeeController {
 
 	@PostMapping("/{employeeId}/disable")
 	@EmitEvent(id = "PEOPLE_EMPLOYEE_DISABLE", apiVersion = "1")
-	@Operation(summary = "Disable employee profile")
+	@Operation(summary = "Disable employee profile",
+			description = "Disables an employee profile and records optional disable metadata.")
 	@ApiResponse(responseCode = "200", description = "Employee disabled")
 	@ApiResponse(responseCode = "400", description = "Employee cannot be disabled")
 	@ApiResponse(responseCode = "404", description = "Employee not found")

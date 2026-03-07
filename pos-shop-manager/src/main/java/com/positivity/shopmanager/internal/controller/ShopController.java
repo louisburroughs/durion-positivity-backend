@@ -35,8 +35,8 @@ public class ShopController {
     @GetMapping("/{locationId}/technicians/{personId}/person")
     @PreAuthorize("hasAuthority('shop:location:view')")
     public ResponseEntity<PersonDTO> getTechnicianPerson(
-            @Parameter(description = "ID of the shop", example = "1") @PathVariable UUID locationId,
-            @Parameter(description = "ID of the technician", example = "1") @PathVariable UUID personId) {
+            @Parameter(description = "ID of the shop", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID locationId,
+            @Parameter(description = "ID of the technician", example = "123e4567-e89b-12d3-a456-426614174001") @PathVariable UUID personId) {
         PersonDTO person = shopService.getTechnicianPerson(locationId, personId);
         if (person == null) {
             return ResponseEntity.notFound().build();

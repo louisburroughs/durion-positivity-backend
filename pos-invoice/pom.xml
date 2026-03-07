@@ -56,6 +56,12 @@
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-shared-dtos</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.swagger.core.v3</groupId>
+                    <artifactId>swagger-annotations</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- JSpecify for null safety -->
         <dependency>

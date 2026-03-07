@@ -1,0 +1,476 @@
+openapi: 3.1.0
+info:
+  title: POS Invoice API
+  description: API documentation for invoice and billing rules management
+  contact:
+    name: Durion Team
+    email: platform@durion.com
+  version: v1
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Invoice
+  description: Invoice generation and lifecycle management
+- name: Billing Rules
+  description: Manage billing rules for commercial accounts
+paths:
+  /v1/billing/rules/{partyId}:
+    get:
+      tags:
+      - Billing Rules
+      summary: Get billing rules for a party/customer
+      description: Retrieve the current billing rules configuration for a commercial
+        account
+      operationId: getBillingRules
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "404":
+          description: No billing rules configured for this party
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BillingRulesDTO"
+        "200":
+          description: Billing rules found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BillingRulesDTO"
+    put:
+      tags:
+      - Billing Rules
+      summary: Create or update billing rules
+      description: Idempotent upsert of billing rules for a commercial account
+      operationId: upsertBillingRules
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillingRulesDTO"
+        required: true
+      responses:
+        "200":
+          description: Billing rules updated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BillingRulesDTO"
+        "400":
+          description: Invalid billing rules data
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BillingRulesDTO"
+        "201":
+          description: Billing rules created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BillingRulesDTO"
+  /v1/invoices:
+    post:
+      tags:
+      - Invoice
+      summary: Create invoice
+      description: Create invoice draft from completed workorder data
+      operationId: createInvoice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceCreationRequest"
+        required: true
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceGenerationResponse"
+  /v1/invoices/{invoiceId}/revert:
+    post:
+      tags:
+      - Invoice
+      summary: Revert finalized invoice
+      description: "Revert a FINALIZED invoice back to DRAFT within 24h of finalization\
+        \ and before GL posting (Story #13, AC6)"
+      operationId: revertInvoice
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevertRequest"
+        required: true
+      responses:
+        "200":
+          description: Invoice reverted to DRAFT
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceDetailsResponse"
+  /v1/invoices/{invoiceId}/finalize:
+    post:
+      tags:
+      - Invoice
+      summary: Finalize invoice
+      description: "Transition invoice from DRAFT to FINALIZED; enforces permission\
+        \ matrix and emits InvoiceFinalized event for async GL posting (Story #13)"
+      operationId: finalizeInvoice
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinalizationRequest"
+        required: true
+      responses:
+        "200":
+          description: Invoice finalized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceDetailsResponse"
+  /v1/invoices/{invoiceId}/adjustments:
+    post:
+      tags:
+      - Invoice
+      summary: Apply invoice adjustment
+      description: "Apply discount, fee, or correction to a draft invoice"
+      operationId: applyAdjustment
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustmentRequest"
+        required: true
+      responses:
+        "200":
+          description: Adjustment applied
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceDetailsResponse"
+  /v1/invoices/{invoiceId}:
+    get:
+      tags:
+      - Invoice
+      summary: Get invoice
+      description: Get invoice details
+      operationId: getInvoice
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Invoice found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceDetailsResponse"
+components:
+  schemas:
+    BillingRulesDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        partyId:
+          type: string
+        purchaseOrderRequired:
+          type: boolean
+        paymentTermsCode:
+          type: string
+        invoiceDeliveryMethod:
+          type: string
+          enum:
+          - EMAIL
+          - PORTAL
+          - MAIL
+        invoiceGroupingStrategy:
+          type: string
+          enum:
+          - PER_WORKORDER
+          - PER_VEHICLE
+          - SINGLE_INVOICE
+        version:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+    InvoiceCreationRequest:
+      type: object
+      description: Internal service payload for creating invoice drafts.
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder identifier backing the invoice draft.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        estimateId:
+          type: string
+          format: uuid
+          description: "Source estimate identifier, when generated from estimate."
+          example: 550e8400-e29b-41d4-a716-446655440001
+        approvalId:
+          type: string
+          format: uuid
+          description: Approval identifier used for billing authorization.
+          example: 550e8400-e29b-41d4-a716-446655440002
+        idempotencyKey:
+          type: string
+          description: Idempotency key to prevent duplicate invoice creation.
+          example: inv-create-wo-1234
+        lineItems:
+          type: array
+          description: Line items to include on the invoice.
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+    InvoiceLineItem:
+      type: object
+      description: Invoice line item details.
+      properties:
+        description:
+          type: string
+          description: Line item description.
+          example: Brake pad replacement
+        quantity:
+          type: number
+          description: Quantity billed.
+          example: 2.0
+        unitPrice:
+          type: number
+          description: Unit price amount.
+          example: 45.0
+        amount:
+          type: number
+          description: Line amount (quantity x unit price).
+          example: 90.0
+      required:
+      - amount
+      - description
+      - quantity
+      - unitPrice
+    InvoiceGenerationResponse:
+      type: object
+      description: Response payload returned after invoice generation.
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+          description: Generated invoice identifier.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          description: Invoice status.
+          example: DRAFT
+        workorderId:
+          type: string
+          format: uuid
+          description: Source workorder identifier.
+          example: 550e8400-e29b-41d4-a716-446655440001
+        estimateId:
+          type: string
+          format: uuid
+          description: Source estimate identifier.
+          example: 550e8400-e29b-41d4-a716-446655440002
+        approvalId:
+          type: string
+          format: uuid
+          description: Approval identifier used for generation.
+          example: 550e8400-e29b-41d4-a716-446655440003
+        subtotal:
+          type: number
+          description: Subtotal amount before tax.
+          example: 120.0
+        taxAmount:
+          type: number
+          description: Tax amount.
+          example: 9.6
+        totalAmount:
+          type: number
+          description: Total amount after tax.
+          example: 129.6
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp (UTC).
+          example: 2026-02-27T12:00:00Z
+    RevertRequest:
+      type: object
+      properties:
+        managerApprovalCode:
+          type: string
+        reason:
+          type: string
+      required:
+      - managerApprovalCode
+      - reason
+    InvoiceAdjustmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - DISCOUNT
+          - FEE
+          - CORRECTION
+        amount:
+          type: number
+        reason:
+          type: string
+        authorizedBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    InvoiceDetailsResponse:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        invoiceNumber:
+          type: string
+        workorderId:
+          type: string
+          format: uuid
+        estimateId:
+          type: string
+          format: uuid
+        approvalId:
+          type: string
+          format: uuid
+        partyId:
+          type: string
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - FINALIZED
+          - POSTED
+          - ERROR
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        adjustments:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        finalizedAt:
+          type: string
+          format: date-time
+        finalizedBy:
+          type: string
+        revertedAt:
+          type: string
+          format: date-time
+        reversionReason:
+          type: string
+        revertedBy:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItemResponse"
+        adjustmentEntries:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceAdjustmentResponse"
+    InvoiceItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        amount:
+          type: number
+        workorderItemId:
+          type: string
+          format: uuid
+    FinalizationRequest:
+      type: object
+      properties:
+        managerApprovalCode:
+          type: string
+        overrideReason:
+          type: string
+    AdjustmentRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - DISCOUNT
+          - FEE
+          - CORRECTION
+        amount:
+          type: number
+          minimum: 0.0001
+        reason:
+          type: string
+        authorizedBy:
+          type: string
+      required:
+      - amount
+      - authorizedBy
+      - reason
+      - type

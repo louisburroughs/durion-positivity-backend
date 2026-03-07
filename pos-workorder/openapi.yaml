@@ -1862,6 +1862,8 @@ paths:
     post:
       tags:
       - workexec-time-tracking-controller
+      summary: Stop timers
+      description: Stop active timer entries for the authenticated mechanic.
       operationId: stopTimers
       parameters:
       - name: X-User-Id
@@ -1879,6 +1881,8 @@ paths:
     post:
       tags:
       - workexec-time-tracking-controller
+      summary: Start timer
+      description: Start a workexec timer entry for the authenticated mechanic.
       operationId: startTimer
       parameters:
       - name: X-User-Id
@@ -2560,6 +2564,8 @@ paths:
     get:
       tags:
       - workexec-time-tracking-controller
+      summary: Get active timers
+      description: Retrieve active timer entries for the authenticated mechanic.
       operationId: getActiveTimerEntries
       parameters:
       - name: X-User-Id

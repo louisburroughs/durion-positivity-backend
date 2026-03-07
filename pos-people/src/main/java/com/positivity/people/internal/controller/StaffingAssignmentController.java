@@ -54,7 +54,8 @@ public class StaffingAssignmentController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(response);
 	}
 
-	@Operation(summary = "List assignments for person")
+	@Operation(summary = "List assignments for person",
+			description = "Returns all staffing assignments for the specified person.")
 	@ApiResponse(responseCode = "200", description = "List of assignments.")
 	@GetMapping
 	@PreAuthorize("hasAuthority('people:employee:view')")
@@ -62,7 +63,8 @@ public class StaffingAssignmentController {
 		return staffingAssignmentService.findByPersonId(personId);
 	}
 
-	@Operation(summary = "Get assignment by ID")
+	@Operation(summary = "Get assignment by ID",
+			description = "Retrieves a single staffing assignment by its unique ID.")
 	@ApiResponse(responseCode = "200", description = "Assignment found.")
 	@ApiResponse(responseCode = "404", description = "Assignment not found.")
 	@GetMapping("/{assignmentId}")
@@ -73,7 +75,8 @@ public class StaffingAssignmentController {
 			.orElse(ResponseEntity.notFound().build());
 	}
 
-	@Operation(summary = "Update staffing assignment")
+	@Operation(summary = "Update staffing assignment",
+			description = "Updates an existing staffing assignment, including role, dates, and primary flag.")
 	@ApiResponse(responseCode = "200", description = "Assignment updated.")
 	@ApiResponse(responseCode = "400", description = "Validation error.")
 	@ApiResponse(responseCode = "404", description = "Assignment not found.")
@@ -89,7 +92,8 @@ public class StaffingAssignmentController {
 			.orElse(ResponseEntity.notFound().build());
 	}
 
-	@Operation(summary = "End (soft-delete) an assignment")
+	@Operation(summary = "End (soft-delete) an assignment",
+			description = "Ends an active staffing assignment without physically deleting the record.")
 	@ApiResponse(responseCode = "204", description = "Assignment ended.")
 	@ApiResponse(responseCode = "404", description = "Assignment not found.")
 	@EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_END", apiVersion = "1")

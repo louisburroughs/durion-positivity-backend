@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -34,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/v1/people")
+@Tag(name = "People - Access Control", description = "APIs for managing person-to-role assignments for access control and permissions (CAP-120)")
 public class PersonAccessController {
 
 	private final PeopleAccessControlService peopleAccessControlService;
@@ -49,8 +51,7 @@ public class PersonAccessController {
 
 	@GetMapping("/{personUuid}/access/assignments")
 	@EmitEvent(id = "PEOPLE_ACCESS_ASSIGNMENTS_LIST", apiVersion = "1")
-	@Operation(summary = "Get role assignments",
-			description = "Retrieve role assignments for a person with optional history and date filtering")
+	@Operation(summary = "Get role assignments", description = "Retrieve role assignments for a person with optional history and date filtering")
 	@ApiResponse(responseCode = "200", description = "Assignments retrieved successfully")
 	@PreAuthorize("hasAuthority('people:role:view')")
 	public ResponseEntity<List<UserRoleDto>> getAssignments(@PathVariable UUID personUuid,
@@ -62,17 +63,11 @@ public class PersonAccessController {
 
 	@PostMapping("/{personUuid}/access/assignments")
 	@EmitEvent(id = "PEOPLE_ACCESS_ASSIGNMENT_CREATE", apiVersion = "1")
-	@Operation(summary = "Assign role to person",
-			description = "Assign a role to a person with optional location scope and date range")
+	@Operation(summary = "Assign role to person", description = "Assign a role to a person with optional location scope and date range")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "201", description = "Role assignment created successfully",
-					content = @Content(schema = @Schema(implementation = UserRoleDto.class))),
-			@ApiResponse(responseCode = "400", description = "Invalid request",
-					content = @Content(mediaType = "application/problem+json",
-							schema = @Schema(implementation = ProblemDetail.class))),
-			@ApiResponse(responseCode = "404", description = "Person or role not found",
-					content = @Content(mediaType = "application/problem+json",
-							schema = @Schema(implementation = ProblemDetail.class))) })
+			@ApiResponse(responseCode = "201", description = "Role assignment created successfully", content = @Content(schema = @Schema(implementation = UserRoleDto.class))),
+			@ApiResponse(responseCode = "400", description = "Invalid request", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class))),
+			@ApiResponse(responseCode = "404", description = "Person or role not found", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class))) })
 	@PreAuthorize("hasAuthority('people:role:assign')")
 	public ResponseEntity<UserRoleDto> createAssignment(@PathVariable UUID personUuid,
 			@Valid @RequestBody PersonRoleAssignmentRequest request) {
@@ -88,12 +83,8 @@ public class PersonAccessController {
 	@EmitEvent(id = "PEOPLE_ACCESS_ASSIGNMENT_REVOKE", apiVersion = "1")
 	@Operation(summary = "Revoke role assignment", description = "Revoke a role assignment from a person")
 	@ApiResponse(responseCode = "204", description = "Role assignment revoked successfully")
-	@ApiResponse(responseCode = "400", description = "Invalid request for revoking role assignment",
-			content = @Content(mediaType = "application/problem+json",
-					schema = @Schema(implementation = ProblemDetail.class)))
-	@ApiResponse(responseCode = "404", description = "Person or role assignment not found",
-			content = @Content(mediaType = "application/problem+json",
-					schema = @Schema(implementation = ProblemDetail.class)))
+	@ApiResponse(responseCode = "400", description = "Invalid request for revoking role assignment", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+	@ApiResponse(responseCode = "404", description = "Person or role assignment not found", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 	@PreAuthorize("hasAuthority('people:role:revoke')")
 	public ResponseEntity<Void> revokeAssignment(@PathVariable UUID personUuid, @PathVariable String roleCode,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
