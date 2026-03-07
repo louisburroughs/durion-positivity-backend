@@ -33,6 +33,20 @@ public class OpenApiConfig {
 
         @Bean
         public OpenAPI aggregatedOpenAPI() {
+                // X-API-Version is consumed by gateway filters, not by controller operations.
+                // The x-purpose extension documents intent and suppresses "unused component"
+                // warnings.
+                Parameter apiVersionParam = new Parameter()
+                                .in("header")
+                                .name("X-API-Version")
+                                .description("API version number (required)")
+                                .required(true)
+                                .schema(new io.swagger.v3.oas.models.media.StringSchema()
+                                                ._default("1")
+                                                .example("1"));
+                apiVersionParam.addExtension("x-purpose",
+                                "Documented for gateway header routing; no local $ref expected");
+
                 return new OpenAPI()
                                 .info(new Info()
                                                 .title("Positivity API Gateway")
@@ -66,13 +80,6 @@ public class OpenApiConfig {
                                                 new Server().url(gatewayHost)
                                                                 .description("API Gateway - All services routed through this endpoint")))
                                 .components(new Components()
-                                                .addParameters("X-API-Version", new Parameter()
-                                                                .in("header")
-                                                                .name("X-API-Version")
-                                                                .description("API version number (required)")
-                                                                .required(true)
-                                                                .schema(new io.swagger.v3.oas.models.media.StringSchema()
-                                                                                ._default("1")
-                                                                                .example("1"))));
+                                                .addParameters("X-API-Version", apiVersionParam));
         }
 }
