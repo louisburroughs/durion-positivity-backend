@@ -22,12 +22,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.customer.internal.entity.CommunicationPreference;
+import com.positivity.customer.internal.entity.PartyNote;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.entity.ProcessingLog;
 import com.positivity.customer.internal.entity.VehicleProjection;
 import com.positivity.customer.internal.enums.ProcessingStatus;
 import com.positivity.customer.internal.event.EventEnvelope;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
+import com.positivity.customer.internal.repository.PartyNoteRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
 import com.positivity.customer.internal.repository.VehicleProjectionRepository;
@@ -70,6 +72,9 @@ class WorkorderEventHandlerTest {
         private PersonPartyRepository personPartyRepository;
 
         @Mock
+        private PartyNoteRepository partyNoteRepository;
+
+        @Mock
         private VehicleProjectionRepository vehicleProjectionRepository;
 
         @Mock
@@ -85,6 +90,7 @@ class WorkorderEventHandlerTest {
                                 processingLogRepository,
                                 communicationPreferenceRepository,
                                 personPartyRepository,
+                                partyNoteRepository,
                                 vehicleProjectionRepository,
                                 new ObjectMapper());
         }
@@ -291,6 +297,14 @@ class WorkorderEventHandlerTest {
 
                 handler.handlePartyNoteAdded(envelope);
 
+                ArgumentCaptor<PartyNote> noteCaptor = ArgumentCaptor.forClass(PartyNote.class);
+                verify(partyNoteRepository).save(noteCaptor.capture());
+                assertThat(noteCaptor.getValue().getPartyId()).isEqualTo(UUID.fromString(partyId));
+                assertThat(noteCaptor.getValue().getNoteText()).isEqualTo("Vehicle service note from workorder");
+                assertThat(noteCaptor.getValue().getNoteType()).isEqualTo("SERVICE");
+                assertThat(noteCaptor.getValue().getSourceWorkorderId())
+                                .isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+
                 ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
                 verify(processingLogRepository).save(captor.capture());
                 assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
@@ -319,6 +333,14 @@ class WorkorderEventHandlerTest {
                                 .build();
 
                 handler.handlePartyNoteAdded(envelope);
+
+                ArgumentCaptor<PartyNote> noteCaptor = ArgumentCaptor.forClass(PartyNote.class);
+                verify(partyNoteRepository).save(noteCaptor.capture());
+                assertThat(noteCaptor.getValue().getPartyId()).isEqualTo(UUID.fromString(partyId));
+                assertThat(noteCaptor.getValue().getNoteText()).isEqualTo("Vehicle service note from workorder");
+                assertThat(noteCaptor.getValue().getNoteType()).isEqualTo("SERVICE");
+                assertThat(noteCaptor.getValue().getSourceWorkorderId())
+                                .isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
 
                 ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
                 verify(processingLogRepository).save(captor.capture());
