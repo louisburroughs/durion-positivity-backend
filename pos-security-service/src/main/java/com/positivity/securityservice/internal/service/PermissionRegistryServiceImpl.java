@@ -49,6 +49,16 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
     @Override
     @Transactional
     public PermissionRegistrationResponse registerPermissions(PermissionRegistrationRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        if (request.getServiceName() == null || request.getServiceName().isBlank()) {
+            throw new IllegalArgumentException("serviceName is required");
+        }
+        if (request.getPermissions() == null || request.getPermissions().isEmpty()) {
+            throw new IllegalArgumentException("permissions must not be empty");
+        }
+
         log.info("Registering permissions for domain: {}, service: {}",
                 request.getDomain(), request.getServiceName());
 

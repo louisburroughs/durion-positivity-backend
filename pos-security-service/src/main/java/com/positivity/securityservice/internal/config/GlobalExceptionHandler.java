@@ -5,10 +5,13 @@ import java.time.Instant;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.context.request.WebRequest;
 
 import com.positivity.securityservice.internal.dto.ErrorResponse;
@@ -175,7 +178,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(IllegalArgumentException.class)
         @ResponseStatus(HttpStatus.BAD_REQUEST)
-        public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
+    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
                         IllegalArgumentException ex,
                         WebRequest request) {
 
@@ -188,6 +191,26 @@ public class GlobalExceptionHandler {
                                                 "INVALID_REQUEST",
                                                 ex.getMessage() != null ? ex.getMessage()
                                                                 : "Invalid request parameters",
+                                                correlationId));
+        }
+
+        @ExceptionHandler({
+                        MethodArgumentTypeMismatchException.class,
+                        MethodArgumentNotValidException.class,
+                        HttpMessageNotReadableException.class
+        })
+        @ResponseStatus(HttpStatus.BAD_REQUEST)
+        public ResponseEntity<ErrorResponse> handleBadRequestExceptions(
+                        Exception ex,
+                        WebRequest request) {
+                String correlationId = extractCorrelationId(request);
+                log.warn("Request binding/validation error (correlationId={}): {}", correlationId, ex.getMessage());
+
+                return ResponseEntity
+                                .status(HttpStatus.BAD_REQUEST)
+                                .body(errorResponse(
+                                                "INVALID_REQUEST",
+                                                "Invalid request parameters",
                                                 correlationId));
         }
 

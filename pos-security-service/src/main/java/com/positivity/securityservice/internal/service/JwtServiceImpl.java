@@ -83,41 +83,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public String generateToken(String username, String personId, Set<String> roles) {
-        if (username == null || username.isBlank()) {
-            throw new IllegalArgumentException("Username cannot be blank");
-        }
-        if (roles == null || roles.isEmpty()) {
-            throw new IllegalArgumentException("Roles cannot be empty");
-        }
-        String resolvedPersonId = resolvePersonId(username, personId);
-
-        Instant now = Instant.now(clock);
-        Instant expiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
-        String jti = UUIDv7Generator.generate().toString();
-        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(roles);
-
-        String token = Jwts.builder()
-                .id(jti)
-                .subject(username)
-                .claim(PERSON_ID, resolvedPersonId)
-                .claim(ROLES, roles)
-                .claim(AUTHORITIES, authorities)
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(expiry))
-                .signWith(secretKey)
-                .compact();
-
-        JwtToken jwtToken = new JwtToken();
-        jwtToken.setToken(token);
-        jwtToken.setIssuedAt(now);
-        jwtToken.setExpiresAt(expiry);
-        jwtToken.setSubject(username);
-        jwtTokenRepository.save(jwtToken);
-
-        log.debug("Generated JWT token: username={}, personId={}, jti={}, expiresAt={}",
-                username, resolvedPersonId, jti, expiry);
-
-        return token;
+        return generateTokenPair(username, personId, roles).accessToken();
     }
 
     @Override

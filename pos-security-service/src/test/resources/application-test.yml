@@ -40,6 +40,8 @@ eureka:
     fetch-registry: false
 
 security:
+  jwt:
+    secret: test-jwt-secret-key-01234567890123456789
   redis:
     enabled: false
 

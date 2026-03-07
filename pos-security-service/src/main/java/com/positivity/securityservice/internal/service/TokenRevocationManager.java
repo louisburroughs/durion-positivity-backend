@@ -4,7 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -44,18 +45,20 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "security.redis.enabled", havingValue = "true", matchIfMissing = true)
 public class TokenRevocationManager {
 
     private static final String REVOCATION_KEY_PREFIX = "jwt:revoked:";
     private final RedisTemplate<String, Boolean> redisTemplate;
     private final Retry jwtRevocationRetry;
+    private final boolean redisEnabled;
 
     public TokenRevocationManager(
-            RedisTemplate<String, Boolean> jwtRevocationRedisTemplate,
-            Retry jwtRevocationRetry) {
-        this.redisTemplate = jwtRevocationRedisTemplate;
-        this.jwtRevocationRetry = jwtRevocationRetry;
+            ObjectProvider<RedisTemplate<String, Boolean>> jwtRevocationRedisTemplateProvider,
+            ObjectProvider<Retry> jwtRevocationRetryProvider,
+            @Value("${security.redis.enabled:true}") boolean redisEnabled) {
+        this.redisTemplate = jwtRevocationRedisTemplateProvider.getIfAvailable();
+        this.jwtRevocationRetry = jwtRevocationRetryProvider.getIfAvailable();
+        this.redisEnabled = redisEnabled;
     }
 
     /**
@@ -83,8 +86,16 @@ public class TokenRevocationManager {
         if (expirationSeconds <= 0) {
             throw new IllegalArgumentException("Expiration seconds must be positive");
         }
+        if (!isRedisAvailable()) {
+            log.debug("Redis revocation cache disabled/unavailable; skipping revokeToken for jti={}", jti);
+            return false;
+        }
 
         String revocationKey = REVOCATION_KEY_PREFIX + jti;
+
+        if (jwtRevocationRetry == null) {
+            return writeRevocationKey(revocationKey, expirationSeconds, jti);
+        }
 
         // Apply retry decorator with exponential backoff
         // Cast is required for proper type resolution with Resilience4j Retry decorator
@@ -126,6 +137,9 @@ public class TokenRevocationManager {
         if (jti == null || jti.isBlank()) {
             throw new IllegalArgumentException("JTI cannot be blank");
         }
+        if (!isRedisAvailable()) {
+            return false;
+        }
 
         String revocationKey = REVOCATION_KEY_PREFIX + jti;
 
@@ -160,6 +174,9 @@ public class TokenRevocationManager {
         if (jti == null || jti.isBlank()) {
             throw new IllegalArgumentException("JTI cannot be blank");
         }
+        if (!isRedisAvailable()) {
+            return false;
+        }
 
         String revocationKey = REVOCATION_KEY_PREFIX + jti;
 
@@ -192,6 +209,10 @@ public class TokenRevocationManager {
      * @return number of keys deleted
      */
     public long clearAllRevoked() {
+        if (!isRedisAvailable()) {
+            return 0;
+        }
+
         try (var cursor = redisTemplate.opsForValue()
                 .getOperations()
                 .scan(org.springframework.data.redis.core.ScanOptions.scanOptions()
@@ -223,6 +244,23 @@ public class TokenRevocationManager {
         } catch (Exception e) {
             log.warn("Failed to clear revoked tokens from Redis: error={}", e.getClass().getSimpleName());
             return 0;
+        }
+    }
+
+    private boolean isRedisAvailable() {
+        return redisEnabled && redisTemplate != null;
+    }
+
+    private boolean writeRevocationKey(String revocationKey, long expirationSeconds, String jti) {
+        try {
+            redisTemplate.opsForValue().set(revocationKey, true, expirationSeconds, TimeUnit.SECONDS);
+            log.debug("Token revoked in Redis (no retry decorator): jti={}, expirationSeconds={}", jti,
+                    expirationSeconds);
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to revoke token in Redis (no retry decorator): jti={}, error={}",
+                    jti, e.getClass().getSimpleName());
+            return false;
         }
     }
 }
