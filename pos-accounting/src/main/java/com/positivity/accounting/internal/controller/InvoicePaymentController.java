@@ -72,8 +72,6 @@ public class InvoicePaymentController {
     public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
             @Parameter(description = "Invoice identifier") @PathVariable UUID invoiceId) {
 
-        log.info("Querying status for invoice {}", invoiceId);
-
         try {
             InvoiceStatusResponse response = paymentStatusService.getInvoiceStatus(invoiceId);
             return ResponseEntity.ok(response);

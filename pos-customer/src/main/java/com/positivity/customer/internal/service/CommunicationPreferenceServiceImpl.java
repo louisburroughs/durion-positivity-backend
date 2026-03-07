@@ -42,8 +42,7 @@ import java.util.UUID;
  */
 @Service
 public class CommunicationPreferenceServiceImpl implements CommunicationPreferenceService {
-    private final Clock clock;
-
+        private final Clock clock;
 
         private static final Logger log = LoggerFactory.getLogger(CommunicationPreferenceServiceImpl.class);
 
@@ -56,8 +55,8 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
         public CommunicationPreferenceServiceImpl(
                         CommunicationPreferenceRepository preferenceRepository,
                         CommercialPartyRepository partyRepository,
-                Clock clock) {
-            this.clock = clock;
+                        Clock clock) {
+                this.clock = clock;
                 this.preferenceRepository = preferenceRepository;
                 this.partyRepository = partyRepository;
         }
@@ -150,16 +149,16 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
                 // Save and return response
                 boolean isCreate = preference.getPreferenceId() == null;
                 CommunicationPreference saved = preferenceRepository.save(preference);
-                Instant updatedAt = saved.getUpdatedAt() != null ? saved.getUpdatedAt() : Instant.now(clock);
-                log.info("Upserted communication preferences: partyId={}, operation={}, source={}",
-                                partyId, isCreate ? "CREATE" : "UPDATE", updateSource);
-
+                if (log.isInfoEnabled()) {
+                        log.info("Upserted communication preferences: partyId={}, operation={}, source={}",
+                                        maskPartyId(partyId), isCreate ? "CREATE" : "UPDATE", updateSource);
+                }
                 return UpsertCommunicationPreferencesResponse.builder()
                                 .partyId(partyId.toString())
                                 .version(String.valueOf(saved.getVersion()))
                                 .operationType(isCreate ? "CREATED" : "UPDATED")
                                 .status("SUCCESS")
-                                .updatedAt(updatedAt.toString())
+                                .updatedAt(saved.getUpdatedAt().toString())
                                 .build();
         }
 
@@ -207,5 +206,10 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
                                 .updatedAt(Instant.now(clock).toString())
                                 .updateSource("DEFAULT")
                                 .build();
+        }
+
+        private String maskPartyId(@NonNull UUID partyId) {
+                String value = partyId.toString();
+                return value.substring(0, 8) + "...";
         }
 }

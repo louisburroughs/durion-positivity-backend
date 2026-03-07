@@ -291,3 +291,5 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         return versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId);
     }
 }
+
+    

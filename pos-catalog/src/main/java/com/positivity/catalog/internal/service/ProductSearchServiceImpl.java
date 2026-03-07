@@ -1,12 +1,9 @@
 package com.positivity.catalog.internal.service;
 
-import com.positivity.catalog.internal.dto.CatalogSearchResultDto;
-import com.positivity.catalog.internal.dto.ProductSummary;
-import com.positivity.catalog.internal.entity.ProductEntity;
-import com.positivity.catalog.internal.repository.ProductRepository;
-import com.positivity.catalog.service.ProductSearchService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.List;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -14,10 +11,14 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.positivity.catalog.internal.dto.CatalogSearchResultDto;
+import com.positivity.catalog.internal.dto.ProductSummary;
+import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.repository.ProductRepository;
+import com.positivity.catalog.service.ProductSearchService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Implementation of {@link ProductSearchService} providing cursor-based
