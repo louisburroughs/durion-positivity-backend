@@ -95,7 +95,7 @@ class PeopleReportsServiceTest {
 		when(personRepository.findAllById(any())).thenReturn(List.of(person));
 
 		List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(LocalDate.parse("2026-02-10"),
-				LocalDate.parse("2026-02-10"), List.of(locationId));
+				LocalDate.parse("2026-02-10"), List.of(locationId), "test-actor", "corr-1");
 
 		assertEquals(1, result.size());
 		assertEquals(approvedId.toString(), result.get(0).timeEntryId());
@@ -116,7 +116,7 @@ class PeopleReportsServiceTest {
 				.thenReturn(List.of());
 
 		List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(LocalDate.parse("2026-02-01"),
-				LocalDate.parse("2026-02-02"), List.of(locationId));
+				LocalDate.parse("2026-02-02"), List.of(locationId), "test-actor", "corr-1");
 
 		assertTrue(result.isEmpty());
 	}
@@ -129,7 +129,7 @@ class PeopleReportsServiceTest {
 		List<UUID> locations = List.of(locationId);
 
 		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-				() -> service.getApprovedTimeForExport(startDate, endDate, locations));
+				() -> service.getApprovedTimeForExport(startDate, endDate, locations, "test-actor", "corr-1"));
 
 		assertTrue(exception.getMessage().contains("endDate"));
 	}
@@ -143,7 +143,7 @@ class PeopleReportsServiceTest {
 		when(locationReferenceClient.isLocationActive(locationId)).thenReturn(false);
 
 		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-				() -> service.getApprovedTimeForExport(startDate, endDate, locations));
+				() -> service.getApprovedTimeForExport(startDate, endDate, locations, "test-actor", "corr-1"));
 
 		assertTrue(exception.getMessage().contains("Unknown locationId"));
 	}

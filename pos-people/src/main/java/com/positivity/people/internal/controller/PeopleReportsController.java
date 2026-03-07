@@ -1,12 +1,12 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
 import com.positivity.people.service.PeopleReportsService;
@@ -22,7 +22,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-@Slf4j
 @Tag(name = "People Reports API", description = "Reporting endpoints for people and attendance data")
 @RestController
 @RequestMapping("/v1/people/reports")
@@ -34,6 +33,10 @@ public class PeopleReportsController {
 	@Operation(summary = "Get attendance and job time discrepancy report",
 			description = "Generates a per-technician, per-location, per-day discrepancy report based on attendance and approved job time totals.")
 	@ApiResponse(responseCode = "200", description = "Report generated successfully.")
+	@ApiResponse(responseCode = "400", description = "Invalid parameters")
+	@ApiResponse(responseCode = "403", description = "Forbidden")
+	@ApiResponse(responseCode = "503", description = "Dependent service unavailable")
+	@ApiResponse(responseCode = "500", description = "Unexpected server error")
 	@EmitEvent(id = "REPORT_ATTENDANCE_VS_JOBTIME_GENERATED", apiVersion = "1")
 	@GetMapping("/attendanceJobtimeDiscrepancy")
 	@PreAuthorize("hasAnyAuthority('people:time:export:read','accounting:time:export')")
@@ -49,16 +52,12 @@ public class PeopleReportsController {
 					required = false) List<UUID> technicianIds,
 			@Parameter(description = "Return flagged rows only") @RequestParam(
 					defaultValue = "false") boolean flaggedOnly,
-			@RequestHeader(value = "X-User", required = false) String managerId,
 			@RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+		String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
 		List<UUID> effectiveTechnicianIds = technicianIds == null ? List.of() : technicianIds;
-		log.info(
-				"Generating attendance job-time discrepancy report managerId={}, correlationId={}, startDate={}, endDate={}, timezone={}, locationId={}, technicianCount={}, flaggedOnly={}",
-				managerId, correlationId, startDate, endDate, timezone, locationId, effectiveTechnicianIds.size(),
-				flaggedOnly);
 
 		return ResponseEntity.ok(peopleReportsService.getAttendanceDiscrepancyReport(startDate, endDate, timezone,
-				locationId, effectiveTechnicianIds, flaggedOnly));
+				locationId, effectiveTechnicianIds, flaggedOnly, actorId, correlationId));
 	}
 
 	@Operation(summary = "Get approved time entries for accounting export",
@@ -68,6 +67,7 @@ public class PeopleReportsController {
 	@ApiResponse(responseCode = "400", description = "Invalid parameters")
 	@ApiResponse(responseCode = "403", description = "Forbidden")
 	@ApiResponse(responseCode = "503", description = "Dependent service unavailable")
+	@ApiResponse(responseCode = "500", description = "Unexpected server error")
 	@EmitEvent(id = "PEOPLE_TIME_APPROVED_EXPORT_READ", apiVersion = "1")
 	@PreAuthorize("hasAnyAuthority('people:time:export:read','accounting:time:export')")
 	@GetMapping("/approvedTime")
@@ -79,12 +79,10 @@ public class PeopleReportsController {
 			@Parameter(description = "One or more location IDs",
 					required = true) @RequestParam("locationId") List<UUID> locationIds,
 			@RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
-
-		log.info("Reading approved time export rows correlationId={}, startDate={}, endDate={}, locationCount={}",
-				correlationId, startDate, endDate, locationIds == null ? 0 : locationIds.size());
+		String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
 
 		List<ApprovedTimeExportResponse> rows = peopleReportsService.getApprovedTimeForExport(startDate, endDate,
-				locationIds == null ? List.of() : locationIds);
+				locationIds == null ? List.of() : locationIds, actorId, correlationId);
 
 		return ResponseEntity.ok(rows);
 	}

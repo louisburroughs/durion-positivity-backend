@@ -32,6 +32,9 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class PeopleReportsServiceImpl implements PeopleReportsService {
 
@@ -60,7 +63,11 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
 	@Override
 	@NonNull public List<ApprovedTimeExportResponse> getApprovedTimeForExport(@NonNull LocalDate startDate,
-			@NonNull LocalDate endDate, @NonNull List<UUID> locationIds) {
+			@NonNull LocalDate endDate, @NonNull List<UUID> locationIds, @NonNull String actorId, String correlationId) {
+		log.info(
+				"Reading approved time export rows actorId={}, correlationId={}, startDate={}, endDate={}, locationCount={}",
+				maskValue(actorId), maskValue(correlationId), maskDate(startDate), maskDate(endDate), locationIds.size());
+
 		// Issue #79: enforce stable approved-only export read contract.
 		if (endDate.isBefore(startDate)) {
 			throw new IllegalArgumentException("endDate must be on or after startDate");
@@ -115,7 +122,12 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 	@Override
 	@NonNull public List<AttendanceDiscrepancyReportResponse> getAttendanceDiscrepancyReport(@NonNull LocalDate startDate,
 			@NonNull LocalDate endDate, @NonNull String timezone, UUID locationId, @NonNull List<UUID> technicianIds,
-			boolean flaggedOnly) {
+			boolean flaggedOnly, @NonNull String actorId, String correlationId) {
+		log.info(
+				"Generating attendance job-time discrepancy report actorId={}, correlationId={}, startDate={}, endDate={}, timezone={}, locationId={}, technicianCount={}, flaggedOnly={}",
+				maskValue(actorId), maskValue(correlationId), maskDate(startDate), maskDate(endDate),
+				maskValue(timezone), maskUuid(locationId), technicianIds.size(), flaggedOnly);
+
 		if (endDate.isBefore(startDate)) {
 			throw new IllegalArgumentException("endDate must be on or after startDate");
 		}
@@ -178,6 +190,31 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 		catch (ZoneRulesException ex) {
 			throw new IllegalArgumentException("timezone must be a valid IANA timezone");
 		}
+	}
+
+	private String maskValue(String value) {
+		if (value == null || value.isBlank()) {
+			return "n/a";
+		}
+		if (value.length() <= 4) {
+			return "****";
+		}
+		return value.substring(0, 2) + "***" + value.substring(value.length() - 2);
+	}
+
+	private String maskDate(LocalDate date) {
+		if (date == null) {
+			return "n/a";
+		}
+		return date.getYear() + "-" + String.format("%02d", date.getMonthValue()) + "-**";
+	}
+
+	private String maskUuid(UUID value) {
+		if (value == null) {
+			return "n/a";
+		}
+		String raw = value.toString();
+		return raw.substring(0, 8) + "-****-****-****-************";
 	}
 
 	private Map<AttendanceReportKey, Long> aggregateAttendanceMinutes(List<TimeEntry> entries,
