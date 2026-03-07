@@ -177,14 +177,14 @@ class CrmVehicleServiceImplTest {
     void updateVehicle_throws_whenVehicleNotOwned() {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CreateVehicleForPartyRequest request = CreateVehicleForPartyRequest.builder().build();
         CommercialParty party = commercialParty(customerId);
 
         when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
         when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
         when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(vehicle(vehicleId, "VIN-OTHER")));
 
-        assertThatThrownBy(
-                () -> service.updateVehicle(customerId, CreateVehicleForPartyRequest.builder().build(), vehicleId))
+        assertThatThrownBy(() -> service.updateVehicle(customerId, request, vehicleId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not belong to customer");
     }
@@ -245,12 +245,13 @@ class CrmVehicleServiceImplTest {
 
     @Test
     void transferVehicle_throwsOnInvalidTargetId() {
+        UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         VehicleTransferRequest badRequest = VehicleTransferRequest.builder()
                 .targetCustomerId("not-a-uuid")
                 .build();
 
-        assertThatThrownBy(() -> service.transferVehicle(UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                UUID.fromString("00000000-0000-0000-0000-000000000001"), badRequest))
+        assertThatThrownBy(() -> service.transferVehicle(sourceId, vehicleId, badRequest))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid customer ID format");
     }

@@ -1,15 +1,16 @@
 package com.positivity.inventory.internal.config;
 
-import com.positivity.security.common.PermissionDefinition;
-import com.positivity.security.common.PermissionRegistrationSupport;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.yaml.snakeyaml.Yaml;
+
+import com.positivity.security.common.PermissionDefinition;
+import com.positivity.security.common.PermissionRegistrationSupport;
 
 /**
  * Registers inventory permissions with pos-security-service at startup.

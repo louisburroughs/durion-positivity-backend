@@ -144,9 +144,7 @@ class PickListServiceImplTest {
         @Test
         @DisplayName("SC3_createPickList_nullWorkorderId: null workorderId → NullPointerException or IllegalArgumentException")
         void SC3_createPickList_nullWorkorderId_throwsNullOrIllegalArgument() {
-                // Issue #28: SC3 — null workorderId must be rejected;
-                // UnsupportedOperationException is RED proof
-                // Arrange
+                // Issue #28: SC3 — empty workorderId must be rejected
                 CreatePickListRequest request = new CreatePickListRequest(null, null, 0, null);
 
                 // Act + Assert — RED: impl throws UnsupportedOperationException, not
@@ -409,7 +407,7 @@ class PickListServiceImplTest {
                 UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000019");
                 UUID correctProductId = UUID.fromString("00000000-0000-0000-0000-000000000020");
                 UUID wrongScannedSkuId = UUID.fromString("00000000-0000-0000-0000-000000000021"); // different from
-                                                            // correctProductId
+                // correctProductId
                 UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000022");
 
                 PickListEntity pickList = PickListEntity.builder()

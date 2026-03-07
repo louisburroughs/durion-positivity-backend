@@ -63,6 +63,8 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("AuditTrailService Unit Tests")
 class AuditTrailServiceTest {
 
+    private static final String STORE_MANAGER = "STORE_MANAGER";
+
     private static final UUID _DEFAULT_UUID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -123,7 +125,7 @@ class AuditTrailServiceTest {
         AuthorizationResult authResult = AuthorizationResult.builder()
                 .result(PolicyValidationResult.APPROVED)
                 .policyVersion("v1.0")
-                .authorizationLevel("STORE_MANAGER")
+                .authorizationLevel(STORE_MANAGER)
                 .build();
 
         when(overrideAuthService.validate(any(), any(), any(), any())).thenReturn(authResult);
@@ -152,7 +154,7 @@ class AuditTrailServiceTest {
         AuthorizationResult authResult = AuthorizationResult.builder()
                 .result(PolicyValidationResult.APPROVED)
                 .policyVersion("v1.0")
-                .authorizationLevel("STORE_MANAGER")
+                .authorizationLevel(STORE_MANAGER)
                 .build();
 
         when(overrideAuthService.validate(any(), any(), any(), any())).thenReturn(authResult);
@@ -410,7 +412,7 @@ class AuditTrailServiceTest {
     private PriceOverrideRequest createPriceOverrideRequest() {
         PriceOverrideRequest request = new PriceOverrideRequest();
         request.setActorId(testActorId);
-        request.setActorRole("STORE_MANAGER");
+        request.setActorRole(STORE_MANAGER);
         request.setOrderId(testOrderId);
         request.setLineItemId(testLineItemId);
         request.setOriginalPrice(new BigDecimal("100.00"));
@@ -422,7 +424,7 @@ class AuditTrailServiceTest {
     private RefundRequest createRefundRequest() {
         RefundRequest request = new RefundRequest();
         request.setActorId(testActorId);
-        request.setActorRole("STORE_MANAGER");
+        request.setActorRole(STORE_MANAGER);
         request.setInvoiceId(testInvoiceId);
         request.setPaymentId(testPaymentId);
         request.setRefundType(RefundType.CREDIT_MEMO);
@@ -435,7 +437,7 @@ class AuditTrailServiceTest {
     private CancellationRequest createCancellationRequest() {
         CancellationRequest request = new CancellationRequest();
         request.setActorId(testActorId);
-        request.setActorRole("STORE_MANAGER");
+        request.setActorRole(STORE_MANAGER);
         request.setOrderId(testOrderId);
         request.setInvoiceId(testInvoiceId);
         request.setCancellationType(CancellationType.ORDER_CANCELLED);
