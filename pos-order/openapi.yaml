@@ -79,14 +79,14 @@ paths:
               $ref: "#/components/schemas/ApplyPriceOverrideRequest"
         required: true
       responses:
-        "403":
-          description: Insufficient permissions
+        "201":
+          description: Override created
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApplyPriceOverrideResponse"
-        "201":
-          description: Override created
+        "403":
+          description: Insufficient permissions
           content:
             '*/*':
               schema:
@@ -120,12 +120,6 @@ paths:
               $ref: "#/components/schemas/RejectPriceOverrideRequest"
         required: true
       responses:
-        "200":
-          description: Override rejected
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideView"
         "400":
           description: Invalid request or override not in pending state
           content:
@@ -134,6 +128,12 @@ paths:
                 $ref: "#/components/schemas/PriceOverrideView"
         "403":
           description: Insufficient rejection permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideView"
+        "200":
+          description: Override rejected
           content:
             '*/*':
               schema:
@@ -168,6 +168,12 @@ paths:
               $ref: "#/components/schemas/ApprovePriceOverrideRequest"
         required: true
       responses:
+        "200":
+          description: Override approved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideView"
         "400":
           description: Invalid request or override not in pending state
           content:
@@ -176,12 +182,6 @@ paths:
                 $ref: "#/components/schemas/PriceOverrideView"
         "404":
           description: Override not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideView"
-        "200":
-          description: Override approved
           content:
             '*/*':
               schema:

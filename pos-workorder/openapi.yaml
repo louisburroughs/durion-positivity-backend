@@ -415,6 +415,8 @@ paths:
       tags:
       - Operational Context
       summary: "Start work on workorder, locking operational context"
+      description: Transitions the workorder into active execution and locks operational
+        context to prevent further overrides.
       operationId: startWork
       parameters:
       - name: workorderId
@@ -669,14 +671,14 @@ paths:
                   quantity: 1
         required: true
       responses:
-        "201":
-          description: Parts returned successfully
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
+        "201":
+          description: Parts returned successfully
           content:
             '*/*':
               schema:
@@ -722,12 +724,6 @@ paths:
                   notes: Returned to stock
         required: true
       responses:
-        "201":
-          description: Unused quantity returned successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "400":
           description: "Invalid request (exceeds available quantity, etc.)"
           content:
@@ -736,6 +732,12 @@ paths:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "404":
           description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "201":
+          description: Unused quantity returned successfully
           content:
             '*/*':
               schema:
@@ -774,14 +776,14 @@ paths:
                   quantity: 2
         required: true
       responses:
-        "409":
-          description: Idempotency conflict (duplicate key)
+        "201":
+          description: Parts issued successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "201":
-          description: Parts issued successfully
+        "409":
+          description: Idempotency conflict (duplicate key)
           content:
             '*/*':
               schema:
@@ -885,6 +887,12 @@ paths:
                   quantity: 1
         required: true
       responses:
+        "201":
+          description: Parts consumption recorded successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "400":
           description: "Invalid request (exceeds issued quantity, etc.)"
           content:
@@ -897,17 +905,13 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "201":
-          description: Parts consumption recorded successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/operationalContext/override:
     post:
       tags:
       - Operational Context
       summary: Manager override of operational context
+      description: Applies a manager-authorized override to operational context values
+        before work starts; request is rejected once context is locked.
       operationId: overrideOperationalContext
       parameters:
       - name: workorderId
@@ -2203,6 +2207,12 @@ paths:
       description: Stop active timer entries for the authenticated mechanic
       operationId: stopTimers
       responses:
+        "200":
+          description: Timers stopped successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkexecTimerStopResponse"
         "400":
           description: Missing or invalid authenticated user id
           content:
@@ -2213,12 +2223,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "200":
-          description: Timers stopped successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkexecTimerStopResponse"
   /v1/workexec/time-entries/timer/start:
     post:
       tags:
@@ -2247,14 +2251,14 @@ paths:
           content:
             '*/*':
               schema: {}
-        "200":
-          description: Idempotent replay returned existing timer
+        "201":
+          description: Timer started successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkexecTimerEntryResponse"
-        "201":
-          description: Timer started successfully
+        "200":
+          description: Idempotent replay returned existing timer
           content:
             '*/*':
               schema:
@@ -2306,6 +2310,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Labor entry created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
         "409":
           description: Conflict while recording labor
           content:
@@ -2313,12 +2323,6 @@ paths:
               schema: {}
         "200":
           description: Idempotent replay returned existing labor entry
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkexecLaborPerformedResponse"
-        "201":
-          description: Labor entry created successfully
           content:
             '*/*':
               schema:
@@ -2641,6 +2645,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
+        "200":
+          description: Usage history retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "404":
           description: Workorder or part not found
           content:
@@ -2649,12 +2659,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "200":
-          description: Usage history retrieved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/parts/adjustments:
     get:
       tags:
@@ -2698,6 +2702,8 @@ paths:
       tags:
       - Operational Context
       summary: Get operational context for workorder
+      description: "Returns the current operational context for a workorder, including\
+        \ flags and source data used to drive execution decisions."
       operationId: getOperationalContext
       parameters:
       - name: workorderId
@@ -2894,10 +2900,6 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
-          description: PDF generated successfully
-          content:
-            application/pdf: {}
         "404":
           description: Estimate not found
           content:
@@ -2905,6 +2907,10 @@ paths:
               schema:
                 type: string
                 format: byte
+        "200":
+          description: PDF generated successfully
+          content:
+            application/pdf: {}
         "502":
           description: Document service unavailable
           content:
@@ -5848,6 +5854,10 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         size:
           type: integer
           format: int32
@@ -5860,10 +5870,6 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -6038,6 +6044,10 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         size:
           type: integer
           format: int32
@@ -6050,10 +6060,6 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         numberOfElements:
           type: integer
           format: int32
