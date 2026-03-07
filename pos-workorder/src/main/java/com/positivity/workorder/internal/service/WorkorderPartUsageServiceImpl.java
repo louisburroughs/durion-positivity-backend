@@ -74,7 +74,6 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * @param workorderId    workorder ID
      * @param partLineId     part line item ID
      * @param quantity       quantity to issue (must be positive)
-     * @param performedBy    user issuing parts
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
      * @throws NoSuchElementException   if workorder or part not found
@@ -87,7 +86,6 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
         String actorId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
@@ -152,7 +150,6 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * @param workorderId    workorder ID
      * @param partLineId     part line item ID
      * @param quantity       quantity to consume (must be positive)
-     * @param performedBy    user consuming parts
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
      * @throws NoSuchElementException   if workorder or part not found
@@ -164,7 +161,6 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
         String actorId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
@@ -238,7 +234,6 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * @param workorderId    workorder ID
      * @param partLineId     part line item ID
      * @param quantity       quantity to return (must be positive)
-     * @param performedBy    user returning parts
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
      * @throws NoSuchElementException   if workorder or part not found
@@ -251,7 +246,6 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
         String actorId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));

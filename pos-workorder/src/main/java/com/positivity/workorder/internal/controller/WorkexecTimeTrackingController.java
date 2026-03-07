@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkexecJobTimeTotalResponse;
 import com.positivity.workorder.internal.dto.WorkexecLaborPerformedRequest;
 import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
@@ -50,8 +51,7 @@ public class WorkexecTimeTrackingController {
     private static final String ERROR_CODE_KEY = "code";
     private static final String ERROR_MESSAGE_KEY = "message";
     private static final String ERROR_INVALID_REQUEST = "WORKEXEC_INVALID_REQUEST";
-    private static final String USER_ID_HEADER = "X-User-Id";
-    private static final String USER_ID_REQUIRED_MESSAGE = "Valid X-User-Id header is required";
+    private static final String USER_ID_REQUIRED_MESSAGE = "Authenticated user id must be a valid UUID";
 
     private final WorkexecTimeTrackingService service;
 
@@ -135,11 +135,10 @@ public class WorkexecTimeTrackingController {
     @PreAuthorize("hasAuthority('workorder:labor:view')")
     @Operation(summary = "Get active timers", description = "Retrieve active timer entries for the authenticated mechanic")
     @ApiResponse(responseCode = "200", description = "Active timers returned successfully", content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid X-User-Id header")
-    public ResponseEntity<Object> getActiveTimerEntries(
-            @Parameter(description = "Mechanic user id", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = USER_ID_HEADER, required = false) String userIdHeader) {
+    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id")
+    public ResponseEntity<Object> getActiveTimerEntries() {
 
-        UUID mechanicId = parseRequiredUuidHeader(userIdHeader, USER_ID_HEADER);
+        UUID mechanicId = resolveAuthenticatedMechanicId();
         if (mechanicId == null) {
             return badRequest(ERROR_INVALID_REQUEST, USER_ID_REQUIRED_MESSAGE);
         }
@@ -154,16 +153,15 @@ public class WorkexecTimeTrackingController {
     @Operation(summary = "Start timer", description = "Start a workexec timer entry for the authenticated mechanic")
     @ApiResponse(responseCode = "201", description = "Timer started successfully", content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
     @ApiResponse(responseCode = "200", description = "Idempotent replay returned existing timer", content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid X-User-Id header")
+    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id")
     @ApiResponse(responseCode = "404", description = "Referenced resource not found")
     @ApiResponse(responseCode = "409", description = "Conflict while starting timer")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Timer start payload", required = true, content = @Content(schema = @Schema(implementation = WorkexecTimerStartRequest.class)))
     public ResponseEntity<Object> startTimer(
-            @Parameter(description = "Mechanic user id", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = USER_ID_HEADER, required = false) String userIdHeader,
             @Parameter(description = "Optional idempotency key", example = "timer-start-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody WorkexecTimerStartRequest request) {
 
-        UUID mechanicId = parseRequiredUuidHeader(userIdHeader, USER_ID_HEADER);
+        UUID mechanicId = resolveAuthenticatedMechanicId();
         if (mechanicId == null) {
             return badRequest(ERROR_INVALID_REQUEST, USER_ID_REQUIRED_MESSAGE);
         }
@@ -189,12 +187,11 @@ public class WorkexecTimeTrackingController {
     @PreAuthorize("hasAuthority('workorder:labor:add')")
     @Operation(summary = "Stop timers", description = "Stop active timer entries for the authenticated mechanic")
     @ApiResponse(responseCode = "200", description = "Timers stopped successfully", content = @Content(schema = @Schema(implementation = WorkexecTimerStopResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid X-User-Id header")
+    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id")
     @ApiResponse(responseCode = "409", description = "Conflict while stopping timers")
-    public ResponseEntity<Object> stopTimers(
-            @Parameter(description = "Mechanic user id", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = USER_ID_HEADER, required = false) String userIdHeader) {
+    public ResponseEntity<Object> stopTimers() {
 
-        UUID mechanicId = parseRequiredUuidHeader(userIdHeader, USER_ID_HEADER);
+        UUID mechanicId = resolveAuthenticatedMechanicId();
         if (mechanicId == null) {
             return badRequest(ERROR_INVALID_REQUEST, USER_ID_REQUIRED_MESSAGE);
         }
@@ -207,17 +204,12 @@ public class WorkexecTimeTrackingController {
         }
     }
 
-    private UUID parseRequiredUuidHeader(String value, String headerName) {
-        if (value == null || value.isBlank()) {
-            log.warn("Missing required header {}", headerName);
-            return null;
+    private UUID resolveAuthenticatedMechanicId() {
+        UUID mechanicId = SecurityContextHelper.getCurrentUserIdAsUuid().orElse(null);
+        if (mechanicId == null) {
+            log.warn("Missing authenticated UUID user id in security context");
         }
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException ex) {
-            log.warn("Invalid UUID for header {}: {}", headerName, value);
-            return null;
-        }
+        return mechanicId;
     }
 
     private ResponseEntity<Object> badRequest(String code, String message) {

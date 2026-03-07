@@ -69,7 +69,6 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             @NonNull UUID originalPartId,
             @NonNull UUID substitutePartId,
             @NonNull String reason,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
         String actorId = SecurityContextHelper.getCurrentUsername().orElseThrow(

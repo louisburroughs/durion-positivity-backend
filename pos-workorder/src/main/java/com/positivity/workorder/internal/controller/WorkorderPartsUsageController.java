@@ -56,14 +56,12 @@ public class WorkorderPartsUsageController {
     public ResponseEntity<WorkorderPartUsageEventResponse> issueParts(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull IssuePartRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey,
-            @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
+            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
 
         var event = usageService.issuePartQuantity(
                 workorderId,
                 request.getWorkorderPartId(),
                 request.getQuantity(),
-                userId,
                 idempotencyKey);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));
@@ -83,15 +81,13 @@ public class WorkorderPartsUsageController {
     public ResponseEntity<WorkorderPartUsageEventResponse> consumeParts(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull ConsumePartRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey,
-            @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
+            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
 
         try {
             var event = usageService.consumePartQuantity(
                     workorderId,
                     request.getWorkorderPartId(),
                     request.getQuantity(),
-                    userId,
                     idempotencyKey);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));
@@ -114,15 +110,13 @@ public class WorkorderPartsUsageController {
     public ResponseEntity<WorkorderPartUsageEventResponse> returnParts(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull ReturnPartRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey,
-            @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
+            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
 
         try {
             var event = usageService.returnPartQuantity(
                     workorderId,
                     request.getWorkorderPartId(),
                     request.getQuantity(),
-                    userId,
                     idempotencyKey);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));

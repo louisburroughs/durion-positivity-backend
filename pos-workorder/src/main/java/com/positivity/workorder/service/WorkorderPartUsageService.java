@@ -15,7 +15,6 @@ public interface WorkorderPartUsageService {
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey);
 
     @NonNull
@@ -23,7 +22,6 @@ public interface WorkorderPartUsageService {
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey);
 
     @NonNull
@@ -31,7 +29,6 @@ public interface WorkorderPartUsageService {
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey);
 
     @NonNull

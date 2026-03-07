@@ -65,8 +65,7 @@ public class WorkorderPartAdjustmentController {
     public ResponseEntity<WorkorderPartAdjustmentEventResponse> substitutePart(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull SubstitutePartRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey,
-            @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
+            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
 
         try {
             // Issue #49: Delegate substitute flow to dedicated substitution service.
@@ -75,7 +74,6 @@ public class WorkorderPartAdjustmentController {
                     request.getOriginalPartId(),
                     request.getSubstitutePartId(),
                     request.getReason(),
-                    userId,
                     idempotencyKey,
                     request.getNotes());
 
@@ -101,8 +99,7 @@ public class WorkorderPartAdjustmentController {
     public ResponseEntity<WorkorderPartAdjustmentEventResponse> returnUnusedQuantity(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull ReturnPartQuantityRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey,
-            @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
+            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
 
         try {
             WorkorderPartAdjustmentEventResponse response = adjustmentService.returnUnusedQuantity(
@@ -110,7 +107,6 @@ public class WorkorderPartAdjustmentController {
                     request.getWorkorderPartId(),
                     request.getQuantity(),
                     request.getReason(),
-                    userId,
                     idempotencyKey,
                     request.getNotes());
 
@@ -136,8 +132,7 @@ public class WorkorderPartAdjustmentController {
     public ResponseEntity<WorkorderPartAdjustmentEventResponse> correctPartQuantity(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull CorrectPartQuantityRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey,
-            @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
+            @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
 
         try {
             WorkorderPartAdjustmentEventResponse response = adjustmentService.correctPartQuantity(
@@ -145,7 +140,6 @@ public class WorkorderPartAdjustmentController {
                     request.getWorkorderPartId(),
                     request.getNewQuantity(),
                     request.getReason(),
-                    userId,
                     idempotencyKey,
                     request.getNotes());
 

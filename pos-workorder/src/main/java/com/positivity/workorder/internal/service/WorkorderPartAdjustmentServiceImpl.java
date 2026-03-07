@@ -83,7 +83,6 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
      * @param originalPartId   ID of the part to substitute
      * @param substitutePartId ID of the new part (must be different from original)
      * @param reason           reason for substitution (required for audit)
-     * @param performedBy      user performing substitution
      * @param idempotencyKey   optional idempotency key
      * @param notes            optional additional notes
      * @return the adjustment event as DTO
@@ -100,7 +99,6 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @NonNull UUID originalPartId,
             @NonNull UUID substitutePartId,
             @NonNull String reason,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
         String actorId = SecurityContextHelper.getCurrentUsername()
@@ -203,7 +201,6 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
      * @param partId         part line item ID
      * @param quantity       quantity to return (must be positive and <= available)
      * @param reason         reason for return (required for audit)
-     * @param performedBy    user performing return
      * @param idempotencyKey optional idempotency key
      * @param notes          optional additional notes
      * @return the adjustment event as DTO
@@ -217,7 +214,6 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @NonNull UUID partId,
             @NonNull BigDecimal quantity,
             @NonNull String reason,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
         String actorId = SecurityContextHelper.getCurrentUsername()
@@ -300,7 +296,6 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
      * @param partId         part line item ID
      * @param newQuantity    new authorized quantity (must be positive)
      * @param reason         reason for correction (required for audit)
-     * @param performedBy    user performing correction
      * @param idempotencyKey optional idempotency key
      * @param notes          optional additional notes
      * @return the adjustment event as DTO
@@ -314,7 +309,6 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @NonNull UUID partId,
             @NonNull BigDecimal newQuantity,
             @NonNull String reason,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
         String actorId = SecurityContextHelper.getCurrentUsername()

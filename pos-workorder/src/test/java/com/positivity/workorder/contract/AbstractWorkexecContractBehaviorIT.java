@@ -4,8 +4,10 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppC
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
+import com.positivity.security.common.GatewaySecurityConstants;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +36,9 @@ import jakarta.servlet.http.HttpServletResponse;
  * tests.
  */
 abstract class AbstractWorkexecContractBehaviorIT {
+
+    private static final String TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+    private static final String TEST_USERNAME = "workorder-test-user";
 
     private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
             new SimpleGrantedAuthority("workorder:labor:view"),
@@ -69,7 +74,10 @@ abstract class AbstractWorkexecContractBehaviorIT {
                             HttpServletResponse response,
                             FilterChain filterChain) throws ServletException, IOException {
                         var authentication = new UsernamePasswordAuthenticationToken(
-                                "workorder-test-user", null, TEST_AUTHORITIES);
+                                TEST_USERNAME, null, TEST_AUTHORITIES);
+                        authentication.setDetails(Map.of(
+                                GatewaySecurityConstants.DETAIL_USER_ID, TEST_USER_ID,
+                                GatewaySecurityConstants.DETAIL_USERNAME, TEST_USERNAME));
                         SecurityContextHolder.getContext().setAuthentication(authentication);
                         filterChain.doFilter(request, response);
                     }
