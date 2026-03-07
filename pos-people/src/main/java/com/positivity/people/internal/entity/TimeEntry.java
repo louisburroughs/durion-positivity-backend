@@ -2,11 +2,22 @@ package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import jakarta.persistence.Column;
+import jakarta.persistence.ConstraintMode;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -19,14 +30,15 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.GeneratedValue;
 import com.positivity.shared.id.UUIDv7Id;
 
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "time_entry",
-		indexes = {
-				@Index(name = "idx_time_entry_attendance_window",
-						columnList = "attendance_start_at, attendance_end_at"),
-				@Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
-				@Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at") })
+@Table(name = "time_entry", indexes = {
+		@Index(name = "idx_time_entry_attendance_window", columnList = "attendance_start_at, attendance_end_at"),
+		@Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
+		@Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at") })
 public class TimeEntry {
 
 	@Id
@@ -35,9 +47,19 @@ public class TimeEntry {
 	@Column(name = "time_entry_id", columnDefinition = "UUID", nullable = false)
 	private UUID timeEntryId;
 
-	@Column(name = "person_id")
-	private String personId;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "person_id", referencedColumnName = "id", columnDefinition = "UUID", foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+	@ToString.Exclude
+	@EqualsAndHashCode.Exclude
+	private Person person;
 
+	/**
+	 * Optional association to timesheet (if this time entry was created via
+	 * timesheet import)
+	 * NOTE: this is not a foreign key association since timesheet records are
+	 * managed by an external timekeeping system; this is just a reference field for
+	 * traceability.
+	 */
 	@Column(name = "timesheet_id")
 	private String timesheetId;
 
@@ -76,115 +98,5 @@ public class TimeEntry {
 	@LastModifiedDate
 	@Column(name = "updated_at")
 	private Instant updatedAt;
-
-	public UUID getTimeEntryId() {
-		return timeEntryId;
-	}
-
-	public void setTimeEntryId(UUID timeEntryId) {
-		this.timeEntryId = timeEntryId;
-	}
-
-	public String getPersonId() {
-		return personId;
-	}
-
-	public void setPersonId(String personId) {
-		this.personId = personId;
-	}
-
-	public String getTimesheetId() {
-		return timesheetId;
-	}
-
-	public void setTimesheetId(String timesheetId) {
-		this.timesheetId = timesheetId;
-	}
-
-	public UUID getLocationId() {
-		return locationId;
-	}
-
-	public void setLocationId(UUID locationId) {
-		this.locationId = locationId;
-	}
-
-	public Instant getAttendanceStartAt() {
-		return attendanceStartAt;
-	}
-
-	public void setAttendanceStartAt(Instant attendanceStartAt) {
-		this.attendanceStartAt = attendanceStartAt;
-	}
-
-	public Instant getAttendanceEndAt() {
-		return attendanceEndAt;
-	}
-
-	public void setAttendanceEndAt(Instant attendanceEndAt) {
-		this.attendanceEndAt = attendanceEndAt;
-	}
-
-	public TimeEntryStatus getStatus() {
-		return status;
-	}
-
-	public void setStatus(TimeEntryStatus status) {
-		this.status = status;
-	}
-
-	public String getApprovedBy() {
-		return approvedBy;
-	}
-
-	public void setApprovedBy(String approvedBy) {
-		this.approvedBy = approvedBy;
-	}
-
-	public Instant getApprovedAt() {
-		return approvedAt;
-	}
-
-	public void setApprovedAt(Instant approvedAt) {
-		this.approvedAt = approvedAt;
-	}
-
-	public String getRejectedBy() {
-		return rejectedBy;
-	}
-
-	public void setRejectedBy(String rejectedBy) {
-		this.rejectedBy = rejectedBy;
-	}
-
-	public Instant getRejectedAt() {
-		return rejectedAt;
-	}
-
-	public void setRejectedAt(Instant rejectedAt) {
-		this.rejectedAt = rejectedAt;
-	}
-
-	public String getRejectionReason() {
-		return rejectionReason;
-	}
-
-	public void setRejectionReason(String rejectionReason) {
-		this.rejectionReason = rejectionReason;
-	}
-
-	public Instant getCreatedAt() {
-		return createdAt;
-	}
-
-	public void setCreatedAt(Instant createdAt) {
-	}
-
-	public Instant getUpdatedAt() {
-		return updatedAt;
-	}
-
-	public void setUpdatedAt(Instant updatedAt) {
-	}
 
 }

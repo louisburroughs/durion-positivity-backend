@@ -27,17 +27,18 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
 			  AND t.attendanceStartAt < :windowEndExclusive
 			  AND (t.attendanceEndAt IS NULL OR t.attendanceEndAt > :windowStartInclusive)
 			  AND (:locationId IS NULL OR t.locationId = :locationId)
-			  AND (:includeAllTechnicians = true OR t.personId IN :technicianIds)
+			  AND (:includeAllTechnicians = true OR t.person.id IN :technicianIds)
 			""")
 	List<TimeEntry> findAttendanceOverlappingWindow(@Param("windowStartInclusive") Instant windowStartInclusive,
 			@Param("windowEndExclusive") Instant windowEndExclusive, @Param("locationId") UUID locationId,
-			@Param("technicianIds") List<String> technicianIds,
+			@Param("technicianIds") List<UUID> technicianIds,
 			@Param("includeAllTechnicians") boolean includeAllTechnicians);
 
 	@NonNull
 	@Query("""
 			SELECT t
 			FROM TimeEntry t
+			LEFT JOIN FETCH t.person p
 			WHERE t.status = :status
 			  AND t.attendanceStartAt >= :windowStartInclusive
 			  AND t.attendanceStartAt < :windowEndExclusive

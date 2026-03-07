@@ -67,7 +67,7 @@ class PeopleReportsServiceTest {
 
 		TimeEntry approved = new TimeEntry();
 		approved.setTimeEntryId(approvedId);
-		approved.setPersonId(personUuid.toString());
+		approved.setPerson(Person.builder().id(personUuid).firstName("Jane").lastName("Doe").build());
 		approved.setLocationId(locationId);
 		approved.setStatus(TimeEntryStatus.APPROVED);
 		approved.setAttendanceStartAt(Instant.parse("2026-02-10T08:00:00Z"));
@@ -77,7 +77,7 @@ class PeopleReportsServiceTest {
 
 		TimeEntry rejected = new TimeEntry();
 		rejected.setTimeEntryId(rejectedId);
-		rejected.setPersonId(personUuid.toString());
+		rejected.setPerson(Person.builder().id(personUuid).firstName("Jane").lastName("Doe").build());
 		rejected.setLocationId(locationId);
 		rejected.setStatus(TimeEntryStatus.REJECTED);
 		rejected.setAttendanceStartAt(Instant.parse("2026-02-10T09:00:00Z"));
@@ -85,14 +85,11 @@ class PeopleReportsServiceTest {
 		rejected.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
 		rejected.setApprovedBy("manager-1");
 
-		Person person = Person.builder().id(personUuid).firstName("Jane").lastName("Doe").build();
-
 		when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
 		when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
 		when(timeEntryRepository.findApprovedForExport(eq(TimeEntryStatus.APPROVED), any(), any(),
 				eq(List.of(locationId))))
 				.thenReturn(List.of(approved));
-		when(personRepository.findAllById(any())).thenReturn(List.of(person));
 
 		List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(LocalDate.parse("2026-02-10"),
 				LocalDate.parse("2026-02-10"), List.of(locationId), "test-actor", "corr-1");
