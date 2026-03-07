@@ -7,7 +7,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link InvalidPaymentStateException}.
  *
- * <p>Covers both constructors to ensure the exception carries the correct
+ * <p>
+ * Covers both constructors to ensure the exception carries the correct
  * message and cause through the exception hierarchy.
  *
  * Story #9.

@@ -100,6 +100,28 @@ public final class InvoiceEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // ==================== STORY #7 — RECEIPT EVENTS ====================
+
+        public static final EventTypeRegistration INVOICE_RECEIPT_GENERATE = EventTypeRegistration
+                        .write("INVOICE_RECEIPT_GENERATE",
+                                        "Generate a payment receipt for an invoice")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration INVOICE_RECEIPT_REPRINT = EventTypeRegistration
+                        .write("INVOICE_RECEIPT_REPRINT",
+                                        "Reprint an existing invoice receipt")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration INVOICE_RECEIPT_PRINT_DELIVERY = EventTypeRegistration
+                        .write("INVOICE_RECEIPT_PRINT_DELIVERY",
+                                        "Record print delivery for a receipt")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration INVOICE_RECEIPT_EMAIL_DELIVERY = EventTypeRegistration
+                        .write("INVOICE_RECEIPT_EMAIL_DELIVERY",
+                                        "Record email delivery for a receipt")
+                        .apiVersion("1").build();
+
         /**
          * Returns all event type registrations for the Invoice module.
          */
@@ -116,6 +138,10 @@ public final class InvoiceEventTypes {
                                 INVOICE_POSTING_FAILED,
                                 INVOICE_DRAFT_REVERT,
                                 INVOICE_PAYMENT_INITIATE,
-                                INVOICE_PAYMENT_CAPTURE);
+                                INVOICE_PAYMENT_CAPTURE,
+                                INVOICE_RECEIPT_GENERATE,
+                                INVOICE_RECEIPT_REPRINT,
+                                INVOICE_RECEIPT_PRINT_DELIVERY,
+                                INVOICE_RECEIPT_EMAIL_DELIVERY);
         }
 }
