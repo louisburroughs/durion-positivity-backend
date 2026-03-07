@@ -59,6 +59,7 @@ public abstract class BaseIntegrationTest {
     // validation
     protected static final String TEST_USER = "testuser";
     protected static final String TEST_AUTHORITIES = String.join(",",
+            "ROLE_ADMIN",
             "security:auth:login",
             "security:auth:refresh",
             "security:auth:validate",
@@ -98,6 +99,7 @@ public abstract class BaseIntegrationTest {
     public void setUpMockMvc() {
         this.mockMvc = MockMvcBuilders
                 .webAppContextSetup(webApplicationContext)
+                .defaultRequest(withAuth(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/")))
                 .apply(springSecurity())
                 .build();
     }

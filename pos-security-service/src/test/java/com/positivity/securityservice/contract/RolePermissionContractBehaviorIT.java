@@ -109,7 +109,7 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> permissions = objectMapper.readValue(queryResponse, List.class);
                 long duplicateCount = permissions.stream()
-                                .filter(permission -> permissionKey.equals(String.valueOf(permission.get("id"))))
+                                .filter(permission -> permissionKey.equals(String.valueOf(permission.get("name"))))
                                 .count();
                 assertThat(duplicateCount).isEqualTo(1);
         }
