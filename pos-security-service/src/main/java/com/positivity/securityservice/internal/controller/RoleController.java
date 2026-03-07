@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
+import java.time.Clock;
+
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.ErrorResponse;
 import com.positivity.securityservice.internal.dto.PermissionDto;
@@ -41,6 +43,8 @@ import java.util.UUID;
 @Slf4j
 @Tag(name = "Role Management", description = "Manage roles, permissions, and user assignments")
 public class RoleController {
+    private final Clock clock;
+
 
     private final RoleManagementService roleManagementService;
     private final RolePermissionService rolePermissionService;
@@ -176,7 +180,7 @@ public class RoleController {
     public ResponseEntity<Void> revokeRoleAssignment(
             @Parameter(description = "Role assignment ID", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID assignmentId,
             @Parameter(description = "Effective end date and time for revocation. Defaults to current date and time", example = "2026-02-16T10:30:00") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-        LocalDateTime effectiveEndDate = endDate != null ? endDate : LocalDateTime.now();
+        LocalDateTime effectiveEndDate = endDate != null ? endDate : LocalDateTime.now(clock);
         roleManagementService.revokeRoleAssignment(assignmentId, effectiveEndDate);
         return ResponseEntity.noContent().build();
     }

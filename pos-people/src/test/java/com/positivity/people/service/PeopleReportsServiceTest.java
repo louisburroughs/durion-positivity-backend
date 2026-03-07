@@ -34,126 +34,118 @@ import static org.mockito.Mockito.when;
  */
 class PeopleReportsServiceTest {
 
-    private TimeEntryRepository timeEntryRepository;
-    private PersonRepository personRepository;
-    private WorkexecJobTimeClient workexecJobTimeClient;
-    private TimekeepingThresholdCache timekeepingThresholdCache;
-    private LocationReferenceClient locationReferenceClient;
-    private PeopleReportsService service;
+	private TimeEntryRepository timeEntryRepository;
 
-    @BeforeEach
-    void setup() {
-        timeEntryRepository = mock(TimeEntryRepository.class);
-        personRepository = mock(PersonRepository.class);
-        workexecJobTimeClient = mock(WorkexecJobTimeClient.class);
-        timekeepingThresholdCache = mock(TimekeepingThresholdCache.class);
-        locationReferenceClient = mock(LocationReferenceClient.class);
+	private PersonRepository personRepository;
 
-        service = new PeopleReportsServiceImpl(
-                timeEntryRepository,
-                personRepository,
-                workexecJobTimeClient,
-                locationReferenceClient,
-                timekeepingThresholdCache);
-    }
+	private WorkexecJobTimeClient workexecJobTimeClient;
 
-    @Test
-    void getApprovedTimeForExport_onlyApprovedRowsReturned() {
-        UUID locationId = UUID.randomUUID();
-        UUID personUuid = UUID.randomUUID();
-        UUID approvedId = UUID.randomUUID();
-        UUID rejectedId = UUID.randomUUID();
+	private TimekeepingThresholdCache timekeepingThresholdCache;
 
-        TimeEntry approved = new TimeEntry();
-        approved.setTimeEntryId(approvedId);
-        approved.setPersonId(personUuid.toString());
-        approved.setLocationId(locationId);
-        approved.setStatus(TimeEntryStatus.APPROVED);
-        approved.setAttendanceStartAt(Instant.parse("2026-02-10T08:00:00Z"));
-        approved.setAttendanceEndAt(Instant.parse("2026-02-10T16:30:00Z"));
-        approved.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
-        approved.setApprovedBy("manager-1");
+	private LocationReferenceClient locationReferenceClient;
 
-        TimeEntry rejected = new TimeEntry();
-        rejected.setTimeEntryId(rejectedId);
-        rejected.setPersonId(personUuid.toString());
-        rejected.setLocationId(locationId);
-        rejected.setStatus(TimeEntryStatus.REJECTED);
-        rejected.setAttendanceStartAt(Instant.parse("2026-02-10T09:00:00Z"));
-        rejected.setAttendanceEndAt(Instant.parse("2026-02-10T10:00:00Z"));
-        rejected.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
-        rejected.setApprovedBy("manager-1");
+	private PeopleReportsService service;
 
-        Person person = Person.builder()
-                .id(personUuid)
-                .firstName("Jane")
-                .lastName("Doe")
-                .build();
+	@BeforeEach
+	void setup() {
+		timeEntryRepository = mock(TimeEntryRepository.class);
+		personRepository = mock(PersonRepository.class);
+		workexecJobTimeClient = mock(WorkexecJobTimeClient.class);
+		timekeepingThresholdCache = mock(TimekeepingThresholdCache.class);
+		locationReferenceClient = mock(LocationReferenceClient.class);
 
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
-        when(timeEntryRepository.findApprovedForExport(eq(TimeEntryStatus.APPROVED), any(), any(),
-                eq(List.of(locationId))))
-                .thenReturn(List.of(approved));
-        when(personRepository.findAllById(any())).thenReturn(List.of(person));
+		service = new PeopleReportsServiceImpl(timeEntryRepository, personRepository, workexecJobTimeClient,
+				locationReferenceClient, timekeepingThresholdCache, java.time.Clock.systemUTC());
+	}
 
-        List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(
-                LocalDate.parse("2026-02-10"),
-                LocalDate.parse("2026-02-10"),
-                List.of(locationId));
+	@Test
+	void getApprovedTimeForExport_onlyApprovedRowsReturned() {
+		UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000009");
+		UUID approvedId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+		UUID rejectedId = UUID.fromString("00000000-0000-0000-0000-000000000021");
 
-        assertEquals(1, result.size());
-        assertEquals(approvedId.toString(), result.get(0).timeEntryId());
-        assertEquals("Jane Doe", result.get(0).employeeName());
-        assertEquals("North Shop", result.get(0).locationName());
-        assertEquals("8.50", result.get(0).hoursWorked().toPlainString());
-        assertEquals("manager-1", result.get(0).approvedBy());
-        assertFalse(result.stream().anyMatch(row -> row.timeEntryId().equals(rejectedId.toString())));
-    }
+		TimeEntry approved = new TimeEntry();
+		approved.setTimeEntryId(approvedId);
+		approved.setPersonId(personUuid.toString());
+		approved.setLocationId(locationId);
+		approved.setStatus(TimeEntryStatus.APPROVED);
+		approved.setAttendanceStartAt(Instant.parse("2026-02-10T08:00:00Z"));
+		approved.setAttendanceEndAt(Instant.parse("2026-02-10T16:30:00Z"));
+		approved.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
+		approved.setApprovedBy("manager-1");
 
-    @Test
-    void getApprovedTimeForExport_emptyResultReturns200EquivalentList() {
-        UUID locationId = UUID.randomUUID();
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
-        when(timeEntryRepository.findApprovedForExport(eq(TimeEntryStatus.APPROVED), any(), any(),
-                eq(List.of(locationId))))
-                .thenReturn(List.of());
+		TimeEntry rejected = new TimeEntry();
+		rejected.setTimeEntryId(rejectedId);
+		rejected.setPersonId(personUuid.toString());
+		rejected.setLocationId(locationId);
+		rejected.setStatus(TimeEntryStatus.REJECTED);
+		rejected.setAttendanceStartAt(Instant.parse("2026-02-10T09:00:00Z"));
+		rejected.setAttendanceEndAt(Instant.parse("2026-02-10T10:00:00Z"));
+		rejected.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
+		rejected.setApprovedBy("manager-1");
 
-        List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(
-                LocalDate.parse("2026-02-01"),
-                LocalDate.parse("2026-02-02"),
-                List.of(locationId));
+		Person person = Person.builder().id(personUuid).firstName("Jane").lastName("Doe").build();
 
-        assertTrue(result.isEmpty());
-    }
+		when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
+		when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
+		when(timeEntryRepository.findApprovedForExport(eq(TimeEntryStatus.APPROVED), any(), any(),
+				eq(List.of(locationId))))
+				.thenReturn(List.of(approved));
+		when(personRepository.findAllById(any())).thenReturn(List.of(person));
 
-    @Test
-    void getApprovedTimeForExport_invalidDateRangeThrowsBadRequestError() {
-        UUID locationId = UUID.randomUUID();
-        LocalDate startDate = LocalDate.parse("2026-02-11");
-        LocalDate endDate = LocalDate.parse("2026-02-10");
-        List<UUID> locations = List.of(locationId);
+		List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(LocalDate.parse("2026-02-10"),
+				LocalDate.parse("2026-02-10"), List.of(locationId));
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> service.getApprovedTimeForExport(startDate, endDate, locations));
+		assertEquals(1, result.size());
+		assertEquals(approvedId.toString(), result.get(0).timeEntryId());
+		assertEquals("Jane Doe", result.get(0).employeeName());
+		assertEquals("North Shop", result.get(0).locationName());
+		assertEquals("8.50", result.get(0).hoursWorked().toPlainString());
+		assertEquals("manager-1", result.get(0).approvedBy());
+		assertFalse(result.stream().anyMatch(row -> row.timeEntryId().equals(rejectedId.toString())));
+	}
 
-        assertTrue(exception.getMessage().contains("endDate"));
-    }
+	@Test
+	void getApprovedTimeForExport_emptyResultReturns200EquivalentList() {
+		UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
+		when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
+		when(timeEntryRepository.findApprovedForExport(eq(TimeEntryStatus.APPROVED), any(), any(),
+				eq(List.of(locationId))))
+				.thenReturn(List.of());
 
-    @Test
-    void getApprovedTimeForExport_unknownLocationThrowsBadRequestError() {
-        UUID locationId = UUID.randomUUID();
-        LocalDate startDate = LocalDate.parse("2026-02-10");
-        LocalDate endDate = LocalDate.parse("2026-02-11");
-        List<UUID> locations = List.of(locationId);
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(false);
+		List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(LocalDate.parse("2026-02-01"),
+				LocalDate.parse("2026-02-02"), List.of(locationId));
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> service.getApprovedTimeForExport(startDate, endDate, locations));
+		assertTrue(result.isEmpty());
+	}
 
-        assertTrue(exception.getMessage().contains("Unknown locationId"));
-    }
+	@Test
+	void getApprovedTimeForExport_invalidDateRangeThrowsBadRequestError() {
+		UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		LocalDate startDate = LocalDate.parse("2026-02-11");
+		LocalDate endDate = LocalDate.parse("2026-02-10");
+		List<UUID> locations = List.of(locationId);
+
+		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+				() -> service.getApprovedTimeForExport(startDate, endDate, locations));
+
+		assertTrue(exception.getMessage().contains("endDate"));
+	}
+
+	@Test
+	void getApprovedTimeForExport_unknownLocationThrowsBadRequestError() {
+		UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		LocalDate startDate = LocalDate.parse("2026-02-10");
+		LocalDate endDate = LocalDate.parse("2026-02-11");
+		List<UUID> locations = List.of(locationId);
+		when(locationReferenceClient.isLocationActive(locationId)).thenReturn(false);
+
+		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+				() -> service.getApprovedTimeForExport(startDate, endDate, locations));
+
+		assertTrue(exception.getMessage().contains("Unknown locationId"));
+	}
+
 }

@@ -48,8 +48,8 @@ class PutawayGenerationServiceImplTest {
         @Test
         void generateTasksForReceipt_withRules_createsUnassignedTask() {
                 GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
-                                .sourceReceiptId(UUID.randomUUID().toString())
-                                .productId(UUID.randomUUID().toString())
+                                .sourceReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .quantity(5)
                                 .build();
                 PutawayRule rule = new PutawayRule();
@@ -68,8 +68,8 @@ class PutawayGenerationServiceImplTest {
         @Test
         void generateTasksForReceipt_noRules_createsUnassignedTaskWithDefaultLocation() {
                 GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
-                                .sourceReceiptId(UUID.randomUUID().toString())
-                                .productId(UUID.randomUUID().toString())
+                                .sourceReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .quantity(5)
                                 .build();
                 when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc())
@@ -86,9 +86,9 @@ class PutawayGenerationServiceImplTest {
 
         @Test
         void generateTasksForReceipt_withLineItems_createsTaskPerLineItem() {
-                UUID receiptId = UUID.randomUUID();
-                UUID productId1 = UUID.randomUUID();
-                UUID productId2 = UUID.randomUUID();
+                UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID productId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID productId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
                                 .sourceReceiptId(receiptId.toString())
@@ -116,11 +116,12 @@ class PutawayGenerationServiceImplTest {
         @Test
         void generateTasksForReceipt_withLineItemsAndLegacyFields_throwsIllegalArgumentException() {
                 GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
-                                .sourceReceiptId(UUID.randomUUID().toString())
-                                .productId(UUID.randomUUID().toString())
+                                .sourceReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .quantity(5)
                                 .lineItems(List.of(PutawayLineItemRequest.builder()
-                                                .productId(UUID.randomUUID().toString())
+                                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                .toString())
                                                 .quantity(2)
                                                 .build()))
                                 .build();
@@ -136,7 +137,7 @@ class PutawayGenerationServiceImplTest {
         @Test
         void getAvailableTasks_returnsUnassignedTasks() {
                 PutawayTask task = new PutawayTask();
-                task.setTaskId(UUID.randomUUID());
+                task.setTaskId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 task.setStatus(PutawayTaskStatus.UNASSIGNED);
                 when(putawayTaskRepository.findByStatusIn(List.of(PutawayTaskStatus.UNASSIGNED)))
                                 .thenReturn(List.of(task));
@@ -149,7 +150,7 @@ class PutawayGenerationServiceImplTest {
 
         @Test
         void claimTask_validTask_updatesStatusAndAssignee() {
-                UUID taskId = UUID.randomUUID();
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String userId = "user-123";
                 PutawayTask task = new PutawayTask();
                 task.setTaskId(taskId);
@@ -167,7 +168,7 @@ class PutawayGenerationServiceImplTest {
 
         @Test
         void claimTask_invalidTask_throwsTaskNotFoundException() {
-                UUID taskId = UUID.randomUUID();
+                UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String taskIdString = taskId.toString();
                 String userId = "user-123";
                 when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.empty());
@@ -178,9 +179,9 @@ class PutawayGenerationServiceImplTest {
 
         @Test
         void getTasksByReceiptId_returnsFilteredList() {
-                UUID receiptId = UUID.randomUUID();
+                UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PutawayTask task = new PutawayTask();
-                task.setTaskId(UUID.randomUUID());
+                task.setTaskId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 task.setSourceReceiptId(receiptId);
 
                 when(putawayTaskRepository.findBySourceReceiptId(receiptId)).thenReturn(List.of(task));
@@ -195,7 +196,7 @@ class PutawayGenerationServiceImplTest {
         void generateTasksForReceipt_withInvalidUuid_throwsIllegalArgumentException() {
                 GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
                                 .sourceReceiptId("invalid-uuid")
-                                .productId(UUID.randomUUID().toString())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .quantity(5)
                                 .build();
 
@@ -208,7 +209,7 @@ class PutawayGenerationServiceImplTest {
         void generateTasksForReceipt_withNullUuid_throwsIllegalArgumentException() {
                 GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
                                 .sourceReceiptId(null)
-                                .productId(UUID.randomUUID().toString())
+                                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .quantity(5)
                                 .build();
 
@@ -220,7 +221,7 @@ class PutawayGenerationServiceImplTest {
         @Test
         void generateTasksForReceipt_withNoLineItemsAndNoLegacyFields_throwsIllegalArgumentException() {
                 GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
-                                .sourceReceiptId(UUID.randomUUID().toString())
+                                .sourceReceiptId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                                 .build();
 
                 when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc())

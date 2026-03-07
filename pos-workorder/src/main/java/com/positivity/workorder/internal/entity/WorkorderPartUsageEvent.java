@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -56,15 +58,9 @@ public class WorkorderPartUsageEvent {
     @PrePersist
     public void generateId() {
         if (performedAt == null) {
-            performedAt = Instant.now();
+            performedAt = Instant.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = performedAt;
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "workorder_part_id", nullable = false)

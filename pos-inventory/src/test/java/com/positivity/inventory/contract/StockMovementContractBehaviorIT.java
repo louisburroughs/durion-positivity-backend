@@ -208,7 +208,8 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("AC-5b: approveAdjustment_withoutApproveAuthority_returns403")
         void approveAdjustment_withoutApproveAuthority_returns403() throws Exception {
-                mockMvc.perform(withCreateOnlyAuth(post("/v1/inventory/adjustments/{id}/approve", UUID.randomUUID())
+                mockMvc.perform(withCreateOnlyAuth(post("/v1/inventory/adjustments/{id}/approve",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .contentType(MediaType.APPLICATION_JSON)))
                                 .andExpect(status().isForbidden());
         }

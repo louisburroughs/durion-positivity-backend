@@ -1,15 +1,5 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.accounting.internal.enums.JournalEntryStatus;
-import com.positivity.accounting.internal.enums.JournalEntryType;
-import com.positivity.accounting.internal.enums.ManualJEReasonCode;
-import com.positivity.security.common.SecurityContextHelper;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Id;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -17,6 +7,32 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.enums.JournalEntryType;
+import com.positivity.accounting.internal.enums.ManualJEReasonCode;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Id;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -50,6 +66,8 @@ import lombok.ToString;
 })
 public class JournalEntry {
 
+    private static final String SYSTEM = "SYSTEM";
+
     @EqualsAndHashCode.Include
     @Id
     @GeneratedValue
@@ -59,22 +77,20 @@ public class JournalEntry {
 
     @PrePersist
     public void onPrePersist() {
-        Instant now = Instant.now();
-        String currentUser = SecurityContextHelper.isAuthenticated() 
-                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
-                : "SYSTEM";
-        this.createdAt = now;
-        this.updatedAt = now;
+        String currentUser = SecurityContextHelper.isAuthenticated()
+                ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM)
+                : SYSTEM;
         this.createdBy = currentUser;
         this.modifiedBy = currentUser;
-        
+
         // Initialize line relationships: set journalEntryId and lineNumber
         initializeLines();
     }
-    
+
     /**
      * Initialize lines with proper parent reference and sequential line numbers.
-     * Called automatically during @PrePersist, but can be called manually if needed.
+     * Called automatically during @PrePersist, but can be called manually if
+     * needed.
      * Public to allow explicit initialization in service layer before persistence.
      */
     public void initializeLines() {
@@ -172,10 +188,9 @@ public class JournalEntry {
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = Instant.now();
         this.modifiedBy = SecurityContextHelper.isAuthenticated()
-                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
-                : "SYSTEM";
+                ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM)
+                : SYSTEM;
     }
 
     /**
@@ -208,7 +223,8 @@ public class JournalEntry {
 
     /**
      * Add a line to this journal entry.
-     * The journalEntryId and lineNumber will be set automatically during persistence
+     * The journalEntryId and lineNumber will be set automatically during
+     * persistence
      * via the @PrePersist hook.
      * 
      * @param line the line to add

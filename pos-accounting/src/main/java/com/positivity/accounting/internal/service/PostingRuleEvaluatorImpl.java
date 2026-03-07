@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -85,6 +87,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
+    private final Clock clock;
+
 
     private final PostingRuleVersionRepository versionRepository;
     private final PostingRuleSetRepository ruleSetRepository;
@@ -300,8 +304,8 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         entry.setTransactionDate(event.getTransactionDate());
         entry.setStatus(JournalEntryStatus.DRAFT);
         entry.setDescription("Auto-generated from default GL mapping for " + event.getEventType());
-        entry.setCreatedAt(Instant.now());
-        entry.setUpdatedAt(Instant.now());
+        entry.setCreatedAt(Instant.now(clock));
+        entry.setUpdatedAt(Instant.now(clock));
 
         // Resolve amount from event payload
         BigDecimal amount = resolveAmount("payload.amount", event);
@@ -609,8 +613,8 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         entry.setTransactionDate(event.getTransactionDate());
         entry.setStatus(JournalEntryStatus.DRAFT);
         entry.setDescription("Auto-generated from event " + event.getEventType());
-        entry.setCreatedAt(Instant.now());
-        entry.setUpdatedAt(Instant.now());
+        entry.setCreatedAt(Instant.now(clock));
+        entry.setUpdatedAt(Instant.now(clock));
 
         List<JournalEntryLine> lines = new ArrayList<>();
 

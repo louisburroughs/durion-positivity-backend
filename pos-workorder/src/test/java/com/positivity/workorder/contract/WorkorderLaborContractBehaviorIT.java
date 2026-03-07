@@ -1,11 +1,20 @@
 package com.positivity.workorder.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -16,12 +25,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
-import com.positivity.workorder.internal.entity.*;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
-import com.positivity.workorder.internal.repository.*;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import io.restassured.http.ContentType;
@@ -47,6 +65,7 @@ import io.restassured.response.Response;
 @DisplayName("Labor Tracking Contract Behavior Tests (CAP:005 Story #159)")
 @Import(ContractTestConfiguration.class)
 class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -85,7 +104,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given: A workorder in WORK_IN_PROGRESS status with a service line
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When: Start a labor session
                 Map<String, Object> startRequest = Map.of(
@@ -131,8 +150,8 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given: A workorder with an active labor session
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
-                String idempotencyKey = "test-start-labor-" + UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                String idempotencyKey = "test-start-labor-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> startRequest = Map.of(
                                 "technicianId", testTechnicianId.toString(),
@@ -176,7 +195,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given: A workorder in COMPLETED status
                 UUID workorderId = seedCompletedWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When: Attempt to start labor
                 Map<String, Object> startRequest = Map.of(
@@ -232,7 +251,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Given: A workorder with an active labor session
                 UUID workorderId = seedWorkorderWithActiveLaborSession();
                 UUID entryId = laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorderId).get(0).getId();
-                String idempotencyKey = "test-stop-labor-" + UUID.randomUUID();
+                String idempotencyKey = "test-stop-labor-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When: First request stops the session
                 Number hoursWorkedValue = givenWithGatewayAuth()
@@ -330,9 +349,9 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
          * Seed a workorder in WORK_IN_PROGRESS status with a service line.
          */
         private UUID seedWorkInProgressWorkorder() {
-                testCustomerId = UUID.randomUUID();
-                testLocationId = UUID.randomUUID();
-                testVehicleId = UUID.randomUUID();
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Create an approved estimate
                 Estimate estimate = Estimate.builder()
@@ -396,7 +415,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         private UUID seedWorkorderWithActiveLaborSession() {
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
@@ -406,11 +425,11 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                                 .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
-                                .startTime(LocalDateTime.now().minusHours(1))
+                                .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .hoursWorked(BigDecimal.ZERO)
                                 .notes("Test active session")
                                 .createdBy(SYSTEM_USER_ID)
-                                .createdAt(java.time.Instant.now())
+                                .createdAt(java.time.Instant.now(TEST_CLOCK))
                                 .build();
                 laborEntryRepository.save(entry);
 
@@ -423,7 +442,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         private UUID seedWorkorderWithStoppedLaborSession() {
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
@@ -433,12 +452,12 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                                 .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
-                                .startTime(LocalDateTime.now().minusHours(3))
-                                .endTime(LocalDateTime.now().minusHours(1))
+                                .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(3))
+                                .endTime(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .hoursWorked(BigDecimal.valueOf(2.0))
                                 .notes("Test stopped session")
                                 .createdBy(SYSTEM_USER_ID)
-                                .createdAt(java.time.Instant.now())
+                                .createdAt(java.time.Instant.now(TEST_CLOCK))
                                 .build();
                 laborEntryRepository.save(entry);
 
@@ -451,7 +470,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         private UUID seedWorkorderWithMultipleLaborEntries() {
                 UUID workorderId = seedWorkInProgressWorkorder();
                 UUID serviceId = workorderServiceRepository.findAll().get(0).getId();
-                testTechnicianId = UUID.randomUUID();
+                testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
@@ -461,12 +480,12 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                                 .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
-                                .startTime(LocalDateTime.now().minusDays(2))
-                                .endTime(LocalDateTime.now().minusDays(2).plusHours(2))
+                                .startTime(LocalDateTime.now(TEST_CLOCK).minusDays(2))
+                                .endTime(LocalDateTime.now(TEST_CLOCK).minusDays(2).plusHours(2))
                                 .hoursWorked(BigDecimal.valueOf(2.0))
                                 .notes("First session")
                                 .createdBy(SYSTEM_USER_ID)
-                                .createdAt(java.time.Instant.now())
+                                .createdAt(java.time.Instant.now(TEST_CLOCK))
                                 .build();
                 laborEntryRepository.save(entry1);
 
@@ -476,12 +495,12 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                                 .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
-                                .startTime(LocalDateTime.now().minusDays(1))
-                                .endTime(LocalDateTime.now().minusDays(1).plusHours(3))
+                                .startTime(LocalDateTime.now(TEST_CLOCK).minusDays(1))
+                                .endTime(LocalDateTime.now(TEST_CLOCK).minusDays(1).plusHours(3))
                                 .hoursWorked(BigDecimal.valueOf(3.0))
                                 .notes("Second session")
                                 .createdBy(SYSTEM_USER_ID)
-                                .createdAt(java.time.Instant.now())
+                                .createdAt(java.time.Instant.now(TEST_CLOCK))
                                 .build();
                 laborEntryRepository.save(entry2);
 

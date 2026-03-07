@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -58,6 +61,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Consumption Contract Behavior — Story #178")
 class ConsumptionContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -94,8 +98,8 @@ class ConsumptionContractBehaviorIT extends BaseContractIntegrationTest {
                 // consumptionId in the response body
 
                 // Arrange
-                UUID workorderId = UUID.randomUUID();
-                UUID pickListId = UUID.randomUUID();
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID expectedConsumptionId = UUID.fromString("00000000-0000-0000-0000-000000000042");
 
                 ConsumptionResponse mockResponse = new ConsumptionResponse(
@@ -103,8 +107,8 @@ class ConsumptionContractBehaviorIT extends BaseContractIntegrationTest {
                                 workorderId,
                                 pickListId,
                                 1,
-                                Instant.now(),
-                                List.of(UUID.randomUUID()));
+                                Instant.now(TEST_CLOCK),
+                                List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
                 when(consumptionService.consumePickedItems(any(ConsumeItemsRequest.class)))
                                 .thenReturn(mockResponse);
@@ -112,7 +116,8 @@ class ConsumptionContractBehaviorIT extends BaseContractIntegrationTest {
                 ConsumeItemsRequest requestBody = new ConsumeItemsRequest(
                                 workorderId,
                                 pickListId,
-                                List.of(new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 1)));
+                                List.of(new ConsumeItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
 
                 // Act + Assert — RED: controller returns 201 but with a randomly generated
                 // consumptionId, not expectedConsumptionId
@@ -143,9 +148,10 @@ class ConsumptionContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #178: ADR-0011/ADR-0014 — missing X-Authorities header must yield 403
 
                 ConsumeItemsRequest requestBody = new ConsumeItemsRequest(
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                List.of(new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 1)));
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                List.of(new ConsumeItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
 
                 mockMvc.perform(post("/v1/inventory/consumption")
                                 .header("X-User", "test-user")
@@ -180,9 +186,10 @@ class ConsumptionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .thenThrow(new WorkorderConsumptionException("Item not picked"));
 
                 ConsumeItemsRequest requestBody = new ConsumeItemsRequest(
-                                UUID.randomUUID(),
-                                UUID.randomUUID(),
-                                List.of(new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 1)));
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                List.of(new ConsumeItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
 
                 // Act + Assert — RED: controller stub returns 201, not 422
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/consumption"))
@@ -212,8 +219,9 @@ class ConsumptionContractBehaviorIT extends BaseContractIntegrationTest {
 
                 ConsumeItemsRequest requestBody = new ConsumeItemsRequest(
                                 null, // null workorderId — must be rejected
-                                UUID.randomUUID(),
-                                List.of(new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 1)));
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                List.of(new ConsumeItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
 
                 // Act + Assert — RED: controller stub accepts null and returns 201, not 400
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/consumption"))

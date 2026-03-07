@@ -10,7 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -35,12 +38,12 @@ import com.positivity.accounting.internal.client.InvoiceServiceException;
 import com.positivity.accounting.internal.config.CreditMemoGLConfig;
 import com.positivity.accounting.internal.dto.ApplyCreditMemoRequest;
 import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
 import com.positivity.accounting.internal.service.CreditMemoServiceImpl;
@@ -58,6 +61,10 @@ import com.positivity.accounting.internal.service.GLPostingServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CreditMemoService Unit Tests")
 class CreditMemoServiceTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+        @Spy
+        Clock clock = TEST_CLOCK;
 
         @Mock
         private CreditMemoRepository creditMemoRepository;
@@ -90,12 +97,12 @@ class CreditMemoServiceTest {
 
         @BeforeEach
         void setUp() {
-                testInvoiceId = UUID.randomUUID();
-                testCustomerId = UUID.randomUUID();
-                testCreditMemoId = UUID.randomUUID();
-                testRevenueAccountId = UUID.randomUUID();
-                testTaxAccountId = UUID.randomUUID();
-                testArAccountId = UUID.randomUUID();
+                testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testCreditMemoId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testRevenueAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testTaxAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testArAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 testRequest = new CreateCreditMemoRequest();
                 testRequest.setOriginalInvoiceId(testInvoiceId);
@@ -125,7 +132,7 @@ class CreditMemoServiceTest {
                                 .totalAmount(new BigDecimal("110.00"))
                                 .balanceDue(new BigDecimal("110.00"))
                                 .currency("USD")
-                                .invoiceDate(Instant.now().minusSeconds(86400)) // Yesterday
+                                .invoiceDate(Instant.now(TEST_CLOCK).minusSeconds(86400)) // Yesterday
                                 .build();
 
                 // Mock invoice response after CM applied
@@ -332,7 +339,7 @@ class CreditMemoServiceTest {
         @DisplayName("Should detect and flag prior period adjustment")
         void testCreateCreditMemo_PriorPeriodAdjustment() {
                 // Given - invoice from prior period
-                Instant priorPeriodDate = Instant.now().minusSeconds(2592000); // 30 days ago
+                Instant priorPeriodDate = Instant.now(TEST_CLOCK).minusSeconds(2592000); // 30 days ago
                 testInvoice = InvoiceDetails.builder()
                                 .invoiceId(testInvoiceId)
                                 .customerId(testCustomerId)
@@ -457,7 +464,7 @@ class CreditMemoServiceTest {
         @DisplayName("Should throw 404 when credit memo not found")
         void testGetCreditMemo_NotFound() {
                 // Given
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(creditMemoRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
                 // When / Then

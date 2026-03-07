@@ -36,7 +36,8 @@ import org.mockito.quality.Strictness;
  * <p>
  * ADR compliance:
  * <ul>
- * <li>ADR-0013: UUID.randomUUID() acceptable in tests</li>
+ * <li>ADR-0013: UUID.fromString("00000000-0000-0000-0000-000000000001")
+ * acceptable in tests</li>
  * <li>ADR-0024: Clock.fixed(...) for time-dependent tests (not required here —
  * no time fields
  * in shortage domain types)</li>
@@ -406,7 +407,7 @@ class ShortageResolutionServiceImplTest {
                                 .thenReturn(List.of());
 
                 ShortageResolutionRequest request = ShortageResolutionRequest.builder()
-                                .allocationId(UUID.randomUUID())
+                                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .sku("SKU-NULL-QTY")
                                 .shortQuantity(null) // null → should default to 1
                                 .build();
@@ -431,7 +432,7 @@ class ShortageResolutionServiceImplTest {
                                 .thenReturn(List.of());
 
                 ShortageResolutionRequest request = ShortageResolutionRequest.builder()
-                                .allocationId(UUID.randomUUID())
+                                .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .sku("SKU-TIMEOUT")
                                 .shortQuantity(5)
                                 .build();

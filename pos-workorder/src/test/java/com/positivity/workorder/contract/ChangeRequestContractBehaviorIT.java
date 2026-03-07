@@ -83,7 +83,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CR-001: Successfully create change request with services and parts")
     void testCreateChangeRequest_HappyPath() {
         UUID workorderId = seedWorkorderInProgress();
-        String idempotencyKey = UUID.randomUUID().toString();
+        String idempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 
         String requestBody = String.format("""
                 {
@@ -140,7 +140,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CR-002: Retry with same idempotency key returns existing change request")
     void testCreateChangeRequest_WithSameIdempotencyKey_ReturnsExisting() {
         UUID workorderId = seedWorkorderInProgress();
-        String idempotencyKey = UUID.randomUUID().toString();
+        String idempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 
         String requestBody = String.format("""
                 {
@@ -395,7 +395,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("CR-008: Get change request by ID - not found")
     void testGetChangeRequestById_NotFound() {
-        UUID nonExistentId = UUID.randomUUID();
+        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         givenWithGatewayAuth()
                 .when()
@@ -477,11 +477,11 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
      * Initialize test data UUIDs.
      */
     private void initializeTestData() {
-        testCustomerId = UUID.randomUUID();
-        testLocationId = UUID.randomUUID();
-        testVehicleId = UUID.randomUUID();
-        testTechnicianId = UUID.randomUUID();
-        testServiceEntityId = UUID.randomUUID();
-        testProductEntityId = UUID.randomUUID();
+        testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testTechnicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testServiceEntityId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testProductEntityId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 }

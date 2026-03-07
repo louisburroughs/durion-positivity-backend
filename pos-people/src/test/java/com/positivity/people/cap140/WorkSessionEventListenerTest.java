@@ -1,5 +1,8 @@
 package com.positivity.people.cap140;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.people.internal.config.WorkSessionEventListener;
 import com.positivity.people.internal.dto.WorkSessionCompletedEvent;
 import com.positivity.people.internal.dto.WorkSessionCorrectedEvent;
@@ -8,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
@@ -17,9 +21,10 @@ import static org.mockito.Mockito.verify;
 
 /**
  * Unit tests for {@link WorkSessionEventListener} verifying that Spring
- * application events are correctly delegated to
- * {@link TimekeepingIngestionService}
- * (CAP-140, Story #58).
+ * application
+ * events are correctly delegated to {@link TimekeepingIngestionService}
+ * (CAP-140, Story
+ * #58).
  *
  * Issue: #58
  */
@@ -27,41 +32,53 @@ import static org.mockito.Mockito.verify;
 @SuppressWarnings("java:S100")
 class WorkSessionEventListenerTest {
 
-    @Mock
-    TimekeepingIngestionService timekeepingIngestionService;
+	private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    @InjectMocks
-    WorkSessionEventListener workSessionEventListener;
+	@Spy
+	Clock clock = TEST_CLOCK;
 
-    // -------------------------------------------------------------------------
-    // AC6 – onWorkSessionCompleted delegates to ingestWorkSession
-    // -------------------------------------------------------------------------
+	@Mock
+	TimekeepingIngestionService timekeepingIngestionService;
 
-    @Test
-    void onWorkSessionCompleted_delegatesToIngestWorkSession() {
-        // Issue #58: AC6 — listener must call ingestWorkSession exactly once
-        WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now().minusSeconds(3600), Instant.now(), UUID.randomUUID());
+	@InjectMocks
+	WorkSessionEventListener workSessionEventListener;
 
-        workSessionEventListener.onWorkSessionCompleted(event);
+	// -------------------------------------------------------------------------
+	// AC6 – onWorkSessionCompleted delegates to ingestWorkSession
+	// -------------------------------------------------------------------------
 
-        verify(timekeepingIngestionService).ingestWorkSession(event);
-    }
+	@Test
+	void onWorkSessionCompleted_delegatesToIngestWorkSession() {
+		// Issue #58: AC6 — listener must call ingestWorkSession exactly once
+		WorkSessionCompletedEvent event = new WorkSessionCompletedEvent(
+				UUID.fromString("00000000-0000-0000-0000-000000000001"),
+				UUID.fromString("00000000-0000-0000-0000-000000000001"),
+				UUID.fromString("00000000-0000-0000-0000-000000000001"), Instant.now(TEST_CLOCK).minusSeconds(3600),
+				Instant.now(TEST_CLOCK),
+				UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-    // -------------------------------------------------------------------------
-    // AC7 – onWorkSessionCorrected delegates to recordCorrection
-    // -------------------------------------------------------------------------
+		workSessionEventListener.onWorkSessionCompleted(event);
 
-    @Test
-    void onWorkSessionCorrected_delegatesToRecordCorrection() {
-        // Issue #58: AC7 — listener must call recordCorrection exactly once
-        WorkSessionCorrectedEvent event = new WorkSessionCorrectedEvent(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now().minusSeconds(3600), Instant.now(), null, "Test correction");
+		verify(timekeepingIngestionService).ingestWorkSession(event);
+	}
 
-        workSessionEventListener.onWorkSessionCorrected(event);
+	// -------------------------------------------------------------------------
+	// AC7 – onWorkSessionCorrected delegates to recordCorrection
+	// -------------------------------------------------------------------------
 
-        verify(timekeepingIngestionService).recordCorrection(event);
-    }
+	@Test
+	void onWorkSessionCorrected_delegatesToRecordCorrection() {
+		// Issue #58: AC7 — listener must call recordCorrection exactly once
+		WorkSessionCorrectedEvent event = new WorkSessionCorrectedEvent(
+				UUID.fromString("00000000-0000-0000-0000-000000000001"),
+				UUID.fromString("00000000-0000-0000-0000-000000000001"),
+				UUID.fromString("00000000-0000-0000-0000-000000000001"),
+				UUID.fromString("00000000-0000-0000-0000-000000000001"), Instant.now(TEST_CLOCK).minusSeconds(3600),
+				Instant.now(TEST_CLOCK), null, "Test correction");
+
+		workSessionEventListener.onWorkSessionCorrected(event);
+
+		verify(timekeepingIngestionService).recordCorrection(event);
+	}
+
 }

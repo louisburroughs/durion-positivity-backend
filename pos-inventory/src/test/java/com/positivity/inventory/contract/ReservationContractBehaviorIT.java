@@ -74,9 +74,9 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_createReservation_returns201() throws Exception {
                 // Issue #29: create reservation endpoint must return 201 with reservationId,
                 // workorderLineId, status
-                UUID workorderLineId = UUID.randomUUID();
-                UUID reservationId = UUID.randomUUID();
-                UUID stockItemId = UUID.randomUUID();
+                UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID reservationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReservationResponse mockResponse = ReservationResponse.builder()
                                 .reservationId(reservationId)
@@ -117,10 +117,10 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_promoteAllocation_returns200() throws Exception {
                 // Issue #29: promote endpoint must return 200 with reservation status after
                 // hardening
-                UUID allocationId = UUID.randomUUID();
-                UUID workorderLineId = UUID.randomUUID();
-                UUID reservationId = UUID.randomUUID();
-                UUID stockItemId = UUID.randomUUID();
+                UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID reservationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReservationResponse mockResponse = ReservationResponse.builder()
                                 .reservationId(reservationId)
@@ -157,7 +157,7 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("DELETE /v1/inventory/reservations/{workorderLineId} → 204 No Content")
         void contract_cancelReservation_returns204() throws Exception {
                 // Issue #29: cancel endpoint must return 204 with no response body
-                UUID workorderLineId = UUID.randomUUID();
+                UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 doNothing().when(reservationService).cancelReservation(eq(workorderLineId));
 
@@ -190,7 +190,7 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_insufficientAtp_returns422() throws Exception {
                 // Issue #29: SC4 — InsufficientAtpException must map to 422 INSUFFICIENT_ATP
                 // (RED: currently 500)
-                UUID allocationId = UUID.randomUUID();
+                UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 when(reservationService.promoteToHard(eq(allocationId), any(PromoteAllocationRequest.class)))
                                 .thenThrow(new InsufficientAtpException(allocationId, 10, 3));
@@ -218,8 +218,8 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
         void contract_missingGatewayAuth_returns403() throws Exception {
                 // Issue #29: ADR-0011/ADR-0014 — missing X-Authorities header must yield 403
                 // Forbidden
-                UUID workorderLineId = UUID.randomUUID();
-                UUID stockItemId = UUID.randomUUID();
+                UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String requestBody = objectMapper.writeValueAsString(
                                 new CreateReservationRequest(workorderLineId, stockItemId, 5));
 

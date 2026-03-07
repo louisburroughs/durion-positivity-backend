@@ -28,6 +28,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -38,6 +39,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RestController
 @RequestMapping("/v1/accounting/gl-accounts")
+@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "GL Accounts", description = "Manage chart of accounts including lifecycle actions.")
 @RequiredArgsConstructor
 public class GLAccountController {

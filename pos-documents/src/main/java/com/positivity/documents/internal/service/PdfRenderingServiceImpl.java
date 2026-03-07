@@ -1,5 +1,18 @@
 package com.positivity.documents.internal.service;
 
+import java.io.ByteArrayOutputStream;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
 import com.itextpdf.html2pdf.HtmlConverter;
 import com.positivity.documents.internal.config.PdfConfiguration;
 import com.positivity.documents.internal.dto.RenderRequest;
@@ -9,23 +22,13 @@ import com.positivity.documents.internal.exception.TemplateNotFoundException;
 import com.positivity.documents.internal.exception.UnsupportedFormatException;
 import com.positivity.documents.internal.service.format.FormatHandler;
 import com.positivity.documents.service.PdfRenderingService;
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
-import java.io.ByteArrayOutputStream;
-import java.time.Instant;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service
 public class PdfRenderingServiceImpl implements PdfRenderingService {
 
     private static final Logger log = LoggerFactory.getLogger(PdfRenderingServiceImpl.class);
 
+    private final Clock clock;
     private final Map<DocumentFormat, FormatHandler> handlerByFormat;
     private final TemplateService templateService;
     private final PdfConfiguration pdfConfiguration;
@@ -33,7 +36,9 @@ public class PdfRenderingServiceImpl implements PdfRenderingService {
     public PdfRenderingServiceImpl(
             List<FormatHandler> formatHandlers,
             TemplateService templateService,
-            PdfConfiguration pdfConfiguration) {
+            PdfConfiguration pdfConfiguration,
+            Clock clock) {
+        this.clock = clock;
         this.templateService = templateService;
         this.pdfConfiguration = pdfConfiguration;
         this.handlerByFormat = new EnumMap<>(DocumentFormat.class);
@@ -63,7 +68,7 @@ public class PdfRenderingServiceImpl implements PdfRenderingService {
         long startedAt = System.nanoTime();
         try {
             Map<String, Object> templateContext = new HashMap<>();
-            templateContext.put("generatedAt", Instant.now().toString());
+            templateContext.put("generatedAt", Instant.now(clock).toString());
             templateContext.put("format", request.getFormat().name());
             templateContext.put("title", "Rendered Document");
 

@@ -4,6 +4,8 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
+import com.positivity.events.service.EventEmissionService;
+
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 

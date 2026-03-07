@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Clock;
 import java.time.LocalDate;
 
 @RestController
@@ -23,6 +24,7 @@ import java.time.LocalDate;
 public class DashboardController {
 
     private final DashboardService dashboardService;
+    private final Clock clock;
 
     @GetMapping("/today")
     @PreAuthorize("hasAuthority('workorder:dashboard:view')")
@@ -31,7 +33,7 @@ public class DashboardController {
     public ResponseEntity<DashboardResponse> getDashboard(
             @RequestParam String locationId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        LocalDate effectiveDate = date != null ? date : LocalDate.now();
+        LocalDate effectiveDate = date != null ? date : LocalDate.now(clock);
         return ResponseEntity.ok(dashboardService.getDashboard(locationId, effectiveDate));
     }
 }

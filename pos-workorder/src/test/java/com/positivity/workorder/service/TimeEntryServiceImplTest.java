@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -30,10 +34,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("TimeEntryServiceImpl Unit Tests")
 class TimeEntryServiceImplTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    private static final UUID TIME_ENTRY_ID = UUID.randomUUID();
-    private static final UUID WORK_ORDER_ID = UUID.randomUUID();
-    private static final UUID PERSON_ID = UUID.randomUUID();
+    @Spy
+    Clock clock = TEST_CLOCK;
+
+    private static final UUID TIME_ENTRY_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID WORK_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID PERSON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Mock
     private TimeEntryRepository timeEntryRepository;
@@ -45,7 +53,7 @@ class TimeEntryServiceImplTest {
     private TimeEntry submittedEntry() {
         return TimeEntry.builder()
                 .timeEntryId(TIME_ENTRY_ID).personId(PERSON_ID).workOrderId(WORK_ORDER_ID)
-                .startAt(Instant.now().minusSeconds(3600)).endAt(Instant.now())
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600)).endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.SUBMITTED).build();
     }
 
@@ -71,7 +79,8 @@ class TimeEntryServiceImplTest {
     @DisplayName("AC4: approveEntry non-existent ID throws TimeEntryNotFoundException")
     void approveEntry_notFound_throws() {
         when(timeEntryRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> timeEntryService.approveTimeEntry(UUID.randomUUID()))
+        assertThatThrownBy(
+                () -> timeEntryService.approveTimeEntry(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                 .isInstanceOf(TimeEntryNotFoundException.class);
     }
 
@@ -101,8 +110,9 @@ class TimeEntryServiceImplTest {
     @DisplayName("AC4 (reject): rejectEntry non-existent ID throws TimeEntryNotFoundException")
     void rejectEntry_notFound_throws() {
         when(timeEntryRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> timeEntryService.rejectTimeEntry(UUID.randomUUID(),
-                new RejectTimeEntryRequest("some reason")))
+        assertThatThrownBy(
+                () -> timeEntryService.rejectTimeEntry(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        new RejectTimeEntryRequest("some reason")))
                 .isInstanceOf(TimeEntryNotFoundException.class);
     }
 

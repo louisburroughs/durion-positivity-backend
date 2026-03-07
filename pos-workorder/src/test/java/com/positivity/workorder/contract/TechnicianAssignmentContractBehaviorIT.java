@@ -1,5 +1,9 @@
 package com.positivity.workorder.contract;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 
@@ -47,6 +51,7 @@ import io.restassured.http.ContentType;
 @DisplayName("Technician Assignment Contract Behavior Tests (CAP:005 Story #161)")
 @Import(ContractTestConfiguration.class)
 class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -81,7 +86,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         void testAssignTechnician_HappyPath() {
                 // Given: A workorder in APPROVED status
                 UUID workorderId = seedApprovedWorkorder();
-                testTechnicianId1 = UUID.randomUUID();
+                testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
                 assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.APPROVED);
@@ -130,7 +135,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         void testReassignTechnician_WithReason() {
                 // Given: A workorder with an existing technician assignment
                 UUID workorderId = seedWorkorderWithAssignedTechnician();
-                testTechnicianId2 = UUID.randomUUID();
+                testTechnicianId2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
                 // Verify initial assignment
                 TechnicianAssignment initialAssignment = assignmentRepository
@@ -228,7 +233,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         void testAssignTechnician_InvalidStatus() {
                 // Given: A workorder in COMPLETED status
                 UUID workorderId = seedCompletedWorkorder();
-                testTechnicianId1 = UUID.randomUUID();
+                testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
                 assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.COMPLETED);
@@ -259,7 +264,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         void testReassignTechnician_NoExistingAssignment() {
                 // Given: A workorder with NO existing assignment
                 UUID workorderId = seedApprovedWorkorder();
-                testTechnicianId1 = UUID.randomUUID();
+                testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Verify no current assignment
                 assertThat(assignmentRepository.findByWorkorderIdAndCurrentTrue(workorderId)).isEmpty();
@@ -289,7 +294,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         @DisplayName("TA-006: Return 404 when retrieving assignment for non-existent workorder")
         void testGetAssignment_WorkorderNotFound() {
                 // Given: A non-existent workorder ID
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When/Then: Attempt to retrieve assignment
                 givenWithGatewayAuth()
@@ -306,9 +311,9 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
          * Seed an APPROVED workorder ready for technician assignment.
          */
         private UUID seedApprovedWorkorder() {
-                testCustomerId = UUID.randomUUID();
-                testLocationId = UUID.randomUUID();
-                testVehicleId = UUID.randomUUID();
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Create an approved estimate
                 Estimate estimate = Estimate.builder()
@@ -351,10 +356,10 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
          */
         private UUID seedWorkorderWithAssignedTechnician() {
                 UUID workorderId = seedApprovedWorkorder();
-                testTechnicianId1 = UUID.randomUUID();
+                testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Create initial assignment
-                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime now = LocalDateTime.now(TEST_CLOCK);
                 TechnicianAssignment assignment = TechnicianAssignment.builder()
                                 .workorderId(workorderId)
                                 .technicianId(testTechnicianId1)
@@ -380,10 +385,10 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
          */
         private UUID seedWorkorderWithReassignmentHistory() {
                 UUID workorderId = seedApprovedWorkorder();
-                testTechnicianId1 = UUID.randomUUID();
-                testTechnicianId2 = UUID.randomUUID();
+                testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testTechnicianId2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
-                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime now = LocalDateTime.now(TEST_CLOCK);
 
                 // Create first assignment (now inactive)
                 TechnicianAssignment firstAssignment = TechnicianAssignment.builder()

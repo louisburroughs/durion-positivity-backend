@@ -1,5 +1,8 @@
 package com.positivity.location.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.server.ResponseStatusException;
@@ -38,6 +42,10 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @ExtendWith(MockitoExtension.class)
 class ServiceAreaServiceTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+        @Spy
+        Clock clock = TEST_CLOCK;
 
         private static final String DOWNTOWN_AREA = "Downtown Area";
 
@@ -51,7 +59,7 @@ class ServiceAreaServiceTest {
         @DisplayName("#76 - create service area with postal codes succeeds")
         void shouldCreateServiceAreaWithPostalCodes() {
                 ServiceAreaEntity persisted = ServiceAreaEntity.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .name(DOWNTOWN_AREA)
                                 .description("core coverage")
                                 .active(true)
@@ -60,8 +68,8 @@ class ServiceAreaServiceTest {
                                                                 .countryCode("US").build(),
                                                 ServiceAreaPostalCodeValue.builder().postalCode("94110")
                                                                 .countryCode("US").build()))
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
                 when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenReturn(persisted);
 
@@ -100,7 +108,7 @@ class ServiceAreaServiceTest {
         @Test
         @DisplayName("#76 - patch service area updates active flag and description")
         void shouldPatchServiceArea() {
-                UUID id = UUID.randomUUID();
+                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 ServiceAreaEntity existing = ServiceAreaEntity.builder()
                                 .id(id)
                                 .name(DOWNTOWN_AREA)
@@ -149,7 +157,7 @@ class ServiceAreaServiceTest {
         @DisplayName("#76 - create defaults active=true when omitted")
         void shouldDefaultActiveToTrueWhenMissing() {
                 ServiceAreaEntity persisted = ServiceAreaEntity.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .name("Default Active")
                                 .description("desc")
                                 .active(true)
@@ -182,7 +190,7 @@ class ServiceAreaServiceTest {
         @Test
         @DisplayName("#76 - patch not found throws not found")
         void shouldThrowWhenPatchTargetMissing() {
-                UUID id = UUID.randomUUID();
+                UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(serviceAreaRepository.findById(id)).thenReturn(java.util.Optional.empty());
 
                 assertThatThrownBy(() -> service.patch(id.toString(), Map.of(
@@ -197,14 +205,14 @@ class ServiceAreaServiceTest {
         @DisplayName("#76 - list returns mapped service areas")
         void shouldListServiceAreas() {
                 ServiceAreaEntity first = ServiceAreaEntity.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .name("A")
                                 .active(true)
                                 .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder().postalCode("11111")
                                                 .countryCode("US").build()))
                                 .build();
                 ServiceAreaEntity second = ServiceAreaEntity.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .name("B")
                                 .active(false)
                                 .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder().postalCode("22222")
@@ -223,7 +231,7 @@ class ServiceAreaServiceTest {
         @DisplayName("#76 - create removes duplicate postal entries via set semantics")
         void shouldDeduplicatePostalEntriesOnCreate() {
                 ServiceAreaEntity persisted = ServiceAreaEntity.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .name("Dedup")
                                 .active(true)
                                 .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder().postalCode("30301")

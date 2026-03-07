@@ -11,9 +11,12 @@ import java.util.UUID;
 
 @Repository
 public interface TimekeepingPolicyRepository extends JpaRepository<TimekeepingPolicy, UUID> {
-    List<TimekeepingPolicy> findByScopeType(TimekeepingPolicyScopeType scopeType);
 
-    List<TimekeepingPolicy> findByScopeTypeAndScopeId(TimekeepingPolicyScopeType scopeType, UUID scopeId);
+	List<TimekeepingPolicy> findByScopeType(TimekeepingPolicyScopeType scopeType);
 
-    List<TimekeepingPolicy> findByScopeTypeAndScopeIdIn(TimekeepingPolicyScopeType scopeType, Collection<UUID> scopeIds);
+	List<TimekeepingPolicy> findByScopeTypeAndScopeId(TimekeepingPolicyScopeType scopeType, UUID scopeId);
+
+	List<TimekeepingPolicy> findByScopeTypeAndScopeIdIn(TimekeepingPolicyScopeType scopeType,
+			Collection<UUID> scopeIds);
+
 }

@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -50,6 +53,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("PickList Contract Behavior — Story #28")
 class PickListContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -76,24 +80,24 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
         void CH1_createPickList_validBodyAndAuth_returns201() throws Exception {
                 // Issue #28: CH1 — create endpoint must return 201 with pickListId and
                 // status=DRAFT
-                UUID workorderId = UUID.randomUUID();
-                UUID pickListId = UUID.randomUUID();
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PickListResponse mockResponse = new PickListResponse(
                                 pickListId,
                                 workorderId,
                                 PickListStatus.DRAFT,
                                 1,
-                                Instant.now().plusSeconds(3600),
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK).plusSeconds(3600),
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 when(pickListService.createPickList(any(CreatePickListRequest.class)))
                                 .thenReturn(mockResponse);
 
                 String requestBody = objectMapper.writeValueAsString(
-                                new CreatePickListRequest(workorderId, Instant.now().plusSeconds(3600), 1,
-                                                UUID.randomUUID()));
+                                new CreatePickListRequest(workorderId, Instant.now(TEST_CLOCK).plusSeconds(3600), 1,
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/pick-lists"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -116,7 +120,7 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /v1/inventory/pick-lists without gateway auth → 403 Forbidden")
         void CH2_createPickList_missingGatewayAuth_returns403() throws Exception {
                 // Issue #28: ADR-0011/ADR-0014 — missing X-Authorities header must yield 403
-                UUID workorderId = UUID.randomUUID();
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String requestBody = objectMapper.writeValueAsString(
                                 new CreatePickListRequest(workorderId, null, 0, null));
 
@@ -143,8 +147,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("GET /v1/inventory/pick-lists/{id} with valid ID + gateway auth → 200 OK")
         void CH3_getPickList_validId_returns200() throws Exception {
                 // Issue #28: CH3 — get endpoint must return 200 with full pick list response
-                UUID pickListId = UUID.randomUUID();
-                UUID workorderId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PickListResponse mockResponse = new PickListResponse(
                                 pickListId,
@@ -152,8 +156,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
                                 PickListStatus.DRAFT,
                                 0,
                                 null,
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 when(pickListService.getPickList(eq(pickListId))).thenReturn(mockResponse);
 
@@ -179,8 +183,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("GET /v1/inventory/pick-lists?workorderId=... with valid workorderId → 200 OK with array")
         void CH4_getPickListsForWorkorder_validWorkorderId_returns200WithArray() throws Exception {
                 // Issue #28: CH4 — list endpoint must return 200 with JSON array
-                UUID workorderId = UUID.randomUUID();
-                UUID pickListId = UUID.randomUUID();
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PickListResponse mockEntry = new PickListResponse(
                                 pickListId,
@@ -188,8 +192,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
                                 PickListStatus.DRAFT,
                                 0,
                                 null,
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 when(pickListService.getPickListsForWorkorder(eq(workorderId))).thenReturn(List.of(mockEntry));
 
@@ -219,8 +223,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("PATCH /v1/inventory/pick-lists/{id}/status with status=READY_TO_PICK → 200 OK")
         void CH5_updatePickListStatus_readyToPick_returns200() throws Exception {
                 // Issue #28: CH5 — status update endpoint must return 200 with updated status
-                UUID pickListId = UUID.randomUUID();
-                UUID workorderId = UUID.randomUUID();
+                UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PickListResponse mockResponse = new PickListResponse(
                                 pickListId,
@@ -228,8 +232,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
                                 PickListStatus.READY_TO_PICK,
                                 0,
                                 null,
-                                Instant.now(),
-                                Instant.now());
+                                Instant.now(TEST_CLOCK),
+                                Instant.now(TEST_CLOCK));
 
                 when(pickListService.updatePickListStatus(eq(pickListId), eq(PickListStatus.READY_TO_PICK)))
                                 .thenReturn(mockResponse);

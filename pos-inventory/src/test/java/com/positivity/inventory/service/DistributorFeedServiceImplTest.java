@@ -151,7 +151,7 @@ class DistributorFeedServiceImplTest {
 
     private DistributorFeedItemDto.DistributorFeedItemDtoBuilder baseItemBuilder() {
         return DistributorFeedItemDto.builder()
-                .productId(UUID.randomUUID())
+                .productId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .distributorId("D1")
                 .distributorSku("SKU-1")
                 .quantityAvailable(10)

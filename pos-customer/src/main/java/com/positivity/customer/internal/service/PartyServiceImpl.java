@@ -1,5 +1,7 @@
 package com.positivity.customer.internal.service;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +17,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.positivity.customer.internal.client.PeopleClient;
+import com.positivity.customer.internal.config.CustomerCacheConfig;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -30,7 +33,6 @@ import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
-import com.positivity.customer.internal.config.CustomerCacheConfig;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.enums.AccountStatus;
@@ -38,6 +40,7 @@ import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRepository;
 import com.positivity.customer.service.PartyService;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +49,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class PartyServiceImpl implements PartyService {
+    private final Clock clock;
 
     private final CommercialPartyRepository partyRepository;
     private final ContactRepository contactRepository;
@@ -169,7 +173,7 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private String generatePartyNumber() {
-        return "PARTY-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.US);
+        return "PARTY-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase(Locale.US);
     }
 
     private String buildContactName(Contact contact) {
@@ -455,8 +459,8 @@ public class PartyServiceImpl implements PartyService {
 
     private com.positivity.customer.internal.dto.snapshot.SnapshotMetadata createMetadata() {
         com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
-                java.util.UUID.randomUUID(),
-                java.time.Instant.now(),
+                UUIDv7Generator.generate(),
+                Instant.now(clock),
                 "1.0.0");
         meta.setSource("CRM_API");
         return meta;

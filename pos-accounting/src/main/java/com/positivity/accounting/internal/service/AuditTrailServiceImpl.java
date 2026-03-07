@@ -2,10 +2,12 @@ package com.positivity.accounting.internal.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,7 @@ import com.positivity.accounting.service.AuditTrailService;
 import com.positivity.accounting.service.PriceOverrideAuthorizationService;
 import com.positivity.accounting.service.RefundAuthorizationService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +47,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 public class AuditTrailServiceImpl implements AuditTrailService {
 
+        private final Clock clock;
         private final AuditTrailEntryRepository auditRepository;
         private final PriceOverrideAuthorizationService overrideAuthService;
         private final RefundAuthorizationService refundAuthService;
@@ -81,6 +85,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
                                         .actorRole(request.getActorRole())
                                         .reasonDenied(authResult.getMessage())
                                         .policyVersion(authResult.getPolicyVersion())
+                                        .timestamp(Instant.now(clock))
                                         .build());
 
                         throw new AuditTrailAuthorizationException(authResult.getMessage());
@@ -111,7 +116,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
                                 .accountingIntent(AccountingIntent.REVENUE_ADJUSTMENT)
                                 .accountingStatus(AccountingStatus.PENDING_POSTING)
                                 .expectedAccountingOutcome("Revenue adjustment of " + overrideDesc)
-                                .sourceEventId(UUID.randomUUID())
+                                .sourceEventId(UUIDv7Generator.generate())
                                 .sourceDocumentId("ORDER-" + request.getOrderId())
                                 .build();
 
@@ -170,6 +175,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
                                         .actorRole(request.getActorRole())
                                         .reasonDenied(authResult.getMessage())
                                         .policyVersion(authResult.getPolicyVersion())
+                                        .timestamp(Instant.now(clock))
                                         .build());
 
                         throw new AuditTrailAuthorizationException(authResult.getMessage());
@@ -208,7 +214,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
                                 .expectedAccountingOutcome(String.format("%s refund of $%.2f via %s",
                                                 request.getRefundType(), request.getRefundAmount(),
                                                 authResult.getRefundMethod()))
-                                .sourceEventId(UUID.randomUUID())
+                                .sourceEventId(UUIDv7Generator.generate())
                                 .sourceDocumentId("INVOICE-" + request.getInvoiceId())
                                 .build();
 
@@ -274,7 +280,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
                                 .accountingIntent(accountingIntent)
                                 .accountingStatus(AccountingStatus.PENDING_POSTING)
                                 .expectedAccountingOutcome("Cancellation reversal pending accounting review")
-                                .sourceEventId(UUID.randomUUID())
+                                .sourceEventId(UUIDv7Generator.generate())
                                 .sourceDocumentId(request.getOrderId() != null
                                                 ? "ORDER-" + request.getOrderId()
                                                 : "INVOICE-" + request.getInvoiceId())

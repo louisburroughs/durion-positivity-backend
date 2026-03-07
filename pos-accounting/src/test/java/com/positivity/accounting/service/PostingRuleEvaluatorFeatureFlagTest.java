@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,6 +56,8 @@ import tools.jackson.databind.ObjectMapper;
 @ExtendWith(MockitoExtension.class)
 class PostingRuleEvaluatorFeatureFlagTest {
 
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
     @Mock
     private PostingRuleVersionRepository versionRepository;
 
@@ -76,7 +81,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
     @BeforeEach
     void setUp() {
         defaultGLMappingProperties = new DefaultGLMappingProperties();
-        evaluator = new PostingRuleEvaluatorImpl(
+        evaluator = new PostingRuleEvaluatorImpl(TEST_CLOCK,
                 versionRepository,
                 ruleSetRepository,
                 glMappingResolver,
@@ -84,21 +89,21 @@ class PostingRuleEvaluatorFeatureFlagTest {
                 defaultGLMappingProperties,
                 new ObjectMapper());
 
-        testOrganizationId = UUID.randomUUID();
-        testDebitAccountId = UUID.randomUUID();
-        testCreditAccountId = UUID.randomUUID();
+        testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testDebitAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testCreditAccountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
     // ── Helper methods ──────────────────────────────────────────────────────
 
     private AccountingEvent createEvent(String eventType, Map<String, Object> payload) {
         AccountingEvent event = new AccountingEvent();
-        event.setEventId(UUID.randomUUID());
+        event.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         event.setOrganizationId(testOrganizationId);
         event.setEventType(eventType);
-        event.setTransactionDate(LocalDateTime.now());
+        event.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
         event.setPayload(payload != null ? payload : new HashMap<>());
-        event.setReceivedAt(Instant.now());
+        event.setReceivedAt(Instant.now(TEST_CLOCK));
         event.setSourceSystem("TEST_SYSTEM");
         return event;
     }
@@ -111,7 +116,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
 
     private DefaultGLMapping createDefaultMapping(UUID organizationId) {
         DefaultGLMapping mapping = new DefaultGLMapping();
-        mapping.setMappingId(UUID.randomUUID());
+        mapping.setMappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         mapping.setEventType("billing.invoicePosted");
         mapping.setOrganizationId(organizationId);
         mapping.setDebitAccountId(testDebitAccountId);

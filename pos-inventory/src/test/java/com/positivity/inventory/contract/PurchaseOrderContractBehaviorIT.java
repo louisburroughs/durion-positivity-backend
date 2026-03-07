@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -65,6 +68,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @DisplayName("Purchase Order Contract Behavior — Story #572")
 class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -91,14 +95,17 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /purchase-orders/{poId}/receive against DRAFT PO → 409 Conflict")
         void draftPoReceiptAttempt_returns409() throws Exception {
                 // Issue #572: AC #1 — DRAFT PO must reject receipt with 409
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(purchaseOrderService.receivePurchaseOrder(eq(poId), any(), anyString()))
                                 .thenThrow(new PurchaseOrderNotApprovedException(
                                                 "Purchase order must be approved before receiving"));
 
                 String receiveBody = objectMapper.writeValueAsString(
                                 java.util.Map.of("lineReceipts", List.of(
-                                                java.util.Map.of("lineId", UUID.randomUUID().toString(), "receivedQty",
+                                                java.util.Map.of("lineId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString(),
+                                                                "receivedQty",
                                                                 5))));
 
                 mockMvc.perform(withPurchaseOrderReceiveAuth(
@@ -121,8 +128,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /purchase-orders/{poId}/approve with encumbrance enabled → 200 + encumbranceRef set")
         void approvalWithEncumbrance_emitsEncumbranceEvent() throws Exception {
                 // Issue #572: AC #2 — approval must trigger encumbrance posting event
-                UUID poId = UUID.randomUUID();
-                UUID vendorId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PurchaseOrderResponse approvedResponse = buildApprovedPoResponse(poId, vendorId,
                                 "ENC-2026-001", /* encumbranceRef */
@@ -158,8 +165,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /purchase-orders/{poId}/approve without encumbrance → 200, encumbranceRef absent")
         void approvalWithoutEncumbrance_noGlEncumbrancePosted() throws Exception {
                 // Issue #572: AC #3 — no encumbrance when encumbranceEnabled=false
-                UUID poId = UUID.randomUUID();
-                UUID vendorId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PurchaseOrderResponse approvedResponse = buildApprovedPoResponse(poId, vendorId,
                                 null, /* encumbranceRef absent */
@@ -193,8 +200,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /purchase-orders/{poId}/receive partial qty → openQuantity and openBalanceMinor decrement")
         void partialReceipt_decrementsOpenQuantityAndBalance() throws Exception {
                 // Issue #572: AC #4 — partial receipt decrements open quantities
-                UUID poId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReceivePurchaseOrderResponse response = ReceivePurchaseOrderResponse.builder()
                                 .poId(poId)
@@ -236,8 +243,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /purchase-orders/{poId}/receive all qty → status=FULLY_RECEIVED, openBalanceMinor=0")
         void fullReceipt_transitionsToFullyReceived() throws Exception {
                 // Issue #572: AC #5 — full receipt closes all open quantities
-                UUID poId = UUID.randomUUID();
-                UUID lineId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 ReceivePurchaseOrderResponse response = ReceivePurchaseOrderResponse.builder()
                                 .poId(poId)
@@ -276,16 +283,16 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /purchase-orders with tax codes → grandTotalMinor = subtotalMinor + taxMinor")
         void createPo_taxTotalsAggregate_grandTotalEqualsSubtotalPlusTax() throws Exception {
                 // Issue #572: AC #6 — grandTotalMinor must equal subtotalMinor + taxMinor
-                UUID vendorId = UUID.randomUUID();
-                UUID poId = UUID.randomUUID();
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Two lines: 5 units * 10_000 = 50_000, tax = 5_000 (10%)
                 PurchaseOrderLineRequest line = new PurchaseOrderLineRequest(
                                 1, null, "Widget A", BigDecimal.valueOf(5), 10_000L, "TAX-10", null);
 
                 CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
-                                vendorId, LocalDate.now(), "USD", "NET30",
-                                LocalDate.now().plusDays(30), null, "procurement-agent", "Test PO",
+                                vendorId, LocalDate.now(TEST_CLOCK), "USD", "NET30",
+                                LocalDate.now(TEST_CLOCK).plusDays(30), null, "procurement-agent", "Test PO",
                                 List.of(line));
 
                 PurchaseOrderResponse mockResponse = PurchaseOrderResponse.builder()
@@ -299,9 +306,11 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 .taxMinor(5_000L)
                                 .grandTotalMinor(55_000L) // subtotal + tax
                                 .openBalanceMinor(55_000L)
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
-                                .lines(List.of(buildLineResponse(UUID.randomUUID(), 1, BigDecimal.valueOf(5), 10_000L,
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
+                                .lines(List.of(buildLineResponse(
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1,
+                                                BigDecimal.valueOf(5), 10_000L,
                                                 50_000L, 5_000L, BigDecimal.valueOf(5))))
                                 .build();
 
@@ -331,12 +340,13 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("GET /purchase-orders?vendorId=...&status=APPROVED → 200 with openBalanceMinor and openQuantity")
         void listOpenPosForVendor_returnsOpenBalanceAndLineQuantities() throws Exception {
                 // Issue #572: AC #7 — list must expose openBalanceMinor for AP matching
-                UUID vendorId = UUID.randomUUID();
-                UUID poId = UUID.randomUUID();
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PurchaseOrderResponse approvedPo = buildApprovedPoResponse(poId, vendorId,
                                 null, 100_000L, 0L, 100_000L);
-                approvedPo.setLines(List.of(buildLineResponse(UUID.randomUUID(), 1,
+                approvedPo.setLines(List.of(buildLineResponse(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                1,
                                 BigDecimal.valueOf(10), 10_000L, 100_000L, 0L, BigDecimal.valueOf(10))));
 
                 Page<PurchaseOrderResponse> page = new PageImpl<>(List.of(approvedPo));
@@ -367,14 +377,14 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /purchase-orders/{poId}/revisions → 200, versionNumber incremented")
         void poRevision_incrementsVersionNumber() throws Exception {
                 // Issue #572: AC #8 — revision increments versionNumber
-                UUID poId = UUID.randomUUID();
-                UUID vendorId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PurchaseOrderLineRequest revisedLine = new PurchaseOrderLineRequest(
                                 1, null, "Widget A revised", BigDecimal.valueOf(5), 12_000L, null, null);
 
                 RevisePurchaseOrderRequest reviseRequest = new RevisePurchaseOrderRequest(
-                                LocalDate.now(), "NET45", LocalDate.now().plusDays(45),
+                                LocalDate.now(TEST_CLOCK), "NET45", LocalDate.now(TEST_CLOCK).plusDays(45),
                                 null, "procurement-agent", "Revised due to price update",
                                 List.of(revisedLine), "Vendor price adjustment");
 
@@ -389,8 +399,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 .taxMinor(0L)
                                 .grandTotalMinor(60_000L)
                                 .openBalanceMinor(60_000L)
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(purchaseOrderService.revisePurchaseOrder(eq(poId), any(RevisePurchaseOrderRequest.class),
@@ -426,8 +436,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("POST /purchase-orders/{poId}/approve → 200 + service.approvePurchaseOrder called with required payload")
         void approval_emitsPurchaseOrderApprovedEvent() throws Exception {
                 // Issue #572: AC #9 — PurchaseOrderApproved event must carry required fields
-                UUID poId = UUID.randomUUID();
-                UUID vendorId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 PurchaseOrderResponse approvedResponse = PurchaseOrderResponse.builder()
                                 .purchaseOrderId(poId)
@@ -441,11 +451,12 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 .grandTotalMinor(220_000L)
                                 .openBalanceMinor(220_000L)
                                 .approverId("approver-user")
-                                .approvalTimestamp(Instant.now())
+                                .approvalTimestamp(Instant.now(TEST_CLOCK))
                                 .approvalNotes("Reviewed and approved")
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
-                                .lines(List.of(buildLineResponse(UUID.randomUUID(), 1,
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
+                                .lines(List.of(buildLineResponse(
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"), 1,
                                                 BigDecimal.valueOf(10), 20_000L, 200_000L, 20_000L,
                                                 BigDecimal.valueOf(10))))
                                 .build();
@@ -489,7 +500,7 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         void glPostingError_triggersRetryAndEmitsAccountingErrorEvent() throws Exception {
                 // Issue #572: AC #10 — GL errors must be handled with retry and structured
                 // response
-                UUID poId = UUID.randomUUID();
+                UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 doAnswer(invocation -> {
                         applicationEventPublisher.publishEvent(Map.of(
@@ -497,7 +508,7 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                         "poId", poId.toString(),
                                         "failureReason", "GL encumbrance post failed: ledger unavailable",
                                         "retryCount", 3,
-                                        "timestamp", Instant.now().toString()));
+                                        "timestamp", Instant.now(TEST_CLOCK).toString()));
                         throw new RuntimeException("GL encumbrance post failed: ledger unavailable");
                 }).when(purchaseOrderService).approvePurchaseOrder(eq(poId), any(ApprovePurchaseOrderRequest.class),
                                 any(String.class));
@@ -536,7 +547,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         void createPo_missingAuthority_returns403() throws Exception {
                 // Issue #572: ADR-0011/ADR-0014 — missing PO create authority must yield 403
                 String requestBody = objectMapper.writeValueAsString(new CreatePurchaseOrderRequest(
-                                UUID.randomUUID(), LocalDate.now(), "USD", null, null, null, null, null,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"), LocalDate.now(TEST_CLOCK),
+                                "USD", null, null, null, null, null,
                                 List.of(new PurchaseOrderLineRequest(1, null, "Widget", BigDecimal.ONE, 1_000L, null,
                                                 null))));
 
@@ -603,9 +615,9 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 .openBalanceMinor(openBalanceMinor(grandTotalMinor))
                                 .encumbranceRef(encumbranceRef)
                                 .approverId("approver-user")
-                                .approvalTimestamp(Instant.now())
-                                .createdAt(Instant.now())
-                                .updatedAt(Instant.now())
+                                .approvalTimestamp(Instant.now(TEST_CLOCK))
+                                .createdAt(Instant.now(TEST_CLOCK))
+                                .updatedAt(Instant.now(TEST_CLOCK))
                                 .build();
         }
 

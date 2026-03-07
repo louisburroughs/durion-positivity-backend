@@ -1,8 +1,11 @@
 package com.positivity.securityservice.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
@@ -26,7 +29,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Setter
 @NoArgsConstructor
 @Entity
-@jakarta.persistence.EntityListeners(AuditingEntityListener.class)
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "pricing_snapshots")
 public class PricingSnapshot {
 
@@ -56,13 +59,7 @@ public class PricingSnapshot {
     @PrePersist
     protected void onCreate() {
         if (timestamp == null) {
-            timestamp = Instant.now();
+            timestamp = Instant.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = timestamp;
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 }

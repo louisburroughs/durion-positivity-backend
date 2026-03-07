@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
+
 import jakarta.persistence.*;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.shared.id.UUIDv7Id;
@@ -13,6 +15,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * Entity representing a payment applied to an invoice.
  * Stores payment transaction details for auditing and status calculation.
@@ -23,6 +26,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "payment_applied_events")
 public class PaymentAppliedEvent {
 
@@ -32,11 +36,6 @@ public class PaymentAppliedEvent {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-    }
-
     @Column(nullable = false)
     private UUID invoiceId;
 
@@ -67,7 +66,7 @@ public class PaymentAppliedEvent {
         this.paymentAmount = paymentAmount;
         this.invoiceTotal = invoiceTotal;
         this.status = status;
-        this.timestamp = Instant.now();
+        this.timestamp = Instant.now(Clock.systemUTC());
         this.idempotencyKey = idempotencyKey;
     }
 }

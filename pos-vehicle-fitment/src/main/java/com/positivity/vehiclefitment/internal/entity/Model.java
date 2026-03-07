@@ -1,7 +1,7 @@
 package com.positivity.vehiclefitment.internal.entity;
 
+
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
 import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -10,26 +10,17 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.positivity.shared.id.UUIDv7Id;
 @Data
 @Entity
 @EntityListeners(AuditingEntityListener.class)
+@Table(name = "model")
 public class Model {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
     private String name;
     @ManyToOne
     private Make make; // Reference to the Make entity

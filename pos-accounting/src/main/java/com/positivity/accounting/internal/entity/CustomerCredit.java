@@ -51,13 +51,6 @@ public class CustomerCredit {
     @UUIDv7Id
     @Column(name = "credit_id", nullable = false, columnDefinition = "UUID")
     private UUID creditId;
-
-    @PrePersist
-    public void onPrePersist() {
-        if (createdAt == null) {
-            }
-    }
-
     @Column(name = "customer_id", nullable = false, columnDefinition = "UUID")
     private UUID customerId;
 

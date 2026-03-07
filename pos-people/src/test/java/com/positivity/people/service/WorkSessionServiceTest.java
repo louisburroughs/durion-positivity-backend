@@ -1,5 +1,7 @@
 package com.positivity.people.service;
 
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,232 +31,229 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WorkSessionServiceTest {
 
-    @Mock
-    private WorkSessionRepository workSessionRepository;
+	@Mock
+	private WorkSessionRepository workSessionRepository;
 
-    @Mock
-    private WorkSessionBreakRepository workSessionBreakRepository;
+	@Mock
+	private WorkSessionBreakRepository workSessionBreakRepository;
 
-    private WorkSessionService service;
-    private UUID personId;
+	private WorkSessionService service;
 
-    @BeforeEach
-    void setUp() {
-        service = new WorkSessionServiceImpl(workSessionRepository, workSessionBreakRepository);
-        personId = UUID.fromString("10000000-0000-0000-0000-000000000001");
-    }
+	private UUID personId;
 
-    @Test
-    void startSession_whenNoActiveSessionExists_createsActiveSession() {
-        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.empty());
-        when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(invocation -> {
-            WorkSession session = invocation.getArgument(0);
-            session.setSessionId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
-            return session;
-        });
+	@BeforeEach
+	void setUp() {
+		service = new WorkSessionServiceImpl(workSessionRepository, workSessionBreakRepository, Clock.systemUTC());
+		personId = UUID.fromString("10000000-0000-0000-0000-000000000001");
+	}
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+	@Test
+	void startSession_whenNoActiveSessionExists_createsActiveSession() {
+		when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.empty());
+		when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(invocation -> {
+			WorkSession session = invocation.getArgument(0);
+			session.setSessionId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+			return session;
+		});
 
-            WorkSessionDto result = service.startSession(personId);
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-            assertThat(result).isNotNull();
-            assertThat(result.getSessionId()).isEqualTo(UUID.fromString("11111111-1111-1111-1111-111111111111"));
-            assertThat(result.getPersonId()).isEqualTo(personId);
-            assertThat(result.getStatus()).isEqualTo("ACTIVE");
-            assertThat(result.getStartedAt()).isNotNull();
-            assertThat(result.getEndedAt()).isNull();
-        }
-    }
+			WorkSessionDto result = service.startSession(personId);
 
-    @Test
-    void startSession_whenActiveSessionAlreadyExists_throwsException() {
-        WorkSession existing = new WorkSession();
-        existing.setSessionId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
-        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.of(existing));
+			assertThat(result).isNotNull();
+			assertThat(result.getSessionId()).isEqualTo(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+			assertThat(result.getPersonId()).isEqualTo(personId);
+			assertThat(result.getStatus()).isEqualTo("ACTIVE");
+			assertThat(result.getStartedAt()).isNotNull();
+			assertThat(result.getEndedAt()).isNull();
+		}
+	}
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+	@Test
+	void startSession_whenActiveSessionAlreadyExists_throwsException() {
+		WorkSession existing = new WorkSession();
+		existing.setSessionId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
+		when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.of(existing));
 
-            assertThatThrownBy(() -> service.startSession(personId))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("active session");
-        }
-    }
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-    @Test
-    void stopSession_whenActiveSessionExists_endsSession() {
-        WorkSession active = new WorkSession();
-        active.setSessionId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
-        active.setPersonId(personId);
-        active.setStatus("ACTIVE");
-        active.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
+			assertThatThrownBy(() -> service.startSession(personId)).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("active session");
+		}
+	}
 
-        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.of(active));
-        when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
-        when(workSessionBreakRepository
-                .findBySessionIdAndEndedAtIsNull(UUID.fromString("11111111-1111-1111-1111-111111111111")))
-                .thenReturn(Optional.empty());
+	@Test
+	void stopSession_whenActiveSessionExists_endsSession() {
+		WorkSession active = new WorkSession();
+		active.setSessionId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+		active.setPersonId(personId);
+		active.setStatus("ACTIVE");
+		active.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+		when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.of(active));
+		when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
+		when(workSessionBreakRepository
+			.findBySessionIdAndEndedAtIsNull(UUID.fromString("11111111-1111-1111-1111-111111111111")))
+			.thenReturn(Optional.empty());
 
-            WorkSessionDto result = service.stopSession(personId);
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-            assertThat(result).isNotNull();
-            assertThat(result.getPersonId()).isEqualTo(personId);
-            assertThat(result.getStatus()).isEqualTo("ENDED");
-            assertThat(result.getEndedAt()).isNotNull();
-        }
-    }
+			WorkSessionDto result = service.stopSession(personId);
 
-    @Test
-    void stopSession_whenNoActiveSessionExists_throwsWorkSessionNotFoundException() {
-        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.empty());
+			assertThat(result).isNotNull();
+			assertThat(result.getPersonId()).isEqualTo(personId);
+			assertThat(result.getStatus()).isEqualTo("ENDED");
+			assertThat(result.getEndedAt()).isNotNull();
+		}
+	}
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+	@Test
+	void stopSession_whenNoActiveSessionExists_throwsWorkSessionNotFoundException() {
+		when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.stopSession(personId))
-                    .isInstanceOf(WorkSessionNotFoundException.class);
-        }
-    }
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-    @Test
-    void startBreak_whenSessionExistsAndNoActiveBreak_createsActiveBreak() {
-        UUID sessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        WorkSession session = new WorkSession();
-        session.setSessionId(sessionId);
-        session.setPersonId(personId);
+			assertThatThrownBy(() -> service.stopSession(personId)).isInstanceOf(WorkSessionNotFoundException.class);
+		}
+	}
 
-        when(workSessionRepository.findBySessionIdAndEndedAtIsNull(sessionId)).thenReturn(Optional.of(session));
-        when(workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId)).thenReturn(Optional.empty());
-        when(workSessionBreakRepository.save(any(WorkSessionBreak.class))).thenAnswer(invocation -> {
-            WorkSessionBreak workBreak = invocation.getArgument(0);
-            workBreak.setBreakId(UUID.fromString("10000000-0000-0000-0000-000000000000"));
-            return workBreak;
-        });
+	@Test
+	void startBreak_whenSessionExistsAndNoActiveBreak_createsActiveBreak() {
+		UUID sessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+		WorkSession session = new WorkSession();
+		session.setSessionId(sessionId);
+		session.setPersonId(personId);
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+		when(workSessionRepository.findBySessionIdAndEndedAtIsNull(sessionId)).thenReturn(Optional.of(session));
+		when(workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId)).thenReturn(Optional.empty());
+		when(workSessionBreakRepository.save(any(WorkSessionBreak.class))).thenAnswer(invocation -> {
+			WorkSessionBreak workBreak = invocation.getArgument(0);
+			workBreak.setBreakId(UUID.fromString("10000000-0000-0000-0000-000000000000"));
+			return workBreak;
+		});
 
-            BreakDto result = service.startBreak(sessionId);
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-            assertThat(result).isNotNull();
-            assertThat(result.getSessionId()).isEqualTo(sessionId);
-            assertThat(result.getStartedAt()).isNotNull();
-            assertThat(result.getEndedAt()).isNull();
-        }
-    }
+			BreakDto result = service.startBreak(sessionId);
 
-    @Test
-    void startBreak_whenSessionDoesNotExist_throwsWorkSessionNotFoundException() {
-        UUID missingId = UUID.fromString("99999999-9999-9999-9999-999999999999");
-        when(workSessionRepository.findBySessionIdAndEndedAtIsNull(missingId)).thenReturn(Optional.empty());
+			assertThat(result).isNotNull();
+			assertThat(result.getSessionId()).isEqualTo(sessionId);
+			assertThat(result.getStartedAt()).isNotNull();
+			assertThat(result.getEndedAt()).isNull();
+		}
+	}
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+	@Test
+	void startBreak_whenSessionDoesNotExist_throwsWorkSessionNotFoundException() {
+		UUID missingId = UUID.fromString("99999999-9999-9999-9999-999999999999");
+		when(workSessionRepository.findBySessionIdAndEndedAtIsNull(missingId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.startBreak(missingId))
-                    .isInstanceOf(WorkSessionNotFoundException.class);
-        }
-    }
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-    @Test
-    void startBreak_whenBreakAlreadyActive_throwsException() {
-        UUID sessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        WorkSession session = new WorkSession();
-        session.setSessionId(sessionId);
-        WorkSessionBreak activeBreak = new WorkSessionBreak();
-        activeBreak.setSessionId(sessionId);
+			assertThatThrownBy(() -> service.startBreak(missingId)).isInstanceOf(WorkSessionNotFoundException.class);
+		}
+	}
 
-        when(workSessionRepository.findBySessionIdAndEndedAtIsNull(sessionId)).thenReturn(Optional.of(session));
-        when(workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId))
-                .thenReturn(Optional.of(activeBreak));
+	@Test
+	void startBreak_whenBreakAlreadyActive_throwsException() {
+		UUID sessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+		WorkSession session = new WorkSession();
+		session.setSessionId(sessionId);
+		WorkSessionBreak activeBreak = new WorkSessionBreak();
+		activeBreak.setSessionId(sessionId);
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+		when(workSessionRepository.findBySessionIdAndEndedAtIsNull(sessionId)).thenReturn(Optional.of(session));
+		when(workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId))
+			.thenReturn(Optional.of(activeBreak));
 
-            assertThatThrownBy(() -> service.startBreak(sessionId))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("already active");
-        }
-    }
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-    @Test
-    void stopBreak_whenActiveBreakExists_endsBreak() {
-        UUID sessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        WorkSessionBreak activeBreak = new WorkSessionBreak();
-        activeBreak.setSessionId(sessionId);
-        activeBreak.setStartedAt(Instant.parse("2026-01-01T10:00:00Z"));
+			assertThatThrownBy(() -> service.startBreak(sessionId)).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("already active");
+		}
+	}
 
-        when(workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId))
-                .thenReturn(Optional.of(activeBreak));
-        when(workSessionBreakRepository.save(any(WorkSessionBreak.class))).thenAnswer(i -> i.getArgument(0));
+	@Test
+	void stopBreak_whenActiveBreakExists_endsBreak() {
+		UUID sessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+		WorkSessionBreak activeBreak = new WorkSessionBreak();
+		activeBreak.setSessionId(sessionId);
+		activeBreak.setStartedAt(Instant.parse("2026-01-01T10:00:00Z"));
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+		when(workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId))
+			.thenReturn(Optional.of(activeBreak));
+		when(workSessionBreakRepository.save(any(WorkSessionBreak.class))).thenAnswer(i -> i.getArgument(0));
 
-            BreakDto result = service.stopBreak(sessionId);
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-            assertThat(result).isNotNull();
-            assertThat(result.getSessionId()).isEqualTo(sessionId);
-            assertThat(result.getEndedAt()).isNotNull();
-        }
-    }
+			BreakDto result = service.stopBreak(sessionId);
 
-    @Test
-    void stopBreak_whenNoActiveBreakExists_throwsException() {
-        UUID sessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        when(workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId)).thenReturn(Optional.empty());
+			assertThat(result).isNotNull();
+			assertThat(result.getSessionId()).isEqualTo(sessionId);
+			assertThat(result.getEndedAt()).isNotNull();
+		}
+	}
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+	@Test
+	void stopBreak_whenNoActiveBreakExists_throwsException() {
+		UUID sessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+		when(workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.stopBreak(sessionId))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("No active break");
-        }
-    }
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-    @Test
-    void stopSession_whenActiveBreakExists_alsoEndsBreak() {
-        WorkSession active = new WorkSession();
-        active.setSessionId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
-        active.setPersonId(personId);
-        active.setStatus("ACTIVE");
-        active.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
+			assertThatThrownBy(() -> service.stopBreak(sessionId)).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("No active break");
+		}
+	}
 
-        WorkSessionBreak activeBreak = new WorkSessionBreak();
-        activeBreak.setBreakId(UUID.fromString("12121212-1212-1212-1212-121212121212"));
-        activeBreak.setSessionId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
-        activeBreak.setStartedAt(Instant.parse("2026-01-01T09:00:00Z"));
+	@Test
+	void stopSession_whenActiveBreakExists_alsoEndsBreak() {
+		WorkSession active = new WorkSession();
+		active.setSessionId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
+		active.setPersonId(personId);
+		active.setStatus("ACTIVE");
+		active.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
 
-        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.of(active));
-        when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
-        when(workSessionBreakRepository
-                .findBySessionIdAndEndedAtIsNull(UUID.fromString("55555555-5555-5555-5555-555555555555")))
-                .thenReturn(Optional.of(activeBreak));
-        when(workSessionBreakRepository.save(any(WorkSessionBreak.class))).thenAnswer(i -> i.getArgument(0));
+		WorkSessionBreak activeBreak = new WorkSessionBreak();
+		activeBreak.setBreakId(UUID.fromString("12121212-1212-1212-1212-121212121212"));
+		activeBreak.setSessionId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
+		activeBreak.setStartedAt(Instant.parse("2026-01-01T09:00:00Z"));
 
-        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
-            helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                    .thenReturn("manager.user");
+		when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.of(active));
+		when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
+		when(workSessionBreakRepository
+			.findBySessionIdAndEndedAtIsNull(UUID.fromString("55555555-5555-5555-5555-555555555555")))
+			.thenReturn(Optional.of(activeBreak));
+		when(workSessionBreakRepository.save(any(WorkSessionBreak.class))).thenAnswer(i -> i.getArgument(0));
 
-            WorkSessionDto result = service.stopSession(personId);
+		try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+			helperMock.when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+				.thenReturn("manager.user");
 
-            assertThat(result.getStatus()).isEqualTo("ENDED");
-            verify(workSessionBreakRepository).save(any(WorkSessionBreak.class));
-            assertThat(activeBreak.getEndedAt()).isNotNull();
-        }
-    }
+			WorkSessionDto result = service.stopSession(personId);
+
+			assertThat(result.getStatus()).isEqualTo("ENDED");
+			verify(workSessionBreakRepository).save(any(WorkSessionBreak.class));
+			assertThat(activeBreak.getEndedAt()).isNotNull();
+		}
+	}
+
 }

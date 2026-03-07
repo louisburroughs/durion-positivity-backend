@@ -1,5 +1,8 @@
 package com.positivity.accounting.controller;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -12,6 +15,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +47,14 @@ import com.positivity.accounting.internal.repository.ReceivablePaymentRepository
 @DisplayName("Payment Application Controller Integration Tests")
 class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
+    private static final AtomicInteger UUID_COUNTER = new AtomicInteger(1000);
+
+    private static UUID nextUuid() {
+        return UUID.fromString(String.format("00000000-0000-0000-0000-%012x", UUID_COUNTER.getAndIncrement()));
+    }
+
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
         @Autowired
         private ReceivablePaymentRepository receivablePaymentRepository;
 
@@ -69,10 +81,10 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 receivablePaymentRepository.deleteAll();
 
                 // Initialize test IDs
-                testPaymentId = UUID.randomUUID();
-                testCustomerId = UUID.randomUUID();
-                testInvoice1Id = UUID.randomUUID();
-                testInvoice2Id = UUID.randomUUID();
+                testPaymentId = nextUuid();
+                testCustomerId = nextUuid();
+                testInvoice1Id = nextUuid();
+                testInvoice2Id = nextUuid();
 
                 // Mock InvoiceServiceClient to prevent real HTTP calls
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenAnswer(invocation -> {
@@ -141,16 +153,16 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
                 PaymentApplication application = new PaymentApplication();
-                application.setPaymentApplicationId(UUID.randomUUID());
+                application.setPaymentApplicationId(nextUuid());
                 application.setPaymentId(testPaymentId);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoice1Id);
                 application.setAppliedAmount(new BigDecimal("100.00"));
                 application.setCurrency("USD");
-                application.setApplicationRequestId(UUID.randomUUID().toString());
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationRequestId(nextUuid().toString());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 application.setCreatedBy("testuser");
-                application.setCreatedAt(Instant.now());
+                application.setCreatedAt(Instant.now(TEST_CLOCK));
                 paymentApplicationRepository.save(application);
 
                 mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/void"))
@@ -166,16 +178,16 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
                 PaymentApplication application = new PaymentApplication();
-                application.setPaymentApplicationId(UUID.randomUUID());
+                application.setPaymentApplicationId(nextUuid());
                 application.setPaymentId(testPaymentId);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoice1Id);
                 application.setAppliedAmount(new BigDecimal("300.00"));
                 application.setCurrency("USD");
-                application.setApplicationRequestId(UUID.randomUUID().toString());
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationRequestId(nextUuid().toString());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 application.setCreatedBy("testuser");
-                application.setCreatedAt(Instant.now());
+                application.setCreatedAt(Instant.now(TEST_CLOCK));
                 paymentApplicationRepository.save(application);
 
                 ReceivablePayment payment = receivablePaymentRepository.findById(testPaymentId).orElseThrow();
@@ -221,7 +233,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
-                request.setApplicationRequestId(UUID.randomUUID().toString());
+                request.setApplicationRequestId(nextUuid().toString());
                 request.setApplications(List.of(
                                 createInvoiceApplication(testInvoice1Id, "500.00")));
 
@@ -259,7 +271,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
-                request.setApplicationRequestId(UUID.randomUUID().toString());
+                request.setApplicationRequestId(nextUuid().toString());
                 request.setApplications(List.of(
                                 createInvoiceApplication(testInvoice1Id, "300.00"),
                                 createInvoiceApplication(testInvoice2Id, "400.00")));
@@ -290,7 +302,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
-                request.setApplicationRequestId(UUID.randomUUID().toString());
+                request.setApplicationRequestId(nextUuid().toString());
                 request.setApplications(List.of(
                                 createInvoiceApplication(testInvoice1Id, "600.00")));
 
@@ -316,7 +328,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 // Arrange
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
-                String idempotencyKey = UUID.randomUUID().toString();
+                String idempotencyKey = nextUuid().toString();
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
                 request.setApplicationRequestId(idempotencyKey);
                 request.setApplications(List.of(
@@ -351,7 +363,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 // Arrange
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
-                String idempotencyKey = UUID.randomUUID().toString();
+                String idempotencyKey = nextUuid().toString();
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
                 request.setApplicationRequestId(idempotencyKey);
                 request.setApplications(List.of(
@@ -394,9 +406,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         @DisplayName("PA-005: Fail when payment not found")
         void testApplyPayment_PaymentNotFound() throws Exception {
                 // Arrange
-                UUID nonExistentPaymentId = UUID.randomUUID();
+                UUID nonExistentPaymentId = nextUuid();
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
-                request.setApplicationRequestId(UUID.randomUUID().toString());
+                request.setApplicationRequestId(nextUuid().toString());
                 request.setApplications(List.of(
                                 createInvoiceApplication(testInvoice1Id, "500.00")));
 
@@ -415,7 +427,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
-                request.setApplicationRequestId(UUID.randomUUID().toString());
+                request.setApplicationRequestId(nextUuid().toString());
                 request.setApplications(List.of(
                                 createInvoiceApplication(testInvoice1Id, "1500.00") // More than available
                 ));
@@ -439,13 +451,13 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 payment.setUnappliedAmount(BigDecimal.ZERO);
                 payment.setCurrency("USD");
                 payment.setStatus(ReceivablePaymentStatus.FULLY_APPLIED);
-                payment.setClearedAt(Instant.now());
-                payment.setSourceEventId(UUID.randomUUID());
-                payment.setCreatedAt(Instant.now());
+                payment.setClearedAt(Instant.now(TEST_CLOCK));
+                payment.setSourceEventId(nextUuid());
+                payment.setCreatedAt(Instant.now(TEST_CLOCK));
                 receivablePaymentRepository.save(payment);
 
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
-                request.setApplicationRequestId(UUID.randomUUID().toString());
+                request.setApplicationRequestId(nextUuid().toString());
                 request.setApplications(List.of(
                                 createInvoiceApplication(testInvoice1Id, "500.00")));
 
@@ -483,7 +495,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
                 PaymentApplicationRequest request = new PaymentApplicationRequest();
-                request.setApplicationRequestId(UUID.randomUUID().toString());
+                request.setApplicationRequestId(nextUuid().toString());
                 request.setApplications(List.of()); // Empty list
 
                 // Act & Assert
@@ -505,16 +517,16 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
                 PaymentApplication application = new PaymentApplication();
-                application.setPaymentApplicationId(UUID.randomUUID());
+                application.setPaymentApplicationId(nextUuid());
                 application.setPaymentId(testPaymentId);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoice1Id);
                 application.setAppliedAmount(new BigDecimal("500.00"));
                 application.setCurrency("USD");
-                application.setApplicationRequestId(UUID.randomUUID().toString());
-                application.setApplicationTimestamp(Instant.now());
+                application.setApplicationRequestId(nextUuid().toString());
+                application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 application.setCreatedBy("testuser");
-                application.setCreatedAt(Instant.now());
+                application.setCreatedAt(Instant.now(TEST_CLOCK));
                 application = paymentApplicationRepository.save(application);
 
                 // Update payment unappliedAmount to reflect application
@@ -546,7 +558,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         @DisplayName("PAR-002: Fail when application not found")
         void testReversePaymentApplication_NotFound() throws Exception {
                 // Arrange
-                UUID nonExistentApplicationId = UUID.randomUUID();
+                UUID nonExistentApplicationId = nextUuid();
                 PaymentApplicationReversalRequest request = new PaymentApplicationReversalRequest();
                 request.setReason("Test reason for reversal");
 
@@ -567,7 +579,8 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
                 // Apply payment first to create valid PaymentApplication
                 PaymentApplicationRequest applyRequest = new PaymentApplicationRequest();
-                applyRequest.setApplicationRequestId(UUID.randomUUID().toString());
+                applyRequest.setApplicationRequestId(
+                                nextUuid().toString());
                 applyRequest.setApplications(List.of(createInvoiceApplication(testInvoice1Id, "500.00")));
 
                 mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/applications"))
@@ -600,7 +613,8 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
                 // Apply payment first to create valid PaymentApplication
                 PaymentApplicationRequest applyRequest = new PaymentApplicationRequest();
-                applyRequest.setApplicationRequestId(UUID.randomUUID().toString());
+                applyRequest.setApplicationRequestId(
+                                nextUuid().toString());
                 applyRequest.setApplications(List.of(createInvoiceApplication(testInvoice1Id, "500.00")));
 
                 mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/applications"))
@@ -637,9 +651,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 payment.setUnappliedAmount(new BigDecimal(amount));
                 payment.setCurrency("USD");
                 payment.setStatus(ReceivablePaymentStatus.AVAILABLE);
-                payment.setClearedAt(Instant.now());
-                payment.setSourceEventId(UUID.randomUUID());
-                payment.setCreatedAt(Instant.now());
+                payment.setClearedAt(Instant.now(TEST_CLOCK));
+                payment.setSourceEventId(nextUuid());
+                payment.setCreatedAt(Instant.now(TEST_CLOCK));
                 receivablePaymentRepository.save(payment);
         }
 

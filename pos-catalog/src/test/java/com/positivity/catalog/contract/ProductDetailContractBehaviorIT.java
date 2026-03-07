@@ -65,8 +65,9 @@ class ProductDetailContractBehaviorIT extends BaseContractIntegrationTest {
                 Mockito.when(inventoryClient.fetchAvailability(Mockito.any(), Mockito.any()))
                                 .thenReturn(Optional.of(new AvailabilityClientResponse(25, 5, 20, "EA")));
 
-                UUID productId = createProductAndGetId("SKU-PD-001-" + UUID.randomUUID(), "MPN-PD-001");
-                UUID locationId = UUID.randomUUID();
+                UUID productId = createProductAndGetId(
+                                "SKU-PD-001-" + UUID.fromString("00000000-0000-0000-0000-000000000001"), "MPN-PD-001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(MockMvcRequestBuilders
                                 .get("/v1/products/{productId}/detail", productId)
@@ -97,8 +98,9 @@ class ProductDetailContractBehaviorIT extends BaseContractIntegrationTest {
                 Mockito.when(inventoryClient.fetchAvailability(Mockito.any(), Mockito.any()))
                                 .thenReturn(Optional.of(new AvailabilityClientResponse(10, 2, 8, "EA")));
 
-                UUID productId = createProductAndGetId("SKU-PD-002-" + UUID.randomUUID(), "MPN-PD-002");
-                UUID locationId = UUID.randomUUID();
+                UUID productId = createProductAndGetId(
+                                "SKU-PD-002-" + UUID.fromString("00000000-0000-0000-0000-000000000001"), "MPN-PD-002");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(MockMvcRequestBuilders
                                 .get("/v1/products/{productId}/detail", productId)
@@ -130,8 +132,9 @@ class ProductDetailContractBehaviorIT extends BaseContractIntegrationTest {
                 Mockito.when(inventoryClient.fetchAvailability(Mockito.any(), Mockito.any()))
                                 .thenThrow(new RuntimeException("inventory service down"));
 
-                UUID productId = createProductAndGetId("SKU-PD-003-" + UUID.randomUUID(), "MPN-PD-003");
-                UUID locationId = UUID.randomUUID();
+                UUID productId = createProductAndGetId(
+                                "SKU-PD-003-" + UUID.fromString("00000000-0000-0000-0000-000000000001"), "MPN-PD-003");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(MockMvcRequestBuilders
                                 .get("/v1/products/{productId}/detail", productId)
@@ -157,8 +160,8 @@ class ProductDetailContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("PD-005: Product not found – returns 404")
         void testProductDetail_productNotFound_returns404() throws Exception {
-                UUID nonExistentProductId = UUID.randomUUID();
-                UUID locationId = UUID.randomUUID();
+                UUID nonExistentProductId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(MockMvcRequestBuilders
                                 .get("/v1/products/{productId}/detail", nonExistentProductId)
@@ -182,7 +185,7 @@ class ProductDetailContractBehaviorIT extends BaseContractIntegrationTest {
                                 "name", "Test Product " + sku,
                                 "description", "Product for contract test",
                                 "unitOfMeasure", "EA",
-                                "manufacturerId", UUID.randomUUID().toString(),
+                                "manufacturerId", UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
                                 "sku", sku,
                                 "mpn", mpn,
                                 "upc", "1000000000000",

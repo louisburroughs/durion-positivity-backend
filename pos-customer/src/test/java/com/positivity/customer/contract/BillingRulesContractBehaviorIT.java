@@ -78,11 +78,13 @@ class BillingRulesContractBehaviorIT extends BaseContractIntegrationTest {
         party.setPartyType(PartyType.COMMERCIAL);
         party.setLegalName("Billing Rules Test Corp");
         party.setDisplayName("Billing Corp");
-        party.setPartyNumber("BR-" + UUID.randomUUID());
-        party.setCustomerNumber("CUST-BR-" + UUID.randomUUID().toString().substring(0, 8));
+        party.setPartyNumber("BR-" + UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        party.setCustomerNumber(
+                "CUST-BR-" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
         party.setStatus(AccountStatus.ACTIVE);
 
         Contact contact = new Contact();
+        contact.setPersonId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
         contact.setFirstName("Billing");
         contact.setLastName("Contact");
         contact.setActive(true);
@@ -164,7 +166,7 @@ class BillingRulesContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("BR-003: billing-rules returns 404 when partyId not found")
     void billingRules_returns404_whenPartyNotFound() throws Exception {
-        UUID unknownPartyId = UUID.randomUUID();
+        UUID unknownPartyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}/billing-rules", unknownPartyId)
                 .header("X-User", TEST_USER)

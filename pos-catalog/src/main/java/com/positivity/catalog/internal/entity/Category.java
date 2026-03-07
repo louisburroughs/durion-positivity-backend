@@ -8,10 +8,12 @@ import lombok.Setter;
 
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @Setter
 @Data
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 public class Category {
 
     @Id

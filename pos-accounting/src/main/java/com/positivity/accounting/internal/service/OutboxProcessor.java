@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -46,6 +47,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class OutboxProcessor {
+    private final Clock clock;
+
 
     private final EventOutboxRepository outboxRepository;
     private final OutboxService outboxService;
@@ -67,7 +70,7 @@ public class OutboxProcessor {
     @Scheduled(fixedRate = 5000, initialDelay = 10000)
     public void processPendingEvents() {
         try {
-            Instant retryThreshold = Instant.now().minus(RETRY_DELAY);
+            Instant retryThreshold = Instant.now(clock).minus(RETRY_DELAY);
 
             List<EventOutbox> pendingEvents = outboxRepository.findPendingForRetry(
                     OutboxStatus.PENDING,
@@ -146,7 +149,7 @@ public class OutboxProcessor {
     @Scheduled(cron = "0 0 2 * * *")
     public void cleanupOldEvents() {
         try {
-            Instant thirtyDaysAgo = Instant.now().minus(Duration.ofDays(30));
+            Instant thirtyDaysAgo = Instant.now(clock).minus(Duration.ofDays(30));
             int deleted = outboxService.cleanupOldEvents(thirtyDaysAgo);
 
             if (deleted > 0) {

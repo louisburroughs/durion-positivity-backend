@@ -1,5 +1,9 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -46,6 +51,10 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("JournalEntryService Unit Tests")
 class JournalEntryServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private JournalEntryRepository journalEntryRepository;
@@ -66,9 +75,9 @@ class JournalEntryServiceTest {
     void setUp() {
         testJournalEntryId = UUID.randomUUID();
         testGLAccountId1 = UUID.randomUUID();
-        testGLAccountId2 = UUID.randomUUID();
+        testGLAccountId2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
         testSourceEventId = UUID.randomUUID();
-        testTransactionDate = LocalDateTime.now();
+        testTransactionDate = LocalDateTime.now(TEST_CLOCK);
     }
 
     // ===== CREATE TESTS =====

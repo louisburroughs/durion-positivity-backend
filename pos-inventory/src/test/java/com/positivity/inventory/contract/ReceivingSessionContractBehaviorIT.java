@@ -1,5 +1,8 @@
 package com.positivity.inventory.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -52,6 +55,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @DisplayName("Receiving Session Contract Behavior")
 class ReceivingSessionContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         @Autowired
         private MockMvc mockMvc;
@@ -77,7 +81,7 @@ class ReceivingSessionContractBehaviorIT extends BaseContractIntegrationTest {
         void createReceivingSession_withValidPO_manualEntry_returns201WithSessionAndLines() throws Exception {
                 // Issue #35: PO-backed manual receiving session must return sessionId, OPEN
                 // status, MANUAL entryMethod, 2 lines
-                UUID sessionId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 ReceivingSessionResponse response = ReceivingSessionResponse.builder()
                                 .sessionId(sessionId)
                                 .sourceDocumentId("PO-123")
@@ -87,20 +91,22 @@ class ReceivingSessionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .createdByUserId("contract-test-user")
                                 .lines(List.of(
                                                 ReceivingLineResponse.builder()
-                                                                .lineId(UUID.randomUUID())
+                                                                .lineId(UUID.fromString(
+                                                                                "00000000-0000-0000-0000-000000000001"))
                                                                 .productId("PROD-001")
                                                                 .expectedQuantity(new BigDecimal("5"))
                                                                 .receivedQuantity(BigDecimal.ZERO)
                                                                 .status("EXPECTED")
                                                                 .build(),
                                                 ReceivingLineResponse.builder()
-                                                                .lineId(UUID.randomUUID())
+                                                                .lineId(UUID.fromString(
+                                                                                "00000000-0000-0000-0000-000000000001"))
                                                                 .productId("PROD-002")
                                                                 .expectedQuantity(new BigDecimal("10"))
                                                                 .receivedQuantity(BigDecimal.ZERO)
                                                                 .status("EXPECTED")
                                                                 .build()))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(receivingService.createReceivingSession(any(), any())).thenReturn(response);
@@ -133,7 +139,7 @@ class ReceivingSessionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC2: POST /receiving/sessions with ASN source document (SCAN) returns 201 with SCAN entryMethod")
         void createReceivingSession_withValidASN_scanEntry_returns201WithScanEntryMethod() throws Exception {
                 // Issue #35: ASN-backed scan receiving session must return SCAN entryMethod
-                UUID sessionId = UUID.randomUUID();
+                UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 ReceivingSessionResponse response = ReceivingSessionResponse.builder()
                                 .sessionId(sessionId)
                                 .sourceDocumentId("ASN-ABC-789")
@@ -142,7 +148,7 @@ class ReceivingSessionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .entryMethod("SCAN")
                                 .createdByUserId("contract-test-user")
                                 .lines(List.of())
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(receivingService.createReceivingSession(any(), any())).thenReturn(response);

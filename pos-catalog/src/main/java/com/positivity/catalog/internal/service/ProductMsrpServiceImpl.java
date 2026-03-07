@@ -1,5 +1,21 @@
 package com.positivity.catalog.internal.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.positivity.catalog.internal.dto.CreateMsrpRequestDto;
 import com.positivity.catalog.internal.dto.ProductMsrpDto;
 import com.positivity.catalog.internal.dto.UpdateMsrpRequestDto;
@@ -10,31 +26,17 @@ import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ProductMsrpRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.service.ProductMsrpService;
-import jakarta.persistence.OptimisticLockException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.UUID;
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.OptimisticLockException;
+import lombok.RequiredArgsConstructor;
+
+@RequiredArgsConstructor
 @Service
 public class ProductMsrpServiceImpl implements ProductMsrpService {
 
+    private final Clock clock;
     private final ProductMsrpRepository productMsrpRepository;
     private final ProductRepository productRepository;
-
-    public ProductMsrpServiceImpl(ProductMsrpRepository productMsrpRepository, ProductRepository productRepository) {
-        this.productMsrpRepository = productMsrpRepository;
-        this.productRepository = productRepository;
-    }
 
     @Override
     @Transactional
@@ -87,7 +89,7 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
         }
 
         // 3) Protect historical data from retroactive edits.
-        if (entity.getEffectiveEndDate() != null && entity.getEffectiveEndDate().isBefore(LocalDate.now())) {
+        if (entity.getEffectiveEndDate() != null && entity.getEffectiveEndDate().isBefore(LocalDate.now(clock))) {
             throw new CatalogValidationException("Historical MSRP records are immutable.");
         }
 
@@ -105,7 +107,7 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
             long otherOpenEndedCount = entityCurrentlyOpenEnded ? openEndedCount - 1 : openEndedCount;
             if (otherOpenEndedCount > 0) {
                 throw new CatalogValidationException(
-                    "Only one open-ended MSRP record is allowed per product.");
+                        "Only one open-ended MSRP record is allowed per product.");
             }
         }
 

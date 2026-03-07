@@ -1,5 +1,8 @@
 package com.positivity.accounting.contract;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.accounting.BaseContractIntegrationTest;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -46,7 +49,8 @@ import java.time.Instant;
  * Each test maps to an acceptance criterion defined in issue #122.
  */
 @DisplayName("Suspense Queue Reprocessing Contract Behavioral Tests (CAP:055)")
-public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
+class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         private static final String REPROCESS_SUCCESS_EVENT_TYPE = "INVOICE_RECEIVED_SUCCESS";
         private static final String REPROCESS_FAILURE_EVENT_TYPE = "INVOICE_RECEIVED_FAILURE";
@@ -78,13 +82,13 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         @Test
         @DisplayName("AC-2a: Successful reprocess posts and closes entry (200 OK)")
-        public void testReprocessSuspendedEventSuccessful() throws Exception {
+        void testReprocessSuspendedEventSuccessful() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
-                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 submitRequest.setSourceSystem("TEST_SYSTEM");
-                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
                                 "invoiceId", "INV-001",
                                 "amount", 100.00,
@@ -120,13 +124,13 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         @Test
         @DisplayName("AC-2b: Reprocess accepted but still pending (202 Accepted)")
-        public void testReprocessSuspendedEventAccepted() throws Exception {
+        void testReprocessSuspendedEventAccepted() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
-                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 submitRequest.setSourceSystem("TEST_SYSTEM");
-                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
                                 "invoiceId", "INV-001-PENDING",
                                 "amount", 100.00,
@@ -161,7 +165,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         @Test
         @DisplayName("AC-3: Idempotent reprocess returns 409 for PROCESSED events")
-        public void testReprocessIdempotency() throws Exception {
+        void testReprocessIdempotency() throws Exception {
                 // This test validates BR-3: Idempotency rule
                 // Reprocessing a PROCESSED event should return 409 Conflict
 
@@ -184,13 +188,13 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         @Test
         @DisplayName("AC-4a: Attempt history is maintained (successful reprocess)")
-        public void testReprocessingAttemptHistoryMaintainedSuccess() throws Exception {
+        void testReprocessingAttemptHistoryMaintainedSuccess() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType(REPROCESS_SUCCESS_EVENT_TYPE);
-                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 submitRequest.setSourceSystem("TEST_SYSTEM");
-                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
                                 "invoiceId", "INV-002",
                                 "amount", 200.00,
@@ -228,13 +232,13 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         @Test
         @DisplayName("AC-4b: Attempt history is maintained (failed reprocess)")
-        public void testReprocessingAttemptHistoryMaintainedFailure() throws Exception {
+        void testReprocessingAttemptHistoryMaintainedFailure() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType(REPROCESS_FAILURE_EVENT_TYPE);
-                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 submitRequest.setSourceSystem("TEST_SYSTEM");
-                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 submitRequest.setPayload(Map.of(
                                 "invoiceId", "INV-002-FAIL",
                                 "amount", 200.00,
@@ -248,7 +252,8 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
                 String eventId = extractEventIdFromResponse(submitResult);
 
-                markEventAsSuspended(UUID.fromString(eventId), "Test setup: simulating suspended event for failure history");
+                markEventAsSuspended(UUID.fromString(eventId),
+                                "Test setup: simulating suspended event for failure history");
 
                 // Act: Reprocess the event
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -275,9 +280,9 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         @Test
         @DisplayName("Reprocess returns 404 for non-existent event")
-        public void testReprocessNonExistentEventNotFound() throws Exception {
+        void testReprocessNonExistentEventNotFound() throws Exception {
                 // Arrange: Use a valid UUID format that doesn't exist in database
-                UUID nonExistentId = UUID.randomUUID();
+                UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act: Attempt to reprocess
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -294,7 +299,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         @Test
         @DisplayName("Reprocess returns 400 for invalid event ID format")
-        public void testReprocessInvalidEventIdBadRequest() throws Exception {
+        void testReprocessInvalidEventIdBadRequest() throws Exception {
                 // Arrange: Use an invalid ID that fails validation
                 String invalidId = "not-a-valid-uuid";
 
@@ -313,13 +318,13 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         @Test
         @DisplayName("Reprocess requires triggeredByUserId")
-        public void testReprocessRequiresUserId() throws Exception {
+        void testReprocessRequiresUserId() throws Exception {
                 // Arrange: Create request without triggeredByUserId
                 ReprocessEventRequest invalidRequest = ReprocessEventRequest.builder()
                                 .reprocessingNotes("Missing user ID")
                                 .build();
 
-                UUID eventId = UUID.randomUUID();
+                UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Act & Assert: Should return 400 Bad Request
                 mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
@@ -338,7 +343,9 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
          */
         private String extractEventIdFromResponse(MvcResult result) throws Exception {
                 String responseBody = result.getResponse().getContentAsString();
-                Map<String, Object> responseMap = objectMapper.readValue(responseBody, Map.class);
+                Map<String, Object> responseMap = objectMapper.readValue(responseBody,
+                                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                });
                 return (String) responseMap.get("eventId");
         }
 
@@ -379,16 +386,17 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
         private UUID createProcessedEvent() {
                 AccountingEvent event = new AccountingEvent();
                 event.setEventType("INVOICE_RECEIVED");
-                event.setOrganizationId(UUID.randomUUID());
+                event.setOrganizationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 event.setSourceSystem("TEST_SYSTEM");
-                event.setTransactionDate(LocalDateTime.now());
+                event.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 event.setPayload(Map.of(
                                 "invoiceId", "INV-PROCESSED",
                                 "amount", 100.00,
                                 "description", "Already processed invoice"));
                 event.setStatus(AccountingEventStatus.PROCESSED);
-                event.setProcessedAt(Instant.now());
-                event.setJournalEntryId(UUID.randomUUID()); // Simulate JE was created
+                event.setProcessedAt(Instant.now(TEST_CLOCK));
+                event.setJournalEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001")); // Simulate JE was
+                                                                                                  // created
 
                 AccountingEvent saved = accountingEventRepository.save(event);
                 return saved.getEventId();
@@ -396,19 +404,21 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         private void createDefaultMappingForSuccessfulReprocessing() {
                 GLAccount debitAccount = new GLAccount();
-                debitAccount.setAccountCode("11" + UUID.randomUUID().toString().substring(0, 8));
+                debitAccount.setAccountCode("11"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
                 debitAccount.setAccountName("Suspense Test Debit");
                 debitAccount.setAccountType(AccountType.ASSET);
-                debitAccount.setActivationDate(LocalDateTime.now().minusDays(1));
+                debitAccount.setActivationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
                 debitAccount.setCreatedBy("test-user");
                 debitAccount.setModifiedBy("test-user");
                 debitAccount = glAccountRepository.save(debitAccount);
 
                 GLAccount creditAccount = new GLAccount();
-                creditAccount.setAccountCode("41" + UUID.randomUUID().toString().substring(0, 8));
+                creditAccount.setAccountCode("41"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
                 creditAccount.setAccountName("Suspense Test Credit");
                 creditAccount.setAccountType(AccountType.REVENUE);
-                creditAccount.setActivationDate(LocalDateTime.now().minusDays(1));
+                creditAccount.setActivationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
                 creditAccount.setCreatedBy("test-user");
                 creditAccount.setModifiedBy("test-user");
                 creditAccount = glAccountRepository.save(creditAccount);

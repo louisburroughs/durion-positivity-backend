@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
@@ -10,13 +11,13 @@ import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.persistence.GeneratedValue;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -39,6 +40,7 @@ import lombok.Setter;
  * @see OperationType
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "statement_line_mappings", indexes = {
         @Index(name = "idx_statement_line_mapping_type", columnList = "statement_type"),
         @Index(name = "idx_statement_line_mapping_account", columnList = "gl_account_id"),
@@ -113,8 +115,4 @@ public class StatementLineMapping {
     @Enumerated(EnumType.STRING)
     @Column(name = "operation", length = 50, nullable = false)
     private OperationType operation;
-
-    @PrePersist
-    protected void onCreate() {
-    }
 }

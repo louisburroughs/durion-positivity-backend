@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.client.PeopleAvailabilityClient;
@@ -42,6 +44,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
+    private final Clock clock;
 
     private final WorkorderRepository workorderRepository;
     private final PeopleAvailabilityClient peopleAvailabilityClient;
@@ -50,12 +53,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public DashboardResponse getDashboard(@NonNull String locationId, @NonNull LocalDate date) {
-        UUID locationUuid;
-        try {
-            locationUuid = UUID.fromString(locationId);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("locationId is not a valid UUID: " + locationId, e);
-        }
+        UUID locationUuid = parseLocationUuid(locationId);
 
         List<Workorder> workorders = workorderRepository.findByScheduledDateAndLocationId(date, locationUuid);
 
@@ -67,7 +65,33 @@ public class DashboardServiceImpl implements DashboardService {
         List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays = shopmgrOperationalContextClient
                 .getBayStatusForLocation(locationUuid);
 
-        List<WorkorderSummary> workorderSummaries = workorders.stream()
+        List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(workorders);
+        List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people);
+        List<BayStatus> bayStatuses = buildBayStatuses(workorders, shopmgrBays);
+
+        List<ConflictEntry> conflicts = detectAllConflicts(workorders, people, shopmgrBays, date);
+
+        return DashboardResponse.builder()
+                .date(date)
+                .locationId(locationId)
+                .workorders(workorderSummaries)
+                .mechanics(mechanicStatuses)
+                .bays(bayStatuses)
+                .conflicts(conflicts)
+                .lastRefreshed(Instant.now(clock))
+                .build();
+    }
+
+    private UUID parseLocationUuid(String locationId) {
+        try {
+            return UUID.fromString(locationId);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("locationId is not a valid UUID: " + locationId, e);
+        }
+    }
+
+    private List<WorkorderSummary> buildWorkorderSummaries(List<Workorder> workorders) {
+        return workorders.stream()
                 .map(wo -> WorkorderSummary.builder()
                         .workorderId(wo.getId())
                         .status(wo.getStatus() != null ? wo.getStatus().name() : null)
@@ -75,8 +99,10 @@ public class DashboardServiceImpl implements DashboardService {
                         .assignedMechanicId(parseFirstMechanic(wo.getMechanicIds()))
                         .assignedBayId(wo.getResourceId() != null ? wo.getResourceId().toString() : null)
                         .build())
-                .collect(Collectors.toList());
+                .toList();
+    }
 
+    private List<MechanicStatus> buildMechanicStatuses(List<Workorder> workorders, List<PersonAvailability> people) {
         Map<String, String> workorderByMechanicId = new LinkedHashMap<>();
         for (Workorder wo : workorders) {
             for (String mId : parseMechanicIds(wo.getMechanicIds())) {
@@ -84,7 +110,7 @@ public class DashboardServiceImpl implements DashboardService {
             }
         }
 
-        List<MechanicStatus> mechanicStatuses = people.stream()
+        return people.stream()
                 .map(pa -> MechanicStatus.builder()
                         .personId(pa.getPersonId())
                         .firstName(pa.getFirstName())
@@ -101,11 +127,14 @@ public class DashboardServiceImpl implements DashboardService {
                                                 .end(p.getEnd())
                                                 .ptoType(p.getPtoType())
                                                 .build())
-                                        .collect(Collectors.toList())
+                                        .toList()
                                 : List.of())
                         .build())
-                .collect(Collectors.toList());
+                .toList();
+    }
 
+    private List<BayStatus> buildBayStatuses(List<Workorder> workorders,
+            List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays) {
         Map<UUID, BayStatus> bayMap = new LinkedHashMap<>();
         for (ShopmgrOperationalContextClient.BayAvailabilityDto bayDto : shopmgrBays) {
             bayMap.put(bayDto.bayId(), BayStatus.builder()
@@ -139,8 +168,11 @@ public class DashboardServiceImpl implements DashboardService {
                 }
             }
         }
-        List<BayStatus> bayStatuses = new ArrayList<>(bayMap.values());
+        return new ArrayList<>(bayMap.values());
+    }
 
+    private List<ConflictEntry> detectAllConflicts(List<Workorder> workorders, List<PersonAvailability> people,
+            List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays, LocalDate date) {
         List<ConflictEntry> conflicts = new ArrayList<>();
         detectBayDoubleBooking(workorders, conflicts);
         detectBayUnavailable(workorders, shopmgrBays, conflicts);
@@ -148,16 +180,7 @@ public class DashboardServiceImpl implements DashboardService {
         detectMechanicStatusConflicts(workorders, people, date, conflicts);
         detectLocationMismatch(workorders, people, conflicts);
         detectMechanicSkillMismatch(workorders, people, conflicts);
-
-        return DashboardResponse.builder()
-                .date(date)
-                .locationId(locationId)
-                .workorders(workorderSummaries)
-                .mechanics(mechanicStatuses)
-                .bays(bayStatuses)
-                .conflicts(conflicts)
-                .lastRefreshed(Instant.now())
-                .build();
+        return conflicts;
     }
 
     private List<String> parseMechanicIds(String mechanicIds) {
@@ -261,11 +284,11 @@ public class DashboardServiceImpl implements DashboardService {
         List<String> assignedMechanicIds = workorders.stream()
                 .flatMap(wo -> parseMechanicIds(wo.getMechanicIds()).stream())
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
 
         Instant dayStart = date.atStartOfDay().toInstant(ZoneOffset.UTC);
         Instant dayEnd = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         Instant fifteenMinFromNow = now.plusSeconds(900);
 
         for (String mechanicId : assignedMechanicIds) {

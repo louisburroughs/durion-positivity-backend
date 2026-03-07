@@ -1,29 +1,29 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import org.springframework.data.domain.Persistable;
-
-import com.positivity.accounting.internal.enums.AccountType;
-import com.positivity.shared.id.UUIDv7Generator;
-
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PostLoad;
 import jakarta.persistence.PostPersist;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
@@ -72,6 +72,8 @@ public class GLAccount implements Persistable<UUID> {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "gl_account_id", nullable = false)
     private UUID glAccountId;
 
@@ -130,14 +132,8 @@ public class GLAccount implements Persistable<UUID> {
     // Lifecycle callbacks
     @PrePersist
     protected void onCreate() {
-        if (this.glAccountId == null) {
-            this.glAccountId = UUIDv7Generator.generate();
-        }
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.updatedAt = now;
         if (this.activationDate == null) {
-            this.activationDate = LocalDateTime.now();
+            this.activationDate = LocalDateTime.now(Clock.systemUTC());
         }
     }
 
@@ -147,11 +143,6 @@ public class GLAccount implements Persistable<UUID> {
         this.isNew = false;
     }
 
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
-    }
-
     /**
      * Derive account status from activation and deactivation dates.
      * 
@@ -159,7 +150,7 @@ public class GLAccount implements Persistable<UUID> {
      */
     @Transient
     public String getDerivedStatus() {
-        LocalDateTime today = LocalDateTime.now();
+        LocalDateTime today = LocalDateTime.now(Clock.systemUTC());
 
         if (activationDate != null && activationDate.isAfter(today)) {
             return "NOT_YET_ACTIVE";

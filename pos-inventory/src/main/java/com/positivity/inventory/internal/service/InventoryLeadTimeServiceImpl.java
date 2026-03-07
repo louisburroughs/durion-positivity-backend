@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
@@ -17,13 +19,17 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
+    private final Clock clock;
+
 
     private final DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository;
     private final NormalizedAvailabilityRepository normalizedAvailabilityRepository;
 
     public InventoryLeadTimeServiceImpl(
             DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository,
-            NormalizedAvailabilityRepository normalizedAvailabilityRepository) {
+            NormalizedAvailabilityRepository normalizedAvailabilityRepository,
+            Clock clock) {
+        this.clock = clock;
         this.distributorNormalizedInventoryRepository = distributorNormalizedInventoryRepository;
         this.normalizedAvailabilityRepository = normalizedAvailabilityRepository;
     }
@@ -105,7 +111,7 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
         return new LeadTimeCandidate(
                 resolvedMin,
                 resolvedMax,
-                asOf != null ? asOf : Instant.now(),
+                asOf != null ? asOf : Instant.now(clock),
                 source,
                 confidence);
     }

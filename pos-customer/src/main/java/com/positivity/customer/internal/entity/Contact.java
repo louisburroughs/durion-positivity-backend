@@ -80,8 +80,7 @@ public class Contact {
     }
 
     public void setModifiedAt(Instant modifiedAt) {
-        this.updatedAt = modifiedAt;
-    }
+}
 
     @Transient
     public UUID getId() {

@@ -15,8 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
+import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -24,6 +23,7 @@ import java.util.UUID;
 
 @Entity
 @EntityListeners(AuditingEntityListener.class)
+@Data
 @Table(name = "invoice_adjustments")
 public class InvoiceAdjustment {
 
@@ -53,67 +53,4 @@ public class InvoiceAdjustment {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
-
-    @Nullable
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(@Nullable UUID id) {
-        this.id = id;
-    }
-
-    @Nullable
-    public Invoice getInvoice() {
-        return invoice;
-    }
-
-    public void setInvoice(@NonNull Invoice invoice) {
-        this.invoice = invoice;
-    }
-
-    @NonNull
-    public InvoiceAdjustmentType getType() {
-        return type;
-    }
-
-    public void setType(@NonNull InvoiceAdjustmentType type) {
-        this.type = type;
-    }
-
-    @NonNull
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public void setAmount(@NonNull BigDecimal amount) {
-        this.amount = amount;
-    }
-
-    @NonNull
-    public String getReason() {
-        return reason;
-    }
-
-    public void setReason(@NonNull String reason) {
-        this.reason = reason;
-    }
-
-    @NonNull
-    public String getAuthorizedBy() {
-        return authorizedBy;
-    }
-
-    public void setAuthorizedBy(@NonNull String authorizedBy) {
-        this.authorizedBy = authorizedBy;
-    }
-
-    @NonNull
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(@NonNull Instant createdAt) {
-        this.createdAt = createdAt;
-    }
 }

@@ -1,17 +1,26 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.accounting.internal.enums.VendorBillStatus;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Id;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.shared.id.UUIDv7Id;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -53,14 +62,6 @@ public class VendorBill {
     @UUIDv7Id
     @Column(name = "vendor_bill_id", nullable = false, columnDefinition = "UUID")
     private UUID vendorBillId;
-
-    @PrePersist
-    public void onPrePersist() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-    }
-
     @Column(name = "vendor_id", nullable = false)
     private UUID vendorId;
 
@@ -142,9 +143,4 @@ public class VendorBill {
 
     @Column(name = "paid_by", length = 50)
     private String paidBy;
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
-    }
 }

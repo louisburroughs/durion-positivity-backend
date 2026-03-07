@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +35,8 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("Cycle Count Plan Contract Behavior")
 class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
 
+        private static final Clock TEST_CLOCK = Clock.systemUTC();
+
         @Autowired
         private MockMvc mockMvc;
 
@@ -59,10 +62,11 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC-176-1: create cycle count plan with valid future scheduledDate returns 201 with PLANNED status")
         void createCycleCountPlan_validRequest_returns201() throws Exception {
                 String body = buildCreatePlanRequestBody(
-                                UUID.randomUUID(),
-                                List.of(UUID.randomUUID(), UUID.randomUUID()),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001")),
                                 "Q1 Zone A Audit",
-                                LocalDate.now().plusDays(7));
+                                LocalDate.now(TEST_CLOCK).plusDays(7));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountPlans"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -82,10 +86,10 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC-176-2: create plan with past scheduledDate returns 400")
         void createCycleCountPlan_pastScheduledDate_returns400() throws Exception {
                 String body = buildCreatePlanRequestBody(
-                                UUID.randomUUID(),
-                                List.of(UUID.randomUUID()),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")),
                                 "Past date plan",
-                                LocalDate.now().minusDays(1));
+                                LocalDate.now(TEST_CLOCK).minusDays(1));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountPlans"))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -104,8 +108,10 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #176: zoneIds=[] → IAE → 400
                 String body = objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
-                                                .put("locationId", UUID.randomUUID().toString())
-                                                .put("scheduledDate", LocalDate.now().plusDays(7).toString())
+                                                .put("locationId",
+                                                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                                                                .toString())
+                                                .put("scheduledDate", LocalDate.now(TEST_CLOCK).plusDays(7).toString())
                                                 .set("zoneIds", objectMapper.createArrayNode()));
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountPlans"))
@@ -125,9 +131,9 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #176: locationId=null → 400
                 var node = objectMapper.createObjectNode();
                 node.putNull("locationId");
-                node.put("scheduledDate", LocalDate.now().plusDays(7).toString());
+                node.put("scheduledDate", LocalDate.now(TEST_CLOCK).plusDays(7).toString());
                 var zoneArray = objectMapper.createArrayNode();
-                zoneArray.add(UUID.randomUUID().toString());
+                zoneArray.add(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
                 node.set("zoneIds", zoneArray);
 
                 mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountPlans"))
@@ -145,7 +151,7 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("AC-176-5: get existing cycle count plan returns 200 with matching planId")
         void getCycleCountPlan_existingPlan_returns200() throws Exception {
-                UUID planId = createPlan("Q2 Zone B Audit", LocalDate.now().plusDays(3));
+                UUID planId = createPlan("Q2 Zone B Audit", LocalDate.now(TEST_CLOCK).plusDays(3));
 
                 mockMvc.perform(withGatewayAuth(
                                 get("/v1/inventory/cycleCountPlans/{planId}", planId)))
@@ -162,7 +168,8 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC-176-6: get non-existent cycle count plan returns 404")
         void getCycleCountPlan_nonExistentPlan_returns404() throws Exception {
                 mockMvc.perform(withGatewayAuth(
-                                get("/v1/inventory/cycleCountPlans/{planId}", UUID.randomUUID())))
+                                get("/v1/inventory/cycleCountPlans/{planId}",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isNotFound());
         }
 
@@ -202,8 +209,8 @@ class CycleCountPlanContractBehaviorIT extends BaseContractIntegrationTest {
          */
         private UUID createPlan(String planName, LocalDate scheduledDate) throws Exception {
                 String body = buildCreatePlanRequestBody(
-                                UUID.randomUUID(),
-                                List.of(UUID.randomUUID()),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")),
                                 planName,
                                 scheduledDate);
 

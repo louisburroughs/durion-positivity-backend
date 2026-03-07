@@ -1,31 +1,44 @@
 package com.positivity.customer;
 
-import com.positivity.customer.internal.enums.ContactPointType;
-import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
-import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
-import com.positivity.customer.internal.dto.CreatePersonRequest;
-import com.positivity.customer.internal.dto.CreatePersonResponse;
-import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
-import com.positivity.customer.internal.enums.PartyRelationshipRole;
-import com.positivity.customer.internal.enums.PreferredContactMethod;
-import com.positivity.customer.internal.entity.*;
-import com.positivity.customer.internal.enums.AccountStatus;
-import com.positivity.customer.internal.repository.*;
-import com.positivity.customer.service.PartyRelationshipService;
-import com.positivity.customer.service.PersonService;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import org.junit.jupiter.api.*;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.server.ResponseStatusException;
-
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
+import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
+import com.positivity.customer.internal.dto.CreatePersonRequest;
+import com.positivity.customer.internal.dto.CreatePersonResponse;
+import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.Contact;
+import com.positivity.customer.internal.entity.PartyRelationship;
+import com.positivity.customer.internal.entity.PersonParty;
+import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.ContactPointType;
+import com.positivity.customer.internal.enums.PartyRelationshipRole;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ContactPointRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.customer.service.PartyRelationshipService;
+import com.positivity.customer.service.PersonService;
 
 /**
  * Contract behavior integration tests for PartyRelationshipService.
@@ -43,6 +56,9 @@ import static org.assertj.core.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegrationTest {
+
+        private static final Clock FIXED_CLOCK = Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"),
+                        java.time.ZoneOffset.UTC);
 
         @Autowired
         private PartyRelationshipService partyRelationshipService;
@@ -76,14 +92,17 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
 
                 // Create test party (commercial account)
                 testParty = new CommercialParty();
-                testParty.setPartyNumber("TEST-" + UUID.randomUUID().toString().substring(0, 8));
+                testParty.setPartyNumber("TEST-"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
                 testParty.setLegalName("Test Commercial Account");
                 testParty.setDisplayName("Test Commercial Account");
-                testParty.setCustomerNumber("CUST-TEST-" + UUID.randomUUID().toString().substring(0, 8));
+                testParty.setCustomerNumber("CUST-TEST-"
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8));
                 testParty.setStatus(AccountStatus.ACTIVE);
 
                 Contact contact = new Contact();
                 contact.setCommercialParty(testParty);
+                contact.setPersonId(UUID.fromString("00000000-0000-0000-0000-000000000003"));
                 contact.setFirstName("Primary");
                 contact.setLastName("Contact");
                 contact.setActive(true);
@@ -108,8 +127,9 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                                                                 .isPrimary(true)
                                                                 .build()))
                                 .build();
-                CreatePersonResponse response1 = personService.createPerson(personRequest1, UUID.randomUUID());
-                testPerson1 = personRepository.findById(response1.getPersonId()).orElseThrow();
+                CreatePersonResponse response1 = personService.createPerson(personRequest1,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                testPerson1 = personRepository.findByPersonId(response1.getPersonId()).orElseThrow();
 
                 CreatePersonRequest personRequest2 = CreatePersonRequest.builder()
                                 .firstName("Bob")
@@ -121,8 +141,9 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                                                                 .isPrimary(true)
                                                                 .build()))
                                 .build();
-                CreatePersonResponse response2 = personService.createPerson(personRequest2, UUID.randomUUID());
-                testPerson2 = personRepository.findById(response2.getPersonId()).orElseThrow();
+                CreatePersonResponse response2 = personService.createPerson(personRequest2,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                testPerson2 = personRepository.findByPersonId(response2.getPersonId()).orElseThrow();
         }
 
         // ==========================================================================
@@ -139,12 +160,13 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 // When: creating relationship
                 CreatePartyRelationshipResponse response = partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: relationship created
                 assertThat(response.getRelationshipId()).isNotNull();
@@ -164,12 +186,13 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING, PartyRelationshipRole.APPROVER))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 // When: creating relationship
                 CreatePartyRelationshipResponse response = partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: relationship has both roles
                 assertThat(response.getRoles()).hasSize(2);
@@ -187,13 +210,14 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
 
                 // When: creating relationship
                 CreatePartyRelationshipResponse response = partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: marked as primary billing
                 assertThat(response.isPrimaryBillingContact()).isTrue();
@@ -211,22 +235,24 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request1 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
                 CreatePartyRelationshipResponse response1 = partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request1, UUID.randomUUID());
+                                testParty.getPartyId(), request1,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 assertThat(response1.isPrimaryBillingContact()).isTrue();
 
                 // When: creating new primary billing contact
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson2.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
                 CreatePartyRelationshipResponse response2 = partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request2, UUID.randomUUID());
+                                testParty.getPartyId(), request2,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: new relationship is primary, old one demoted
                 assertThat(response2.isPrimaryBillingContact()).isTrue();
@@ -248,13 +274,14 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT)) // No BILLING role
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
 
                 // When/Then: expect validation error
                 assertThatThrownBy(() -> partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request, UUID.randomUUID()))
+                                testParty.getPartyId(), request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -273,19 +300,21 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request1 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getPartyId(), request1, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request1,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // When/Then: creating overlapping relationship fails
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT)) // Same role
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 assertThatThrownBy(() -> partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request2, UUID.randomUUID()))
+                                testParty.getPartyId(), request2,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -300,17 +329,17 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
         @Order(7)
         void createRelationship_nonExistentParty_fails() {
                 // Given: non-existent party ID
-                UUID nonExistentPartyId = UUID.randomUUID();
+                UUID nonExistentPartyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 // When/Then: expect not found
                 assertThatThrownBy(() -> partyRelationshipService.createRelationship(
-                                nonExistentPartyId, request, UUID.randomUUID()))
+                                nonExistentPartyId, request, UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -325,17 +354,18 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
         @Order(8)
         void createRelationship_nonExistentPerson_fails() {
                 // Given: non-existent person ID
-                UUID nonExistentPersonId = UUID.randomUUID();
+                UUID nonExistentPersonId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(nonExistentPersonId)
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
 
                 // When/Then: expect not found
                 assertThatThrownBy(() -> partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request, UUID.randomUUID()))
+                                testParty.getPartyId(), request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -354,17 +384,19 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request1 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(true)
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getPartyId(), request1, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request1,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson2.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.TECHNICAL))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getPartyId(), request2, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request2,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // When: getting contacts
                 GetCommercialAccountContactsResponse response = partyRelationshipService
@@ -387,16 +419,18 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request1 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getPartyId(), request1, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request1,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson2.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.TECHNICAL))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getPartyId(), request2, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request2,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // When: filtering by BILLING role
                 GetCommercialAccountContactsResponse response = partyRelationshipService
@@ -419,19 +453,22 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
-                                .effectiveStartDate(LocalDate.now().minusDays(30))
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK).minusDays(30))
                                 .build();
                 CreatePartyRelationshipResponse created = partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // When: deactivating
-                partyRelationshipService.deactivateRelationship(created.getRelationshipId(), UUID.randomUUID());
+                partyRelationshipService.deactivateRelationship(created.getRelationshipId(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: end date set to today
                 PartyRelationship relationship = partyRelationshipRepository
                                 .findById(created.getRelationshipId()).orElseThrow();
-                assertThat(relationship.getEffectiveEndDate()).isEqualTo(LocalDate.now());
-                assertThat(relationship.isActive()).isFalse();
+                LocalDate utcToday = LocalDate.now(java.time.Clock.systemUTC());
+                assertThat(relationship.getEffectiveEndDate()).isEqualTo(utcToday);
+                assertThat(relationship.isActive(utcToday)).isFalse();
         }
 
         // ==========================================================================
@@ -445,15 +482,17 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .isPrimaryBillingContact(false)
                                 .build();
                 CreatePartyRelationshipResponse created = partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // When: designating as primary
                 partyRelationshipService.designatePrimaryBillingContact(
-                                testParty.getPartyId(), created.getRelationshipId(), UUID.randomUUID());
+                                testParty.getPartyId(), created.getRelationshipId(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // Then: relationship is now primary
                 PartyRelationship relationship = partyRelationshipRepository
@@ -468,14 +507,16 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.TECHNICAL)) // Not BILLING
-                                .effectiveStartDate(LocalDate.now())
+                                .effectiveStartDate(LocalDate.now(FIXED_CLOCK))
                                 .build();
                 CreatePartyRelationshipResponse created = partyRelationshipService.createRelationship(
-                                testParty.getPartyId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
                 // When/Then: expect validation error
                 assertThatThrownBy(() -> partyRelationshipService.designatePrimaryBillingContact(
-                                testParty.getPartyId(), created.getRelationshipId(), UUID.randomUUID()))
+                                testParty.getPartyId(), created.getRelationshipId(),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;

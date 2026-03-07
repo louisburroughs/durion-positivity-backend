@@ -1,5 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.shared.dto.InvoiceCreationRequest;
@@ -41,6 +45,10 @@ import com.positivity.workorder.internal.service.WorkorderInvoiceServiceImpl;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WorkorderInvoiceService Unit Tests")
 class WorkorderInvoiceServiceTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+        @Spy
+        Clock clock = TEST_CLOCK;
 
         private static final String INV_KEY_1 = "inv-key-1";
 
@@ -68,9 +76,9 @@ class WorkorderInvoiceServiceTest {
 
         @BeforeEach
         void setUp() {
-                workorderId = UUID.randomUUID();
-                estimateId = UUID.randomUUID();
-                approvalId = UUID.randomUUID();
+                workorderId = UUID.fromString("11000000-0000-0000-0000-000000000001");
+                estimateId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                approvalId = UUID.fromString("00000000-0000-0000-0000-000000000011");
         }
 
         @Test
@@ -86,7 +94,7 @@ class WorkorderInvoiceServiceTest {
                                 .thenReturn(List.of());
                 when(idempotencyService.getExistingInvoiceId(INV_KEY_1)).thenReturn(Optional.empty());
 
-                UUID invoiceId = UUID.randomUUID();
+                UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
                                 .invoiceId(invoiceId)
                                 .status("DRAFT")
@@ -96,7 +104,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("170.0000"))
                                 .taxAmount(new BigDecimal("10.0000"))
                                 .totalAmount(new BigDecimal("180.0000"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
@@ -121,7 +129,7 @@ class WorkorderInvoiceServiceTest {
                 when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                                 .thenReturn(List.of());
 
-                UUID invoiceId = UUID.randomUUID();
+                UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InvoiceGenerationResponse upstreamResponse = InvoiceGenerationResponse.builder()
                                 .invoiceId(invoiceId)
                                 .status("DRAFT")
@@ -174,7 +182,7 @@ class WorkorderInvoiceServiceTest {
                                 .thenReturn(List.of());
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                                 .thenReturn(InvoiceGenerationResponse.builder()
-                                                .invoiceId(UUID.randomUUID())
+                                                .invoiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                                 .status("DRAFT")
                                                 .subtotal(new BigDecimal("210.0000"))
                                                 .taxAmount(BigDecimal.ZERO)
@@ -208,7 +216,7 @@ class WorkorderInvoiceServiceTest {
         @Test
         @DisplayName("generateInvoice returns existing invoice details when workorder already has invoice")
         void generateInvoice_AlreadyGenerated_ReturnsExistingInvoice() {
-                UUID existingInvoiceId = UUID.randomUUID();
+                UUID existingInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Workorder workorder = completedWorkorder();
                 workorder.setInvoiceId(existingInvoiceId);
 
@@ -223,7 +231,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("120.00"))
                                 .taxAmount(new BigDecimal("10.00"))
                                 .totalAmount(new BigDecimal("130.00"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
@@ -250,7 +258,7 @@ class WorkorderInvoiceServiceTest {
                 // Create a duplicate part that will be returned by both queries (same ID)
                 // This simulates a scenario where a part has both workorder and
                 // workOrderService references
-                UUID duplicatePartId = UUID.randomUUID();
+                UUID duplicatePartId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 WorkorderPart duplicatePart1 = WorkorderPart.builder()
                                 .id(duplicatePartId)
                                 .description("Oil Filter")
@@ -269,7 +277,7 @@ class WorkorderInvoiceServiceTest {
 
                 // Create a standalone part with unique ID
                 WorkorderPart standalonePart = WorkorderPart.builder()
-                                .id(UUID.randomUUID())
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000033"))
                                 .description("Standalone Part")
                                 .quantity(new BigDecimal("1.0000"))
                                 .unitPrice(new BigDecimal("25.0000"))
@@ -288,7 +296,7 @@ class WorkorderInvoiceServiceTest {
 
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                                 .thenReturn(InvoiceGenerationResponse.builder()
-                                                .invoiceId(UUID.randomUUID())
+                                                .invoiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                                 .status("DRAFT")
                                                 .subtotal(new BigDecimal("40.0000"))
                                                 .taxAmount(BigDecimal.ZERO)
@@ -332,8 +340,8 @@ class WorkorderInvoiceServiceTest {
                 when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                                 .thenReturn(List.of());
 
-                UUID newInvoiceId = UUID.randomUUID();
-                UUID existingInvoiceId = UUID.randomUUID();
+                UUID newInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID existingInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
                                 .invoiceId(newInvoiceId)
                                 .status("DRAFT")
@@ -343,7 +351,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("170.0000"))
                                 .taxAmount(new BigDecimal("10.0000"))
                                 .totalAmount(new BigDecimal("180.0000"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
@@ -370,7 +378,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("170.0000"))
                                 .taxAmount(new BigDecimal("10.0000"))
                                 .totalAmount(new BigDecimal("180.0000"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
                 when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoice);
 
@@ -435,7 +443,7 @@ class WorkorderInvoiceServiceTest {
                                 .thenReturn(List.of());
                 when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                                 .thenReturn(InvoiceGenerationResponse.builder()
-                                                .invoiceId(UUID.randomUUID())
+                                                .invoiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                                 .status("DRAFT")
                                                 .subtotal(new BigDecimal("150.0000"))
                                                 .taxAmount(BigDecimal.ZERO)
@@ -472,7 +480,7 @@ class WorkorderInvoiceServiceTest {
         @Test
         @DisplayName("generateInvoice with idempotency key replay fetches existing invoice and updates workorder")
         void generateInvoice_IdempotencyKeyReplay_FetchesExistingInvoiceAndUpdatesWorkorder() {
-                UUID existingInvoiceId = UUID.randomUUID();
+                UUID existingInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 Workorder workorder = completedWorkorder();
                 // Workorder does not have invoice ID yet (simulating a retry scenario)
                 workorder.setInvoiceId(null);
@@ -490,7 +498,7 @@ class WorkorderInvoiceServiceTest {
                                 .subtotal(new BigDecimal("150.00"))
                                 .taxAmount(new BigDecimal("12.00"))
                                 .totalAmount(new BigDecimal("162.00"))
-                                .createdAt(Instant.now())
+                                .createdAt(Instant.now(TEST_CLOCK))
                                 .build();
 
                 when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
@@ -521,8 +529,8 @@ class WorkorderInvoiceServiceTest {
                                 .estimateId(estimateId)
                                 .approvalId(approvalId)
                                 .status(WorkorderStatus.COMPLETED)
-                                .updatedAt(LocalDateTime.now())
-                                .completedAt(Instant.now())
+                                .updatedAt(LocalDateTime.now(TEST_CLOCK))
+                                .completedAt(Instant.now(TEST_CLOCK))
                                 .build();
         }
 

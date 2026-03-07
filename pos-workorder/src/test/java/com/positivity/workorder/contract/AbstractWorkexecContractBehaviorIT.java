@@ -19,6 +19,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -53,6 +54,9 @@ abstract class AbstractWorkexecContractBehaviorIT {
     protected TechnicianAssignmentRepository technicianAssignmentRepository;
 
     @Autowired
+    protected IdempotencyKeyRepository idempotencyKeyRepository;
+
+    @Autowired
     private WebApplicationContext webApplicationContext;
 
     @BeforeEach
@@ -76,6 +80,7 @@ abstract class AbstractWorkexecContractBehaviorIT {
     @AfterEach
     void tearDownBaseContractTest() {
         laborEntryRepository.deleteAll();
+        idempotencyKeyRepository.deleteAll();
         technicianAssignmentRepository.deleteAll();
         workorderRepository.deleteAll();
     }
@@ -83,8 +88,8 @@ abstract class AbstractWorkexecContractBehaviorIT {
     protected Workorder seedWorkorder(UUID locationId, WorkorderStatus status) {
         Workorder workorder = Workorder.builder()
                 .shopId(locationId)
-                .customerId(UUID.randomUUID())
-                .vehicleId(UUID.randomUUID())
+                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .status(status)
                 .isReopened(false)
                 .build();
@@ -92,6 +97,6 @@ abstract class AbstractWorkexecContractBehaviorIT {
     }
 
     protected Workorder seedWorkorderInProgress() {
-        return seedWorkorder(UUID.randomUUID(), WorkorderStatus.WORK_IN_PROGRESS);
+        return seedWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), WorkorderStatus.WORK_IN_PROGRESS);
     }
 }

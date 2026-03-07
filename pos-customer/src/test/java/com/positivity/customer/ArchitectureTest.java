@@ -109,6 +109,7 @@ public class ArchitectureTest {
                         .matching("com.positivity.customer.internal.(*)..")
                         .should().beFreeOfCycles()
                         .allowEmptyShould(true)
+
                         .because("cyclic dependencies make modules harder to maintain and evolve");
         private static final DescribedPredicate<JavaClass> NOT_ABSTRACT = new DescribedPredicate<>("not abstract") {
                 @Override

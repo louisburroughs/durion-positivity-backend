@@ -100,7 +100,7 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
     }
 
     private UUID createPendingApprovalAdjustment() throws Exception {
-        UUID stockItemId = UUID.randomUUID();
+        UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         JsonNode createRequest = objectMapper.createObjectNode()
                 .put("stockItemId", stockItemId.toString())
                 .put("reasonCode", "CYCLE_COUNT_RECONCILIATION")

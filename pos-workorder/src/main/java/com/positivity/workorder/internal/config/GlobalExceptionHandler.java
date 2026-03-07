@@ -1,23 +1,12 @@
 package com.positivity.workorder.internal.config;
 
-import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
-import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
-import com.positivity.workorder.internal.exception.TimeEntryStateException;
-import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
-import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
-import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
-import com.positivity.workorder.internal.exception.WorkSessionLockedException;
-import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
-import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
-import com.positivity.workorder.internal.exception.WorkSessionStateException;
-import jakarta.servlet.http.HttpServletRequest;
-
+import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,10 +14,29 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
+import com.positivity.workorder.internal.exception.TimeEntryStateException;
+import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
+import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.WorkSessionLockedException;
+import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
+import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
+import com.positivity.workorder.internal.exception.WorkSessionStateException;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+
+import jakarta.servlet.http.HttpServletRequest;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private final Clock clock;
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
+
+    public GlobalExceptionHandler(ObjectProvider<Clock> clockProvider) {
+        this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
+    }
 
     @ExceptionHandler(WorkorderNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleWorkorderNotFound(
@@ -122,7 +130,7 @@ public class GlobalExceptionHandler {
         body.put("code", code);
         body.put("message", message);
         body.put("status", status.value());
-        body.put("timestamp", Instant.now().toString());
+        body.put("timestamp", Instant.now(clock).toString());
         body.put("correlationId", correlationId);
 
         HttpHeaders headers = new HttpHeaders();
@@ -132,6 +140,6 @@ public class GlobalExceptionHandler {
 
     private String resolveCorrelationId(HttpServletRequest request) {
         String header = request.getHeader(X_CORRELATION_ID);
-        return (header != null && !header.isBlank()) ? header : UUID.randomUUID().toString();
+        return (header != null && !header.isBlank()) ? header : UUIDv7Generator.generate().toString();
     }
 }

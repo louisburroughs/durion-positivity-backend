@@ -4,23 +4,22 @@ import java.time.Instant;
 import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
-
-import com.positivity.security.common.SecurityContextHelper;
-import com.positivity.shared.id.UUIDv7Id;
-
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Id;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.GeneratedValue;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -64,19 +63,15 @@ public class DefaultGLMapping {
 
     @PrePersist
     public void onPrePersist() {
-        Instant now = Instant.now();
         String currentUser = SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";
-        this.createdAt = now;
-        this.updatedAt = now;
         this.createdBy = currentUser;
         this.modifiedBy = currentUser;
     }
 
     @PreUpdate
     public void onPreUpdate() {
-        this.updatedAt = Instant.now();
         String currentUser = SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";

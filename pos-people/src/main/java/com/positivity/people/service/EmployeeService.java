@@ -10,15 +10,12 @@ import java.util.UUID;
 
 public interface EmployeeService {
 
-    @NonNull
-    EmployeeProfileDto createEmployee(@NonNull CreateEmployeeRequest request);
+	@NonNull EmployeeProfileDto createEmployee(@NonNull CreateEmployeeRequest request);
 
-    @NonNull
-    EmployeeProfileDto getEmployee(@NonNull UUID employeeId);
+	@NonNull EmployeeProfileDto getEmployee(@NonNull UUID employeeId);
 
-    @NonNull
-    EmployeeProfileDto updateEmployee(@NonNull UUID employeeId, @NonNull UpdateEmployeeRequest request);
+	@NonNull EmployeeProfileDto updateEmployee(@NonNull UUID employeeId, @NonNull UpdateEmployeeRequest request);
 
-    @NonNull
-    EmployeeProfileDto disableEmployee(@NonNull UUID employeeId, @NonNull DisableEmployeeRequestDto request);
+	@NonNull EmployeeProfileDto disableEmployee(@NonNull UUID employeeId, @NonNull DisableEmployeeRequestDto request);
+
 }

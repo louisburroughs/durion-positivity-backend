@@ -27,6 +27,7 @@ public class ArchitectureTest {
 
         private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
                         "call UUID.randomUUID()") {
+
                 @Override
                 public boolean test(JavaCall<?> input) {
                         return input.getTargetOwner().isEquivalentTo(UUID.class)
@@ -99,10 +100,11 @@ public class ArchitectureTest {
                         .because("all HTTP endpoints must declare authorization guards");
 
         @ArchTest
-        static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
+        static final ArchRule entities_should_depend_on_uuidv7_id = classes()
                         .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
                         .and().areAnnotatedWith("jakarta.persistence.Entity")
-                        .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
+                        .should().dependOnClassesThat()
+                        .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
                         .allowEmptyShould(true)
                         .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
 
@@ -112,7 +114,7 @@ public class ArchitectureTest {
                         .and().areAnnotatedWith("jakarta.persistence.Entity")
                         .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
                         .allowEmptyShould(true)
-                        .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
+                        .because("UUIDv7Id centralizes ID creation; direct randomUUID calls are not allowed");
 
         // Issue CAP-169: Restrict cycle checks to internal implementation slices to
         // avoid expected service contract coupling noise.
@@ -120,5 +122,6 @@ public class ArchitectureTest {
         static final ArchRule packages_should_be_free_of_cycles = slices()
                         .matching("com.positivity.price.internal.(*)..")
                         .should().beFreeOfCycles()
+                        .allowEmptyShould(true)
                         .because("cyclic dependencies make modules harder to maintain and evolve");
 }

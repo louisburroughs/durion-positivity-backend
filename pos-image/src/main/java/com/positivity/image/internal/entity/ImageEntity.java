@@ -4,7 +4,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import java.util.List;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "image")
 @Schema(description = "Represents an image stored in the POS system.")
 public class ImageEntity {

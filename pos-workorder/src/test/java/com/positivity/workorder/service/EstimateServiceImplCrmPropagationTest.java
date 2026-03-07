@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -17,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -26,7 +30,6 @@ import com.positivity.workorder.internal.client.DocumentClient;
 import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
-import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -34,7 +37,6 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.EstimateServiceImpl;
-import com.positivity.workorder.service.BillingRulesClientService;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -61,6 +63,11 @@ import tools.jackson.databind.ObjectMapper;
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("EstimateServiceImpl — CRM Reference ID Mapping Unit Tests (CAP-094 Story #93)")
 class EstimateServiceImplCrmPropagationTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private EstimateRepository estimateRepository;
@@ -133,7 +140,7 @@ class EstimateServiceImplCrmPropagationTest {
         ArgumentCaptor<Estimate> estimateCaptor = ArgumentCaptor.forClass(Estimate.class);
         when(estimateRepository.save(estimateCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
-        EstimateResponse response = estimateService.createEstimate(request, "test-user");
+        estimateService.createEstimate(request, "test-user");
 
         assertThat(estimateCaptor.getValue().getCrmContactIds())
                 .as("crmContactIds should be an empty list, never null, even when request field is null")

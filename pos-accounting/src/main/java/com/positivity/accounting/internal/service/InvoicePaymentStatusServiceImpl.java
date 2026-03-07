@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.entity.InvoiceStatusView;
 import com.positivity.accounting.internal.entity.PaymentAppliedEvent;
@@ -28,6 +30,8 @@ import java.util.UUID;
  */
 @Service
 public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusService {
+    private final Clock clock;
+
 
     private static final Logger log = LoggerFactory.getLogger(InvoicePaymentStatusServiceImpl.class);
 
@@ -38,7 +42,9 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
     public InvoicePaymentStatusServiceImpl(
             PaymentAppliedEventRepository paymentEventRepository,
             InvoiceStatusViewRepository statusViewRepository,
-            IdempotencyService idempotencyService) {
+            IdempotencyService idempotencyService,
+            Clock clock) {
+        this.clock = clock;
         this.paymentEventRepository = paymentEventRepository;
         this.statusViewRepository = statusViewRepository;
         this.idempotencyService = idempotencyService;
@@ -165,7 +171,7 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
         statusView.setTotalPaid(totalPaid);
         statusView.setInvoiceTotal(invoiceTotal);
         statusView.setLatestTransactionReference(latestTransactionRef);
-        statusView.setLastUpdated(Instant.now());
+        statusView.setLastUpdated(Instant.now(clock));
 
         statusViewRepository.save(statusView);
         log.info("Updated invoice status view for {} - status: {}, totalPaid: {}, total: {}",

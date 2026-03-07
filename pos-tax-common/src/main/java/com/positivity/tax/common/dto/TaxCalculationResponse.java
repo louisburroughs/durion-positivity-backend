@@ -89,10 +89,9 @@ public class TaxCalculationResponse {
     /**
      * Timestamp when the calculation was performed.
      */
-    @Builder.Default
     @NotNull(message = "calculatedAt is required")
     @Schema(description = "Timestamp when calculation completed", example = "2026-02-21T09:18:40Z", requiredMode = Schema.RequiredMode.REQUIRED)
-    private Instant calculatedAt = Instant.now();
+    private Instant calculatedAt;
 
     /**
      * Reference ID from the request (if provided).

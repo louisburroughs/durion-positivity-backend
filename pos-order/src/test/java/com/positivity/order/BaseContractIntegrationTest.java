@@ -11,9 +11,14 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 public abstract class BaseContractIntegrationTest {
 
     protected MockHttpServletRequestBuilder withGatewayAuth(MockHttpServletRequestBuilder requestBuilder) {
+        return withGatewayAuth(requestBuilder, defaultAuthorities());
+    }
+
+    protected MockHttpServletRequestBuilder withGatewayAuth(
+            MockHttpServletRequestBuilder requestBuilder, String authorities) {
         return requestBuilder
-                .header("X-User", "contract-test-user")
-                .header("X-Authorities", defaultAuthorities());
+                .header("X-User", "00000000-0000-0000-0000-000000000001")
+                .header("X-Authorities", authorities);
     }
 
     protected String defaultAuthorities() {

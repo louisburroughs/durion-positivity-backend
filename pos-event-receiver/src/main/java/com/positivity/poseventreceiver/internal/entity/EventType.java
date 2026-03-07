@@ -1,8 +1,17 @@
 package com.positivity.poseventreceiver.internal.entity;
 
 import java.util.UUID;
-import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.positivity.shared.id.UUIDv7Id;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,6 +24,7 @@ import lombok.NoArgsConstructor;
  * for monitoring event execution performance against SLOs.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "event_type")
 @Data
 @NoArgsConstructor
@@ -28,16 +38,10 @@ public class EventType {
     public static final String DEFAULT_API_VERSION = "1";
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
-
     @Column(nullable = false, unique = true)
     private String typeCode;
 

@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.workorder.internal.domain.WorkSessionStartedEvent;
 import com.positivity.workorder.internal.domain.WorkSessionStoppedEvent;
 import com.positivity.workorder.internal.dto.AddBreakSegmentRequest;
@@ -42,6 +44,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class WorkSessionServiceImpl implements WorkSessionService {
+    private final Clock clock;
+
 
     private final WorkSessionRepository workSessionRepository;
     private final BreakSegmentRepository breakSegmentRepository;
@@ -70,7 +74,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
             overrideUsed = true;
             overrideReason = request.getOverlapOverrideReason();
             overriddenByUserId = actorId;
-            overrideAt = Instant.now();
+            overrideAt = Instant.now(clock);
         }
 
         // 3. Build and save session
@@ -80,7 +84,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 .workOrderTaskId(request.getWorkOrderTaskId())
                 .locationId(request.getLocationId())
                 .resourceId(request.getResourceId())
-                .startAt(Instant.now())
+                .startAt(Instant.now(clock))
                 .status(WorkSessionStatus.IN_PROGRESS)
                 .locked(false)
                 .totalDurationSeconds(0)
@@ -113,7 +117,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
             throw new WorkSessionLockedException(workSessionId);
         }
 
-        Instant endAt = Instant.now();
+        Instant endAt = Instant.now(clock);
         session.setEndAt(endAt);
         session.setStatus(WorkSessionStatus.COMPLETED);
 
@@ -158,7 +162,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         BreakSegment seg = BreakSegment.builder()
                 .workSession(session)
                 .workSessionId(session.getWorkSessionId())
-                .breakStartAt(Instant.now())
+                .breakStartAt(Instant.now(clock))
                 .breakType(request.getBreakType())
                 .notes(request.getNotes())
                 .build();
@@ -188,7 +192,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
             throw new WorkSessionStateException("Break segment is already stopped");
         }
 
-        seg.setBreakEndAt(Instant.now());
+        seg.setBreakEndAt(Instant.now(clock));
         seg = breakSegmentRepository.save(seg);
         return toBreakResponse(seg);
     }

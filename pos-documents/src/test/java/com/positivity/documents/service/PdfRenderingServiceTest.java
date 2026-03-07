@@ -17,12 +17,16 @@ import org.springframework.core.io.DefaultResourceLoader;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class PdfRenderingServiceTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"),
+            Clock.systemUTC().getZone());
     private static final String TEMPLATE_BASE_PATH = "classpath:/templates";
     private static final PdfConfiguration PDF_CONFIG = new PdfConfiguration(1_000_000, TEMPLATE_BASE_PATH, 200);
 
@@ -31,10 +35,10 @@ class PdfRenderingServiceTest {
                     new JsonFormatHandler(new ObjectMapper()),
                     new XmlFormatHandler(),
                     new MarkdownFormatHandler(),
-            new CsvFormatHandler(PDF_CONFIG),
+                    new CsvFormatHandler(PDF_CONFIG),
                     new TextFormatHandler()),
-        new TemplateService(new DefaultResourceLoader(), PDF_CONFIG),
-        PDF_CONFIG);
+            new TemplateService(new DefaultResourceLoader(), PDF_CONFIG),
+            PDF_CONFIG, FIXED_CLOCK);
 
     @Test
     void shouldRenderPdfUsingDefaultTemplate() {

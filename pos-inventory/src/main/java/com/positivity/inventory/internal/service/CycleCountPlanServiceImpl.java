@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -21,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 public class CycleCountPlanServiceImpl implements CycleCountPlanService {
 
     private final CycleCountPlanRepository cycleCountPlanRepository;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -54,7 +56,7 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
         if (request.getZoneIds() == null || request.getZoneIds().isEmpty()) {
             throw new IllegalArgumentException("zoneIds cannot be empty");
         }
-        if (request.getScheduledDate() == null || !request.getScheduledDate().isAfter(LocalDate.now())) {
+        if (request.getScheduledDate() == null || !request.getScheduledDate().isAfter(LocalDate.now(clock))) {
             throw new IllegalArgumentException("scheduledDate cannot be in the past and must be in the future");
         }
     }

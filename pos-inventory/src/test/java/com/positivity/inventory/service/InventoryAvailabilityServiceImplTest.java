@@ -1,5 +1,8 @@
 package com.positivity.inventory.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
@@ -26,6 +29,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class InventoryAvailabilityServiceImplTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         private static final UUID LOC_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
         private static final UUID SLOC_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -42,7 +46,7 @@ class InventoryAvailabilityServiceImplTest {
 
         @Test
         void getAvailabilityByProduct_returnsEmptyWhenNoEntriesExist() {
-                UUID productId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                                 .thenReturn(List.of());
 
@@ -54,7 +58,7 @@ class InventoryAvailabilityServiceImplTest {
 
         @Test
         void getAvailabilityByProduct_skipsEntryWhenLocationIsMissing() {
-                UUID productId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InventoryLedgerEntry onHandEntry = ledgerEntry(
                                 productId.toString(),
                                 InventoryLedgerEventType.GOODS_RECEIPT,
@@ -71,7 +75,7 @@ class InventoryAvailabilityServiceImplTest {
 
         @Test
         void getAvailabilityByProduct_allowsNegativeAtpWhenReservationsExceedOnHand() {
-                UUID productId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InventoryLedgerEntry onHandEntry = ledgerEntry(
                                 productId.toString(),
                                 InventoryLedgerEventType.GOODS_RECEIPT,
@@ -103,7 +107,7 @@ class InventoryAvailabilityServiceImplTest {
 
         @Test
         void getAvailabilityByProduct_wrapsRepositoryErrors() {
-                UUID productId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                                 .thenThrow(new RuntimeException("db down"));
 
@@ -114,7 +118,7 @@ class InventoryAvailabilityServiceImplTest {
 
         @Test
         void getAvailabilityByProduct_skipsNullQuantityEntries() {
-                UUID productId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InventoryLedgerEntry invalidEntry = ledgerEntry(productId.toString(),
                                 InventoryLedgerEventType.GOODS_RECEIPT, 1,
                                 LOC_1);
@@ -129,7 +133,7 @@ class InventoryAvailabilityServiceImplTest {
 
         @Test
         void getAvailabilityByProduct_skipsNullLedgerEntry() {
-                UUID productId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                                 .thenReturn(java.util.Arrays.asList(
                                                 ledgerEntry(productId.toString(),
@@ -143,7 +147,7 @@ class InventoryAvailabilityServiceImplTest {
 
         @Test
         void getAvailabilityByProduct_handlesNullEventType() {
-                UUID productId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InventoryLedgerEntry entry = ledgerEntry(productId.toString(), null, 5, LOC_1);
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                                 .thenReturn(List.of(entry));
@@ -178,7 +182,7 @@ class InventoryAvailabilityServiceImplTest {
 
         @Test
         void getAvailabilityByProduct_handlesReservationReleased() {
-                UUID productId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InventoryLedgerEntry reservationEntry = ledgerEntry(
                                 productId.toString(),
                                 InventoryLedgerEventType.RESERVATION_RELEASED,
@@ -196,7 +200,7 @@ class InventoryAvailabilityServiceImplTest {
 
         @Test
         void getAvailabilityByProduct_handlesNullQuantityInSafeQuantity() {
-                UUID productId = UUID.randomUUID();
+                UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InventoryLedgerEntry entry = ledgerEntry(productId.toString(),
                                 InventoryLedgerEventType.RESERVATION_CREATED, 1,
                                 LOC_1);
@@ -281,7 +285,7 @@ class InventoryAvailabilityServiceImplTest {
                                 .changeInQuantity(changeInQuantity)
                                 .quantityAfter(0)
                                 .transactionUserId("test-user")
-                                .timestamp(Instant.now())
+                                .timestamp(Instant.now(TEST_CLOCK))
                                 .locationId(locationId)
                                 .build();
         }

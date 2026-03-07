@@ -1,5 +1,9 @@
 package com.positivity.securityservice.service;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -36,6 +41,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class RoleManagementServiceImplTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+        @Spy
+        Clock clock = TEST_CLOCK;
 
         @Mock
         private RoleRepository roleRepository;
@@ -63,7 +72,7 @@ class RoleManagementServiceImplTest {
                                                 List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
 
                 Role role = new Role();
-                UUID roleId = UUID.randomUUID();
+                UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 role.setId(roleId);
                 role.setName("MANAGER");
 
@@ -85,9 +94,9 @@ class RoleManagementServiceImplTest {
 
         @Test
         void createRoleAssignment_andPermissionChecks_success() {
-                UUID userId = UUID.randomUUID();
-                UUID roleId = UUID.randomUUID();
-                UUID assignmentId = UUID.randomUUID();
+                UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 User user = new User();
                 user.setId(userId);
@@ -105,14 +114,14 @@ class RoleManagementServiceImplTest {
                 assignment.setUser(user);
                 assignment.setRole(role);
                 assignment.setScopeType(ScopeType.GLOBAL);
-                assignment.setEffectiveStartDate(LocalDateTime.now().minusDays(1));
+                assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
                 RoleAssignmentRequest request = new RoleAssignmentRequest(
                                 userId,
                                 roleId,
                                 ScopeType.GLOBAL,
                                 Set.of(),
-                                LocalDateTime.now().minusHours(1),
+                                LocalDateTime.now(TEST_CLOCK).minusHours(1),
                                 null);
 
                 when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -126,7 +135,7 @@ class RoleManagementServiceImplTest {
 
                 var createdAssignment = roleManagementService.createRoleAssignment(request);
                 boolean hasPermission = roleManagementService.userHasPermission(userId, "security:role:grant", "loc-1");
-                roleManagementService.revokeRoleAssignment(assignmentId, LocalDateTime.now().plusDays(1));
+                roleManagementService.revokeRoleAssignment(assignmentId, LocalDateTime.now(TEST_CLOCK).plusDays(1));
 
                 assertThat(createdAssignment.getRoleId()).isEqualTo(roleId);
                 assertThat(hasPermission).isTrue();
@@ -134,15 +143,15 @@ class RoleManagementServiceImplTest {
 
         @Test
         void validationBranches_throwOnInvalidScopeAndMissingRole() {
-                UUID userId = UUID.randomUUID();
-                UUID roleId = UUID.randomUUID();
+                UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 RoleAssignmentRequest invalidLocationRequest = new RoleAssignmentRequest(
                                 userId,
                                 roleId,
                                 ScopeType.LOCATION,
                                 Set.of(),
-                                LocalDateTime.now(),
+                                LocalDateTime.now(TEST_CLOCK),
                                 null);
 
                 assertThatThrownBy(() -> roleManagementService.createRoleAssignment(invalidLocationRequest))

@@ -1,28 +1,38 @@
 package com.positivity.invoice.internal.service;
 
-import com.positivity.invoice.internal.dto.BillingRulesDTO;
-import com.positivity.invoice.internal.entity.BillingRules;
-import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
-import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
-import com.positivity.invoice.internal.repository.BillingRulesRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-
-import java.util.Optional;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import com.positivity.invoice.internal.dto.BillingRulesDTO;
+import com.positivity.invoice.internal.entity.BillingRules;
+import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
+import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
+import com.positivity.invoice.internal.repository.BillingRulesRepository;
+
 @ExtendWith(MockitoExtension.class)
 class BillingRulesServiceImplTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private BillingRulesRepository billingRulesRepository;
@@ -41,7 +51,7 @@ class BillingRulesServiceImplTest {
         ReflectionTestUtils.setField(billingRulesService, "defaultInvoiceGroupingStrategy", "PER_WORKORDER");
 
         existingRules = new BillingRules();
-        existingRules.setId(UUID.randomUUID());
+        existingRules.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         existingRules.setPartyId(partyId);
         existingRules.setPurchaseOrderRequired(false);
         existingRules.setPaymentTermsCode("NET_30");

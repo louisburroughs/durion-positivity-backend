@@ -46,7 +46,7 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CS-001: No matching products – returns 200 OK with empty data and null nextCursor")
         void testSearch_noMatchingProducts_returnsEmptyDataWithNullNextCursor() throws Exception {
                 // Issue CAP-247: search for a term guaranteed to match nothing
-                String uniqueTerm = "xqznomatch-" + UUID.randomUUID();
+                String uniqueTerm = "xqznomatch-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(withAuth(MockMvcRequestBuilders
                                 .get(SEARCH_PATH)
@@ -66,10 +66,14 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CS-002: Results fit within limit – returns matching items with null nextCursor")
         void testSearch_resultsWithinLimit_returnsPopulatedDataWithNullNextCursor() throws Exception {
                 // Issue CAP-247: 2 products share the unique name prefix; limit=10 fits both
-                String namePrefix = "SearchWrench-" + UUID.randomUUID();
+                String namePrefix = "SearchWrench-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                createProductAndGetId(namePrefix + " Model-A", "SKU-CS002-A-" + UUID.randomUUID(), "MPN-CS002-A");
-                createProductAndGetId(namePrefix + " Model-B", "SKU-CS002-B-" + UUID.randomUUID(), "MPN-CS002-B");
+                createProductAndGetId(namePrefix + " Model-A",
+                                "SKU-CS002-A-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS002-A");
+                createProductAndGetId(namePrefix + " Model-B",
+                                "SKU-CS002-B-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS002-B");
 
                 MvcResult result = mockMvc.perform(withAuth(MockMvcRequestBuilders
                                 .get(SEARCH_PATH)
@@ -98,11 +102,17 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CS-003: Results exceed limit – returns exactly limit items with non-null nextCursor")
         void testSearch_resultsExceedLimit_returnsPagedResultsWithNextCursor() throws Exception {
                 // Issue CAP-247: create 3 products with limit=2 → expect 2 results + cursor
-                String namePrefix = "SearchSocket-" + UUID.randomUUID();
+                String namePrefix = "SearchSocket-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                createProductAndGetId(namePrefix + " 1/4in", "SKU-CS003-A-" + UUID.randomUUID(), "MPN-CS003-A");
-                createProductAndGetId(namePrefix + " 3/8in", "SKU-CS003-B-" + UUID.randomUUID(), "MPN-CS003-B");
-                createProductAndGetId(namePrefix + " 1/2in", "SKU-CS003-C-" + UUID.randomUUID(), "MPN-CS003-C");
+                createProductAndGetId(namePrefix + " 1/4in",
+                                "SKU-CS003-A-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS003-A");
+                createProductAndGetId(namePrefix + " 3/8in",
+                                "SKU-CS003-B-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS003-B");
+                createProductAndGetId(namePrefix + " 1/2in",
+                                "SKU-CS003-C-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS003-C");
 
                 MvcResult result = mockMvc.perform(withAuth(MockMvcRequestBuilders
                                 .get(SEARCH_PATH)
@@ -132,11 +142,17 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
         void testSearch_cursorUsedForNextPage_returnsNextPageItems() throws Exception {
                 // Issue CAP-247: create 3 products; first page (limit=2) returns cursor;
                 // second page (cursor) should return the remaining 1 item
-                String namePrefix = "SearchCaliper-" + UUID.randomUUID();
+                String namePrefix = "SearchCaliper-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                createProductAndGetId(namePrefix + " A", "SKU-CS004-A-" + UUID.randomUUID(), "MPN-CS004-A");
-                createProductAndGetId(namePrefix + " B", "SKU-CS004-B-" + UUID.randomUUID(), "MPN-CS004-B");
-                createProductAndGetId(namePrefix + " C", "SKU-CS004-C-" + UUID.randomUUID(), "MPN-CS004-C");
+                createProductAndGetId(namePrefix + " A",
+                                "SKU-CS004-A-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS004-A");
+                createProductAndGetId(namePrefix + " B",
+                                "SKU-CS004-B-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS004-B");
+                createProductAndGetId(namePrefix + " C",
+                                "SKU-CS004-C-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS004-C");
 
                 // Get first page to obtain cursor
                 MvcResult firstPage = mockMvc.perform(withAuth(MockMvcRequestBuilders
@@ -183,10 +199,12 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
         void testSearch_skuExactMatchPresent_skuMatchRankedFirst() throws Exception {
                 // Issue CAP-247: create 2 products with shared name term; search by
                 // skuForFirstProduct → expect that product to be data[0]
-                String namePrefix = "SearchRatchet-" + UUID.randomUUID();
-                String targetSku = "SKU-CS005-TARGET-" + UUID.randomUUID();
+                String namePrefix = "SearchRatchet-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
+                String targetSku = "SKU-CS005-TARGET-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                createProductAndGetId(namePrefix + " other", "SKU-CS005-OTHER-" + UUID.randomUUID(), "MPN-CS005-OTHER");
+                createProductAndGetId(namePrefix + " other",
+                                "SKU-CS005-OTHER-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS005-OTHER");
                 createProductAndGetId(namePrefix + " target", targetSku, "MPN-CS005-TARGET");
 
                 MvcResult result = mockMvc.perform(withAuth(MockMvcRequestBuilders
@@ -219,10 +237,14 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
                 // brand="Acme" should only return the first product (after implementation sets
                 // brand). Since brand cannot be set via create DTO in current API, we assert on
                 // data non-emptiness with no brand filter as the RED driver.
-                String namePrefix = "SearchTorque-" + UUID.randomUUID();
+                String namePrefix = "SearchTorque-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                createProductAndGetId(namePrefix + " Acme", "SKU-CS006-A-" + UUID.randomUUID(), "MPN-CS006-A");
-                createProductAndGetId(namePrefix + " Bosch", "SKU-CS006-B-" + UUID.randomUUID(), "MPN-CS006-B");
+                createProductAndGetId(namePrefix + " Acme",
+                                "SKU-CS006-A-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS006-A");
+                createProductAndGetId(namePrefix + " Bosch",
+                                "SKU-CS006-B-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS006-B");
 
                 // Without brand filter → expect both products
                 MvcResult allResult = mockMvc.perform(withAuth(MockMvcRequestBuilders
@@ -258,10 +280,14 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
                 // filter → expect both; search with category=ZZZ-NoSuchCategory → expect empty.
                 // The second assertion tests that category filtering correctly excludes
                 // products.
-                String namePrefix = "SearchMallet-" + UUID.randomUUID();
+                String namePrefix = "SearchMallet-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                createProductAndGetId(namePrefix + " A", "SKU-CS007-A-" + UUID.randomUUID(), "MPN-CS007-A");
-                createProductAndGetId(namePrefix + " B", "SKU-CS007-B-" + UUID.randomUUID(), "MPN-CS007-B");
+                createProductAndGetId(namePrefix + " A",
+                                "SKU-CS007-A-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS007-A");
+                createProductAndGetId(namePrefix + " B",
+                                "SKU-CS007-B-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS007-B");
 
                 // Without category filter → expect both products
                 MvcResult allResult = mockMvc.perform(withAuth(MockMvcRequestBuilders
@@ -297,10 +323,14 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
                 // endpoint must return 200 (not 400) with at most 100 results.
                 // We create just 2 products and verify the CLAMPING contract (200 OK, data
                 // array present and size <= 100). The empty-data failure drives implementation.
-                String namePrefix = "SearchClamp-" + UUID.randomUUID();
+                String namePrefix = "SearchClamp-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                createProductAndGetId(namePrefix + " A", "SKU-CS008-A-" + UUID.randomUUID(), "MPN-CS008-A");
-                createProductAndGetId(namePrefix + " B", "SKU-CS008-B-" + UUID.randomUUID(), "MPN-CS008-B");
+                createProductAndGetId(namePrefix + " A",
+                                "SKU-CS008-A-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS008-A");
+                createProductAndGetId(namePrefix + " B",
+                                "SKU-CS008-B-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "MPN-CS008-B");
 
                 MvcResult result = mockMvc.perform(withAuth(MockMvcRequestBuilders
                                 .get(SEARCH_PATH)
@@ -331,17 +361,17 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
         void testSearch_queryMatchesDescription_returnsMatchingProduct() throws Exception {
                 // Issue CAP-247: create a product whose name is generic but description is
                 // unique; q should find it via description.
-                String uniqueDescToken = "descmatch-" + UUID.randomUUID();
-                String genericName = "GenericProduct-" + UUID.randomUUID();
-                String sku = "SKU-CS009-" + UUID.randomUUID();
+                String uniqueDescToken = "descmatch-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
+                String genericName = "GenericProduct-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
+                String sku = "SKU-CS009-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> payload = Map.of(
                                 "name", genericName,
                                 "description", "This product has token " + uniqueDescToken + " in its description",
                                 "unitOfMeasure", "EA",
-                                "manufacturerId", UUID.randomUUID().toString(),
+                                "manufacturerId", UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
                                 "sku", sku,
-                                "mpn", "MPN-CS009-" + UUID.randomUUID(),
+                                "mpn", "MPN-CS009-" + UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                 "upc", "1000000000000",
                                 "attributes", "{}");
 
@@ -380,7 +410,7 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
                                 "name", name,
                                 "description", "Product for catalog search contract test",
                                 "unitOfMeasure", "EA",
-                                "manufacturerId", UUID.randomUUID().toString(),
+                                "manufacturerId", UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
                                 "sku", sku,
                                 "mpn", mpn,
                                 "upc", "1000000000000",

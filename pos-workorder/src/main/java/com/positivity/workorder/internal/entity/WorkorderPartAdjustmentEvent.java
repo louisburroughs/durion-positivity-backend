@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
+import java.time.Clock;
+
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -142,13 +144,7 @@ public class WorkorderPartAdjustmentEvent {
     @PrePersist
     protected void prePersist() {
         if (performedAt == null) {
-            performedAt = Instant.now();
+            performedAt = Instant.now(Clock.systemUTC());
         }
-        if (createdAt == null) {
-            createdAt = performedAt;
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
-    }
+}
 }

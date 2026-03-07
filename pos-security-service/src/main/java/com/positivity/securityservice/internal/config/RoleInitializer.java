@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.config;
 
+import java.time.Clock;
+
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import jakarta.annotation.PostConstruct;
@@ -25,6 +27,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class RoleInitializer {
+    private final Clock clock;
+
     private final RoleRepository roleRepository;
 
     @PostConstruct
@@ -48,7 +52,7 @@ public class RoleInitializer {
                 role.setName(roleName);
                 role.setDescription(description);
                 role.setCreatedBy("system");
-                role.setCreatedAt(Instant.now());
+                role.setCreatedAt(Instant.now(clock));
                 roleRepository.save(role);
                 log.info("Initialized default role: {}", roleName);
             }

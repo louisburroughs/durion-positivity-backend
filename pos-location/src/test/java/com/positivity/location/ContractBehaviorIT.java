@@ -267,14 +267,17 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         private String uniqueCode(String prefix) {
-                return prefix + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                return prefix + "-" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8)
+                                .toUpperCase();
         }
 
         private String uniqueType(String prefix) {
-                return prefix + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                return prefix + "-" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8)
+                                .toUpperCase();
         }
 
         private String uniqueName(String prefix) {
-                return prefix + " " + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                return prefix + " " + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8)
+                                .toUpperCase();
         }
 }

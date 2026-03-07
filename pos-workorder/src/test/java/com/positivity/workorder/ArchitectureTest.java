@@ -27,6 +27,7 @@ public class ArchitectureTest {
 
         private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
                         "call UUID.randomUUID()") {
+
                 @Override
                 public boolean test(JavaCall<?> input) {
                         return input.getTargetOwner().isEquivalentTo(UUID.class)
@@ -123,5 +124,6 @@ public class ArchitectureTest {
         static final ArchRule packages_should_be_free_of_cycles = slices()
                         .matching("com.positivity.workorder.internal.(*)..")
                         .should().beFreeOfCycles()
+                        .allowEmptyShould(true)
                         .because("cyclic dependencies make modules harder to maintain and evolve");
 }

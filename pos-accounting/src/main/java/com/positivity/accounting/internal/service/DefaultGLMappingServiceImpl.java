@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -37,6 +38,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Transactional
 public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
+    private final Clock clock;
+
 
     private final DefaultGLMappingRepository repository;
     private final GLAccountRepository glAccountRepository;
@@ -161,7 +164,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
      * posting.
      */
     private void validateGLAccounts(UUID debitAccountId, UUID creditAccountId) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         glAccountService.validateAccountForPosting(debitAccountId, now);
         glAccountService.validateAccountForPosting(creditAccountId, now);
     }

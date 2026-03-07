@@ -1,15 +1,17 @@
 package com.positivity.workorder.internal.config;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class WorkorderKafkaProducer {
+    private final Clock clock;
 
     private static final String SOURCE_SERVICE = "pos-workorder";
 
@@ -57,9 +60,9 @@ public class WorkorderKafkaProducer {
 
     private String serializeEnvelope(String eventType, Object payload) {
         Map<String, Object> envelope = new LinkedHashMap<>();
-        envelope.put("eventId", UUID.randomUUID().toString());
+        envelope.put("eventId", UUIDv7Generator.generate().toString());
         envelope.put("eventType", eventType);
-        envelope.put("occurredAtUtc", Instant.now());
+        envelope.put("occurredAtUtc", Instant.now(clock));
         envelope.put("sourceService", SOURCE_SERVICE);
         envelope.put("payload", payload);
 

@@ -1,36 +1,46 @@
 package com.positivity.invoice.internal.service;
 
-import com.positivity.invoice.internal.client.TaxServiceClient;
-import com.positivity.invoice.internal.dto.AdjustmentRequest;
-import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
-import com.positivity.invoice.internal.entity.Invoice;
-import com.positivity.invoice.internal.enums.InvoiceStatus;
-import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
-import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
-import com.positivity.invoice.internal.repository.InvoiceRepository;
-import com.positivity.shared.dto.InvoiceCreationRequest;
-import com.positivity.shared.dto.InvoiceGenerationRequest;
-import com.positivity.shared.dto.InvoiceGenerationResponse;
-import com.positivity.shared.dto.InvoiceLineItem;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.positivity.invoice.internal.client.TaxServiceClient;
+import com.positivity.invoice.internal.dto.AdjustmentRequest;
+import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
+import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
+import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.shared.dto.InvoiceCreationRequest;
+import com.positivity.shared.dto.InvoiceGenerationRequest;
+import com.positivity.shared.dto.InvoiceGenerationResponse;
+import com.positivity.shared.dto.InvoiceLineItem;
+
 @ExtendWith(MockitoExtension.class)
 class InvoiceServiceImplTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private InvoiceRepository invoiceRepository;
@@ -47,8 +57,8 @@ class InvoiceServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        invoiceId = UUID.randomUUID();
-        workorderId = UUID.randomUUID();
+        invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         draftInvoice = new Invoice();
         draftInvoice.setId(invoiceId);
@@ -77,7 +87,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> invoiceService.getInvoice(invoiceId))
-            .isInstanceOf(InvoiceNotFoundException.class);
+                .isInstanceOf(InvoiceNotFoundException.class);
     }
 
     // ---- createInvoice(InvoiceGenerationRequest) ----
@@ -114,7 +124,7 @@ class InvoiceServiceImplTest {
         request.setWorkorderId(null);
 
         assertThatThrownBy(() -> invoiceService.createInvoice(request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     // ---- createInvoice(InvoiceCreationRequest) ----
@@ -162,7 +172,7 @@ class InvoiceServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> invoiceService.createInvoice(request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     // ---- applyAdjustment ----
@@ -195,7 +205,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(InvoiceNotFoundException.class);
+                .isInstanceOf(InvoiceNotFoundException.class);
     }
 
     @Test
@@ -210,7 +220,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(RuntimeException.class);
     }
 
     @Test
@@ -224,7 +234,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -238,7 +248,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -252,7 +262,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -266,6 +276,6 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-            .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

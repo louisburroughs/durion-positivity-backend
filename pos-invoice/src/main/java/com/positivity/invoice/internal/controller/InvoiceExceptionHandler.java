@@ -1,20 +1,26 @@
 package com.positivity.invoice.internal.controller;
 
-import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
-import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
-import jakarta.servlet.http.HttpServletRequest;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 
 @RestControllerAdvice(assignableTypes = InvoiceController.class)
+@RequiredArgsConstructor
 public class InvoiceExceptionHandler {
+        private final Clock clock;
 
         private static final String X_CORRELATION_ID = "X-Correlation-Id";
         private static final String MESSAGE = "message";
@@ -31,7 +37,7 @@ public class InvoiceExceptionHandler {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                                 .header(X_CORRELATION_ID, correlationId)
                                 .body(Map.of(
-                                                TIMESTAMP, Instant.now().toString(),
+                                                TIMESTAMP, Instant.now(clock).toString(),
                                                 ERROR, "NOT_FOUND",
                                                 CODE, "NOT_FOUND",
                                                 STATUS, HttpStatus.NOT_FOUND.value(),
@@ -46,7 +52,7 @@ public class InvoiceExceptionHandler {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .header(X_CORRELATION_ID, correlationId)
                                 .body(Map.of(
-                                                TIMESTAMP, Instant.now().toString(),
+                                                TIMESTAMP, Instant.now(clock).toString(),
                                                 ERROR, "INVALID_STATE",
                                                 CODE, "INVALID_STATE",
                                                 STATUS, HttpStatus.CONFLICT.value(),
@@ -65,7 +71,7 @@ public class InvoiceExceptionHandler {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .header(X_CORRELATION_ID, correlationId)
                                 .body(Map.of(
-                                                TIMESTAMP, Instant.now().toString(),
+                                                TIMESTAMP, Instant.now(clock).toString(),
                                                 ERROR, "CONFLICT",
                                                 CODE, "CONFLICT",
                                                 STATUS, HttpStatus.CONFLICT.value(),
@@ -82,7 +88,7 @@ public class InvoiceExceptionHandler {
                                 ? List.of(Map.of("field", "managerApprovalCode", MESSAGE, msg))
                                 : List.of();
                 java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
-                body.put(TIMESTAMP, Instant.now().toString());
+                body.put(TIMESTAMP, Instant.now(clock).toString());
                 body.put(ERROR, "VALIDATION_ERROR");
                 body.put(CODE, "VALIDATION_ERROR");
                 body.put(STATUS, HttpStatus.BAD_REQUEST.value());
@@ -96,6 +102,6 @@ public class InvoiceExceptionHandler {
 
         private static String correlationId(HttpServletRequest request) {
                 String header = request.getHeader(X_CORRELATION_ID);
-                return (header != null && !header.isBlank()) ? header : UUID.randomUUID().toString();
+                return (header != null && !header.isBlank()) ? header : UUIDv7Generator.generate().toString();
         }
 }

@@ -1,11 +1,15 @@
 package com.positivity.invoice.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
 import org.junit.jupiter.api.AfterEach;
@@ -13,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -54,6 +59,10 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 class InvoiceFinalizationServiceTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    Clock clock = TEST_CLOCK;
 
     @Mock
     private InvoiceRepository invoiceRepository;
@@ -89,8 +98,8 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void checkEligibility_returnsEligible_whenInvoiceIsDraftAndDataComplete() {
-        UUID invoiceId = UUID.randomUUID();
-        UUID workorderId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice(workorderId, BigDecimal.ZERO)));
 
         FinalizationEligibilityResult result = service.checkEligibility(invoiceId);
@@ -106,7 +115,7 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void checkEligibility_returnsIneligible_whenInvoiceNotFound() {
-        UUID invoiceId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         FinalizationEligibilityResult result = service.checkEligibility(invoiceId);
 
@@ -120,7 +129,7 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void checkEligibility_returnsIneligible_whenInvoiceNotInDraftStatus() {
-        UUID invoiceId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Invoice finalized = new Invoice();
         finalized.setStatus(InvoiceStatus.FINALIZED);
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(finalized));
@@ -137,7 +146,7 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void checkEligibility_returnsIneligible_whenWorkorderNotCompleted() {
-        UUID invoiceId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         FinalizationEligibilityResult result = service.checkEligibility(invoiceId);
 
@@ -154,8 +163,8 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void checkEligibility_requiresManagerApproval_whenAmountExceedsServiceAdvisorLimit() {
-        UUID invoiceId = UUID.randomUUID();
-        UUID workorderId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // M5: stub repository with a DRAFT invoice whose total exceeds $500
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(workorderId, new BigDecimal("600.00"))));
@@ -176,8 +185,8 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void finalize_transitionsInvoiceFromDraftToFinalized_andEmitsEvent() {
-        UUID invoiceId = UUID.randomUUID();
-        UUID workorderId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Invoice draft = draftInvoice(workorderId, BigDecimal.ZERO);
         draft.setId(invoiceId);
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
@@ -199,8 +208,9 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void finalize_throws_whenEligibilityCheckFails() {
-        UUID invoiceId = UUID.randomUUID();
-        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(finalizedInvoice(UUID.randomUUID())));
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(invoiceRepository.findById(invoiceId))
+                .thenReturn(Optional.of(finalizedInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"))));
         FinalizationRequest request = shopManagerRequest();
 
         assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
@@ -218,11 +228,12 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void finalize_throws_whenPermissionLevelInsufficientForAmount() {
-        UUID invoiceId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // M5: stub invoice with total > $500 so the permission check exercises
         // SERVICE_ADVISOR path
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("500.01"))));
+                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        new BigDecimal("500.01"))));
         // No approval code, no SHOP_MANAGER role in context → rejected
         FinalizationRequest request = serviceAdvisorRequest(null);
 
@@ -236,11 +247,12 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void finalize_succeeds_forShopManagerWithAmountAboveLimit() {
-        UUID invoiceId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // C1: SHOP_MANAGER role derived from SecurityContext
         withShopManagerContext();
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("1000.00"))));
+                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        new BigDecimal("1000.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = shopManagerRequest();
 
@@ -256,10 +268,11 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void finalize_succeeds_withManagerApprovalCode_whenAmountExceedsServiceAdvisorLimit() {
-        UUID invoiceId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // M5: stub invoice with > $500 total; SERVICE_ADVISOR + approval code → allowed
         when(invoiceRepository.findById(invoiceId))
-                .thenReturn(Optional.of(draftInvoice(UUID.randomUUID(), new BigDecimal("750.00"))));
+                .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        new BigDecimal("750.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = serviceAdvisorRequest("MGR-APPROVAL-001");
 
@@ -283,8 +296,8 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void finalize_responseContainsLineItems_whenInvoiceHasItems() {
-        UUID invoiceId = UUID.randomUUID();
-        UUID workorderId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Invoice draft = draftInvoice(workorderId, new BigDecimal("99.00"));
         draft.setId(invoiceId);
         InvoiceItem item = new InvoiceItem();
@@ -310,10 +323,10 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void revert_transitionsToReverted_withinAllowedWindow_withManagerApproval() {
-        UUID invoiceId = UUID.randomUUID();
-        UUID workorderId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Invoice invoice = finalizedInvoice(workorderId);
-        invoice.setFinalizedAt(Instant.now().minusSeconds(3600)); // 1h ago — within 24h window
+        invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600)); // 1h ago — within 24h window
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(invoice));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -331,8 +344,8 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void revert_throws_whenInvoiceNotFinalized() {
-        UUID invoiceId = UUID.randomUUID();
-        Invoice draftInv = draftInvoice(UUID.randomUUID(), BigDecimal.ZERO);
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Invoice draftInv = draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"), BigDecimal.ZERO);
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInv));
 
         assertThatThrownBy(() -> service.revert(invoiceId, "MGR-APPROVAL-001", "Incorrect state"))
@@ -346,9 +359,9 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void revert_throws_whenInvoiceAlreadyPOSTED() {
-        UUID invoiceId = UUID.randomUUID();
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Invoice postedInvoice = new Invoice();
-        postedInvoice.setWorkorderId(UUID.randomUUID());
+        postedInvoice.setWorkorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         postedInvoice.setStatus(InvoiceStatus.POSTED);
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(postedInvoice));
 
@@ -363,10 +376,10 @@ class InvoiceFinalizationServiceTest {
      */
     @Test
     void revert_throws_whenReversionWindowExpired() {
-        UUID invoiceId = UUID.randomUUID();
-        Invoice expiredInvoice = finalizedInvoice(UUID.randomUUID());
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Invoice expiredInvoice = finalizedInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         // finalizedAt 25h ago — outside the 24h reversion window
-        expiredInvoice.setFinalizedAt(Instant.now().minusSeconds(25 * 3600));
+        expiredInvoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(25 * 3600));
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(expiredInvoice));
 
         assertThatThrownBy(() -> service.revert(invoiceId, "MGR-APPROVAL-001", "Late revert attempt"))
@@ -421,7 +434,7 @@ class InvoiceFinalizationServiceTest {
         invoice.setWorkorderId(workorderId);
         invoice.setStatus(InvoiceStatus.FINALIZED);
         invoice.setTotal(BigDecimal.ZERO);
-        invoice.setFinalizedAt(Instant.now().minusSeconds(3600));
+        invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600));
         invoice.setFinalizedBy("manager-001");
         return invoice;
     }

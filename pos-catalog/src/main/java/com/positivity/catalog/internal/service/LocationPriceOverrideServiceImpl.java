@@ -1,5 +1,7 @@
 package com.positivity.catalog.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.catalog.internal.dto.EffectiveLocationPriceResponseDto;
 import com.positivity.catalog.internal.dto.GuardrailPolicyUpsertRequestDto;
 import com.positivity.catalog.internal.dto.LocationPriceOverrideCreateRequestDto;
@@ -31,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideService {
+    private final Clock clock;
+
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
@@ -45,7 +49,9 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
             GuardrailPolicyRepository guardrailPolicyRepository,
             ApprovalRequestRepository approvalRequestRepository,
             ProductRepository productRepository,
-            ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher) {
+            ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher,
+            Clock clock) {
+        this.clock = clock;
         this.locationPriceOverrideRepository = locationPriceOverrideRepository;
         this.guardrailPolicyRepository = guardrailPolicyRepository;
         this.approvalRequestRepository = approvalRequestRepository;
@@ -114,7 +120,7 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
 
         if (discountPercent.compareTo(policy.getAutoApprovalThresholdPercent()) <= 0) {
             override.setStatus(PriceOverrideStatus.ACTIVE);
-            override.setResolvedAt(Instant.now());
+            override.setResolvedAt(Instant.now(clock));
         } else {
             override.setStatus(PriceOverrideStatus.PENDING_APPROVAL);
         }
@@ -182,8 +188,8 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
 
         override.setStatus(PriceOverrideStatus.ACTIVE);
         override.setApprovedByUserId(request.getActorUserId());
-        override.setApprovedAt(Instant.now());
-        override.setResolvedAt(Instant.now());
+        override.setApprovedAt(Instant.now(clock));
+        override.setResolvedAt(Instant.now(clock));
 
         LocationPriceOverrideEntity saved = locationPriceOverrideRepository.save(override);
 
@@ -191,7 +197,7 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
                 .orElseThrow(() -> new CatalogNotFoundException(
                         "APPROVAL_REQUEST_NOT_FOUND: overrideId=" + overrideId));
         approvalRequest.setStatus(ApprovalRequestStatus.APPROVED);
-        approvalRequest.setResolvedAt(Instant.now());
+        approvalRequest.setResolvedAt(Instant.now(clock));
         ApprovalRequestEntity savedApproval = approvalRequestRepository.save(approvalRequest);
 
         productDetailCacheInvalidationPublisher.invalidateProductAtLocation(
@@ -216,10 +222,10 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
 
         override.setStatus(PriceOverrideStatus.REJECTED);
         override.setRejectedBy(request.getActorUserId());
-        override.setRejectedAt(Instant.now());
+        override.setRejectedAt(Instant.now(clock));
         override.setRejectionReasonCode(request.getRejectionReasonCode());
         override.setRejectionNotes(request.getRejectionNotes());
-        override.setResolvedAt(Instant.now());
+        override.setResolvedAt(Instant.now(clock));
 
         LocationPriceOverrideEntity saved = locationPriceOverrideRepository.save(override);
 
@@ -227,7 +233,7 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
                 .orElseThrow(() -> new CatalogNotFoundException(
                         "APPROVAL_REQUEST_NOT_FOUND: overrideId=" + overrideId));
         approvalRequest.setStatus(ApprovalRequestStatus.REJECTED);
-        approvalRequest.setResolvedAt(Instant.now());
+        approvalRequest.setResolvedAt(Instant.now(clock));
         ApprovalRequestEntity savedApproval = approvalRequestRepository.save(approvalRequest);
 
         productDetailCacheInvalidationPublisher.invalidateProductAtLocation(
@@ -241,7 +247,7 @@ public class LocationPriceOverrideServiceImpl implements LocationPriceOverrideSe
 
         for (LocationPriceOverrideEntity active : existingActive) {
             active.setStatus(PriceOverrideStatus.INACTIVE);
-            active.setResolvedAt(Instant.now());
+            active.setResolvedAt(Instant.now(clock));
             locationPriceOverrideRepository.save(active);
         }
     }

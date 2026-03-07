@@ -64,8 +64,8 @@ class MappingKeyServiceTest {
 
     @BeforeEach
     void setUp() {
-        testCategoryId = UUID.randomUUID();
-        testMappingKeyId = UUID.randomUUID();
+        testCategoryId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        testMappingKeyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         testCategory = new PostingCategory();
         testCategory.setPostingCategoryId(testCategoryId);
@@ -96,7 +96,7 @@ class MappingKeyServiceTest {
         when(mappingKeyRepository.existsByPostingCategoryIdAndKeyName(testCategoryId, "NEW_KEY")).thenReturn(false);
         when(mappingKeyRepository.save(any(MappingKey.class))).thenAnswer(inv -> {
             MappingKey key = inv.getArgument(0);
-            key.setMappingKeyId(UUID.randomUUID());
+            key.setMappingKeyId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
             return key;
         });
 

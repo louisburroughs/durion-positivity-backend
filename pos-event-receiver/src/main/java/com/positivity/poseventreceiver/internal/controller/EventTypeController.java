@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,9 +41,7 @@ public class EventTypeController {
 
     @GetMapping
     @Operation(summary = "Get all event types", description = "Retrieve all available event types")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "List of event types returned successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "List of event types returned successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
     public ResponseEntity<List<EventTypeResponse>> getAllEventTypes() {
         log.info("Fetching all event types");
         List<EventTypeResponse> eventTypes = eventDao.getAllEventTypes().stream()
@@ -55,9 +52,7 @@ public class EventTypeController {
 
     @GetMapping("/active")
     @Operation(summary = "Get active event types", description = "Retrieve only active event types")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "List of active event types returned successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "List of active event types returned successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
     public ResponseEntity<List<EventTypeResponse>> getActiveEventTypes() {
         log.info("Fetching active event types");
         List<EventTypeResponse> eventTypes = eventDao.getActiveEventTypes().stream()
@@ -68,10 +63,8 @@ public class EventTypeController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get event type by ID", description = "Retrieve a specific event type by its unique ID")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Event type not found")
-    })
+    @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<EventTypeResponse> getEventTypeById(
             @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id) {
         log.info("Fetching event type with id: {}", id);
@@ -83,10 +76,8 @@ public class EventTypeController {
 
     @GetMapping("/code/{typeCode}")
     @Operation(summary = "Get event type by code", description = "Retrieve a specific event type by its unique type code")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Event type not found")
-    })
+    @ApiResponse(responseCode = "200", description = "Event type found and returned", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<EventTypeResponse> getEventTypeByCode(
             @Parameter(description = "Event type code", required = true, example = "ORDER_CREATED") @PathVariable String typeCode) {
         log.info("Fetching event type with code: {}", typeCode);
@@ -99,10 +90,8 @@ public class EventTypeController {
     @PostMapping
     @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_CREATE", apiVersion = "1")
     @Operation(summary = "Create event type", description = "Create a new event type for preregistered events")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Event type created successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request parameters")
-    })
+    @ApiResponse(responseCode = "201", description = "Event type created successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     public ResponseEntity<EventTypeResponse> createEventType(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
         log.info("Creating new event type: typeCode={}", request.getTypeCode());
@@ -123,10 +112,8 @@ public class EventTypeController {
     @PutMapping("/code/{typeCode}")
     @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPSERT", apiVersion = "1")
     @Operation(summary = "Upsert event type", description = "Create or update an event type by type code")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Event type created or updated successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request parameters")
-    })
+    @ApiResponse(responseCode = "200", description = "Event type created or updated successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     public ResponseEntity<EventTypeResponse> upsertEventType(
             @Parameter(description = "Event type code", required = true, example = "ORDER_ORDER_CREATE") @PathVariable String typeCode,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
@@ -154,10 +141,8 @@ public class EventTypeController {
     @PutMapping("/{id}")
     @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPDATE", apiVersion = "1")
     @Operation(summary = "Update event type", description = "Update an existing event type")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Event type updated successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Event type not found")
-    })
+    @ApiResponse(responseCode = "200", description = "Event type updated successfully", content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<EventTypeResponse> updateEventType(
             @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
@@ -178,10 +163,8 @@ public class EventTypeController {
     @DeleteMapping("/{id}")
     @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_DELETE", apiVersion = "1")
     @Operation(summary = "Delete event type", description = "Delete an event type by ID")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Event type deleted successfully"),
-            @ApiResponse(responseCode = "404", description = "Event type not found")
-    })
+    @ApiResponse(responseCode = "204", description = "Event type deleted successfully")
+    @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<Void> deleteEventType(
             @Parameter(description = "EventType ID to delete", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id) {
         log.info("Deleting event type: id={}", id);

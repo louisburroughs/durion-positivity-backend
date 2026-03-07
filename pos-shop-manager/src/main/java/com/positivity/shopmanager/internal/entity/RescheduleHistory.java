@@ -21,6 +21,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
+import org.springframework.data.annotation.CreatedDate;
 /**
  * Immutable reschedule history record for an appointment.
  *
@@ -30,6 +33,7 @@ import lombok.Setter;
  * (see TODO in AppointmentsServiceImpl#rescheduleAppointment).
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "reschedule_history")
 @Getter
 @Setter
@@ -94,5 +98,6 @@ public class RescheduleHistory {
 
     @NonNull
     @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private Instant createdAt;
 }

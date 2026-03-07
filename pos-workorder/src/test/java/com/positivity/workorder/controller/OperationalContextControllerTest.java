@@ -1,5 +1,8 @@
 package com.positivity.workorder.controller;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
@@ -38,6 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestSecurityConfig.class)
 @ActiveProfiles("test")
 class OperationalContextControllerTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000059");
         private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000060");
@@ -153,7 +157,7 @@ class OperationalContextControllerTest {
                 var startResponse = WorkorderStartResponse.builder()
                                 .workorderId(WORKORDER_ID)
                                 .operationalContextVersion("v1")
-                                .workStartedAt(Instant.now())
+                                .workStartedAt(Instant.now(TEST_CLOCK))
                                 .build();
                 when(workorderService.startWork(eq(WORKORDER_ID), eq("workorder-test-user"), isNull()))
                                 .thenReturn(startResponse);

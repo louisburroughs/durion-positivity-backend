@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import java.time.ZoneOffset;
+import java.time.Clock;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -44,6 +48,10 @@ import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("EventIngestionService Unit Tests")
 class EventIngestionServiceTest {
+        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+        @Spy
+        Clock clock = TEST_CLOCK;
 
         @Mock
         private AccountingEventRepository accountingEventRepository;
@@ -70,24 +78,24 @@ class EventIngestionServiceTest {
 
         @BeforeEach
         void setUp() {
-                testOrganizationId = UUID.randomUUID();
-                testEventId = UUID.randomUUID();
+                testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testEventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 testEvent = new AccountingEvent();
                 testEvent.setEventId(testEventId);
                 testEvent.setOrganizationId(testOrganizationId);
                 testEvent.setEventType("INVOICE_RECEIVED");
-                testEvent.setTransactionDate(LocalDateTime.now());
+                testEvent.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
                 testEvent.setPayload(Map.of("amount", "1500.00"));
                 testEvent.setStatus(AccountingEventStatus.RECEIVED);
-                testEvent.setReceivedAt(Instant.now());
+                testEvent.setReceivedAt(Instant.now(TEST_CLOCK));
 
                 testEventMap = Map.of(
                                 "eventId", testEventId,
                                 "organizationId", testOrganizationId,
                                 "eventType", "INVOICE_RECEIVED",
                                 "sourceSystem", "MYOB",
-                                "transactionDate", LocalDateTime.now(),
+                                "transactionDate", LocalDateTime.now(TEST_CLOCK),
                                 "payload", Map.of("amount", "1500.00"));
         }
 
@@ -258,7 +266,7 @@ class EventIngestionServiceTest {
                 savedEvent.setOrganizationId(testOrganizationId);
                 savedEvent.setEventType("INVOICE_RECEIVED");
                 savedEvent.setStatus(AccountingEventStatus.RECEIVED);
-                savedEvent.setReceivedAt(Instant.now());
+                savedEvent.setReceivedAt(Instant.now(TEST_CLOCK));
 
                 when(idempotencyService.isKeyProcessed(any(String.class)))
                                 .thenReturn(false); // Not a duplicate

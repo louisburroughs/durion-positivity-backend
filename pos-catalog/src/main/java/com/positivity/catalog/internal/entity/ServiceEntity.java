@@ -6,8 +6,10 @@ import lombok.Data;
 
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Data
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "service")
 public class ServiceEntity implements CatalogItem {
     @Id

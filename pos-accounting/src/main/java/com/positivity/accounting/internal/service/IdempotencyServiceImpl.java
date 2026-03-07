@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.accounting.internal.entity.IdempotencyKey;
 import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
 import com.positivity.accounting.service.IdempotencyService;
@@ -19,13 +21,16 @@ import java.util.UUID;
  */
 @Service
 public class IdempotencyServiceImpl implements IdempotencyService {
+    private final Clock clock;
+
 
     private static final Logger log = LoggerFactory.getLogger(IdempotencyServiceImpl.class);
     private static final Duration KEY_EXPIRATION = Duration.ofHours(24);
 
     private final IdempotencyKeyRepository repository;
 
-    public IdempotencyServiceImpl(IdempotencyKeyRepository repository) {
+    public IdempotencyServiceImpl(IdempotencyKeyRepository repository, Clock clock) {
+        this.clock = clock;
         this.repository = repository;
     }
 
@@ -40,7 +45,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
         Optional<IdempotencyKey> existing = repository.findByKeyValue(keyValue);
         if (existing.isPresent()) {
             IdempotencyKey key = existing.get();
-            if (key.getExpiresAt().isAfter(Instant.now())) {
+            if (key.getExpiresAt().isAfter(Instant.now(clock))) {
                 log.info("Idempotency key {} already processed for invoice {}", keyValue, key.getInvoiceId());
                 return true;
             }
@@ -54,7 +59,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional
     public void registerKey(String keyValue, UUID invoiceId) {
-        Instant expiresAt = Instant.now().plus(KEY_EXPIRATION);
+        Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         IdempotencyKey key = new IdempotencyKey(keyValue, invoiceId, expiresAt);
         repository.save(key);
         log.info("Registered idempotency key {} for invoice {}", keyValue, invoiceId);
@@ -66,7 +71,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional
     public int cleanupExpiredKeys() {
-        int deleted = repository.deleteExpiredKeys(Instant.now());
+        int deleted = repository.deleteExpiredKeys(Instant.now(clock));
         log.info("Deleted {} expired idempotency keys", deleted);
         return deleted;
     }

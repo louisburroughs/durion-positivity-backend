@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 
@@ -28,7 +29,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import jakarta.persistence.PrePersist;
 
 @Entity
 @Data
@@ -121,15 +121,5 @@ public class WorkorderService {
     public boolean canExecute() {
         return status != WorkorderItemStatus.PENDING_APPROVAL
                 || (isEmergencySafety && customerDenialAcknowledged != null);
-    }
-
-    @PrePersist
-    protected void prePersist() {
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
     }
 }

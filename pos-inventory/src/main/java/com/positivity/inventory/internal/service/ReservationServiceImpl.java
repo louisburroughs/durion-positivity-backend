@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.service;
 
+import java.time.Clock;
+
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
@@ -14,6 +16,9 @@ import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.security.common.SecurityContextHelper;
+
+import lombok.RequiredArgsConstructor;
+
 import java.time.Instant;
 import java.util.List;
 import com.positivity.inventory.service.ReservationService;
@@ -23,21 +28,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 @Transactional
 public class ReservationServiceImpl implements ReservationService {
 
+    private final Clock clock;
     private final ReservationRepository reservationRepository;
     private final AllocationRepository allocationRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
-
-    public ReservationServiceImpl(
-            ReservationRepository reservationRepository,
-            AllocationRepository allocationRepository,
-            InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
-        this.reservationRepository = reservationRepository;
-        this.allocationRepository = allocationRepository;
-        this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
-    }
 
     @Override
     public @NonNull ReservationResponse createOrUpdateReservation(@NonNull CreateReservationRequest request) {
@@ -76,7 +74,7 @@ public class ReservationServiceImpl implements ReservationService {
         }
 
         allocation.setAllocationState(AllocationState.HARD);
-        allocation.setHardenedAt(Instant.now());
+        allocation.setHardenedAt(Instant.now(clock));
         allocation.setHardenedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
         allocation.setHardenedReason(request.getHardenedReason());
         allocationRepository.save(allocation);

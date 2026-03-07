@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
+import java.time.Clock;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -11,13 +13,17 @@ import java.time.Instant;
 import com.positivity.accounting.internal.dto.ErrorResponse;
 import com.positivity.accounting.internal.exception.GLPostingException;
 
+import lombok.RequiredArgsConstructor;
+
 /**
  * Exception handler for GL Posting failures.
  */
 @RestControllerAdvice(basePackages = "com.positivity.accounting.internal.controller")
+@RequiredArgsConstructor
 public class GLPostingExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GLPostingExceptionHandler.class);
+    private final Clock clock;
 
     @ExceptionHandler(GLPostingException.class)
     public ResponseEntity<ErrorResponse> handleGLPostingException(GLPostingException ex) {
@@ -26,7 +32,7 @@ public class GLPostingExceptionHandler {
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .errorCode("GL_POSTING_FAILED")
                 .message(ex.getMessage())
-                .timestamp(Instant.now().toEpochMilli())
+                .timestamp(Instant.now(clock).toEpochMilli())
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);

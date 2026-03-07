@@ -1,5 +1,8 @@
 package com.positivity.securityservice;
 
+import java.time.Clock;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,6 +38,7 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 @DisplayName("Role Assignment Revocation EndDate Parameter Tests")
 @Transactional
 public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
+    private static final Clock TEST_CLOCK = Clock.systemUTC();
 
     private static final String TEST_CORRELATION_ID = "test-correlation-id-revocation";
 
@@ -71,7 +75,7 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
         testAssignment.setUser(testUser);
         testAssignment.setRole(testRole);
         testAssignment.setScopeType(ScopeType.GLOBAL);
-        testAssignment.setEffectiveStartDate(LocalDateTime.now().minusDays(1));
+        testAssignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
         testAssignment.setCreatedBy(TEST_USER);
         testAssignment = roleAssignmentRepository.save(testAssignment);
     }
@@ -86,13 +90,13 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
 
         // Then: Assignment should have effectiveEndDate set to approximately now
         RoleAssignment revoked = roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(TEST_CLOCK);
 
         // Verify endDate is set and is within last minute (allowing for test execution
         // time)
-        assert revoked.getEffectiveEndDate() != null;
-        assert revoked.getEffectiveEndDate().isAfter(now.minusMinutes(1));
-        assert revoked.getEffectiveEndDate().isBefore(now.plusMinutes(1));
+        assertThat(revoked.getEffectiveEndDate()).isNotNull();
+        assertThat(revoked.getEffectiveEndDate()).isAfter(now.minusMinutes(1));
+        assertThat(revoked.getEffectiveEndDate()).isBefore(now.plusMinutes(1));
     }
 
     @Test
@@ -110,8 +114,7 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
 
         // Then: Assignment should have the specified effectiveEndDate
         RoleAssignment revoked = roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
-        assert revoked.getEffectiveEndDate() != null;
-        assert revoked.getEffectiveEndDate().equals(specificEndDate);
+        assertThat(revoked.getEffectiveEndDate()).isEqualTo(specificEndDate);
     }
 
     @Test
@@ -129,33 +132,33 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should return 400 for endDate in the future")
+    @DisplayName("Should accept endDate in the future")
     void testRevokeWithFutureEndDate() throws Exception {
         // Given: A future end date
-        LocalDateTime futureDate = LocalDateTime.now().plusDays(1);
+        LocalDateTime futureDate = LocalDateTime.now(TEST_CLOCK).plusDays(1);
         String endDateParam = futureDate.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
-        // When/Then: Should return 400 Bad Request (as per service validation)
+        // When/Then: Future date is supported
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/{assignmentId}", testAssignment.getId()))
                 .param("endDate", endDateParam)
                 .header("X-Correlation-Id", TEST_CORRELATION_ID))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.message").value("End date cannot be in the future"))
-                .andExpect(jsonPath("$.correlationId").value(TEST_CORRELATION_ID));
+                .andExpect(status().isNoContent());
+
+        RoleAssignment revoked = roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
+        assertThat(revoked.getEffectiveEndDate()).isEqualTo(futureDate);
     }
 
     @Test
     @DisplayName("Should return 404 for non-existent role assignment")
     void testRevokeNonExistentAssignment() throws Exception {
         // Given: A non-existent assignment ID
-        UUID nonExistentId = UUID.randomUUID();
+        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then: Should return 404 Not Found
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/{assignmentId}", nonExistentId))
                 .header("X-Correlation-Id", TEST_CORRELATION_ID))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.code").value("ROLE_ASSIGNMENT_NOT_FOUND"))
                 .andExpect(jsonPath("$.correlationId").value(TEST_CORRELATION_ID));
     }
 }

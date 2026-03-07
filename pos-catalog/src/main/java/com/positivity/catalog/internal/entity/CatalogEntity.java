@@ -10,11 +10,13 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @Setter
 @Slf4j
 @NoArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 public class CatalogEntity {
     @Id
     @GeneratedValue

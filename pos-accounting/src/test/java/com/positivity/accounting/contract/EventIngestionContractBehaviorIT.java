@@ -62,7 +62,7 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
         // Clean up before each test
         reprocessingAttemptHistoryRepository.deleteAll();
         accountingEventRepository.deleteAll();
-        testOrganizationId = UUID.randomUUID();
+        testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
     @AfterEach
@@ -188,7 +188,7 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
         accountingEventRepository.save(event);
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.randomUUID().toString());
+        request.setTriggeredByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("Manual reprocessing after rule update");
 
         // When/Then - reprocess the event
@@ -211,7 +211,7 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When - reprocess the event to create history
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.randomUUID().toString());
+        request.setTriggeredByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("First reprocessing attempt");
 
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", eventId))
@@ -246,7 +246,7 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get non-existent event - 404 error")
     void testGetEvent_NotFound() throws Exception {
         // Given - random UUID that doesn't exist
-        UUID nonExistentId = UUID.randomUUID();
+        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then - expect 404 Not Found
         mockMvc.perform(withAuth(get(API_V1_EVENTS + "/{eventId}", nonExistentId)))
@@ -258,7 +258,7 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Retry non-existent event - 404 error")
     void testRetryEvent_NotFound() throws Exception {
         // Given - random UUID that doesn't exist
-        UUID nonExistentId = UUID.randomUUID();
+        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then - expect 404 Not Found
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/retry", nonExistentId)))
@@ -270,10 +270,10 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Reprocess non-existent event - 404 error")
     void testReprocessEvent_NotFound() throws Exception {
         // Given - random UUID that doesn't exist
-        UUID nonExistentId = UUID.randomUUID();
+        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.randomUUID().toString());
+        request.setTriggeredByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("Test");
 
         // When/Then - expect 404 Not Found
@@ -294,7 +294,7 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
         accountingEventRepository.save(event);
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.randomUUID().toString());
+        request.setTriggeredByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
         request.setReprocessingNotes("Attempt to reprocess");
 
         // When/Then - expect 409 Conflict
@@ -321,7 +321,7 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Get processing log for non-existent event - returns 200 with no entries")
     void testGetProcessingLog_NotFound() throws Exception {
         // Given - random UUID that doesn't exist
-        UUID nonExistentId = UUID.randomUUID();
+        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // When/Then - expect 200 OK with message indicating no processing log entries
         mockMvc.perform(withAuth(get(API_V1_EVENTS + "/{eventId}/processing-log", nonExistentId)))

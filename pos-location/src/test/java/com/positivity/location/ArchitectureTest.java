@@ -25,14 +25,14 @@ import java.util.UUID;
 @AnalyzeClasses(packages = "com.positivity.location", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
 
-    private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
-            "call UUID.randomUUID()") {
-        
-        public boolean test(JavaCall<?> input) {
-            return input.getTargetOwner().isEquivalentTo(UUID.class)
-                    && "randomUUID".equals(input.getName());
-        }
-    };
+        private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
+                        "call UUID.randomUUID()") {
+
+                public boolean test(JavaCall<?> input) {
+                        return input.getTargetOwner().isEquivalentTo(UUID.class)
+                                        && "randomUUID".equals(input.getName());
+                }
+        };
 
         @ArchTest
         static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
@@ -95,8 +95,11 @@ public class ArchitectureTest {
         static final ArchRule internal_service_implementations_should_implement_service_interfaces = classes()
                         .that().resideInAPackage("..internal.service..")
                         .and().haveSimpleNameEndingWith("Impl")
-                        .should().implement(DescribedPredicate.describe("a service interface in com.positivity.location.service..",
-                                        javaClass -> javaClass.getPackageName().startsWith("com.positivity.location.service")))
+                        .should()
+                        .implement(DescribedPredicate.describe(
+                                        "a service interface in com.positivity.location.service..",
+                                        javaClass -> javaClass.getPackageName()
+                                                        .startsWith("com.positivity.location.service")))
                         .allowEmptyShould(true)
                         .because("internal service classes should implement interfaces from the public service package");
 
@@ -116,21 +119,22 @@ public class ArchitectureTest {
 
         @ArchTest
         static final ArchRule packages_should_be_free_of_cycles = slices()
-            .matching("com.positivity.location.internal.(*)..")
-            .should().beFreeOfCycles()
-            .because("cyclic dependencies make modules harder to maintain and evolve");
-    @ArchTest
-    static final ArchRule entities_should_use_uuidv7_id_annotation = classes()
-            .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
-            .and().areAnnotatedWith("jakarta.persistence.Entity")
-            .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
-            .allowEmptyShould(true)
-            .because("ADR-0013 addendum mandates UUID v7 identifiers via shared @UUIDv7Id");
-    @ArchTest
-    static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
-            .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
-            .and().areAnnotatedWith("jakarta.persistence.Entity")
-            .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
-            .allowEmptyShould(true)
-            .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
+                        .matching("com.positivity.location.internal.(*)..")
+                        .should().beFreeOfCycles()
+                        .allowEmptyShould(true)
+                        .because("cyclic dependencies make modules harder to maintain and evolve");
+        @ArchTest
+        static final ArchRule entities_should_use_uuidv7_id_annotation = classes()
+                        .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
+                        .and().areAnnotatedWith("jakarta.persistence.Entity")
+                        .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
+                        .allowEmptyShould(true)
+                        .because("ADR-0013 addendum mandates UUID v7 identifiers via shared @UUIDv7Id");
+        @ArchTest
+        static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
+                        .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
+                        .and().areAnnotatedWith("jakarta.persistence.Entity")
+                        .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
+                        .allowEmptyShould(true)
+                        .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
 }

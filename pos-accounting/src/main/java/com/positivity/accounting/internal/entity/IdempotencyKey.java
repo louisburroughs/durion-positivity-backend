@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.shared.id.UUIDv7Id;
@@ -13,7 +14,6 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -42,11 +42,6 @@ public class IdempotencyKey {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-    }
-
     @Column(nullable = false, unique = true)
     private String keyValue;
 
@@ -54,6 +49,7 @@ public class IdempotencyKey {
     private UUID invoiceId;
 
     @Column(nullable = false)
+    @CreatedDate
     private Instant createdAt;
 
     @Column(nullable = false)
@@ -62,7 +58,6 @@ public class IdempotencyKey {
     public IdempotencyKey(String keyValue, UUID invoiceId, Instant expiresAt) {
         this.keyValue = keyValue;
         this.invoiceId = invoiceId;
-        this.createdAt = Instant.now();
         this.expiresAt = expiresAt;
     }
 }

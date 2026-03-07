@@ -100,8 +100,8 @@ class CycleCountAdjustmentServiceImplTest {
     void createAdjustment_belowThreshold_autoApprovesAndPosts() {
         // counted < onHand → negative variance, evaluator returns empty → AUTO_APPROVED
         CreateAdjustmentRequest request = createRequest(8, 10);
-        UUID assignedId = UUID.randomUUID();
-        UUID ledgerId = UUID.randomUUID();
+        UUID assignedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID ledgerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
                 .thenReturn(Optional.empty());
@@ -132,7 +132,7 @@ class CycleCountAdjustmentServiceImplTest {
         // counted < onHand → variance, evaluator returns TIER_1_MANAGER →
         // PENDING_APPROVAL
         CreateAdjustmentRequest request = createRequest(5, 10);
-        UUID assignedId = UUID.randomUUID();
+        UUID assignedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
                 .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
@@ -157,8 +157,8 @@ class CycleCountAdjustmentServiceImplTest {
     @Test
     void approveAdjustment_pendingApproval_setsPostedAndCreatesLedgerEntry() {
         setUpAuthenticatedActor();
-        UUID adjustmentId = UUID.randomUUID();
-        UUID ledgerId = UUID.randomUUID();
+        UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID ledgerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CycleCountAdjustment adjustment = pendingAdjustment(adjustmentId);
 
         when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
@@ -182,7 +182,7 @@ class CycleCountAdjustmentServiceImplTest {
     @Test
     void approveAdjustment_nonExistentAdjustment_throwsIllegalArgumentException() {
         setUpAuthenticatedActor();
-        UUID adjustmentId = UUID.randomUUID();
+        UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.empty());
 
@@ -199,7 +199,7 @@ class CycleCountAdjustmentServiceImplTest {
 
     @Test
     void rejectAdjustment_pendingApproval_setsRejectedStatus() {
-        UUID adjustmentId = UUID.randomUUID();
+        UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CycleCountAdjustment adjustment = pendingAdjustment(adjustmentId);
 
         when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
@@ -220,7 +220,7 @@ class CycleCountAdjustmentServiceImplTest {
 
     @Test
     void rejectAdjustment_nonExistentAdjustment_throwsIllegalArgumentException() {
-        UUID adjustmentId = UUID.randomUUID();
+        UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.empty());
 
@@ -240,7 +240,7 @@ class CycleCountAdjustmentServiceImplTest {
 
     @Test
     void listAdjustmentsByStatus_returnsList() {
-        UUID id = UUID.randomUUID();
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CycleCountAdjustment adjustment = pendingAdjustment(id);
 
         when(adjustmentRepository.findByStatus(AdjustmentStatus.PENDING_APPROVAL))
@@ -255,7 +255,7 @@ class CycleCountAdjustmentServiceImplTest {
 
     @Test
     void getAdjustment_existing_returnsResponse() {
-        UUID id = UUID.randomUUID();
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CycleCountAdjustment adjustment = pendingAdjustment(id);
 
         when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adjustment));

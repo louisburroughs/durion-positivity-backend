@@ -20,9 +20,15 @@ public record EventEmitted(
      * @param apiVersion The API version that triggered the event
      * @param timestamp  The timestamp from the event execution
      * @param elapsedMs  The elapsed time in milliseconds for the operation
+     * @param publishedAt The instant the event is published
      * @return EventEmitted domain event
      */
-    public static EventEmitted from(String eventId, String apiVersion, long timestamp, long elapsedMs) {
-        return new EventEmitted(eventId, apiVersion, timestamp, elapsedMs, Instant.now());
+    public static EventEmitted from(
+            String eventId,
+            String apiVersion,
+            long timestamp,
+            long elapsedMs,
+            Instant publishedAt) {
+        return new EventEmitted(eventId, apiVersion, timestamp, elapsedMs, publishedAt);
     }
 }

@@ -1,12 +1,28 @@
 package com.positivity.accounting.internal.audit.entity;
 
-import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
-import lombok.*;
-
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.positivity.shared.id.UUIDv7Id;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Configuration for role-based price override thresholds.
@@ -16,6 +32,7 @@ import java.util.UUID;
  * and percentage discounts. Supports versioning via effective dates.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "override_policy_threshold", indexes = {
         @Index(name = "idx_role_effective", columnList = "role, effective_date")
 })
@@ -26,19 +43,15 @@ import java.util.UUID;
 public class OverridePolicyThreshold {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "policy_id", updatable = false, nullable = false, columnDefinition = "UUID")
     private UUID policyId;
 
     @PrePersist
     public void onPrePersist() {
-        if (policyId == null) {
-            policyId = UUIDv7Generator.generate();
-        }
-        Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
         if (effectiveDate == null) {
-            effectiveDate = now;
+            effectiveDate = Instant.now(Clock.systemUTC());
         }
     }
 
@@ -86,13 +99,10 @@ public class OverridePolicyThreshold {
     private Boolean active = true;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
+    @LastModifiedDate
     private Instant updatedAt;
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = Instant.now();
-    }
 }

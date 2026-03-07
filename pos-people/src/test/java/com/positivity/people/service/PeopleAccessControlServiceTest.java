@@ -24,115 +24,114 @@ import static org.mockito.Mockito.when;
 
 class PeopleAccessControlServiceTest {
 
-    private SecurityServiceClient securityServiceClient;
-    private UserPersonTranslationService userPersonTranslationService;
-    private PersonRepository personRepository;
-    private PeopleAccessControlService peopleAccessControlService;
+	private SecurityServiceClient securityServiceClient;
 
-    // Fixed UUIDs for deterministic tests
-    private UUID testPersonId;
-    private UUID testUserId;
-    private UUID testLocationId;
+	private UserPersonTranslationService userPersonTranslationService;
 
-    @BeforeEach
-    void setUp() {
-        securityServiceClient = mock(SecurityServiceClient.class);
-        userPersonTranslationService = mock(UserPersonTranslationService.class);
-        personRepository = mock(PersonRepository.class);
-        peopleAccessControlService = new PeopleAccessControlServiceImpl(userPersonTranslationService,
-                securityServiceClient, personRepository);
+	private PersonRepository personRepository;
 
-        // Initialize fixed test UUIDs
-        testPersonId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testUserId = UUID.fromString("00000000-0000-0000-0000-000000000002");
-        testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000003");
-    }
+	private PeopleAccessControlService peopleAccessControlService;
 
-    @Test
-    void getAvailableRolesForPerson_combinesLocationAndGlobalRoles() {
-        RoleDto locationRole = RoleDto.builder().code("MANAGER").scopeType("LOCATION").build();
-        RoleDto globalRole = RoleDto.builder().code("ADMIN").scopeType("GLOBAL").build();
+	// Fixed UUIDs for deterministic tests
+	private UUID testPersonId;
 
-        when(personRepository.existsById(testPersonId)).thenReturn(true);
-        when(securityServiceClient.getAvailableRoles("LOCATION")).thenReturn(List.of(locationRole));
-        when(securityServiceClient.getAvailableRoles("GLOBAL")).thenReturn(List.of(globalRole));
+	private UUID testUserId;
 
-        List<RoleDto> result = peopleAccessControlService.getAvailableRolesForPerson(testPersonId);
+	private UUID testLocationId;
 
-        assertEquals(2, result.size());
-        verify(personRepository).existsById(testPersonId);
-    }
+	@BeforeEach
+	void setUp() {
+		securityServiceClient = mock(SecurityServiceClient.class);
+		userPersonTranslationService = mock(UserPersonTranslationService.class);
+		personRepository = mock(PersonRepository.class);
+		peopleAccessControlService = new PeopleAccessControlServiceImpl(userPersonTranslationService,
+				securityServiceClient, personRepository);
 
-    @Test
-    void getAvailableRolesForPerson_throwsWhenPersonNotFound() {
-        when(personRepository.existsById(testPersonId)).thenReturn(false);
+		// Initialize fixed test UUIDs
+		testPersonId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		testUserId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+		testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+	}
 
-        assertThrows(PersonNotFoundException.class,
-                () -> peopleAccessControlService.getAvailableRolesForPerson(testPersonId));
-    }
+	@Test
+	void getAvailableRolesForPerson_combinesLocationAndGlobalRoles() {
+		RoleDto locationRole = RoleDto.builder().code("MANAGER").scopeType("LOCATION").build();
+		RoleDto globalRole = RoleDto.builder().code("ADMIN").scopeType("GLOBAL").build();
 
-    @Test
-    void getPersonRoleAssignments_translatesPersonAndFetchesAssignments() {
-        UserRoleDto assignment = UserRoleDto.builder().roleCode("MANAGER").build();
-        when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.of(testUserId));
-        when(securityServiceClient.getUserRoleAssignments(testUserId, true, null)).thenReturn(List.of(assignment));
+		when(personRepository.existsById(testPersonId)).thenReturn(true);
+		when(securityServiceClient.getAvailableRoles("LOCATION")).thenReturn(List.of(locationRole));
+		when(securityServiceClient.getAvailableRoles("GLOBAL")).thenReturn(List.of(globalRole));
 
-        List<UserRoleDto> result = peopleAccessControlService.getPersonRoleAssignments(testPersonId, true, null);
+		List<RoleDto> result = peopleAccessControlService.getAvailableRolesForPerson(testPersonId);
 
-        assertEquals(1, result.size());
-        verify(userPersonTranslationService).getUserIdForPerson(testPersonId);
-        verify(securityServiceClient).getUserRoleAssignments(testUserId, true, null);
-    }
+		assertEquals(2, result.size());
+		verify(personRepository).existsById(testPersonId);
+	}
 
-    @Test
-    void assignRoleToPerson_translatesPersonAndCreatesAssignment() {
-        UserRoleDto created = UserRoleDto.builder().roleCode("MANAGER").build();
+	@Test
+	void getAvailableRolesForPerson_throwsWhenPersonNotFound() {
+		when(personRepository.existsById(testPersonId)).thenReturn(false);
 
-        when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.of(testUserId));
-        when(securityServiceClient.assignRole(any())).thenReturn(created);
+		assertThrows(PersonNotFoundException.class,
+				() -> peopleAccessControlService.getAvailableRolesForPerson(testPersonId));
+	}
 
-        UserRoleDto result = peopleAccessControlService.assignRoleToPerson(
-                testPersonId,
-                "MANAGER",
-                testLocationId,
-                LocalDateTime.parse("2026-02-16T10:00:00"),
-                null);
+	@Test
+	void getPersonRoleAssignments_translatesPersonAndFetchesAssignments() {
+		UserRoleDto assignment = UserRoleDto.builder().roleCode("MANAGER").build();
+		when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.of(testUserId));
+		when(securityServiceClient.getUserRoleAssignments(testUserId, true, null)).thenReturn(List.of(assignment));
 
-        assertEquals("MANAGER", result.getRoleCode());
-        verify(securityServiceClient).assignRole(any());
-    }
+		List<UserRoleDto> result = peopleAccessControlService.getPersonRoleAssignments(testPersonId, true, null);
 
-    @Test
-    void revokeRoleFromPerson_callsSecurityClient() {
-        LocalDateTime endDate = LocalDateTime.parse("2026-02-16T11:00:00");
-        when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.of(testUserId));
+		assertEquals(1, result.size());
+		verify(userPersonTranslationService).getUserIdForPerson(testPersonId);
+		verify(securityServiceClient).getUserRoleAssignments(testUserId, true, null);
+	}
 
-        peopleAccessControlService.revokeRoleFromPerson(testPersonId, "MANAGER", endDate);
+	@Test
+	void assignRoleToPerson_translatesPersonAndCreatesAssignment() {
+		UserRoleDto created = UserRoleDto.builder().roleCode("MANAGER").build();
 
-        verify(securityServiceClient).revokeRole(testUserId, "MANAGER", endDate);
-    }
+		when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.of(testUserId));
+		when(securityServiceClient.assignRole(any())).thenReturn(created);
 
-    @Test
-    void personMethods_throwWhenNoUserLinkExists() {
-        when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.empty());
+		UserRoleDto result = peopleAccessControlService.assignRoleToPerson(testPersonId, "MANAGER", testLocationId,
+				LocalDateTime.parse("2026-02-16T10:00:00"), null);
 
-        assertThrows(EntityNotFoundException.class,
-                () -> peopleAccessControlService.getPersonRoleAssignments(testPersonId, false, null));
-    }
+		assertEquals("MANAGER", result.getRoleCode());
+		verify(securityServiceClient).assignRole(any());
+	}
 
-    @Test
-    void assignRoleToPerson_throwsWhenEndDateBeforeStartDate() {
-        LocalDateTime startDate = LocalDateTime.parse("2026-02-20T10:00:00");
-        LocalDateTime endDate = LocalDateTime.parse("2026-02-15T10:00:00"); // before startDate
+	@Test
+	void revokeRoleFromPerson_callsSecurityClient() {
+		LocalDateTime endDate = LocalDateTime.parse("2026-02-16T11:00:00");
+		when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.of(testUserId));
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> peopleAccessControlService.assignRoleToPerson(
-                        testPersonId,
-                        "MANAGER",
-                        testLocationId,
-                        startDate,
-                        endDate));
+		peopleAccessControlService.revokeRoleFromPerson(testPersonId, "MANAGER", endDate);
 
-        assertEquals("endDate must be greater than or equal to startDate", exception.getMessage());
-    }
+		verify(securityServiceClient).revokeRole(testUserId, "MANAGER", endDate);
+	}
+
+	@Test
+	void personMethods_throwWhenNoUserLinkExists() {
+		when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.empty());
+
+		assertThrows(EntityNotFoundException.class,
+				() -> peopleAccessControlService.getPersonRoleAssignments(testPersonId, false, null));
+	}
+
+	@Test
+	void assignRoleToPerson_throwsWhenEndDateBeforeStartDate() {
+		LocalDateTime startDate = LocalDateTime.parse("2026-02-20T10:00:00");
+		LocalDateTime endDate = LocalDateTime.parse("2026-02-15T10:00:00"); // before
+																			// startDate
+
+		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+				() -> peopleAccessControlService.assignRoleToPerson(testPersonId, "MANAGER", testLocationId, startDate,
+						endDate));
+
+		assertEquals("endDate must be greater than or equal to startDate", exception.getMessage());
+	}
+
 }

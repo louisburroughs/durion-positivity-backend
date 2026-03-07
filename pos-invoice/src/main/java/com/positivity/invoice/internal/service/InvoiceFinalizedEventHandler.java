@@ -1,9 +1,7 @@
 package com.positivity.invoice.internal.service;
 
-import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
-import com.positivity.invoice.internal.entity.Invoice;
-import com.positivity.invoice.internal.enums.InvoiceStatus;
-import com.positivity.invoice.internal.repository.InvoiceRepository;
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,7 +9,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
-import java.util.UUID;
+import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
+import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.shared.id.UUIDv7Generator;
 
 /**
  * CAP-248 AC5: GL posting handler — idempotent by invoiceId, retry logic TBD.
@@ -48,8 +50,11 @@ public class InvoiceFinalizedEventHandler {
     @EventListener
     public void onInvoiceFinalized(@NonNull InvoiceFinalizedEvent event) {
         UUID invoiceId = event.invoiceId();
-        log.info("GL posting handler invoked: invoiceId(mask)={}, workorderId(mask)={}, amount={}",
-                maskForLog(invoiceId), maskForLog(event.workorderId()), event.grandTotal());
+
+        if (log.isInfoEnabled()) {
+            log.info("GL posting handler invoked: invoiceId(mask)={}, workorderId(mask)={}, amount={}",
+                    maskForLog(invoiceId), maskForLog(event.workorderId()), event.grandTotal());
+        }
 
         invoiceRepository.findById(invoiceId).ifPresentOrElse(
                 invoice -> postToGl(invoice, event),
@@ -66,14 +71,15 @@ public class InvoiceFinalizedEventHandler {
         try {
             // Simulate GL entry creation; production implementation connects to
             // pos-accounting via event bus (CAP-248 AC5 — retry infrastructure TBD)
-            UUID glEntryId = UUID.randomUUID();
+            UUID glEntryId = UUIDv7Generator.generate();
 
             invoice.setStatus(InvoiceStatus.POSTED);
             invoice.setGlEntryId(glEntryId);
             invoiceRepository.save(invoice);
-
-            log.info("GL posting succeeded: invoiceId(mask)={}, glEntryId(mask)={}, amount={}",
-                    maskForLog(invoice.getId()), maskForLog(glEntryId), event.grandTotal());
+            if (log.isInfoEnabled()) {
+                log.info("GL posting succeeded: invoiceId(mask)={}, glEntryId(mask)={}, amount={}",
+                        maskForLog(invoice.getId()), maskForLog(glEntryId), event.grandTotal());
+            }
         } catch (Exception e) {
             log.error("GL posting failed: invoiceId(mask)={}, error={}", maskForLog(invoice.getId()), e.getMessage(),
                     e);

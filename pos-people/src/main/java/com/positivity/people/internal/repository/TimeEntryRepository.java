@@ -14,39 +14,37 @@ import java.util.UUID;
 
 @Repository
 public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
-        List<TimeEntry> findByTimeEntryIdIn(List<UUID> ids);
 
-        long countByStatus(TimeEntryStatus status);
+	List<TimeEntry> findByTimeEntryIdIn(List<UUID> ids);
 
-        @NonNull
-        @Query("""
-                        SELECT t
-                        FROM TimeEntry t
-                        WHERE t.attendanceStartAt IS NOT NULL
-                          AND t.attendanceStartAt < :windowEndExclusive
-                          AND (t.attendanceEndAt IS NULL OR t.attendanceEndAt > :windowStartInclusive)
-                          AND (:locationId IS NULL OR t.locationId = :locationId)
-                          AND (:includeAllTechnicians = true OR t.personId IN :technicianIds)
-                        """)
-        List<TimeEntry> findAttendanceOverlappingWindow(
-                        @Param("windowStartInclusive") Instant windowStartInclusive,
-                        @Param("windowEndExclusive") Instant windowEndExclusive,
-                        @Param("locationId") UUID locationId,
-                        @Param("technicianIds") List<String> technicianIds,
-                        @Param("includeAllTechnicians") boolean includeAllTechnicians);
+	long countByStatus(TimeEntryStatus status);
 
-        @NonNull
-        @Query("""
-                        SELECT t
-                        FROM TimeEntry t
-                        WHERE t.status = :status
-                          AND t.attendanceStartAt >= :windowStartInclusive
-                          AND t.attendanceStartAt < :windowEndExclusive
-                          AND t.locationId IN :locationIds
-                        """)
-        List<TimeEntry> findApprovedForExport(
-                        @Param("status") TimeEntryStatus status,
-                        @Param("windowStartInclusive") Instant windowStartInclusive,
-                        @Param("windowEndExclusive") Instant windowEndExclusive,
-                        @Param("locationIds") List<UUID> locationIds);
+	@NonNull
+	@Query("""
+			SELECT t
+			FROM TimeEntry t
+			WHERE t.attendanceStartAt IS NOT NULL
+			  AND t.attendanceStartAt < :windowEndExclusive
+			  AND (t.attendanceEndAt IS NULL OR t.attendanceEndAt > :windowStartInclusive)
+			  AND (:locationId IS NULL OR t.locationId = :locationId)
+			  AND (:includeAllTechnicians = true OR t.personId IN :technicianIds)
+			""")
+	List<TimeEntry> findAttendanceOverlappingWindow(@Param("windowStartInclusive") Instant windowStartInclusive,
+			@Param("windowEndExclusive") Instant windowEndExclusive, @Param("locationId") UUID locationId,
+			@Param("technicianIds") List<String> technicianIds,
+			@Param("includeAllTechnicians") boolean includeAllTechnicians);
+
+	@NonNull
+	@Query("""
+			SELECT t
+			FROM TimeEntry t
+			WHERE t.status = :status
+			  AND t.attendanceStartAt >= :windowStartInclusive
+			  AND t.attendanceStartAt < :windowEndExclusive
+			  AND t.locationId IN :locationIds
+			""")
+	List<TimeEntry> findApprovedForExport(@Param("status") TimeEntryStatus status,
+			@Param("windowStartInclusive") Instant windowStartInclusive,
+			@Param("windowEndExclusive") Instant windowEndExclusive, @Param("locationIds") List<UUID> locationIds);
+
 }
