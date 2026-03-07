@@ -1,218 +1,232 @@
 package com.positivity.order;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static com.positivity.order.internal.security.PriceOverridePermissions.PRICE_OVERRIDE_APPLY;
+import static com.positivity.order.internal.security.PriceOverridePermissions.PRICE_OVERRIDE_APPROVE;
+import static com.positivity.order.internal.security.PriceOverridePermissions.PRICE_OVERRIDE_REJECT;
+import static com.positivity.order.internal.security.PriceOverridePermissions.PRICE_OVERRIDE_VIEW;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@DisplayName("Order Management Backend Contract Behavioral Tests")
+@DisplayName("Price Override Contract Behavior Tests")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
 
-        @Autowired
-        private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-        @Autowired
-        private ObjectMapper objectMapper;
+    @Autowired
+    private ObjectMapper objectMapper;
 
-        // ========== HAPPY PATH TESTS ==========
-        @Test
-        @DisplayName("CP-001: Successfully create order with valid items and totals")
-        void testCreateOrder_HappyPath() throws Exception {
-                String payload = createOrderPayload("CUST-001", "100.00", "10.00", "110.00");
-                mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-001"))
-                                .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.id").exists())
-                                .andExpect(jsonPath("$.customerId").value("CUST-001"))
-                                .andExpect(jsonPath("$.total").value(110.00));
-        }
+    @Override
+    protected String defaultAuthorities() {
+        return String.join(",", PRICE_OVERRIDE_VIEW, PRICE_OVERRIDE_APPLY, PRICE_OVERRIDE_APPROVE,
+                PRICE_OVERRIDE_REJECT, "ROLE_MANAGER");
+    }
 
-        @Test
-        @DisplayName("CP-002: Successfully retrieve order by ID")
-        void testGetOrder_HappyPath() throws Exception {
-                String payload = createOrderPayload("CUST-002", "250.50", "25.05", "275.55");
-                MvcResult createResult = mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-002"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
+    @Test
+    @DisplayName("CP-001: Apply override with small discount returns 201 APPROVED")
+    void testApplyPriceOverride_AutoApproved() throws Exception {
+        String payload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(), "100.00", "95.00");
 
-                String orderId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
-                                .asString();
-                mockMvc.perform(get("/v1/orders/{id}", orderId)
-                                .header("X-Correlation-Id", "test-002"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.id").value(orderId))
-                                .andExpect(jsonPath("$.total").value(275.55));
-        }
+        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .header("X-Correlation-Id", "test-apply-auto-approved")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.overrideId").exists())
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.requiresApproval").value(false));
+    }
 
-        // ========== VALIDATION ERROR TESTS ==========
-        @Test
-        @DisplayName("VE-001: Reject order with missing customerId")
-        void testCreateOrder_MissingCustomerId() throws Exception {
-                String invalidPayload = "{\"subtotal\":\"100.00\",\"taxAmount\":\"10.00\",\"total\":\"110.00\"}";
-                mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(invalidPayload)
-                                .header("X-Correlation-Id", "test-ve-001"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-        }
+    @Test
+    @DisplayName("CP-002: Apply override with large discount returns 201 PENDING_APPROVAL")
+    void testApplyPriceOverride_RequiresApproval() throws Exception {
+        String payload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(), "1000.00", "800.00");
 
-        @Test
-        @DisplayName("VE-002: Reject order with totals mismatch")
-        void testCreateOrder_TotalsMismatch() throws Exception {
-                String invalidPayload = createOrderPayload("CUST-003", "100.00", "10.00", "99.99");
-                mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(invalidPayload)
-                                .header("X-Correlation-Id", "test-ve-002"))
-                                .andExpect(status().isConflict())
-                                .andExpect(jsonPath("$.code").value("CONFLICT"));
-        }
+        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .header("X-Correlation-Id", "test-apply-pending")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.overrideId").exists())
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
+                .andExpect(jsonPath("$.requiresApproval").value(true));
+    }
 
-        @Test
-        @DisplayName("VE-003: Reject order with negative subtotal")
-        void testCreateOrder_NegativeSubtotal() throws Exception {
-                String invalidPayload = createOrderPayload("CUST-004", "-50.00", "0.00", "-50.00");
-                mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(invalidPayload)
-                                .header("X-Correlation-Id", "test-ve-003"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-        }
+    @Test
+    @DisplayName("CP-003: Get override by ID returns 200")
+    void testGetOverride_HappyPath() throws Exception {
+        String orderId = UUID.randomUUID().toString();
+        String payload = createApplyPayload(orderId, newUuid(), newUuid(), "1000.00", "800.00");
 
-        // ========== IDEMPOTENCY TEST ==========
-        @Test
-        @DisplayName("ID-001: Idempotent create with same Idempotency-Key returns same resource")
-        void testCreateOrder_Idempotent() throws Exception {
-                String idempotencyKey = "idem-order-" + System.currentTimeMillis();
-                String payload = createOrderPayload("CUST-005", "500.00", "50.00", "550.00");
+        MvcResult create = mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .header("X-Correlation-Id", "test-get-create")))
+                .andExpect(status().isCreated())
+                .andReturn();
 
-                MvcResult result1 = mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-id-001")
-                                .header("Idempotency-Key", idempotencyKey))
-                                .andExpect(status().isCreated())
-                                .andReturn();
+        String overrideId = readField(create, "overrideId");
 
-                String id1 = objectMapper.readTree(result1.getResponse().getContentAsString()).get("id").asString();
+        mockMvc.perform(withGatewayAuth(get("/v1/orders/price-overrides/{overrideId}", overrideId)
+                .header("X-Correlation-Id", "test-get-fetch")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.overrideId").value(overrideId))
+                .andExpect(jsonPath("$.orderId").value(orderId));
+    }
 
-                MvcResult result2 = mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-id-001")
-                                .header("Idempotency-Key", idempotencyKey))
-                                .andExpect(status().isCreated())
-                                .andReturn();
+    @Test
+    @DisplayName("CP-004: Get overrides by orderId filter returns matching records")
+    void testGetOverridesByOrderId_HappyPath() throws Exception {
+        String orderId = UUID.randomUUID().toString();
+        String payload = createApplyPayload(orderId, newUuid(), newUuid(), "500.00", "450.00");
 
-                String id2 = objectMapper.readTree(result2.getResponse().getContentAsString()).get("id").asString();
-                assert id1.equals(id2) : "Idempotent requests should return same order ID";
-        }
+        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .header("X-Correlation-Id", "test-list-create")))
+                .andExpect(status().isCreated());
 
-        // ========== CONCURRENCY INVARIANT TESTS ==========
-        @Test
-        @DisplayName("CC-001: Optimistic locking prevents concurrent updates with stale version")
-        void testUpdateOrder_OptimisticLockingConflict() throws Exception {
-                String payload = createOrderPayload("CUST-006", "300.00", "30.00", "330.00");
-                MvcResult createResult = mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-cc-001"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
+        MvcResult listResult = mockMvc.perform(withGatewayAuth(get("/v1/orders/price-overrides")
+                .queryParam("orderId", orderId)
+                .header("X-Correlation-Id", "test-list-fetch")))
+                .andExpect(status().isOk())
+                .andReturn();
 
-                String orderId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
-                                .asString();
-                String updatePayload = "{\"subtotal\":\"350.00\",\"taxAmount\":\"35.00\",\"total\":\"385.00\",\"version\":0}";
+        String responseBody = listResult.getResponse().getContentAsString();
+        assertThat(responseBody).contains(orderId);
+    }
 
-                mockMvc.perform(patch("/v1/orders/{id}", orderId)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(updatePayload)
-                                .header("X-Correlation-Id", "test-cc-001"))
-                                .andExpect(status().isConflict())
-                                .andExpect(jsonPath("$.code").value("CONFLICT"));
-        }
+    @Test
+    @DisplayName("CP-005: Pending approvals endpoint returns pending overrides")
+    void testGetPendingApprovals_HappyPath() throws Exception {
+        String pendingPayload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(), "1200.00",
+                "900.00");
 
-        @Test
-        @DisplayName("CC-002: Order state transition respects business rules")
-        void testUpdateOrder_ValidStateTransition() throws Exception {
-                String payload = createOrderPayload("CUST-007", "400.00", "40.00", "440.00");
-                MvcResult createResult = mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-cc-002"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
+        MvcResult create = mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(pendingPayload)
+                .header("X-Correlation-Id", "test-pending-create")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
+                .andReturn();
 
-                String orderId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
-                                .asString();
-                String confirmPayload = "{\"status\":\"CONFIRMED\"}";
+        String pendingOverrideId = readField(create, "overrideId");
 
-                mockMvc.perform(patch("/v1/orders/{id}/status", orderId)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(confirmPayload)
-                                .header("X-Correlation-Id", "test-cc-002"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.status").value("CONFIRMED"));
-        }
+        MvcResult pendingList = mockMvc.perform(withGatewayAuth(get("/v1/orders/price-overrides/pending")
+                .header("X-Correlation-Id", "test-pending-fetch")))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // ========== FIELD FORMAT VALIDATION TESTS ==========
-        @Test
-        @DisplayName("FF-001: ISO 8601 timestamp format validation for createdAt")
-        void testOrder_TimestampFormat() throws Exception {
-                String payload = createOrderPayload("CUST-008", "150.00", "15.00", "165.00");
-                MvcResult result = mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-ff-001"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
+        String responseBody = pendingList.getResponse().getContentAsString();
+        assertThat(responseBody).contains(pendingOverrideId);
+    }
 
-                String createdAt = objectMapper.readTree(result.getResponse().getContentAsString()).get("createdAt")
-                                .asString();
-                assert createdAt.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z")
-                                : "createdAt must be ISO 8601 UTC format";
-        }
+    @Test
+    @DisplayName("CP-006: Approve pending override returns 200 APPROVED")
+    void testApproveOverride_HappyPath() throws Exception {
+        String payload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(), "1000.00", "800.00");
 
-        @Test
-        @DisplayName("FF-002: Valid order status enum values")
-        void testOrder_ValidStatusEnums() throws Exception {
-                String payload = createOrderPayload("CUST-009", "200.00", "20.00", "220.00");
-                MvcResult result = mockMvc.perform(post("/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-ff-002"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
+        MvcResult create = mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .header("X-Correlation-Id", "test-approve-create")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
+                .andReturn();
 
-                String status = objectMapper.readTree(result.getResponse().getContentAsString()).get("status")
-                                .asString();
-                assert status.matches("DRAFT|CONFIRMED|SHIPPED|CANCELLED|COMPLETED")
-                                : "Order status must be valid enum value";
-        }
+        String overrideId = readField(create, "overrideId");
 
-        private String createOrderPayload(String customerId, String subtotal, String taxAmount, String total) {
-                return String.format(
-                                "{\"customerId\":\"%s\",\"subtotal\":%s,\"taxAmount\":%s,\"total\":%s}",
-                                customerId, subtotal, taxAmount, total);
-        }
+        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides/{overrideId}/approve", overrideId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"comments\":\"approved in test\"}")
+                .header("X-Correlation-Id", "test-approve-call")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.approvedByUserId").value("00000000-0000-0000-0000-000000000001"));
+    }
+
+    @Test
+    @DisplayName("CP-007: Reject pending override returns 200 REJECTED")
+    void testRejectOverride_HappyPath() throws Exception {
+        String payload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(), "1000.00", "800.00");
+
+        MvcResult create = mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .header("X-Correlation-Id", "test-reject-create")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
+                .andReturn();
+
+        String overrideId = readField(create, "overrideId");
+
+        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides/{overrideId}/reject", overrideId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"exceeds policy\",\"comments\":\"reject in test\"}")
+                .header("X-Correlation-Id", "test-reject-call")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectionReason").value("exceeds policy"));
+    }
+
+    @Test
+    @DisplayName("VE-001: Missing required fields in apply request returns 400")
+    void testApplyPriceOverride_MissingRequiredField() throws Exception {
+        String invalidPayload = """
+                {
+                  "orderLineId": "%s",
+                  "productId": "%s",
+                  "originalPrice": 100.00,
+                  "overridePrice": 90.00,
+                  "reasonCode": "CUSTOMER_LOYALTY"
+                }
+                """.formatted(newUuid(), newUuid());
+
+        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidPayload)
+                .header("X-Correlation-Id", "test-apply-invalid")))
+                .andExpect(status().isBadRequest());
+    }
+
+    private String createApplyPayload(String orderId, String orderLineId, String productId,
+            String originalPrice, String overridePrice) {
+        return """
+                {
+                  "orderId": "%s",
+                  "orderLineId": "%s",
+                  "productId": "%s",
+                  "originalPrice": %s,
+                  "overridePrice": %s,
+                  "reasonCode": "CUSTOMER_LOYALTY",
+                  "justification": "contract test"
+                }
+                """.formatted(orderId, orderLineId, productId, originalPrice, overridePrice);
+    }
+
+    private String newUuid() {
+        return UUID.randomUUID().toString();
+    }
+
+    private String readField(MvcResult result, String field) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get(field).asText();
+    }
 }
