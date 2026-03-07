@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.controller;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -306,10 +307,17 @@ public class ProductController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/{productId}/substitutes")
     @Operation(summary = "Get substitute parts", description = "Returns list of substitute parts for a given productId.")
-    @ApiResponse(responseCode = "501", description = "Not implemented")
+    @ApiResponse(responseCode = "200", description = "Substitute parts returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+    @ApiResponse(responseCode = "404", description = "Product not found")
     public ResponseEntity<List<ProductDto>> getPartSubstitutes(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {
-        log.warn("Substitutes endpoint not implemented yet: productId={}", productId);
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        List<ProductDto> substitutes = productLifecycleService.getReplacementProducts(productId).stream()
+                .map(ProductLifecycleResponse.ReplacementOption::getReplacementProductId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(catalogService::getProductById)
+                .flatMap(java.util.Optional::stream)
+                .toList();
+        return ResponseEntity.ok(substitutes);
     }
 }

@@ -77,11 +77,13 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         @Test
-        @DisplayName("CP-005: Substitutes endpoint returns not implemented")
-        void testGetSubstitutes_NotImplemented() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/products/{productId}/substitutes",
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
-                                .andExpect(status().isNotImplemented());
+        @DisplayName("CP-005: Substitutes endpoint returns empty list when no replacements configured")
+        void testGetSubstitutes_EmptyList() throws Exception {
+                UUID productId = createProductAndReturnId("CP-005 Product");
+
+                mockMvc.perform(withAuth(get("/v1/products/{productId}/substitutes", productId)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.length()").value(0));
         }
 
         @Test
