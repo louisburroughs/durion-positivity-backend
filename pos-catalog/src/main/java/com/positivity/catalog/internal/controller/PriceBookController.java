@@ -42,7 +42,7 @@ public class PriceBookController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping
-    @Operation(summary = "Create price book")
+    @Operation(summary = "Create price book", description = "Creates a new price book used to group and apply pricing rules.")
     @ApiResponse(responseCode = "201", description = "Price book created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid payload")
     @EmitEvent(id = "CATALOG_PRICE_BOOK_CREATE", apiVersion = "1")
@@ -52,7 +52,7 @@ public class PriceBookController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasRole('CATALOG_EDIT')")
     @GetMapping("/{priceBookId}")
-    @Operation(summary = "Get price book")
+    @Operation(summary = "Get price book", description = "Retrieves a price book by ID, including its configuration metadata.")
     @ApiResponse(responseCode = "200", description = "Price book returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookDto.class)))
     @ApiResponse(responseCode = "404", description = "Price book not found")
     public ResponseEntity<PriceBookDto> getPriceBook(@Parameter(required = true) @PathVariable UUID priceBookId) {
@@ -61,7 +61,7 @@ public class PriceBookController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PutMapping("/{priceBookId}")
-    @Operation(summary = "Update price book")
+    @Operation(summary = "Update price book", description = "Updates mutable fields of an existing price book.")
     @ApiResponse(responseCode = "200", description = "Price book updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookDto.class)))
     @ApiResponse(responseCode = "404", description = "Price book not found")
     @EmitEvent(id = "CATALOG_PRICE_BOOK_UPDATE", apiVersion = "1")
@@ -73,7 +73,7 @@ public class PriceBookController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/{priceBookId}/rules")
-    @Operation(summary = "Create price book rule")
+    @Operation(summary = "Create price book rule", description = "Adds a new pricing rule to a specific price book.")
     @ApiResponse(responseCode = "201", description = "Price book rule created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookRuleDto.class)))
     @ApiResponse(responseCode = "409", description = "Rule conflict")
     @EmitEvent(id = "CATALOG_PRICE_BOOK_RULE_CREATE", apiVersion = "1")
@@ -85,7 +85,7 @@ public class PriceBookController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PutMapping("/{priceBookId}/rules/{ruleId}")
-    @Operation(summary = "Update price book rule")
+    @Operation(summary = "Update price book rule", description = "Updates an existing pricing rule in a price book.")
     @ApiResponse(responseCode = "200", description = "Price book rule updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookRuleDto.class)))
     @ApiResponse(responseCode = "409", description = "Rule conflict")
     @EmitEvent(id = "CATALOG_PRICE_BOOK_RULE_UPDATE", apiVersion = "1")
@@ -98,7 +98,7 @@ public class PriceBookController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @DeleteMapping("/{priceBookId}/rules/{ruleId}")
-    @Operation(summary = "Deactivate price book rule")
+    @Operation(summary = "Deactivate price book rule", description = "Deactivates a price book rule so it is no longer considered in price resolution.")
     @ApiResponse(responseCode = "204", description = "Rule deactivated")
     @EmitEvent(id = "CATALOG_PRICE_BOOK_RULE_DEACTIVATE", apiVersion = "1")
     public ResponseEntity<Void> deactivateRule(
@@ -110,7 +110,7 @@ public class PriceBookController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasRole('CATALOG_EDIT')")
     @GetMapping("/{priceBookId}/rules")
-    @Operation(summary = "List price book rules")
+    @Operation(summary = "List price book rules", description = "Returns all rules associated with a price book.")
     @ApiResponse(responseCode = "200", description = "Rule list returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookRuleDto.class)))
     public ResponseEntity<List<PriceBookRuleDto>> listRules(
             @Parameter(required = true) @PathVariable UUID priceBookId) {
@@ -119,7 +119,7 @@ public class PriceBookController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasRole('CATALOG_EDIT')")
     @PostMapping("/resolve-price")
-    @Operation(summary = "Resolve effective product price")
+    @Operation(summary = "Resolve effective product price", description = "Calculates the effective price for a product using applicable price books and rules.")
     @ApiResponse(responseCode = "200", description = "Resolved price returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ResolvePriceResponseDto.class)))
     @EmitEvent(id = "CATALOG_PRICE_BOOK_RESOLVE_PRICE", apiVersion = "1")
     public ResponseEntity<ResolvePriceResponseDto> resolvePrice(@Valid @RequestBody ResolvePriceRequestDto request) {
