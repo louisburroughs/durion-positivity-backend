@@ -213,7 +213,7 @@ class WorkorderEventHandlerCoverageTest {
         }
 
         // -----------------------------------------------------------------------
-        // handleContactPreferenceUpdated — catch(Exception) branch via bad partyId
+        // handleContactPreferenceUpdated — catch Exception branch via bad partyId
         // -----------------------------------------------------------------------
 
         /**
@@ -246,7 +246,7 @@ class WorkorderEventHandlerCoverageTest {
         }
 
         // -----------------------------------------------------------------------
-        // handlePartyNoteAdded — catch(Exception) branch via bad partyId
+        // handlePartyNoteAdded — catch Exception branch via bad partyId
         // -----------------------------------------------------------------------
 
         /**
@@ -280,7 +280,7 @@ class WorkorderEventHandlerCoverageTest {
         }
 
         // -----------------------------------------------------------------------
-        // handleVehicleUpdated — catch(Exception) branch via save failure
+        // handleVehicleUpdated — catch Exception branch via save failure
         // -----------------------------------------------------------------------
 
         /**
