@@ -32,7 +32,6 @@ import java.util.UUID;
 public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusService {
     private final Clock clock;
 
-
     private static final Logger log = LoggerFactory.getLogger(InvoicePaymentStatusServiceImpl.class);
 
     private final PaymentAppliedEventRepository paymentEventRepository;
@@ -109,6 +108,9 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
      * the {@code @Transactional} proxy on {@link #getInvoiceStatus(UUID)}.
      */
     private InvoiceStatusResponse buildInvoiceStatusResponse(UUID invoiceId) {
+        if (log.isInfoEnabled()) {
+            log.info("Querying status for invoice {}", maskInvoiceId(invoiceId));
+        }
         InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(invoiceId)
                 .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
 
@@ -119,6 +121,15 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
                 statusView.getInvoiceTotal(),
                 statusView.getLatestTransactionReference(),
                 statusView.getLastUpdated());
+    }
+
+    private String maskInvoiceId(UUID invoiceId) {
+        if (invoiceId == null) {
+            return "null";
+        }
+
+        String value = invoiceId.toString();
+        return value.substring(0, 8) + "...";
     }
 
     /**
