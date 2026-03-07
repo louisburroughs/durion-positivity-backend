@@ -343,7 +343,7 @@ paths:
       summary: View workorder operational context
       description: Read-only operational context view for workorders used by UI with
         optional filters.
-      operationId: viewOpenWorkordersByShop
+      operationId: getOperationalContext
       parameters:
       - name: locationId
         in: path

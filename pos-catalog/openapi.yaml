@@ -44,16 +44,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Successfully retrieved product
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "404":
           description: Product not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+        "200":
+          description: Successfully retrieved product
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
     put:
@@ -89,16 +89,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "200":
           description: Product updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+        "404":
+          description: Product not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
   /v1/products/{productId}/msrp/{msrpId}:
@@ -146,16 +146,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
-        "409":
-          description: Temporal overlap or optimistic locking conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "200":
           description: MSRP updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "409":
+          description: Temporal overlap or optimistic locking conflict
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/{productId}/lifecycle:
@@ -174,16 +174,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
         "200":
           description: Successfully retrieved lifecycle state
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+        "404":
+          description: Product not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
     put:
@@ -208,16 +208,16 @@ paths:
               $ref: "#/components/schemas/ProductLifecycleUpdateRequest"
         required: true
       responses:
-        "400":
-          description: Validation error
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
         "200":
           description: Lifecycle state updated successfully
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+        "400":
+          description: Validation error
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
         "404":
@@ -243,29 +243,40 @@ paths:
       tags:
       - UOM Conversion API
       summary: Get conversion
-      operationId: get
+      description: Retrieves a unit-of-measure conversion by its ID.
+      operationId: getUomConversionById
       parameters:
       - name: id
         in: path
+        description: Conversion ID
         required: true
         schema:
           type: string
           format: uuid
       responses:
+        "404":
+          description: Conversion not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UomConversionDto"
         "200":
           description: Conversion found
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
     put:
       tags:
       - UOM Conversion API
       summary: Update conversion factor
-      operationId: update
+      description: Updates the conversion factor and mutable fields for an existing
+        conversion.
+      operationId: updateUomConversion
       parameters:
       - name: id
         in: path
+        description: Conversion ID
         required: true
         schema:
           type: string
@@ -280,6 +291,18 @@ paths:
         "200":
           description: Conversion updated
           content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UomConversionDto"
+        "404":
+          description: Conversion not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UomConversionDto"
+        "400":
+          description: Invalid request
+          content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
@@ -287,10 +310,13 @@ paths:
       tags:
       - UOM Conversion API
       summary: Deactivate conversion
-      operationId: deactivate
+      description: Deactivates a conversion so it is excluded from active conversion
+        results.
+      operationId: deactivateUomConversion
       parameters:
       - name: id
         in: path
+        description: Conversion ID
         required: true
         schema:
           type: string
@@ -298,6 +324,8 @@ paths:
       responses:
         "204":
           description: Conversion deactivated
+        "404":
+          description: Conversion not found
   /v1/products/supplier-costs/{id}:
     get:
       tags:
@@ -343,16 +371,16 @@ paths:
               $ref: "#/components/schemas/SupplierItemCostUpdateRequestDto"
         required: true
       responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
         "404":
           description: Not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
+        "200":
+          description: Updated
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
     delete:
@@ -377,6 +405,7 @@ paths:
       tags:
       - Price Book API
       summary: Get price book
+      description: "Retrieves a price book by ID, including its configuration metadata."
       operationId: getPriceBook
       parameters:
       - name: priceBookId
@@ -402,6 +431,7 @@ paths:
       tags:
       - Price Book API
       summary: Update price book
+      description: Updates mutable fields of an existing price book.
       operationId: updatePriceBook
       parameters:
       - name: priceBookId
@@ -417,16 +447,16 @@ paths:
               $ref: "#/components/schemas/PriceBookCreateRequestDto"
         required: true
       responses:
-        "404":
-          description: Price book not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookDto"
         "200":
           description: Price book updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/PriceBookDto"
+        "404":
+          description: Price book not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
   /v1/products/price-books/{priceBookId}/rules/{ruleId}:
@@ -434,6 +464,7 @@ paths:
       tags:
       - Price Book API
       summary: Update price book rule
+      description: Updates an existing pricing rule in a price book.
       operationId: updateRule
       parameters:
       - name: priceBookId
@@ -471,6 +502,8 @@ paths:
       tags:
       - Price Book API
       summary: Deactivate price book rule
+      description: Deactivates a price book rule so it is no longer considered in
+        price resolution.
       operationId: deactivateRule
       parameters:
       - name: priceBookId
@@ -508,16 +541,16 @@ paths:
               $ref: "#/components/schemas/UpdateStandardCostRequestDto"
         required: true
       responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ItemCostsDto"
         "400":
           description: Invalid payload
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/ItemCostsDto"
+        "200":
+          description: Updated
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ItemCostsDto"
   /v1/catalogs/{catalogId}:
@@ -570,16 +603,16 @@ paths:
               $ref: "#/components/schemas/CatalogDto"
         required: true
       responses:
-        "200":
-          description: Catalog updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogDto"
         "400":
           description: Invalid request body
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogDto"
+        "200":
+          description: Catalog updated successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
         "404":
@@ -636,16 +669,16 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        "200":
-          description: Catalog item updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
         "400":
           description: Invalid item type or request body
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+        "200":
+          description: Catalog item updated successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
         "404":
@@ -848,12 +881,13 @@ paths:
       tags:
       - UOM Conversion API
       summary: List active conversions
-      operationId: list
+      description: Returns all active unit-of-measure conversion records.
+      operationId: listUomConversions
       responses:
         "200":
           description: Conversions listed
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -862,7 +896,8 @@ paths:
       tags:
       - UOM Conversion API
       summary: Create UOM conversion
-      operationId: create
+      description: Creates a new unit-of-measure conversion record.
+      operationId: createUomConversion
       requestBody:
         content:
           application/json:
@@ -872,6 +907,12 @@ paths:
       responses:
         "201":
           description: Conversion created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UomConversionDto"
+        "400":
+          description: Invalid request
           content:
             '*/*':
               schema:
@@ -889,6 +930,12 @@ paths:
               $ref: "#/components/schemas/SupplierItemCostCreateRequestDto"
         required: true
       responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
         "400":
           description: Invalid payload
           content:
@@ -899,12 +946,6 @@ paths:
           description: Duplicate supplier and item combination
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
-        "201":
-          description: Created
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
   /v1/products/pricing/location-overrides:
@@ -922,12 +963,6 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideCreateRequestDto"
         required: true
       responses:
-        "201":
-          description: Override created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "400":
           description: Guardrail validation failed
           content:
@@ -938,6 +973,12 @@ paths:
           description: Forbidden
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "201":
+          description: Override created
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
   /v1/products/pricing/location-overrides/{overrideId}/reject:
@@ -963,12 +1004,6 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "200":
-          description: Override rejected
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "404":
           description: Override or approval request not found
           content:
@@ -985,6 +1020,12 @@ paths:
           description: Version conflict
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "200":
+          description: Override rejected
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
   /v1/products/pricing/location-overrides/{overrideId}/approve:
@@ -1010,16 +1051,16 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "404":
-          description: Override or approval request not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "200":
           description: Override approved
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "404":
+          description: Override or approval request not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "409":
@@ -1066,6 +1107,7 @@ paths:
       tags:
       - Price Book API
       summary: Create price book
+      description: Creates a new price book used to group and apply pricing rules.
       operationId: createPriceBook
       requestBody:
         content:
@@ -1091,6 +1133,7 @@ paths:
       tags:
       - Price Book API
       summary: List price book rules
+      description: Returns all rules associated with a price book.
       operationId: listRules
       parameters:
       - name: priceBookId
@@ -1110,6 +1153,7 @@ paths:
       tags:
       - Price Book API
       summary: Create price book rule
+      description: Adds a new pricing rule to a specific price book.
       operationId: createRule
       parameters:
       - name: priceBookId
@@ -1142,6 +1186,8 @@ paths:
       tags:
       - Price Book API
       summary: Resolve effective product price
+      description: Calculates the effective price for a product using applicable price
+        books and rules.
       operationId: resolvePrice
       requestBody:
         content:
@@ -1204,16 +1250,16 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        "201":
-          description: Catalog item created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
         "400":
           description: Invalid item type or request body
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+        "201":
+          description: Catalog item created successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
   /v1/products/{productId}/substitutes:
@@ -1232,8 +1278,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "501":
-          description: Not implemented
+        "200":
+          description: Substitute parts returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+        "404":
+          description: Product not found
           content:
             '*/*':
               schema:
@@ -1298,6 +1350,13 @@ paths:
           type: string
           format: uuid
       responses:
+        "200":
+          description: Successfully retrieved product details (may be partial if some
+            services unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetailView"
         "400":
           description: Invalid location ID
           content:
@@ -1314,13 +1373,6 @@ paths:
           description: Unexpected server error while retrieving product details
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDetailView"
-        "200":
-          description: Successfully retrieved product details (may be partial if some
-            services unavailable)
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
   /v1/products/services/{serviceId}:
@@ -1420,16 +1472,16 @@ paths:
           format: int32
           default: 20
       responses:
-        "400":
-          description: "Invalid request parameter (e.g., non-numeric limit)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogSearchResultDto"
         "200":
           description: Search results
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSearchResultDto"
+        "400":
+          description: "Invalid request parameter (e.g., non-numeric limit)"
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/CatalogSearchResultDto"
   /v1/products/pricing/effective-price/{locationId}/{productId}:

@@ -380,6 +380,12 @@ paths:
               $ref: "#/components/schemas/PersonRoleAssignmentRequest"
         required: true
       responses:
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "404":
           description: Person or role not found
           content:
@@ -392,12 +398,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserRoleDto"
-        "400":
-          description: Invalid request
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -510,14 +510,14 @@ paths:
               $ref: "#/components/schemas/LinkUserToPersonRequest"
         required: true
       responses:
-        "201":
-          description: Link created successfully
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "200":
-          description: Link already exists and is returned
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -554,14 +554,14 @@ paths:
               $ref: "#/components/schemas/CreateUserLinkRequest"
         required: true
       responses:
-        "201":
-          description: Link created successfully
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "200":
-          description: Link already exists and is returned
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -1436,14 +1436,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "204":
-          description: Role assignment revoked successfully
         "404":
           description: Person or role assignment not found
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
+        "204":
+          description: Role assignment revoked successfully
   /v1/people/users/{userId}/link:
     delete:
       tags:
