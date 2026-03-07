@@ -5,6 +5,8 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -58,6 +60,9 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
 
         @Autowired
         private WorkorderPartAdjustmentEventRepository adjustmentEventRepository;
+
+        @Autowired
+        private Clock clock;
 
         private UUID testCustomerId;
         private UUID testLocationId;
@@ -402,7 +407,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 // Given: A workorder with a part
                 UUID workorderId = seedWorkorderWithPart();
                 UUID partId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
-                String idempotencyKey = "test-correct-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
+                String idempotencyKey = "test-correct-" + UUID.fromString("11000000-0000-0000-0000-000000000001");
 
                 Map<String, Object> correctRequest = Map.of(
                                 "workorderPartId", partId.toString(),
@@ -441,7 +446,6 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
 
         @Test
         @DisplayName("PA-008: Get adjustment history returns newest-first")
-        @org.junit.jupiter.api.Disabled("RestAssured NullPointerException - needs investigation")
         void testGetAdjustmentHistory_NewestFirst() {
                 // Given: A workorder with multiple adjustments
                 UUID workorderId = seedWorkorderWithMultipleAdjustments();
@@ -467,8 +471,8 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
 
         private UUID seedWorkorderWithPart() {
                 testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000011");
 
                 // Create and save workorder
                 Workorder workorder = Workorder.builder()
@@ -513,6 +517,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         private UUID seedWorkorderWithMultipleAdjustments() {
                 UUID workorderId = seedWorkorderWithPart();
                 UUID originalPartId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
+                Instant baseTime = Instant.now(clock);
 
                 // Create substitute (first adjustment)
                 Map<String, Object> substituteRequest = Map.of(
@@ -525,12 +530,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                                 .body(substituteRequest)
                                 .post("/v1/workorders/{workorderId}/parts/substitute", workorderId)
                                 .then().statusCode(201);
-
-                // Brief sleep to ensure different timestamps
-                try {
-                        Thread.sleep(10);
-                } catch (InterruptedException e) {
-                }
+                setPerformedAtForAdjustment(workorderId, "SUBSTITUTION", baseTime.plusMillis(1));
 
                 // Update part to have issued/consumed for return test
                 WorkorderPart part = workorderPartRepository.findById(originalPartId).orElseThrow();
@@ -549,11 +549,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                                 .body(returnRequest)
                                 .post("/v1/workorders/{workorderId}/parts/returnUnused", workorderId)
                                 .then().statusCode(201);
-
-                try {
-                        Thread.sleep(10);
-                } catch (InterruptedException e) {
-                }
+                setPerformedAtForAdjustment(workorderId, "ADDITIONAL_RETURN", baseTime.plusMillis(2));
 
                 // Create correction (third adjustment)
                 Map<String, Object> correctRequest = Map.of(
@@ -566,7 +562,19 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                                 .body(correctRequest)
                                 .post("/v1/workorders/{workorderId}/parts/correct", workorderId)
                                 .then().statusCode(201);
+                setPerformedAtForAdjustment(workorderId, "CORRECTION", baseTime.plusMillis(3));
 
                 return workorderId;
+        }
+
+        private void setPerformedAtForAdjustment(UUID workorderId, String adjustmentType, Instant performedAt) {
+                WorkorderPartAdjustmentEvent event = adjustmentEventRepository
+                                .findByWorkorderIdOrderByPerformedAtDesc(workorderId)
+                                .stream()
+                                .filter(existing -> adjustmentType.equals(existing.getAdjustmentType()))
+                                .findFirst()
+                                .orElseThrow();
+                event.setPerformedAt(performedAt);
+                adjustmentEventRepository.save(event);
         }
 }
