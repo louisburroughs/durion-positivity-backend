@@ -31,6 +31,9 @@ tags:
   description: Time entry exception APIs
 - name: User-Person Linking API
   description: Link authentication users to person records
+- name: People - Access Control
+  description: APIs for managing person-to-role assignments for access control and
+    permissions (CAP-120)
 - name: Employee API
   description: Employee profile and offboarding operations
 paths:
@@ -122,6 +125,7 @@ paths:
       tags:
       - People - Staffing Assignments
       summary: Get assignment by ID
+      description: Retrieves a single staffing assignment by its unique ID.
       operationId: getAssignment
       parameters:
       - name: assignmentId
@@ -147,6 +151,8 @@ paths:
       tags:
       - People - Staffing Assignments
       summary: Update staffing assignment
+      description: "Updates an existing staffing assignment, including role, dates,\
+        \ and primary flag."
       operationId: updateAssignment
       parameters:
       - name: assignmentId
@@ -190,6 +196,8 @@ paths:
       tags:
       - People - Staffing Assignments
       summary: End (soft-delete) an assignment
+      description: Ends an active staffing assignment without physically deleting
+        the record.
       operationId: endAssignment
       parameters:
       - name: assignmentId
@@ -208,6 +216,7 @@ paths:
       tags:
       - Employee API
       summary: Get employee profile
+      description: Retrieves an employee profile by employee ID.
       operationId: getEmployee
       parameters:
       - name: employeeId
@@ -233,6 +242,8 @@ paths:
       tags:
       - Employee API
       summary: Update employee profile
+      description: Updates an existing employee profile using the provided employee
+        ID.
       operationId: updateEmployee
       parameters:
       - name: employeeId
@@ -316,7 +327,7 @@ paths:
   /v1/people/{personUuid}/access/assignments:
     get:
       tags:
-      - person-access-controller
+      - People - Access Control
       summary: Get role assignments
       description: Retrieve role assignments for a person with optional history and
         date filtering
@@ -350,7 +361,7 @@ paths:
                   $ref: "#/components/schemas/UserRoleDto"
     post:
       tags:
-      - person-access-controller
+      - People - Access Control
       summary: Assign role to person
       description: Assign a role to a person with optional location scope and date
         range
@@ -375,14 +386,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserRoleDto"
-        "404":
-          description: Person or role not found
+        "400":
+          description: Invalid request
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "400":
-          description: Invalid request
+        "404":
+          description: Person or role not found
           content:
             application/problem+json:
               schema:
@@ -582,16 +593,6 @@ paths:
         decision.
       operationId: rejectTimeEntries
       parameters:
-      - name: X-User-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: X-Permissions
-        in: header
-        required: false
-        schema:
-          type: string
       - name: X-Correlation-Id
         in: header
         required: false
@@ -623,16 +624,6 @@ paths:
         approval execution.
       operationId: approveTimeEntries
       parameters:
-      - name: X-User-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: X-Permissions
-        in: header
-        required: false
-        schema:
-          type: string
       - name: X-Correlation-Id
         in: header
         required: false
@@ -708,16 +699,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: X-Permissions
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: X-User-Id
-        in: header
-        required: false
-        schema:
-          type: string
       - name: X-Correlation-Id
         in: header
         required: false
@@ -744,6 +725,7 @@ paths:
       tags:
       - People - Staffing Assignments
       summary: List assignments for person
+      description: Returns all staffing assignments for the specified person.
       operationId: getAssignments_1
       parameters:
       - name: personId
@@ -881,11 +863,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: X-User-Id
-        in: header
-        required: false
-        schema:
-          type: string
       - name: X-Correlation-Id
         in: header
         required: false
@@ -895,9 +872,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
+              $ref: "#/components/schemas/TimeEntryExceptionWaiveRequest"
         required: true
       responses:
         "200":
@@ -929,11 +904,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: X-User-Id
-        in: header
-        required: false
-        schema:
-          type: string
       - name: X-Correlation-Id
         in: header
         required: false
@@ -943,9 +913,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
+              $ref: "#/components/schemas/TimeEntryExceptionResolveRequest"
       responses:
         "404":
           description: Exception not found
@@ -962,7 +930,7 @@ paths:
       tags:
       - People - Exceptions
       summary: Acknowledge an exception
-      description: Mark an exception as acknowledged by the specified actor.
+      description: Mark an exception as acknowledged.
       operationId: acknowledgeException
       parameters:
       - name: exceptionId
@@ -971,19 +939,19 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: X-User-Id
-        in: header
-        required: false
-        schema:
-          type: string
       - name: X-Correlation-Id
         in: header
         required: false
         schema:
           type: string
       responses:
+        "404":
+          description: Exception not found
+          content:
+            application/json:
+              schema: {}
         "200":
-          description: OK
+          description: Exception acknowledged successfully
           content:
             application/json:
               schema: {}
@@ -992,6 +960,8 @@ paths:
       tags:
       - Employee API
       summary: Create employee profile
+      description: "Creates a new employee profile with identity, employment, and\
+        \ role-related attributes."
       operationId: createEmployee
       requestBody:
         content:
@@ -1029,6 +999,7 @@ paths:
       tags:
       - Employee API
       summary: Disable employee profile
+      description: Disables an employee profile and records optional disable metadata.
       operationId: disableEmployee
       parameters:
       - name: employeeId
@@ -1064,7 +1035,7 @@ paths:
   /v1/people/{personUuid}/access/roles:
     get:
       tags:
-      - person-access-controller
+      - People - Access Control
       summary: Get available roles
       description: Retrieve list of roles that can be assigned to people
       operationId: getRoles
@@ -1254,19 +1225,46 @@ paths:
         schema:
           type: boolean
           default: false
-      - name: X-User
-        in: header
-        required: false
-        schema:
-          type: string
       - name: X-Correlation-Id
         in: header
         required: false
         schema:
           type: string
       responses:
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
         "200":
           description: Report generated successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
+        "500":
+          description: Unexpected server error
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
+        "503":
+          description: Dependent service unavailable
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
+        "400":
+          description: Invalid parameters
           content:
             '*/*':
               schema:
@@ -1316,6 +1314,14 @@ paths:
       responses:
         "403":
           description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
+        "500":
+          description: Unexpected server error
           content:
             '*/*':
               schema:
@@ -1401,7 +1407,7 @@ paths:
   /v1/people/{personUuid}/access/assignments/{roleCode}:
     delete:
       tags:
-      - person-access-controller
+      - People - Access Control
       summary: Revoke role assignment
       description: Revoke a role assignment from a person
       operationId: revokeAssignment
@@ -1424,14 +1430,14 @@ paths:
           type: string
           format: date-time
       responses:
-        "400":
-          description: Invalid request for revoking role assignment
+        "404":
+          description: Person or role assignment not found
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Person or role assignment not found
+        "400":
+          description: Invalid request for revoking role assignment
           content:
             application/problem+json:
               schema:
@@ -1467,10 +1473,13 @@ components:
         id:
           type: string
           format: uuid
+          description: Unique identifier for the person
         firstName:
           type: string
+          description: First name of the person
         lastName:
           type: string
+          description: Last name of the person
         primaryEmail:
           type: string
         secondaryEmail:
@@ -1481,6 +1490,9 @@ components:
             type: string
         username:
           type: string
+      required:
+      - firstName
+      - lastName
     UpdateStaffingAssignmentRequest:
       type: object
       description: Request to update a staffing assignment
@@ -1769,8 +1781,12 @@ components:
         personId:
           type: string
           format: uuid
+          description: ID of the person
         actor:
           type: string
+          description: Actor performing the action
+      required:
+      - personId
     WorkSessionDto:
       type: object
       properties:
@@ -1839,18 +1855,31 @@ components:
       - userId
     Decision:
       type: object
+      description: An individual decision for a specific time entry
       properties:
         timeEntryId:
           type: string
+          description: The unique identifier of the time entry
+          example: 123e4567-e89b-12d3-a456-426614174000
         rejectionReason:
           type: string
+          description: The reason for rejection. Applicable if this is a rejection
+            request.
+          example: Incomplete work details
+      required:
+      - timeEntryId
     TimeEntryDecisionBatchRequest:
       type: object
+      description: Batch request payload for making decisions (approve/reject) on
+        multiple time entries
       properties:
         decisions:
           type: array
+          description: List of decisions for the time entries
           items:
             $ref: "#/components/schemas/Decision"
+      required:
+      - decisions
     TimeEntryAdjustmentRequest:
       type: object
       description: Request to create a time entry adjustment
@@ -2072,6 +2101,20 @@ components:
           example: Exception created successfully
       required:
       - success
+    TimeEntryExceptionWaiveRequest:
+      type: object
+      properties:
+        waiveReason:
+          type: string
+          description: Reason for waiving the exception
+      required:
+      - waiveReason
+    TimeEntryExceptionResolveRequest:
+      type: object
+      properties:
+        resolutionNotes:
+          type: string
+          description: Notes explaining the resolution
     CreateEmployeeRequest:
       type: object
       properties:

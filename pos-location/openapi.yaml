@@ -17,6 +17,8 @@ tags:
   description: Operations for managing travel buffer policies
 - name: Bay API
   description: Operations for managing bays within locations
+- name: Site Defaults API
+  description: Operations for managing location site default settings
 - name: Service Area API
   description: Operations for managing service areas
 - name: Location API
@@ -202,29 +204,47 @@ paths:
   /v1/locations/{locationId}/defaults:
     get:
       tags:
-      - site-defaults-controller
+      - Site Defaults API
+      summary: Get site defaults
+      description: Retrieve default site configuration for a location.
       operationId: getDefaults
       parameters:
       - name: locationId
         in: path
+        description: ID of the location
         required: true
         schema:
           type: string
           format: uuid
       responses:
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
         "200":
-          description: OK
+          description: Site defaults returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "404":
+          description: Location not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
     put:
       tags:
-      - site-defaults-controller
+      - Site Defaults API
+      summary: Configure site defaults
+      description: Create or update default site configuration for a location.
       operationId: configureDefaults
       parameters:
       - name: locationId
         in: path
+        description: ID of the location
         required: true
         schema:
           type: string
@@ -236,8 +256,26 @@ paths:
               $ref: "#/components/schemas/SiteDefaultsRequest"
         required: true
       responses:
+        "400":
+          description: Invalid request payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
         "200":
-          description: OK
+          description: Site defaults configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "404":
+          description: Location not found
           content:
             '*/*':
               schema:

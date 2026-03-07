@@ -145,9 +145,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
+              $ref: "#/components/schemas/FilterProductsRequest"
         required: true
       responses:
         "200":
@@ -281,9 +279,11 @@ components:
   schemas:
     FitmentTagDto:
       type: object
+      description: Fitment tag key/value pair used for product applicability matching
       properties:
         tagType:
           type: string
+          description: Tag category
           enum:
           - MAKE
           - MODEL
@@ -292,105 +292,211 @@ components:
           - AXLE_POSITION
           - ENGINE_SIZE
           - TRIM_LEVEL
+          example: MAKE
         tagValue:
           type: string
+          description: Tag value for the selected category
+          example: Toyota
+          maxLength: 120
+          minLength: 0
+      required:
+      - tagType
+      - tagValue
     UpdateHintRequest:
       type: object
+      description: Request payload for updating fitment tags on an existing hint
       properties:
         fitmentTags:
           type: array
+          description: Updated fitment tags for the hint
           items:
             $ref: "#/components/schemas/FitmentTagDto"
         updatedBy:
           type: string
+          description: User or system identity updating the hint
+          example: advisor@durion.local
+          maxLength: 128
+          minLength: 0
       required:
       - fitmentTags
     HintResponse:
       type: object
+      description: Response payload for a vehicle applicability hint
       properties:
         hintId:
           type: string
+          description: Hint identifier
+          example: 550e8400-e29b-41d4-a716-446655440100
         productId:
           type: string
+          description: Product identifier tied to the hint
+          example: 550e8400-e29b-41d4-a716-446655440000
         fitmentTags:
           type: array
+          description: Fitment tags for this hint
           items:
             $ref: "#/components/schemas/FitmentTagDto"
         createdAt:
           type: string
           format: date-time
+          description: Hint creation timestamp
+          example: 2026-03-05T14:10:00
         updatedAt:
           type: string
           format: date-time
+          description: Hint last update timestamp
+          example: 2026-03-05T14:12:00
         createdBy:
           type: string
+          description: User or system identity that created the hint
+          example: tech.ops@durion.local
         updatedBy:
           type: string
+          description: User or system identity that last updated the hint
+          example: advisor@durion.local
+      required:
+      - createdAt
+      - fitmentTags
+      - hintId
+      - productId
+      - updatedAt
     CreateHintRequest:
       type: object
+      description: Request payload for creating a vehicle applicability hint
       properties:
         productId:
           type: string
           format: uuid
+          description: Product identifier for the hint
+          example: 550e8400-e29b-41d4-a716-446655440000
         fitmentTags:
           type: array
+          description: Fitment tags used to determine product applicability
           items:
             $ref: "#/components/schemas/FitmentTagDto"
         createdBy:
           type: string
+          description: User or system identity creating the hint
+          example: tech.ops@durion.local
+          maxLength: 128
+          minLength: 0
       required:
       - fitmentTags
       - productId
+    FilterProductsRequest:
+      type: object
+      description: Request payload for filtering products by vehicle attributes
+      properties:
+        vehicleAttributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Vehicle attributes used as matching criteria
+          example:
+            make: Toyota
+            model: Camry
+            year_range: 2018-2022
+      required:
+      - vehicleAttributes
     FilterProductsResponse:
       type: object
+      description: Response payload containing product IDs matching vehicle attributes
       properties:
         productIds:
           type: array
+          description: List of matching product identifiers
           items:
             type: string
         count:
           type: integer
           format: int32
+          description: Count of matching products
+          example: 3
+          minimum: 0
+      required:
+      - count
+      - productIds
     VehicleTypeResponse:
       type: object
+      description: Vehicle type response for a make
       properties:
         id:
           type: string
           format: uuid
+          description: Vehicle type identifier
+          example: 550e8400-e29b-41d4-a716-446655440030
         makeId:
           type: string
           format: uuid
+          description: Make identifier for this vehicle type
+          example: 550e8400-e29b-41d4-a716-446655440010
         vehicleTypeId:
           type: string
+          description: External vehicle type code
+          example: CAR
         vehicleTypeName:
           type: string
+          description: Human-readable vehicle type name
+          example: Passenger Car
+      required:
+      - id
+      - vehicleTypeId
+      - vehicleTypeName
     ModelResponse:
       type: object
+      description: Vehicle model response
       properties:
         id:
           type: string
           format: uuid
+          description: Model identifier
+          example: 550e8400-e29b-41d4-a716-446655440020
         name:
           type: string
+          description: Model name
+          example: Camry SE
         makeId:
           type: string
           format: uuid
+          description: Make identifier for this model
+          example: 550e8400-e29b-41d4-a716-446655440010
+      required:
+      - id
+      - name
     ManufacturerResponse:
       type: object
+      description: Vehicle manufacturer response
       properties:
         id:
           type: string
           format: uuid
+          description: Manufacturer identifier
+          example: 550e8400-e29b-41d4-a716-446655440001
         name:
           type: string
+          description: Manufacturer name
+          example: Toyota
+      required:
+      - id
+      - name
     MakeResponse:
       type: object
+      description: Vehicle make response
       properties:
         id:
           type: string
           format: uuid
+          description: Make identifier
+          example: 550e8400-e29b-41d4-a716-446655440010
         name:
           type: string
+          description: Make name
+          example: Camry
         manufacturerId:
           type: string
           format: uuid
+          description: Manufacturer identifier for this make
+          example: 550e8400-e29b-41d4-a716-446655440001
+      required:
+      - id
+      - name
