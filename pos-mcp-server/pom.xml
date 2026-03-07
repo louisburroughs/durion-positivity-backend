@@ -70,7 +70,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.7.0</version>
+            <version>${springdoc-openapi.version}</version>
         </dependency>
         <!-- Kotlin Reflect - required by springdoc-openapi 2.8+ -->
         <dependency>
