@@ -20,7 +20,6 @@ public interface WorkorderSubstitutionService {
      * @param originalPartId   original part line identifier
      * @param substitutePartId substitute product identifier
      * @param reason           substitution reason
-     * @param performedBy      user performing substitution
      * @param idempotencyKey   optional idempotency key
      * @param notes            optional notes
      * @return created substitution adjustment event response
@@ -31,7 +30,6 @@ public interface WorkorderSubstitutionService {
             @NonNull UUID originalPartId,
             @NonNull UUID substitutePartId,
             @NonNull String reason,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes);
 }

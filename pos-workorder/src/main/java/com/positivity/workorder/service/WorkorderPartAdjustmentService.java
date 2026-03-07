@@ -15,7 +15,6 @@ public interface WorkorderPartAdjustmentService {
             @NonNull UUID originalPartId,
             @NonNull UUID substitutePartId,
             @NonNull String reason,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes);
 
@@ -25,7 +24,6 @@ public interface WorkorderPartAdjustmentService {
             @NonNull UUID partId,
             @NonNull BigDecimal quantity,
             @NonNull String reason,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes);
 
@@ -35,7 +33,6 @@ public interface WorkorderPartAdjustmentService {
             @NonNull UUID partId,
             @NonNull BigDecimal newQuantity,
             @NonNull String reason,
-            @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes);
 
