@@ -267,6 +267,131 @@ class ReceiptServiceImplTest {
     }
 
     // -------------------------------------------------------------------------
+    // generateReceipt — invoice not found
+    // -------------------------------------------------------------------------
+
+    /**
+     * generateReceipt must throw ReceiptNotFoundException when the invoice
+     * is not found.
+     * Issue: #7
+     */
+    @Test
+    void generateReceipt_invoiceNotFound_throwsReceiptNotFoundException() {
+        UUID unknownInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        when(invoiceRepository.findById(unknownInvoiceId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> receiptServiceImpl.generateReceipt(
+                unknownInvoiceId, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION))
+                .isInstanceOf(com.positivity.invoice.internal.exception.ReceiptNotFoundException.class)
+                .hasMessageContaining(unknownInvoiceId.toString());
+    }
+
+    // -------------------------------------------------------------------------
+    // recordPrintDelivery — FAILED status + not-found
+    // -------------------------------------------------------------------------
+
+    /**
+     * recordPrintDelivery must update delivery record with FAILED status.
+     * Issue: #7
+     */
+    @Test
+    void recordPrintDelivery_failedStatus_updatesDeliveryRecord() {
+        var receipt = buildExistingReceipt(0);
+        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+
+        receiptServiceImpl.recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.FAILED);
+
+        ArgumentCaptor<Receipt> captor = ArgumentCaptor.forClass(Receipt.class);
+        verify(receiptRepository).save(captor.capture());
+        assertThat(captor.getValue().getDeliveryStatus()).isEqualTo(ReceiptDeliveryStatus.FAILED);
+        assertThat(captor.getValue().getDeliveryMethod()).isEqualTo(ReceiptDeliveryMethod.PRINT);
+    }
+
+    /**
+     * recordPrintDelivery must throw ReceiptNotFoundException when receipt is not found.
+     * Issue: #7
+     */
+    @Test
+    void recordPrintDelivery_receiptNotFound_throwsReceiptNotFoundException() {
+        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> receiptServiceImpl.recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS))
+                .isInstanceOf(com.positivity.invoice.internal.exception.ReceiptNotFoundException.class)
+                .hasMessageContaining(RECEIPT_ID.toString());
+    }
+
+    // -------------------------------------------------------------------------
+    // sendEmailReceipt — FAILED status + not-found
+    // -------------------------------------------------------------------------
+
+    /**
+     * sendEmailReceipt must update delivery record with FAILED status.
+     * Issue: #7
+     */
+    @Test
+    void sendEmailReceipt_failedStatus_updatesDeliveryRecord() {
+        var receipt = buildExistingReceipt(0);
+        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+
+        receiptServiceImpl.sendEmailReceipt(RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.FAILED);
+
+        ArgumentCaptor<Receipt> captor = ArgumentCaptor.forClass(Receipt.class);
+        verify(receiptRepository).save(captor.capture());
+        assertThat(captor.getValue().getDeliveryStatus()).isEqualTo(ReceiptDeliveryStatus.FAILED);
+        assertThat(captor.getValue().getDeliveryMethod()).isEqualTo(ReceiptDeliveryMethod.EMAIL);
+        assertThat(captor.getValue().getDeliveryEmailAddress()).isEqualTo("customer@example.com");
+    }
+
+    /**
+     * sendEmailReceipt must throw ReceiptNotFoundException when receipt is not found.
+     * Issue: #7
+     */
+    @Test
+    void sendEmailReceipt_receiptNotFound_throwsReceiptNotFoundException() {
+        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> receiptServiceImpl.sendEmailReceipt(
+                RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS))
+                .isInstanceOf(com.positivity.invoice.internal.exception.ReceiptNotFoundException.class)
+                .hasMessageContaining(RECEIPT_ID.toString());
+    }
+
+    // -------------------------------------------------------------------------
+    // reprintReceipt — SUPERVISOR_OVERRIDE bypass + not-found
+    // -------------------------------------------------------------------------
+
+    /**
+     * reprintReceipt must allow reprint past the limit when caller has
+     * SUPERVISOR_OVERRIDE authority.
+     * Issue: #7
+     */
+    @Test
+    void reprintReceipt_atLimit_withSupervisorOverride_succeeds() {
+        var receipt = buildExistingReceipt(5);
+        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+        withAuthorities("GENERATE_RECEIPT", "SUPERVISOR_OVERRIDE");
+
+        com.positivity.invoice.service.Receipt saved = receiptServiceImpl.reprintReceipt(
+                RECEIPT_ID, "SUPERVISOR_APPROVED");
+
+        assertThat(saved.getReprintCount()).isEqualTo(6);
+        assertThat(saved.getLastReprintReason()).isEqualTo("SUPERVISOR_APPROVED");
+    }
+
+    /**
+     * reprintReceipt must throw ReceiptNotFoundException when receipt is not found.
+     * Issue: #7
+     */
+    @Test
+    void reprintReceipt_receiptNotFound_throwsReceiptNotFoundException() {
+        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> receiptServiceImpl.reprintReceipt(RECEIPT_ID, "CUSTOMER_REQUEST"))
+                .isInstanceOf(com.positivity.invoice.internal.exception.ReceiptNotFoundException.class)
+                .hasMessageContaining(RECEIPT_ID.toString());
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
