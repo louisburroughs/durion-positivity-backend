@@ -71,8 +71,6 @@ class TimeEntryAdjustmentContractIT extends BaseContractIntegrationTest {
 			.perform(withAuth(post("/v1/people/timeEntries/adjustments/{id}/approve",
 					UUID.fromString("00000000-0000-0000-0000-000000000000"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.header("X-Permissions", "people:timeAdjustment:approve")
-				.header("X-User-Id", TEST_USER)
 				.content("{}")))
 			.andExpect(status().isNotFound());
 	}
