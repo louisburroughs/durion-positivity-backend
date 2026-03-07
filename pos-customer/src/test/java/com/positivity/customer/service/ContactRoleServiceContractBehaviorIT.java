@@ -124,8 +124,9 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("getContactsWithRoles - Not Found: Party does not exist")
         void getContactsWithRoles_partyNotFound() {
-                assertThatThrownBy(() -> contactRoleService
-                                .getContactsWithRoles(UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                UUID missingPartyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+                assertThatThrownBy(() -> contactRoleService.getContactsWithRoles(missingPartyId))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Party not found");
         }
@@ -238,13 +239,12 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("updateContactRoles - Not Found: Party does not exist")
         void updateContactRoles_partyNotFound() {
+                UUID missingPartyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UpdateContactRolesRequest request = UpdateContactRolesRequest.builder()
                                 .roles(List.of())
                                 .build();
 
-                assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                                testContactUuid,
+                assertThatThrownBy(() -> contactRoleService.updateContactRoles(missingPartyId, testContactUuid,
                                 request))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Party not found");
@@ -257,11 +257,10 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .roles(List.of())
                                 .build();
 
+                UUID partyId = testParty.getPartyId();
                 UUID nonExistentContactUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-                assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                                testParty.getPartyId(),
-                                nonExistentContactUuid,
+                assertThatThrownBy(() -> contactRoleService.updateContactRoles(partyId, nonExistentContactUuid,
                                 request))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Person not found");
@@ -278,10 +277,9 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                                                 .build()))
                                 .build();
 
-                assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                                testParty.getPartyId(),
-                                testContactUuid,
-                                request))
+                UUID partyId = testParty.getPartyId();
+
+                assertThatThrownBy(() -> contactRoleService.updateContactRoles(partyId, testContactUuid, request))
                                 .isInstanceOf(IllegalArgumentException.class);
         }
 }

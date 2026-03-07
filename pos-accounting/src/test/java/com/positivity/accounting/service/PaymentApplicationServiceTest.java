@@ -248,9 +248,11 @@ class PaymentApplicationServiceTest {
                 when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
-                                createTestInvoiceDetails(UUID.fromString("00000000-0000-0000-0000-000000000001"), InvoiceStatus.OPEN, "USD", "1000.00"));
+                                createTestInvoiceDetails(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                InvoiceStatus.OPEN, "USD", "1000.00"));
                 when(invoiceServiceClient.applyPaymentToInvoice(any(), any())).thenReturn(
-                                createApplyPaymentResponse(UUID.fromString("00000000-0000-0000-0000-000000000001"), "1000.00", "500.00"));
+                                createApplyPaymentResponse(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                "1000.00", "500.00"));
 
                 // Act
                 PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
@@ -298,13 +300,12 @@ class PaymentApplicationServiceTest {
                 // Act
                 PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
 
-                // Assert - credit is null because payment status is AVAILABLE (not
-                // FULLY_APPLIED)
-                // Credit creation logic: if (remainingAmount > 0 && status == FULLY_APPLIED)
+                // Credit is null because payment status is AVAILABLE (not FULLY_APPLIED)
+                // Credit creation logic - if remainingAmount gt 0 and status eq FULLY_APPLIED
                 // In normal flow, status stays AVAILABLE, so credit is not created
                 assertThat(response.getCustomerCredit()).isNull();
-                assertThat(response.getRemainingAmount()).isEqualByComparingTo("400.00"); // Verify remaining amount
-                                                                                          // instead
+                // Verify remaining amount
+                assertThat(response.getRemainingAmount()).isEqualByComparingTo("400.00");
                 assertThat(response.getAppliedAmount()).isEqualByComparingTo("600.00");
 
                 // Verify credit repository was NOT called
@@ -637,7 +638,8 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                                                rev.setReversalId(UUID
+                                                                .fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });
@@ -738,7 +740,8 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                                                rev.setReversalId(UUID
+                                                                .fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });
@@ -795,7 +798,8 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                                                rev.setReversalId(UUID
+                                                                .fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });
@@ -930,7 +934,8 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                                                rev.setReversalId(UUID
+                                                                .fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });
@@ -979,7 +984,8 @@ class PaymentApplicationServiceTest {
                                 .thenAnswer(invocation -> {
                                         PaymentApplicationReversal rev = invocation.getArgument(0);
                                         if (rev.getReversalId() == null) {
-                                                rev.setReversalId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                                                rev.setReversalId(UUID
+                                                                .fromString("00000000-0000-0000-0000-000000000001"));
                                         }
                                         return rev;
                                 });

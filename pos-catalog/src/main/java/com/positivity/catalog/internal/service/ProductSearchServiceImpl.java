@@ -54,7 +54,7 @@ public class ProductSearchServiceImpl implements ProductSearchService {
                         String cursor,
                         int limit) {
 
-                int effectiveLimit = Math.min(Math.max(limit, 1), MAX_LIMIT);
+                int effectiveLimit = Math.clamp(limit, 1, MAX_LIMIT);
                 int pageNumber = decodeCursor(cursor);
 
                 // Normalize blank strings to null so JPQL treats them as "no filter"

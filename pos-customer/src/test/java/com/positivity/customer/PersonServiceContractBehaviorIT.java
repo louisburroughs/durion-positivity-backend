@@ -171,6 +171,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @Order(3)
         void ac3_missingLastName_returns400AndPersistsNothing() {
+                UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 // Given: request without lastName
                 CreatePersonRequest request = CreatePersonRequest.builder()
                                 .firstName("John")
@@ -179,8 +180,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build();
 
                 // When/Then: expect validation error
-                assertThatThrownBy(() -> personService.createPerson(request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                assertThatThrownBy(() -> personService.createPerson(request, requestId))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -197,6 +197,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @Order(4)
         void ac4_invalidEmailFormat_returns400AndPersistsNothing() {
+                UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 // Given: request with invalid email
                 CreatePersonRequest request = CreatePersonRequest.builder()
                                 .firstName("John")
@@ -210,8 +211,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build();
 
                 // When/Then: expect validation error
-                assertThatThrownBy(() -> personService.createPerson(request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                assertThatThrownBy(() -> personService.createPerson(request, requestId))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;

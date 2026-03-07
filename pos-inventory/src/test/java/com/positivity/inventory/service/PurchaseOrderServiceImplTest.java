@@ -207,12 +207,11 @@ class PurchaseOrderServiceImplTest {
                                 .status(PurchaseOrderStatus.APPROVED)
                                 .build();
                 when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(po));
+                ApprovePurchaseOrderRequest request = new ApprovePurchaseOrderRequest("notes");
 
                 // Act & Assert
-                assertThrows(IllegalStateException.class, () -> {
-                        purchaseOrderService.approvePurchaseOrder(poId, new ApprovePurchaseOrderRequest("notes"),
-                                        "approver");
-                });
+                assertThrows(IllegalStateException.class,
+                                () -> purchaseOrderService.approvePurchaseOrder(poId, request, "approver"));
         }
 
         @Test
@@ -358,6 +357,7 @@ class PurchaseOrderServiceImplTest {
         void receivePurchaseOrder_shouldThrowExceptionForDraftPo() {
                 // Arrange
                 UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                ReceivePurchaseOrderRequest request = new ReceivePurchaseOrderRequest(Collections.emptyList());
                 PurchaseOrderEntity po = PurchaseOrderEntity.builder()
                                 .purchaseOrderId(poId)
                                 .status(PurchaseOrderStatus.DRAFT)
@@ -365,11 +365,8 @@ class PurchaseOrderServiceImplTest {
                 when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(po));
 
                 // Act & Assert
-                assertThrows(PurchaseOrderNotApprovedException.class, () -> {
-                        purchaseOrderService.receivePurchaseOrder(poId,
-                                        new ReceivePurchaseOrderRequest(Collections.emptyList()),
-                                        "receiver");
-                });
+                assertThrows(PurchaseOrderNotApprovedException.class,
+                                () -> purchaseOrderService.receivePurchaseOrder(poId, request, "receiver"));
         }
 
         @Test
