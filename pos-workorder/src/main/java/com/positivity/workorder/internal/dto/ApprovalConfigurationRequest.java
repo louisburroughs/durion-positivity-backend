@@ -20,10 +20,10 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request DTO for approval configuration creation and updates")
 public class ApprovalConfigurationRequest {
 
-    @Schema(description = "Location ID for this configuration (null = applies to all locations)", example = "1")
+    @Schema(description = "Location ID for this configuration (null = applies to all locations)", example = "00000000-0000-0000-0000-000000000001")
     private UUID locationId;
 
-    @Schema(description = "Customer ID for this configuration (null = applies to all customers)", example = "2")
+    @Schema(description = "Customer ID for this configuration (null = applies to all customers)", example = "00000000-0000-0000-0000-000000000002")
     private UUID customerId;
 
     @NotNull(message = "approvalMethod is required")
@@ -34,7 +34,7 @@ public class ApprovalConfigurationRequest {
     @Schema(description = "Number of days a declined estimate can be reopened", example = "30")
     private Integer declineExpiryDays;
 
-    @Schema(description = "Whether signature is required", example = "false")
+    @Schema(description = "Whether signature is required", example = "false", defaultValue = "false", type = "boolean")
     private Boolean requireSignature;
 
     @Min(value = 0, message = "priority must be 0 or greater")

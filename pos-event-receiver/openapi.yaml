@@ -8,6 +8,8 @@ servers:
 tags:
 - name: Event Types
   description: Manage EventTypes for PreregisteredEvents
+- name: Event Emission
+  description: Receive and persist emitted events from internal services
 paths:
   /v1/eventTypes/{id}:
     get:
@@ -143,14 +145,14 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request parameters
+        "200":
+          description: Event type created or updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventTypeResponse"
-        "200":
-          description: Event type created or updated successfully
+        "400":
+          description: Invalid request parameters
           content:
             '*/*':
               schema:
@@ -158,9 +160,12 @@ paths:
   /v1/events:
     post:
       tags:
-      - emit-event-controller
+      - Event Emission
+      summary: Receive emitted event
+      description: Stores a preregistered emitted event payload
       operationId: receiveEvent
       requestBody:
+        description: Event payload to persist
         content:
           application/json:
             schema:
@@ -168,7 +173,13 @@ paths:
         required: true
       responses:
         "200":
-          description: OK
+          description: Event stored successfully
+          content:
+            '*/*':
+              schema:
+                type: string
+        "400":
+          description: Event type ID is not preregistered
           content:
             '*/*':
               schema:
@@ -201,14 +212,14 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "201":
-          description: Event type created successfully
+        "400":
+          description: Invalid request parameters
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventTypeResponse"
-        "400":
-          description: Invalid request parameters
+        "201":
+          description: Event type created successfully
           content:
             '*/*':
               schema:
@@ -237,6 +248,7 @@ components:
           type: string
           description: Unique code identifying the event type
           example: ORDER_CREATED
+          pattern: "^[A-Z0-9_]+$"
         description:
           type: string
           description: Human-readable description of the event type
@@ -249,6 +261,7 @@ components:
           type: string
           description: API version for this event type
           example: 1
+          pattern: "^[0-9]+$"
         p50Micros:
           type: integer
           format: int64
@@ -267,42 +280,90 @@ components:
           description: "99th percentile latency threshold in microseconds (default:\
             \ 10,000,000 = 10s)"
           example: 2000000
+      required:
+      - description
+      - typeCode
     EventTypeResponse:
       type: object
+      description: Response payload representing a registered event type
       properties:
         id:
           type: string
           format: uuid
+          description: Event type identifier
+          example: 018e1c9f-6b5a-7890-abcd-1234567890ab
         typeCode:
           type: string
+          description: Unique event type code
+          example: ORDER_CREATED
         description:
           type: string
+          description: Human-readable event type description
+          example: Triggered when an order is created
         active:
           type: boolean
+          description: Whether this event type is active
+          example: true
         apiVersion:
           type: string
+          description: Event API version
+          example: 1
         p50Micros:
           type: integer
           format: int64
+          description: p50 latency threshold in microseconds
+          example: 500000
         p95Micros:
           type: integer
           format: int64
+          description: p95 latency threshold in microseconds
+          example: 1000000
         p99Micros:
           type: integer
           format: int64
+          description: p99 latency threshold in microseconds
+          example: 2000000
+      required:
+      - active
+      - apiVersion
+      - description
+      - id
+      - p50Micros
+      - p95Micros
+      - p99Micros
+      - typeCode
     EmitEventRequest:
       type: object
+      description: Request payload used to emit and persist an application event
       properties:
         id:
           type: string
+          description: Preregistered event type code
+          example: ORDER_ORDER_CREATE
+          pattern: "^[A-Z0-9_]+$"
         apiVersion:
           type: string
+          description: Event API version
+          example: 1
+          pattern: "^[0-9]+$"
         timestamp:
           type: integer
           format: int64
+          description: Event timestamp in epoch milliseconds
+          example: 1730809200000
         elapsedMs:
           type: integer
           format: int64
+          description: Elapsed operation time in milliseconds
+          example: 42
         publishedAt:
           type: string
           format: date-time
+          description: Event publication time in UTC
+          example: 2026-03-05T21:15:00Z
+      required:
+      - apiVersion
+      - elapsedMs
+      - id
+      - publishedAt
+      - timestamp

@@ -21,10 +21,10 @@ public class ApprovalConfigurationResponse {
     @Schema(description = "Unique identifier for the configuration", example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID id;
 
-    @Schema(description = "Location ID for this configuration (null = applies to all locations)", example = "1")
+    @Schema(description = "Location ID for this configuration (null = applies to all locations)", example = "00000000-0000-0000-0000-000000000001")
     private UUID locationId;
 
-    @Schema(description = "Customer ID for this configuration (null = applies to all customers)", example = "2")
+    @Schema(description = "Customer ID for this configuration (null = applies to all customers)", example = "00000000-0000-0000-0000-000000000002")
     private UUID customerId;
 
     @Schema(description = "Approval method", example = "CLICK_CONFIRM")

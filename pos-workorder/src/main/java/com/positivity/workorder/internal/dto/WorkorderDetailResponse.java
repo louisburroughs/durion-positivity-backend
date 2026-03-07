@@ -48,7 +48,7 @@ public class WorkorderDetailResponse {
     @Schema(description = "Vehicle ID", example = "550e8400-e29b-41d4-a716-446655440002", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID vehicleId;
 
-    @Schema(description = "Vehicle description", example = "2020 Toyota Camry (VIN: 1HGBH41JXMN109186)")
+    @Schema(description = "Vehicle description", example = "\"2020 Toyota Camry (VIN: 1HGBH41JXMN109186)\"")
     private String vehicleDescription;
 
     @Schema(description = "Creation timestamp", example = "2024-01-27T10:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -58,13 +58,13 @@ public class WorkorderDetailResponse {
     private UUID createdBy;
 
     // Derived status fields
-    @Schema(description = "Is workorder started (derived from status)", example = "true")
+    @Schema(description = "Is workorder started (derived from status)", example = "true", type = "boolean")
     private Boolean isStarted;
 
-    @Schema(description = "Is workorder in progress (derived from status)", example = "true")
+    @Schema(description = "Is workorder in progress (derived from status)", example = "true", type = "boolean")
     private Boolean isInProgress;
 
-    @Schema(description = "Is workorder completed (derived from status)", example = "false")
+    @Schema(description = "Is workorder completed (derived from status)", example = "false", type = "boolean")
     private Boolean isCompleted;
 
     @Schema(description = "Start timestamp", example = "2024-01-27T14:30:00Z")
