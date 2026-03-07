@@ -211,7 +211,6 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
         private EstimateItem buildItem(UUID estimateId, EstimateItemType type, String description,
                         BigDecimal quantity, BigDecimal unitPrice) {
                 return EstimateItem.builder()
-                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .estimateId(estimateId)
                                 .itemType(type)
                                 .description(description)

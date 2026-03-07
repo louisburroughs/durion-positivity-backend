@@ -170,7 +170,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
         UUID estimateId1 = seedApprovedEstimate();
         UUID estimateId2 = seedApprovedEstimate();
         String idempotencyKey1 = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-        String idempotencyKey2 = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        String idempotencyKey2 = UUID.fromString("00000000-0000-0000-0000-000000000002").toString();
 
         String requestBody1 = String.format("""
                 {

@@ -142,10 +142,17 @@ public class Estimate {
      * Check if estimate can be reopened (transitioned from declined to draft).
      */
     public boolean canReopen(int configuredExpiryDays) {
+        return canReopen(configuredExpiryDays, LocalDateTime.now(Clock.systemUTC()));
+    }
+
+    /**
+     * Check if estimate can be reopened using the provided reference time.
+     */
+    public boolean canReopen(int configuredExpiryDays, LocalDateTime referenceTime) {
         if (status != EstimateStatus.DECLINED || declinedAt == null) {
             return false;
         }
         LocalDateTime expiryDate = declinedAt.plusDays(configuredExpiryDays);
-        return !LocalDateTime.now(Clock.systemUTC()).isAfter(expiryDate);
+        return !referenceTime.isAfter(expiryDate);
     }
 }

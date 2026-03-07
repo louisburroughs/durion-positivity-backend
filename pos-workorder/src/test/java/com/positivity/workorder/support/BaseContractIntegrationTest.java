@@ -1,7 +1,9 @@
 package com.positivity.workorder.support;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
@@ -10,6 +12,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.contract.ContractTestConfiguration;
+import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
 
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
@@ -19,11 +22,16 @@ import io.restassured.specification.RequestSpecification;
  * Shared contract-test scaffolding for REST Assured based tests.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import({ TestSecurityConfig.class, ContractTestConfiguration.class })
 public abstract class BaseContractIntegrationTest {
 
+    @Autowired
     protected MockMvc mockMvc;
+
+    @Autowired(required = false)
+    private IdempotencyKeyRepository idempotencyKeyRepository;
 
     protected static final String SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -84,6 +92,9 @@ public abstract class BaseContractIntegrationTest {
 
     @BeforeEach
     void configureRestAssuredDefaults() {
+        if (idempotencyKeyRepository != null) {
+            idempotencyKeyRepository.deleteAll();
+        }
         RestAssured.port = port;
     }
 

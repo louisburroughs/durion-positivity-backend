@@ -530,7 +530,7 @@ public class EstimateServiceImpl implements EstimateService {
 
                 ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
 
-                if (!estimate.canReopen(config.getDeclineExpiryDays())) {
+                if (!estimate.canReopen(config.getDeclineExpiryDays(), LocalDateTime.now(clock))) {
                         throw new IllegalStateException(
                                         "Estimate cannot be reopened - either not declined or expiry period has passed");
                 }

@@ -135,7 +135,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         void testReassignTechnician_WithReason() {
                 // Given: A workorder with an existing technician assignment
                 UUID workorderId = seedWorkorderWithAssignedTechnician();
-                testTechnicianId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testTechnicianId2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
                 // Verify initial assignment
                 TechnicianAssignment initialAssignment = assignmentRepository
@@ -386,7 +386,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         private UUID seedWorkorderWithReassignmentHistory() {
                 UUID workorderId = seedApprovedWorkorder();
                 testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                testTechnicianId2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testTechnicianId2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
                 LocalDateTime now = LocalDateTime.now(TEST_CLOCK);
 
