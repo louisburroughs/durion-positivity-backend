@@ -25,6 +25,7 @@ import com.positivity.customer.internal.entity.ProcessingLog;
 import com.positivity.customer.internal.enums.ProcessingStatus;
 import com.positivity.customer.internal.event.EventEnvelope;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
+import com.positivity.customer.internal.repository.PartyNoteRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
 import com.positivity.customer.internal.repository.VehicleProjectionRepository;
@@ -58,6 +59,9 @@ class WorkorderEventHandlerCoverageTest {
         private PersonPartyRepository personPartyRepository;
 
         @Mock
+        private PartyNoteRepository partyNoteRepository;
+
+        @Mock
         private VehicleProjectionRepository vehicleProjectionRepository;
 
         @Mock
@@ -72,6 +76,7 @@ class WorkorderEventHandlerCoverageTest {
                                 processingLogRepository,
                                 communicationPreferenceRepository,
                                 personPartyRepository,
+                                partyNoteRepository,
                                 vehicleProjectionRepository,
                                 new ObjectMapper());
         }

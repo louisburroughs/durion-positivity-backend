@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import com.positivity.customer.internal.entity.CommunicationPreference;
+import com.positivity.customer.internal.entity.PartyNote;
 import com.positivity.customer.internal.entity.ProcessingLog;
 import com.positivity.customer.internal.entity.VehicleProjection;
 import com.positivity.customer.internal.enums.ProcessingStatus;
@@ -21,6 +22,7 @@ import com.positivity.customer.internal.event.EventEnvelope;
 import com.positivity.customer.internal.event.PartyNoteAddedPayload;
 import com.positivity.customer.internal.event.VehicleUpdatedPayload;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
+import com.positivity.customer.internal.repository.PartyNoteRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
 import com.positivity.customer.internal.repository.VehicleProjectionRepository;
@@ -63,6 +65,7 @@ public class WorkorderEventHandler {
     private final ProcessingLogRepository processingLogRepository;
     private final CommunicationPreferenceRepository communicationPreferenceRepository;
     private final PersonPartyRepository personPartyRepository;
+    private final PartyNoteRepository partyNoteRepository;
     private final VehicleProjectionRepository vehicleProjectionRepository;
     private final ObjectMapper objectMapper;
 
@@ -315,8 +318,15 @@ public class WorkorderEventHandler {
                 return;
             }
 
-            // TODO F-05: Implement party note persistence when PartyNoteRepository is
-            // available // NOSONAR
+            partyNoteRepository.save(PartyNote.builder()
+                    .partyId(partyId)
+                    .noteText(normalizeOptionalText(payload.getNoteText()))
+                    .noteType(normalizeOptionalText(payload.getNoteType()))
+                    .sourceWorkorderId(normalizeOptionalText(payload.getSourceWorkorderId()))
+                    .sourceEventId(envelope.getEventId())
+                    .createdAt(Instant.now(clock))
+                    .build());
+
             log.info("PartyNoteAdded accepted eventId={} eventType={} partyId={} noteType={}",
                     envelope.getEventId(),
                     envelope.getEventType(),
