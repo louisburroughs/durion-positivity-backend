@@ -5,6 +5,7 @@ import java.time.Clock;
 
 import com.positivity.customer.internal.config.CustomerCacheConfig;
 import com.positivity.customer.internal.client.PeopleClient;
+import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
@@ -27,6 +28,7 @@ import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRepository;
 import com.positivity.customer.internal.service.PartyServiceImpl;
+import com.positivity.shared.dto.VehicleResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -67,12 +69,15 @@ class PartyServiceImplTest {
     private Cache cache;
     @Mock
     private PeopleClient peopleClient;
+    @Mock
+    private VehicleInventoryClient vehicleInventoryClient;
 
     private PartyServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new PartyServiceImpl(TEST_CLOCK, partyRepository, contactRepository, cacheManager, peopleClient);
+        service = new PartyServiceImpl(TEST_CLOCK, partyRepository, contactRepository, cacheManager, peopleClient,
+                vehicleInventoryClient);
     }
 
     private CommercialParty party(UUID id) {
@@ -187,12 +192,13 @@ class PartyServiceImplTest {
     }
 
     @Test
-    void buildSnapshotForParty_handlesBlankContactName() {
+    void buildSnapshotForParty_usesContactId_whenContactNameMissing() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
+        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000009");
 
         Contact c = new Contact();
-        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
+        c.setId(contactId);
         c.setFirstName(" ");
         c.setLastName(null);
         c.setCommercialParty(p);
@@ -205,7 +211,30 @@ class PartyServiceImplTest {
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
         assertThat(result.getContacts()).hasSize(1);
-        assertThat(result.getContacts().getFirst().getName()).isEqualTo("Unknown Contact");
+        assertThat(result.getContacts().getFirst().getName()).isEqualTo(contactId.toString());
+    }
+
+    @Test
+    void buildSnapshotForParty_usesEmail_whenContactNameMissing() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CommercialParty p = party(partyId);
+
+        Contact c = new Contact();
+        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000010"));
+        c.setFirstName(" ");
+        c.setLastName(" ");
+        c.setEmail("fallback@acme.com");
+        c.setCommercialParty(p);
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result.getContacts()).hasSize(1);
+        assertThat(result.getContacts().getFirst().getName()).isEqualTo("fallback@acme.com");
     }
 
     @Test
@@ -223,6 +252,84 @@ class PartyServiceImplTest {
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
         assertThat(result.getAccount().getAccountName()).isEqualTo("Legal Corp");
+    }
+
+    @Test
+    void buildSnapshotForParty_throwsIllegalState_whenPartyNumberMissing() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CommercialParty p = party(partyId);
+        p.setPartyNumber(" ");
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        assertThatThrownBy(() -> service.buildSnapshotForParty(partyId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("partyNumber");
+    }
+
+    @Test
+    void buildSnapshotForParty_throwsIllegalState_whenLegalNameMissing() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CommercialParty p = party(partyId);
+        p.setLegalName(" ");
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        assertThatThrownBy(() -> service.buildSnapshotForParty(partyId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("legalName");
+    }
+
+    @Test
+    void buildSnapshotForParty_throwsIllegalState_whenPartyTypeMissing() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CommercialParty p = party(partyId);
+        p.setPartyType(null);
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+
+        assertThatThrownBy(() -> service.buildSnapshotForParty(partyId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("partyType");
+    }
+
+    @Test
+    void buildSnapshotForParty_populatesVehicleSummaries_fromVehicleInventory() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        CommercialParty p = party(partyId);
+        p.getVehicleVins().add("VIN-123");
+
+        VehicleResponse vehicleResponse = VehicleResponse.builder()
+                .vehicleId(vehicleId)
+                .vin("VIN-123")
+                .licensePlate("ABC-123")
+                .make("Ford")
+                .model("F-150")
+                .year(2024)
+                .build();
+
+        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
+        when(vehicleInventoryClient.getVehicleByVin("VIN-123")).thenReturn(Optional.of(vehicleResponse));
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getVehicles()).hasSize(1);
+        assertThat(result.getVehicles().getFirst().getVehicleId()).isEqualTo(vehicleId.toString());
+        assertThat(result.getVehicles().getFirst().getVin()).isEqualTo("VIN-123");
+        assertThat(result.getVehicles().getFirst().getMake()).isEqualTo("Ford");
+        assertThat(result.getVehicles().getFirst().getModel()).isEqualTo("F-150");
+        assertThat(result.getVehicles().getFirst().getYear()).isEqualTo(2024);
     }
 
     @Test
@@ -263,6 +370,17 @@ class PartyServiceImplTest {
     }
 
     @Test
+    void createCommercialAccount_throwsIllegalArgument_whenContactLastNameMissing() {
+        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
+        request.setLegalName("Acme Legal");
+        request.setEmail("billing@acme.com");
+
+        assertThatThrownBy(() -> service.createCommercialAccount(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("contactLastName is required");
+    }
+
+    @Test
     void createCommercialAccount_savesPartyAndContact() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
@@ -270,6 +388,8 @@ class PartyServiceImplTest {
         request.setDisplayName("Acme Display");
         request.setTaxId("TAX-1");
         request.setBillingTermsId("NET30");
+        request.setContactFirstName("John");
+        request.setContactLastName("Doe");
         request.setEmail("billing@acme.com");
         request.setPhone("555-0001");
         request.setExternalIdentifiers(new HashMap<>(Collections.singletonMap("erp", "A-100")));
@@ -366,6 +486,43 @@ class PartyServiceImplTest {
         assertThat(response.getTotalCount()).isEqualTo(1);
         assertThat(response.getResults()).hasSize(1);
         assertThat(response.getResults().getFirst().getLegalName()).isEqualTo("Acme Industrial");
+    }
+
+    @Test
+    void searchParties_filtersByPartyTypeAndStatus_caseInsensitive() {
+        CommercialParty match = party(UUID.fromString("00000000-0000-0000-0000-000000000003"));
+        match.setPartyType(PartyType.COMMERCIAL);
+        match.setStatus(AccountStatus.ACTIVE);
+
+        CommercialParty miss = party(UUID.fromString("00000000-0000-0000-0000-000000000004"));
+        miss.setPartyType(PartyType.PERSON);
+        miss.setStatus(AccountStatus.INACTIVE);
+
+        when(partyRepository.findAll()).thenReturn(List.of(match, miss));
+
+        SearchPartiesRequest request = new SearchPartiesRequest();
+        request.setPartyType("commercial");
+        request.setStatus("active");
+
+        SearchPartiesResponse response = service.searchParties(request);
+
+        assertThat(response.getTotalCount()).isEqualTo(1);
+        assertThat(response.getResults()).hasSize(1);
+        assertThat(response.getResults().getFirst().getPartyId()).isEqualTo(match.getPartyId().toString());
+    }
+
+    @Test
+    void searchParties_returnsNoResults_whenPartyTypeFilterInvalid() {
+        CommercialParty existing = party(UUID.fromString("00000000-0000-0000-0000-000000000005"));
+        when(partyRepository.findAll()).thenReturn(List.of(existing));
+
+        SearchPartiesRequest request = new SearchPartiesRequest();
+        request.setPartyType("NOT_A_VALID_TYPE");
+
+        SearchPartiesResponse response = service.searchParties(request);
+
+        assertThat(response.getTotalCount()).isZero();
+        assertThat(response.getResults()).isEmpty();
     }
 
     @Test
@@ -466,7 +623,8 @@ class PartyServiceImplTest {
         when(partyRepository.findByPartyId(partyId)).thenReturn(p1);
         when(contactRepository.findById(contactId)).thenReturn(Optional.of(c));
 
-        assertThatThrownBy(() -> service.updateContactRoles(partyId, contactId, new UpdateContactRolesRequest()))
+        UpdateContactRolesRequest request = new UpdateContactRolesRequest();
+        assertThatThrownBy(() -> service.updateContactRoles(partyId, contactId, request))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400 BAD_REQUEST")
                 .hasMessageContaining("contact does not belong to this party");
@@ -513,8 +671,9 @@ class PartyServiceImplTest {
     @Test
     void createVehicleForParty_throwsBadRequest_whenVinMissing() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CreateVehicleForPartyRequest request = new CreateVehicleForPartyRequest();
 
-        assertThatThrownBy(() -> service.createVehicleForParty(partyId, new CreateVehicleForPartyRequest()))
+        assertThatThrownBy(() -> service.createVehicleForParty(partyId, request))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400 BAD_REQUEST")
                 .hasMessageContaining("vinNumber is required");

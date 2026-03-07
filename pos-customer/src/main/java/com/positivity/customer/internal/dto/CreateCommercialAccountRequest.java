@@ -52,6 +52,16 @@ public class CreateCommercialAccountRequest {
     private Map<String, String> externalIdentifiers;
 
     /**
+     * Primary contact first name (optional)
+     */
+    private String contactFirstName;
+
+    /**
+     * Primary contact last name (optional)
+     */
+    private String contactLastName;
+
+    /**
      * Contact email (optional)
      */
     private String email;

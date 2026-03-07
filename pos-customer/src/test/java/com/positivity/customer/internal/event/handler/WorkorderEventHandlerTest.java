@@ -21,13 +21,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.entity.ProcessingLog;
+import com.positivity.customer.internal.entity.VehicleProjection;
 import com.positivity.customer.internal.enums.ProcessingStatus;
 import com.positivity.customer.internal.event.EventEnvelope;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
+import com.positivity.customer.internal.repository.VehicleProjectionRepository;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -67,6 +70,9 @@ class WorkorderEventHandlerTest {
         private PersonPartyRepository personPartyRepository;
 
         @Mock
+        private VehicleProjectionRepository vehicleProjectionRepository;
+
+        @Mock
         private PersonParty personParty;
 
         private WorkorderEventHandler handler;
@@ -79,6 +85,7 @@ class WorkorderEventHandlerTest {
                                 processingLogRepository,
                                 communicationPreferenceRepository,
                                 personPartyRepository,
+                                vehicleProjectionRepository,
                                 new ObjectMapper());
         }
 
@@ -96,6 +103,50 @@ class WorkorderEventHandlerTest {
                 EventEnvelope envelope = vehicleUpdatedEnvelope(eventId);
 
                 handler.handleVehicleUpdated(envelope);
+
+                ArgumentCaptor<VehicleProjection> vehicleCaptor = ArgumentCaptor.forClass(VehicleProjection.class);
+                verify(vehicleProjectionRepository).save(vehicleCaptor.capture());
+                assertThat(vehicleCaptor.getValue().getVehicleId())
+                                .isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                assertThat(vehicleCaptor.getValue().getVin()).isEqualTo("1HGBH41JXMN109186");
+
+                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+                verify(processingLogRepository).save(captor.capture());
+                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+                assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
+        }
+
+        @Test
+        void handleVehicleUpdated_snakeCasePayload_mapsAndSavesSuccessLog() {
+                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000010").toString();
+                EventEnvelope envelope = EventEnvelope.builder()
+                                .eventId(eventId)
+                                .eventType("VehicleUpdated")
+                                .eventVersion("1.0")
+                                .sourceSystem("WorkorderExecution")
+                                .correlationId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                                .timestamp("2026-03-03T10:00:00Z")
+                                .payload(Map.of(
+                                                "vehicle_id",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
+                                                "vin_normalized", "1HGBH41JXMN109186",
+                                                "vehicle_make", "Honda",
+                                                "vehicle_model", "Accord",
+                                                "model_year", 2022,
+                                                "vehicle_color", "White"))
+                                .build();
+
+                handler.handleVehicleUpdated(envelope);
+
+                ArgumentCaptor<VehicleProjection> vehicleCaptor = ArgumentCaptor.forClass(VehicleProjection.class);
+                verify(vehicleProjectionRepository).save(vehicleCaptor.capture());
+                assertThat(vehicleCaptor.getValue().getVehicleId())
+                                .isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                assertThat(vehicleCaptor.getValue().getVin()).isEqualTo("1HGBH41JXMN109186");
+                assertThat(vehicleCaptor.getValue().getMake()).isEqualTo("Honda");
+                assertThat(vehicleCaptor.getValue().getModel()).isEqualTo("Accord");
+                assertThat(vehicleCaptor.getValue().getYear()).isEqualTo(2022);
+                assertThat(vehicleCaptor.getValue().getColor()).isEqualTo("White");
 
                 ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
                 verify(processingLogRepository).save(captor.capture());
@@ -124,6 +175,7 @@ class WorkorderEventHandlerTest {
 
                 handler.handleVehicleUpdated(envelope);
 
+                verify(vehicleProjectionRepository, never()).save(any());
                 ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
                 verify(processingLogRepository).save(captor.capture());
                 assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SKIPPED_DUPLICATE);
@@ -148,6 +200,43 @@ class WorkorderEventHandlerTest {
                 handler.handleContactPreferenceUpdated(envelope);
 
                 verify(communicationPreferenceRepository).save(any());
+                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+                verify(processingLogRepository).save(captor.capture());
+                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+                assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
+        }
+
+        @Test
+        void handleContactPreferenceUpdated_snakeCasePayload_mapsAndSavesSuccessLog() {
+                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000011").toString();
+                EventEnvelope envelope = EventEnvelope.builder()
+                                .eventId(eventId)
+                                .eventType("ContactPreferenceUpdated")
+                                .eventVersion("1.0")
+                                .sourceSystem("WorkorderExecution")
+                                .correlationId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                                .timestamp("2026-03-03T10:00:00Z")
+                                .payload(Map.of(
+                                                "party_id",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
+                                                "email_preference", "OPT_IN",
+                                                "sms_preference", "OPT_OUT",
+                                                "phone_preference", "OPT_IN",
+                                                "marketing_preference", "OPT_OUT"))
+                                .build();
+
+                handler.handleContactPreferenceUpdated(envelope);
+
+                ArgumentCaptor<CommunicationPreference> preferenceCaptor = ArgumentCaptor
+                                .forClass(CommunicationPreference.class);
+                verify(communicationPreferenceRepository).save(preferenceCaptor.capture());
+                assertThat(preferenceCaptor.getValue().getPartyId())
+                                .isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                assertThat(preferenceCaptor.getValue().getEmailPreference()).isEqualTo("OPT_IN");
+                assertThat(preferenceCaptor.getValue().getSmsPreference()).isEqualTo("OPT_OUT");
+                assertThat(preferenceCaptor.getValue().getPhonePreference()).isEqualTo("OPT_IN");
+                assertThat(preferenceCaptor.getValue().getMarketingPreference()).isEqualTo("OPT_OUT");
+
                 ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
                 verify(processingLogRepository).save(captor.capture());
                 assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
@@ -208,6 +297,35 @@ class WorkorderEventHandlerTest {
                 assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
         }
 
+        @Test
+        void handlePartyNoteAdded_snakeCasePayload_mapsAndSavesSuccessLog() {
+                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000012").toString();
+                String partyId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                when(personPartyRepository.findByPersonId(UUID.fromString(partyId)))
+                                .thenReturn(Optional.of(personParty));
+                EventEnvelope envelope = EventEnvelope.builder()
+                                .eventId(eventId)
+                                .eventType("PartyNoteAdded")
+                                .eventVersion("1.0")
+                                .sourceSystem("WorkorderExecution")
+                                .correlationId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                                .timestamp("2026-03-03T10:00:00Z")
+                                .payload(Map.of(
+                                                "party_id", partyId,
+                                                "note_text", "Vehicle service note from workorder",
+                                                "note_type", "SERVICE",
+                                                "source_workorder_id",
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))
+                                .build();
+
+                handler.handlePartyNoteAdded(envelope);
+
+                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+                verify(processingLogRepository).save(captor.capture());
+                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+                assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
+        }
+
         // -----------------------------------------------------------------------
         // AC-6 PartyNoteAdded — duplicate detection
         // -----------------------------------------------------------------------
@@ -257,6 +375,28 @@ class WorkorderEventHandlerTest {
                                 + "\","
                                 + "\"timestamp\":\"2026-03-03T10:00:00Z\","
                                 + "\"payload\":{}}";
+
+                handler.handleWorkorderEvent(json);
+
+                ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
+                verify(processingLogRepository).save(captor.capture());
+                assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+                assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
+        }
+
+        @Test
+        void handleWorkorderEvent_vehicleUpdatedSnakeCaseJson_dispatchesAndSavesSuccessLog() {
+                String eventId = UUID.fromString("00000000-0000-0000-0000-000000000013").toString();
+                String json = "{\"event_id\":\"" + eventId + "\","
+                                + "\"event_type\":\"VehicleUpdated\","
+                                + "\"event_version\":\"1.0\","
+                                + "\"source_system\":\"WorkorderExecution\","
+                                + "\"correlation_id\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                + "\","
+                                + "\"event_timestamp\":\"2026-03-03T10:00:00Z\","
+                                + "\"payload\":{\"vehicle_id\":\""
+                                + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                + "\",\"vin_normalized\":\"1HGBH41JXMN109186\"}}";
 
                 handler.handleWorkorderEvent(json);
 

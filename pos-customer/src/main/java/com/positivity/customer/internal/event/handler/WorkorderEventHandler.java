@@ -10,9 +10,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.entity.ProcessingLog;
+import com.positivity.customer.internal.entity.VehicleProjection;
 import com.positivity.customer.internal.enums.ProcessingStatus;
 import com.positivity.customer.internal.event.ContactPreferenceUpdatedPayload;
 import com.positivity.customer.internal.event.EventEnvelope;
@@ -21,6 +23,7 @@ import com.positivity.customer.internal.event.VehicleUpdatedPayload;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
+import com.positivity.customer.internal.repository.VehicleProjectionRepository;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
@@ -60,6 +63,7 @@ public class WorkorderEventHandler {
     private final ProcessingLogRepository processingLogRepository;
     private final CommunicationPreferenceRepository communicationPreferenceRepository;
     private final PersonPartyRepository personPartyRepository;
+    private final VehicleProjectionRepository vehicleProjectionRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -140,11 +144,7 @@ public class WorkorderEventHandler {
         try {
             final Map<String, Object> payloadMap = envelope.getPayload() == null ? Map.of() : envelope.getPayload();
             final VehicleUpdatedPayload payload = objectMapper.convertValue(payloadMap, VehicleUpdatedPayload.class);
-            // TODO F-01: Implement vehicle entity update when VehicleRepository is
-            // available // NOSONAR
-            log.warn(
-                    "handleVehicleUpdated: No vehicle repository available — CRM vehicle data not updated for vehicleId={}",
-                    payload.getVehicleId());
+            upsertVehicleProjection(payload);
 
             processingLogRepository.save(ProcessingLog.builder()
                     .eventId(envelope.getEventId())
@@ -167,6 +167,43 @@ public class WorkorderEventHandler {
                     .processedAt(Instant.now(clock))
                     .build());
         }
+    }
+
+    private void upsertVehicleProjection(@NonNull VehicleUpdatedPayload payload) {
+        if (!StringUtils.hasText(payload.getVehicleId())) {
+            log.warn("VehicleUpdated payload missing vehicleId; skipping vehicle projection update");
+            return;
+        }
+
+        final UUID vehicleId = UUID.fromString(payload.getVehicleId());
+        final VehicleProjection projection = vehicleProjectionRepository.findById(vehicleId)
+                .orElseGet(() -> VehicleProjection.builder().vehicleId(vehicleId).build());
+
+        if (payload.getVin() != null) {
+            projection.setVin(normalizeOptionalText(payload.getVin()));
+        }
+        if (payload.getMake() != null) {
+            projection.setMake(normalizeOptionalText(payload.getMake()));
+        }
+        if (payload.getModel() != null) {
+            projection.setModel(normalizeOptionalText(payload.getModel()));
+        }
+        if (payload.getColor() != null) {
+            projection.setColor(normalizeOptionalText(payload.getColor()));
+        }
+        if (payload.getYear() != null) {
+            projection.setYear(payload.getYear());
+        }
+        projection.setLastEventAt(Instant.now(clock));
+        vehicleProjectionRepository.save(projection);
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

@@ -27,6 +27,8 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * Handled exceptions:
  * <ul>
+ * <li>{@link IllegalArgumentException} - 400 Bad Request (domain
+ * validation)</li>
  * <li>{@link DuplicateRedemptionException} - 409 Conflict</li>
  * <li>{@link MethodArgumentNotValidException} - 400 Bad Request
  * (validation)</li>
@@ -37,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @RequiredArgsConstructor
 public class CrmExceptionHandler {
+    private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -60,7 +63,7 @@ public class CrmExceptionHandler {
         String path = request != null ? request.getRequestURI() : "";
         log.warn("Access denied on {}: {}", path, ex.getMessage());
         String correlationId = resolveCorrelationId(request);
-        response.setHeader("X-Correlation-Id", correlationId);
+        response.setHeader(X_CORRELATION_ID, correlationId);
 
         ErrorResponse body = new ErrorResponse(
                 "PERMISSION_DENIED",
@@ -81,7 +84,7 @@ public class CrmExceptionHandler {
         String path = request != null ? request.getRequestURI() : "";
         log.warn("Duplicate redemption on {}: {}", path, ex.getMessage());
         String correlationId = resolveCorrelationId(request);
-        response.setHeader("X-Correlation-Id", correlationId);
+        response.setHeader(X_CORRELATION_ID, correlationId);
 
         ErrorResponse body = new ErrorResponse(
                 "DUPLICATE_REDEMPTION",
@@ -102,7 +105,7 @@ public class CrmExceptionHandler {
         String path = request != null ? request.getRequestURI() : "";
         log.warn("Validation failed on {}: {}", path, ex.getMessage());
         String correlationId = resolveCorrelationId(request);
-        response.setHeader("X-Correlation-Id", correlationId);
+        response.setHeader(X_CORRELATION_ID, correlationId);
 
         List<FieldErrorEnvelope> fieldErrors = ex.getBindingResult()
                 .getFieldErrors()
@@ -121,6 +124,27 @@ public class CrmExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(
+            IllegalArgumentException ex,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Invalid argument on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        ErrorResponse body = new ErrorResponse(
+                "VALIDATION_ERROR",
+                ex.getMessage(),
+                HttpStatus.BAD_REQUEST.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                null);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
     private FieldErrorEnvelope toFieldErrorEnvelope(FieldError fieldError) {
         return new FieldErrorEnvelope(
                 fieldError.getField(),
@@ -131,7 +155,7 @@ public class CrmExceptionHandler {
         if (request == null) {
             return UUIDv7Generator.generate().toString();
         }
-        String correlationId = request.getHeader("X-Correlation-Id");
+        String correlationId = request.getHeader(X_CORRELATION_ID);
         if (correlationId == null || correlationId.isBlank()) {
             return UUIDv7Generator.generate().toString();
         }
