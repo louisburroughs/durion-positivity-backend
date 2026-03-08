@@ -108,13 +108,13 @@ class IdempotencyServiceTest {
     @DisplayName("registerKey - saves new key with 24-hour expiration")
     void registerKey_success() {
         // Arrange
-        when(repository.save(any(IdempotencyKey.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.saveAndFlush(any(IdempotencyKey.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
         service.registerKey(testKeyValue, testInvoiceId);
 
         // Assert
-        verify(repository).save(any(IdempotencyKey.class));
+        verify(repository).saveAndFlush(any(IdempotencyKey.class));
     }
 
     @Test
@@ -122,7 +122,7 @@ class IdempotencyServiceTest {
     void registerKey_setsCorrectExpiration() {
         // Arrange
         Instant beforeCall = Instant.now(TEST_CLOCK);
-        when(repository.save(any(IdempotencyKey.class))).thenAnswer(invocation -> {
+        when(repository.saveAndFlush(any(IdempotencyKey.class))).thenAnswer(invocation -> {
             IdempotencyKey saved = invocation.getArgument(0);
             Instant expectedExpiry = beforeCall.plus(24, ChronoUnit.HOURS);
 
@@ -139,7 +139,7 @@ class IdempotencyServiceTest {
         service.registerKey(testKeyValue, testInvoiceId);
 
         // Assert
-        verify(repository).save(any(IdempotencyKey.class));
+        verify(repository).saveAndFlush(any(IdempotencyKey.class));
     }
 
     // ===== CLEANUP TESTS =====

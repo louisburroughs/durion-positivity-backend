@@ -19,6 +19,8 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -51,11 +53,14 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
 
     /**
      * Process a payment applied event and update invoice status.
-     * Implements retry logic for transient failures.
+     * Implements retry logic for transient failures only (DataAccessException,
+     * OptimisticLockingFailureException). Domain exceptions such as
+     * EntityNotFoundException are not retried.
      */
     @Override
     @Transactional
-    @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2), retryFor = { Exception.class })
+    @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2), retryFor = {
+            DataAccessException.class, OptimisticLockingFailureException.class })
     public InvoiceStatusResponse processPaymentApplied(PaymentAppliedRequest request) {
         log.info("Processing payment for invoice {} with idempotency key {}",
                 request.getInvoiceId(), request.getIdempotencyKey());
@@ -184,7 +189,7 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
         statusView.setLatestTransactionReference(latestTransactionRef);
         statusView.setLastUpdated(Instant.now(clock));
 
-        statusViewRepository.save(statusView);
+        statusViewRepository.saveAndFlush(statusView);
         log.info("Updated invoice status view for {} - status: {}, totalPaid: {}, total: {}",
                 invoiceId, overallStatus, totalPaid, invoiceTotal);
     }

@@ -1,4 +1,4 @@
-package com.positivity.accounting.controller;
+package com.positivity.accounting.internal.controller;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
@@ -110,11 +110,13 @@ class FinancialReportingControllerTest {
                 @DisplayName("Should reject CRLF injection attempt (security S5145) - blocked by Spring Security firewall")
                 void shouldRejectCRLFInjection() throws Exception {
                         // Given: Malicious code with newline characters (URL-encoded)
-                        // Note: Spring Security's StrictHttpFirewall blocks requests with URL-encoded control characters
+                        // Note: Spring Security's StrictHttpFirewall blocks requests with URL-encoded
+                        // control characters
                         String maliciousCode = "REVENUE%0A[FAKE_LOG_ENTRY]";
 
                         // When: Request with CRLF injection
-                        // Then: Spring Security firewall blocks the request before it reaches controller
+                        // Then: Spring Security firewall blocks the request before it reaches
+                        // controller
                         // This provides defense-in-depth alongside our controller validation
                         mockMvc.perform(get("/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}",
                                         maliciousCode)

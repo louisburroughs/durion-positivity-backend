@@ -1,4 +1,4 @@
-package com.positivity.accounting.config;
+package com.positivity.accounting.internal.config;
 
 import java.io.IOException;
 import java.util.List;
@@ -21,7 +21,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.positivity.accounting.internal.config.AccountingSecurityConfig;
 import com.positivity.security.common.GatewaySecurityConfig;
 
 import jakarta.servlet.FilterChain;
@@ -87,7 +86,7 @@ public class TestSecurityConfig {
      */
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary
-    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)

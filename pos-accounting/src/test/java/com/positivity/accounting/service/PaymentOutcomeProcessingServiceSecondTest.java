@@ -1,4 +1,4 @@
-package com.positivity.accounting.internal.service;
+package com.positivity.accounting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,7 +42,7 @@ import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.ReconciliationRecordRepository;
 import com.positivity.accounting.internal.service.PaymentOutcomeProcessingServiceImpl;
-import com.positivity.accounting.service.OutboxService;
+
 import jakarta.persistence.EntityNotFoundException;
 
 /**
@@ -57,7 +57,7 @@ import jakarta.persistence.EntityNotFoundException;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PaymentOutcomeProcessingService Unit Tests — CAP-251 #6")
-class PaymentOutcomeProcessingServiceTest {
+class PaymentOutcomeProcessingServiceSecondTest {
 
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
 
@@ -718,7 +718,8 @@ class PaymentOutcomeProcessingServiceTest {
                         // Act
                         PaymentOutcomeResponse response = service.processPaymentOutcome(request);
 
-                        // Assert — invoice paid, entire amount becomes CustomerCredit (excess = 5000-0=5000)
+                        // Assert — invoice paid, entire amount becomes CustomerCredit (excess =
+                        // 5000-0=5000)
                         assertThat(response.getInvoiceStatus()).isEqualTo(PaymentStatus.PAID);
                         verify(customerCreditRepository).save(customerCreditCaptor.capture());
                         // 5000 minor = 50.00 major

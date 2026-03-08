@@ -37,11 +37,12 @@ stripe:
 # Logging
 logging:
   level:
+    root: WARN
     com:
-      positivity: DEBUG
+      positivity: INFO
     org:
       springframework:
-        security: DEBUG
+        security: WARN
 
 # Required GL account configuration for Credit Memo processing
 pos:

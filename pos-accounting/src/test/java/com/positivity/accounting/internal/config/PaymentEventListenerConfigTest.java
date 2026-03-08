@@ -1,7 +1,4 @@
-package com.positivity.accounting.config;
-
-import java.time.ZoneOffset;
-import java.time.Clock;
+package com.positivity.accounting.internal.config;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -10,7 +7,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -19,7 +18,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import com.positivity.accounting.internal.config.PaymentEventListenerConfig;
 import com.positivity.accounting.internal.dto.PaymentClearedEvent;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.service.PaymentApplicationService;
@@ -75,12 +73,12 @@ class PaymentEventListenerConfigTest {
                         listener.onPaymentCleared(message);
 
                         verify(paymentApplicationService).handlePaymentCleared(
-                                        eq(paymentId),
-                                        eq(customerId),
-                                        eq(currencyCode),
-                                        eq(amount),
-                                        eq(clearedAt),
-                                        eq(eventId));
+                                        paymentId,
+                                        customerId,
+                                        currencyCode,
+                                        amount,
+                                        clearedAt,
+                                        eventId);
                 }
 
                 @Test

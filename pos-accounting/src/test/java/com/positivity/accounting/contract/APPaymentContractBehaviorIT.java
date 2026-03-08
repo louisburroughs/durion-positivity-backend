@@ -260,7 +260,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-AP-004: List eligible vendor bills (status=APPROVED, ordered by due date)")
         void testListEligibleBills_Success() throws Exception {
-                // Act: GET /v1/accounting/ap/bills?vendorId={vendorId}
+                // Act: GET /v1/accounting/ap/bills?vendorId equals vendorId
                 MvcResult result = mockMvc.perform(withAuth(get(API_V1_AP_BILLS))
                                 .param("vendorId", testVendorId.toString()))
                                 .andDo(print())
@@ -297,7 +297,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 payment.setCreatedBy("test-user");
                 payment = apPaymentRepository.save(payment);
 
-                // Act: GET /v1/accounting/ap/payments/{paymentId}
+                // Act: GET /v1/accounting/ap/payments/[paymentId]
                 mockMvc.perform(withAuth(get(API_V1_AP_PAYMENTS + "/" + payment.getPaymentId())))
                                 .andDo(print())
                                 .andExpect(status().isOk())
