@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,6 +43,7 @@ import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository
 import com.positivity.accounting.internal.repository.ReconciliationRecordRepository;
 import com.positivity.accounting.internal.service.PaymentOutcomeProcessingServiceImpl;
 import com.positivity.accounting.service.OutboxService;
+import jakarta.persistence.EntityNotFoundException;
 
 /**
  * Unit tests for PaymentOutcomeProcessingService.
@@ -576,6 +578,152 @@ class PaymentOutcomeProcessingServiceTest {
                         CustomerCredit credit = customerCreditCaptor.getValue();
                         // 2000 minor units = 20.00 in standard monetary units (scale 2)
                         assertThat(credit.getAmount()).isEqualByComparingTo(java.math.BigDecimal.valueOf(20_00, 2));
+                }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // EC1 — EntityNotFoundException when invoice not found
+        // ─────────────────────────────────────────────────────────────────────
+        @Nested
+        @DisplayName("EC1 — EntityNotFoundException for missing invoice")
+        class EntityNotFound {
+
+                @Test
+                @DisplayName("processPaymentOutcome throws EntityNotFoundException when invoice status view not found")
+                void whenInvoiceNotFound_thenProcessPaymentOutcomeThrows() {
+                        // Arrange — repository returns empty
+                        when(statusViewRepository.findByInvoiceId(INVOICE_ID))
+                                        .thenReturn(Optional.empty());
+
+                        PaymentOutcomeRequest request = PaymentOutcomeRequest.builder()
+                                        .invoiceId(INVOICE_ID)
+                                        .transactionId("TXN-NOTFOUND-001")
+                                        .amountMinor(10_000L)
+                                        .currency("GBP")
+                                        .outcomeType(PaymentOutcomeType.FULL_PAYMENT)
+                                        .customerId(CUSTOMER_ID)
+                                        .build();
+
+                        // Act + Assert — EntityNotFoundException raised for unknown invoice
+                        assertThatThrownBy(() -> service.processPaymentOutcome(request))
+                                        .isInstanceOf(EntityNotFoundException.class)
+                                        .hasMessageContaining(INVOICE_ID.toString());
+
+                        verify(statusViewRepository, never()).save(any());
+                        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+                }
+
+                @Test
+                @DisplayName("handlePostingRetryExhausted throws EntityNotFoundException when invoice status view not found")
+                void whenInvoiceNotFound_thenHandlePostingRetryExhaustedThrows() {
+                        // Arrange — repository returns empty
+                        when(statusViewRepository.findByInvoiceId(INVOICE_ID))
+                                        .thenReturn(Optional.empty());
+
+                        // Act + Assert — EntityNotFoundException raised
+                        assertThatThrownBy(
+                                        () -> service.handlePostingRetryExhausted(INVOICE_ID, "TXN-NOTFOUND-002", 5))
+                                        .isInstanceOf(EntityNotFoundException.class)
+                                        .hasMessageContaining(INVOICE_ID.toString());
+
+                        verify(statusViewRepository, never()).save(any());
+                        verify(reconciliationRecordRepository, never()).save(any());
+                        verify(eventPublisher, never()).publishEvent(any());
+                }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // NC1 — Null-value guards in status view fields
+        // ─────────────────────────────────────────────────────────────────────
+        @Nested
+        @DisplayName("NC1 — Null-value guard ternaries on InvoiceStatusView fields")
+        class NullValueGuards {
+
+                @Test
+                @DisplayName("treats null paidAmountMinor as zero on full payment")
+                void whenPaidAmountMinorIsNull_thenFullPaymentTreatsItAsZero() {
+                        // Arrange — paidAmountMinor not initialised (null)
+                        existingStatusView.setPaidAmountMinor(null);
+
+                        when(statusViewRepository.findByInvoiceId(INVOICE_ID))
+                                        .thenReturn(Optional.of(existingStatusView));
+                        when(statusViewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+                        PaymentOutcomeRequest request = PaymentOutcomeRequest.builder()
+                                        .invoiceId(INVOICE_ID)
+                                        .transactionId("TXN-NULL-001")
+                                        .amountMinor(10_000L)
+                                        .currency("GBP")
+                                        .outcomeType(PaymentOutcomeType.FULL_PAYMENT)
+                                        .customerId(CUSTOMER_ID)
+                                        .build();
+
+                        // Act
+                        PaymentOutcomeResponse response = service.processPaymentOutcome(request);
+
+                        // Assert — null treated as 0, so paidAmountMinor = 0 + 10000 = 10000
+                        assertThat(response.getPaidAmountMinor()).isEqualTo(10_000L);
+                        assertThat(response.getInvoiceStatus()).isEqualTo(PaymentStatus.PAID);
+                }
+
+                @Test
+                @DisplayName("treats null paidAmountMinor and null outstandingAmountMinor as zero on partial payment")
+                void whenAmountsAreNull_thenPartialPaymentTreatsThemAsZero() {
+                        // Arrange — both amount fields unset (null)
+                        existingStatusView.setPaidAmountMinor(null);
+                        existingStatusView.setOutstandingAmountMinor(null);
+
+                        when(statusViewRepository.findByInvoiceId(INVOICE_ID))
+                                        .thenReturn(Optional.of(existingStatusView));
+                        when(statusViewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+                        PaymentOutcomeRequest request = PaymentOutcomeRequest.builder()
+                                        .invoiceId(INVOICE_ID)
+                                        .transactionId("TXN-NULL-002")
+                                        .amountMinor(3_000L)
+                                        .currency("GBP")
+                                        .outcomeType(PaymentOutcomeType.PARTIAL_PAYMENT)
+                                        .customerId(CUSTOMER_ID)
+                                        .build();
+
+                        // Act
+                        PaymentOutcomeResponse response = service.processPaymentOutcome(request);
+
+                        // Assert — null treated as 0 for both fields
+                        assertThat(response.getPaidAmountMinor()).isEqualTo(3_000L);
+                        assertThat(response.getOutstandingAmountMinor()).isZero();
+                        assertThat(response.getInvoiceStatus()).isEqualTo(PaymentStatus.PARTIALLY_PAID);
+                }
+
+                @Test
+                @DisplayName("treats null totalAmountMinor as zero on overpayment — entire amount becomes credit")
+                void whenTotalAmountMinorIsNull_thenOverpaymentTreatsItAsZero() {
+                        // Arrange — totalAmountMinor not set (null) means entire payment is excess
+                        existingStatusView.setTotalAmountMinor(null);
+
+                        when(statusViewRepository.findByInvoiceId(INVOICE_ID))
+                                        .thenReturn(Optional.of(existingStatusView));
+                        when(statusViewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+                        when(customerCreditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+                        PaymentOutcomeRequest request = PaymentOutcomeRequest.builder()
+                                        .invoiceId(INVOICE_ID)
+                                        .transactionId("TXN-NULL-003")
+                                        .amountMinor(5_000L) // all of it is excess when total=null(→0)
+                                        .currency("GBP")
+                                        .outcomeType(PaymentOutcomeType.OVERPAYMENT)
+                                        .customerId(CUSTOMER_ID)
+                                        .build();
+
+                        // Act
+                        PaymentOutcomeResponse response = service.processPaymentOutcome(request);
+
+                        // Assert — invoice paid, entire amount becomes CustomerCredit (excess = 5000-0=5000)
+                        assertThat(response.getInvoiceStatus()).isEqualTo(PaymentStatus.PAID);
+                        verify(customerCreditRepository).save(customerCreditCaptor.capture());
+                        // 5000 minor = 50.00 major
+                        assertThat(customerCreditCaptor.getValue().getAmount())
+                                        .isEqualByComparingTo(java.math.BigDecimal.valueOf(50_00, 2));
                 }
         }
 

@@ -808,9 +808,15 @@ class PaymentApplicationServiceTest {
                 when(invoiceServiceClient.reversePaymentApplication(any(), any())).thenReturn(
                                 createReversePaymentResponse(testInvoiceId, "500.00", "1000.00"));
 
-                // Set up SecurityContext with authenticated user
-                org.springframework.security.core.Authentication authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                // Set up SecurityContext with authenticated user using gateway-format details
+                // map (required by SecurityContextHelper.getCurrentUsername() per ADR-0018
+                // and the updated PaymentApplicationServiceImpl.getCurrentUser() method)
+                var authDetails = new java.util.HashMap<String, Object>();
+                authDetails.put("username", "admin@example.com");
+                var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                                 "admin@example.com", null, List.of());
+                ((org.springframework.security.authentication.AbstractAuthenticationToken) authentication)
+                                .setDetails(authDetails);
                 org.springframework.security.core.context.SecurityContextHolder.getContext()
                                 .setAuthentication(authentication);
 
