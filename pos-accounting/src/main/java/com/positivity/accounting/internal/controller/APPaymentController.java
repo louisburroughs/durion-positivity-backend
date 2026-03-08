@@ -118,7 +118,7 @@ public class APPaymentController {
                         @PathVariable
                         @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
                         @NotBlank
-                        @Size(max = 100)
+                        @Size(min = 1, max = 100, message = "Payment reference must be 1-100 characters")
                         @Pattern(regexp = "^[^\\r\\n]+$", message = "Payment reference must not contain newline characters")
                         @NonNull String paymentRef) {
 

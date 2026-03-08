@@ -1,7 +1,5 @@
 package com.positivity.accounting.internal.entity;
 
-import java.time.Clock;
-
 import jakarta.persistence.*;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.shared.id.UUIDv7Id;
@@ -56,19 +54,19 @@ public class InvoiceStatusView {
     @Column
     private String latestTransactionReference;
 
-    @Column(nullable = true)
+    @Column
     private Long totalAmountMinor;
 
-    @Column(nullable = true)
+    @Column
     private Long outstandingAmountMinor;
 
-    @Column(nullable = true)
+    @Column
     private Long paidAmountMinor;
 
     @Column(nullable = false)
     private boolean postingError;
 
-    @Column(nullable = true)
+    @Column
     private String latestIdempotencyKey;
 
     public InvoiceStatusView(UUID invoiceId, PaymentStatus currentStatus,
@@ -77,6 +75,5 @@ public class InvoiceStatusView {
         this.currentStatus = currentStatus;
         this.totalPaid = totalPaid;
         this.invoiceTotal = invoiceTotal;
-        this.lastUpdated = Instant.now(Clock.systemUTC());
     }
 }

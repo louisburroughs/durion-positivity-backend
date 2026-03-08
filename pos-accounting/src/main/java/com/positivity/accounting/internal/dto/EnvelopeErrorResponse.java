@@ -15,6 +15,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class EnvelopeErrorResponse {
 
+    private String code;
+    private String message;
+    private Long timestamp;
+
     private Error error;
 
     @Data
@@ -33,6 +37,9 @@ public class EnvelopeErrorResponse {
 
     public static EnvelopeErrorResponse of(String code, String message, Long timestamp) {
         return EnvelopeErrorResponse.builder()
+                .code(code)
+                .message(message)
+                .timestamp(timestamp)
                 .error(Error.builder().code(code).message(message).timestamp(timestamp).build())
                 .build();
     }

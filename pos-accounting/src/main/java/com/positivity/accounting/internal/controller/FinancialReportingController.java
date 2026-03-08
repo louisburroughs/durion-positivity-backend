@@ -116,7 +116,7 @@ public class FinancialReportingController {
         @ApiResponse(responseCode = "401", description = "Unauthorized")
         @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
         public ResponseEntity<List<AccountDrilldownResponse>> drilldownToAccounts(
-                        @Parameter(description = "Statement line code (e.g., REVENUE_SALES)", required = true) @PathVariable @NotBlank @Pattern(regexp = "^[A-Z_]{1,100}$", message = "Statement line code must contain only uppercase letters and underscores (max 100 characters)") @NonNull String statementLineCode,
+                        @Parameter(description = "Statement line code (e.g., REVENUE_SALES)", required = true) @PathVariable @NotBlank @Pattern(regexp = "^[A-Z_]{1,100}$", message = "Invalid statement line code format: must contain only uppercase letters and underscores (1-100 characters)") @NonNull String statementLineCode,
 
                         @Parameter(description = "Period start date (YYYY-MM-DD)", required = true, example = "2024-01-01") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate startDate,
 
