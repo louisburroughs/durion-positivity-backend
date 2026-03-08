@@ -29,8 +29,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * REST Controller for Default GL Mappings.
@@ -48,6 +52,7 @@ import lombok.extern.slf4j.Slf4j;
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Default GL Mappings", description = "Manage default GL account mappings for event types without explicit posting rules")
 @RequiredArgsConstructor
+@Validated
 public class DefaultGLMappingController {
 
         private final DefaultGLMappingService defaultGLMappingService;
@@ -116,8 +121,8 @@ public class DefaultGLMappingController {
         @ApiResponse(responseCode = "403", description = "Forbidden")
         @EmitEvent(id = "ACCOUNTING_DEFAULT_MAPPING_LIST", apiVersion = "1")
         public ResponseEntity<DefaultGLMappingListResponse> listDefaultMappings(
-                        @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
-                        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
+                        @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
+                        @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size) {
                 log.info("List default GL mappings: page={}, size={}", page, size);
                 DefaultGLMappingListResponse response = defaultGLMappingService.listDefaultMappings(page, size);
                 return ResponseEntity.ok(response);
@@ -164,7 +169,7 @@ public class DefaultGLMappingController {
         @ApiResponse(responseCode = "404", description = "No default mapping found")
         @ApiResponse(responseCode = "403", description = "Forbidden")
         public ResponseEntity<DefaultGLMappingResponse> resolveDefaultMapping(
-                        @Parameter(description = "Event type") @RequestParam String eventType,
+                        @Parameter(description = "Event type") @NotBlank @RequestParam String eventType,
                         @Parameter(description = "Organization ID (optional)") @RequestParam(required = false) @Nullable UUID organizationId) {
                 log.info("Resolve default GL mapping: eventType={}, orgId={}", eventType, organizationId);
 

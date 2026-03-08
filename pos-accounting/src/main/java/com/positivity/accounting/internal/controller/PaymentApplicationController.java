@@ -25,6 +25,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * REST Controller for payment application operations (AR).
@@ -43,6 +44,7 @@ import lombok.extern.slf4j.Slf4j;
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @Tag(name = "Payment Applications", description = "Manage payment applications to invoices (AR)")
+@Validated
 public class PaymentApplicationController {
 
         private final PaymentApplicationService paymentApplicationService;

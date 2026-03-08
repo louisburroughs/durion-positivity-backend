@@ -31,6 +31,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -57,9 +60,9 @@ public class PostingRuleController {
         @ApiResponse(responseCode = "403", description = "Forbidden")
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_LIST", apiVersion = "1")
         public ResponseEntity<PostingRuleSetListResponse> listPostingRuleSets(
-                        @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
-                        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-                        @Parameter(description = "Sort field") @RequestParam(defaultValue = "createdAt") String sort) {
+                        @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
+                        @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size,
+                        @Parameter(description = "Sort field") @NotBlank @RequestParam(defaultValue = "createdAt") String sort) {
                 log.info("List posting rule sets - page={}, size={}", page, size);
                 PostingRuleSetListResponse response = postingRuleService.listRuleSetsAsResponse(page, size, sort);
                 return ResponseEntity.ok(response);
@@ -142,8 +145,8 @@ public class PostingRuleController {
         @ApiResponse(responseCode = "404", description = "Posting rule set not found")
         public ResponseEntity<List<PostingRuleVersionResponse>> listPostingRuleVersions(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
-                        @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
-                        @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size) {
+                        @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
+                        @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "10") int size) {
                 log.info("List posting rule versions - ruleSetId={}, page={}, size={}", postingRuleSetId, page, size);
                 List<PostingRuleVersionResponse> responses = postingRuleService
                                 .listVersionsAsResponse(postingRuleSetId, page, size);

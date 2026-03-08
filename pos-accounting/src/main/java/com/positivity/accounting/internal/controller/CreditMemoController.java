@@ -31,6 +31,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * REST Controller for Credit Memo operations (AR corrections).
@@ -50,6 +51,7 @@ import lombok.extern.slf4j.Slf4j;
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @Tag(name = "Credit Memos", description = "Manage credit memos for AR corrections")
+@Validated
 public class CreditMemoController {
 
         private final CreditMemoService creditMemoService;

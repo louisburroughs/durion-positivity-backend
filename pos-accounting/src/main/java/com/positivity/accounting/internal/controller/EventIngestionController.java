@@ -36,6 +36,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * REST Controller for Accounting Event Ingestion.
@@ -46,6 +49,7 @@ import jakarta.validation.Valid;
 @RequestMapping("/v1/accounting/events")
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Accounting Events", description = "Ingest and manage accounting events for journal processing.")
+@Validated
 public class EventIngestionController {
 
         private static final Logger log = LoggerFactory.getLogger(EventIngestionController.class);
@@ -63,8 +67,8 @@ public class EventIngestionController {
         @EmitEvent(id = "ACCOUNTING_EVENT_LIST", apiVersion = "1")
         public ResponseEntity<PagedResponse<AccountingEventResponse>> listEvents(
                         @Parameter(description = "Organization identifier") @RequestParam UUID organizationId,
-                        @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
-                        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
+                        @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
+                        @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Filter by processing status") @RequestParam(required = false) String status) {
 
                 Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "receivedAt"));
