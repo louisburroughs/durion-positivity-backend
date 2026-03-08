@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
 import com.positivity.invoice.internal.enums.ReceiptStatus;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.exception.ReceiptNotFoundException;
 import com.positivity.invoice.service.Receipt;
@@ -117,6 +118,25 @@ class ReceiptControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void generateReceipt_invoiceNotFound_returns404() throws Exception {
+        when(receiptService.generateReceipt(
+                eq(INVOICE_ID), eq(PAYMENT_INTENT_ID), any(), any(), any()))
+                .thenThrow(new InvoiceNotFoundException(INVOICE_ID));
+
+        mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts", INVOICE_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "paymentIntentId": "00000000-0000-0000-0000-000000000020",
+                          "terminalId": "POS-001",
+                          "templateId": "default",
+                          "templateVersion": "1.0"
+                        }
+                        """))
+                .andExpect(status().isNotFound());
     }
 
     // -------------------------------------------------------------------------

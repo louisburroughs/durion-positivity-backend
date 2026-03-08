@@ -34,6 +34,7 @@ import com.positivity.invoice.internal.entity.Receipt;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryMethod;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
 import com.positivity.invoice.internal.enums.ReceiptStatus;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.ReceiptRepository;
@@ -135,8 +136,8 @@ class ReceiptServiceImplTest {
     // -------------------------------------------------------------------------
 
     /**
-     * AC4: Reference must match pattern RCP-{invoiceNumber}-{yyyyMMddTHHmmssZ}-001.
-     * Uses fixed clock 2026-01-15T14:30:22Z → RCP-INV-12345-20260115T143022Z-001.
+     * AC4: Reference must match pattern RCP-{invoiceNumber}-{yyyyMMddTHHmmssZ}-{seq}.
+     * Uses fixed clock 2026-01-15T14:30:22Z; first sequence suffix is 001.
      * Issue: #7
      */
     @Test
@@ -150,6 +151,16 @@ class ReceiptServiceImplTest {
         String reference = captor.getValue().getReference();
         assertThat(reference).startsWith("RCP-INV-12345-");
         assertThat(reference).matches("RCP-INV-12345-\\d{8}T\\d{6}Z-\\d{3}");
+    }
+
+    @Test
+    void generateReceipt_secondReceiptForInvoice_usesIncrementedReferenceSuffix() {
+        when(receiptRepository.countByInvoiceId(INVOICE_ID)).thenReturn(1L);
+
+        com.positivity.invoice.service.Receipt saved = receiptServiceImpl.generateReceipt(
+                INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
+
+        assertThat(saved.getReference()).endsWith("-002");
     }
 
     /**
@@ -271,18 +282,18 @@ class ReceiptServiceImplTest {
     // -------------------------------------------------------------------------
 
     /**
-     * generateReceipt must throw ReceiptNotFoundException when the invoice
+     * generateReceipt must throw InvoiceNotFoundException when the invoice
      * is not found.
      * Issue: #7
      */
     @Test
-    void generateReceipt_invoiceNotFound_throwsReceiptNotFoundException() {
+    void generateReceipt_invoiceNotFound_throwsInvoiceNotFoundException() {
         UUID unknownInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000099");
         when(invoiceRepository.findById(unknownInvoiceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> receiptServiceImpl.generateReceipt(
                 unknownInvoiceId, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION))
-                .isInstanceOf(com.positivity.invoice.internal.exception.ReceiptNotFoundException.class)
+                .isInstanceOf(InvoiceNotFoundException.class)
                 .hasMessageContaining(unknownInvoiceId.toString());
     }
 

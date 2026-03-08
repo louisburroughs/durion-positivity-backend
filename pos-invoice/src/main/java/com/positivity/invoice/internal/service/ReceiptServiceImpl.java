@@ -4,6 +4,7 @@ import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryMethod;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
 import com.positivity.invoice.internal.enums.ReceiptStatus;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.ReceiptNotFoundException;
 import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
@@ -29,6 +30,7 @@ public class ReceiptServiceImpl implements ReceiptService {
     private static final String GENERATE_RECEIPT = "GENERATE_RECEIPT";
     private static final String SUPERVISOR_OVERRIDE = "SUPERVISOR_OVERRIDE";
     private static final String RECEIPT_NOT_FOUND_PREFIX = "Receipt not found: ";
+    private static final int INITIAL_REFERENCE_SEQUENCE = 1;
 
     private final ReceiptRepository receiptRepository;
     private final InvoiceRepository invoiceRepository;
@@ -54,15 +56,18 @@ public class ReceiptServiceImpl implements ReceiptService {
         requireAuthority(GENERATE_RECEIPT);
 
         Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ReceiptNotFoundException("Invoice not found: " + invoiceId));
+                .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
 
         String cashierId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        int nextReferenceSequence = Math.toIntExact(
+                receiptRepository.countByInvoiceId(invoiceId) + INITIAL_REFERENCE_SEQUENCE);
+        String referenceSuffix = String.format("%03d", nextReferenceSequence);
 
         String reference = "RCP-" + invoice.getInvoiceNumber() + "-"
                 + DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
                         .withZone(ZoneOffset.UTC)
                         .format(Instant.now(clock))
-                + "-001";
+                + "-" + referenceSuffix;
 
         com.positivity.invoice.internal.entity.Receipt receiptEntity = new com.positivity.invoice.internal.entity.Receipt();
         receiptEntity.setInvoiceId(invoiceId);

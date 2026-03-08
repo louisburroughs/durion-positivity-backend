@@ -61,7 +61,14 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         return paymentIntentRepository.findByIdempotencyKey(request.getIdempotencyKey())
-                .map(this::toResponse)
+                .map(paymentIntent -> {
+                    if (!invoiceId.equals(paymentIntent.getInvoiceId())) {
+                        throw new PaymentIntentNotFoundException(
+                                "Idempotency key " + request.getIdempotencyKey()
+                                        + " not found under invoice " + invoiceId);
+                    }
+                    return toResponse(paymentIntent);
+                })
                 .orElseGet(() -> createAndProcessPaymentIntent(invoiceId, request));
     }
 
