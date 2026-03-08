@@ -1026,7 +1026,8 @@ class SalesOrderServiceImplTest {
 
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(order);
-        // source document returns the same line that is already linked → should be deduped
+        // source document returns the same line that is already linked → should be
+        // deduped
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
                 .thenReturn(List.of(new SourceDocumentLine(
                         "TIRE-001", "Tire", 1, new BigDecimal("100.00"), existingSourceLineId)));

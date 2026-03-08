@@ -10,9 +10,66 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: Order Cancellation
+  description: Cancel orders and retry failed cancellations
 - name: Price Overrides
   description: Price override management with approval workflow
+- name: Sales Orders
+  description: Sales order cart management
 paths:
+  /v1/orders/carts/{orderId}/items/{lineId}:
+    put:
+      tags:
+      - Sales Orders
+      summary: Update a sales order cart item quantity
+      operationId: updateItemQuantity
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: lineId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateItemRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SalesOrderLineResponse"
+    delete:
+      tags:
+      - Sales Orders
+      summary: Remove an item from a sales order cart
+      operationId: removeItem
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: lineId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
   /v1/orders/price-overrides:
     get:
       tags:
@@ -56,7 +113,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PriceOverrideView"
+                  $ref: "#/components/schemas/PriceOverrideDetail"
         "400":
           description: No filter parameter provided
           content:
@@ -64,7 +121,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PriceOverrideView"
+                  $ref: "#/components/schemas/PriceOverrideDetail"
     post:
       tags:
       - Price Overrides
@@ -84,19 +141,19 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ApplyPriceOverrideResponse"
+                $ref: "#/components/schemas/PriceOverrideResult"
         "403":
           description: Insufficient permissions
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ApplyPriceOverrideResponse"
+                $ref: "#/components/schemas/PriceOverrideResult"
         "400":
           description: Invalid request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ApplyPriceOverrideResponse"
+                $ref: "#/components/schemas/PriceOverrideResult"
   /v1/orders/price-overrides/{overrideId}/reject:
     post:
       tags:
@@ -125,25 +182,25 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverrideView"
-        "200":
-          description: Override rejected
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideView"
+                $ref: "#/components/schemas/PriceOverrideDetail"
         "403":
           description: Insufficient rejection permissions
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverrideView"
+                $ref: "#/components/schemas/PriceOverrideDetail"
         "404":
           description: Override not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverrideView"
+                $ref: "#/components/schemas/PriceOverrideDetail"
+        "200":
+          description: Override rejected
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideDetail"
   /v1/orders/price-overrides/{overrideId}/approve:
     post:
       tags:
@@ -168,30 +225,194 @@ paths:
               $ref: "#/components/schemas/ApprovePriceOverrideRequest"
         required: true
       responses:
-        "200":
-          description: Override approved
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideView"
         "400":
           description: Invalid request or override not in pending state
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverrideView"
+                $ref: "#/components/schemas/PriceOverrideDetail"
         "404":
           description: Override not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverrideView"
+                $ref: "#/components/schemas/PriceOverrideDetail"
+        "200":
+          description: Override approved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideDetail"
         "403":
           description: Insufficient approval permissions
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverrideView"
+                $ref: "#/components/schemas/PriceOverrideDetail"
+  /v1/orders/carts:
+    post:
+      tags:
+      - Sales Orders
+      summary: Create a sales order cart
+      operationId: createCart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCartRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SalesOrderResponse"
+  /v1/orders/carts/{orderId}/items:
+    post:
+      tags:
+      - Sales Orders
+      summary: Add an item to a sales order cart
+      operationId: addItem
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddItemRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SalesOrderLineResponse"
+  /v1/orders/carts/{orderId}/cancel:
+    post:
+      tags:
+      - Order Cancellation
+      summary: Cancel order
+      operationId: cancelOrder
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelOrderRequest"
+        required: true
+      responses:
+        "404":
+          description: Order not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationResponse"
+        "409":
+          description: Order cannot be cancelled in current state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationResponse"
+        "201":
+          description: Cancellation initiated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationResponse"
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationResponse"
+  /v1/orders/carts/{orderId}/cancel/retry:
+    post:
+      tags:
+      - Order Cancellation
+      summary: Retry failed cancellation
+      operationId: retryCancellation
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: idempotencyKey
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        "404":
+          description: Order not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationResponse"
+        "200":
+          description: Retry accepted
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationResponse"
+        "409":
+          description: Order not in retryable state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationResponse"
+  /v1/orders/carts/{orderId}/source:
+    patch:
+      tags:
+      - Sales Orders
+      summary: Link a source to a sales order
+      operationId: linkSource
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkSourceRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SalesOrderResponse"
   /v1/orders/price-overrides/{overrideId}:
     get:
       tags:
@@ -209,18 +430,18 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "404":
-          description: Override not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideView"
         "200":
           description: Override found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverrideView"
+                $ref: "#/components/schemas/PriceOverrideDetail"
+        "404":
+          description: Override not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideDetail"
   /v1/orders/price-overrides/pending:
     get:
       tags:
@@ -236,9 +457,62 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PriceOverrideView"
+                  $ref: "#/components/schemas/PriceOverrideDetail"
+  /v1/orders/carts/{orderId}:
+    get:
+      tags:
+      - Sales Orders
+      summary: Get a sales order by ID
+      operationId: getOrder
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SalesOrderResponse"
 components:
   schemas:
+    UpdateItemRequest:
+      type: object
+      properties:
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+    SalesOrderLineResponse:
+      type: object
+      properties:
+        orderLineId:
+          type: string
+        itemSku:
+          type: string
+        itemDescription:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+        unitPrice:
+          type: number
+        fulfillmentStatus:
+          type: string
+        priceSource:
+          type: string
+        reasonCode:
+          type: string
+        sourceType:
+          type: string
+        sourceId:
+          type: string
+        sourceLineId:
+          type: string
     ApplyPriceOverrideRequest:
       type: object
       properties:
@@ -256,17 +530,14 @@ components:
           minimum: 0.0
         reasonCode:
           type: string
-          enum:
-          - CUSTOMER_LOYALTY
-          - PRICE_MATCH
-          - PROMOTIONAL_PRICING
-          - PRICING_ERROR_CORRECTION
-          - VOLUME_DISCOUNT
-          - GOODWILL_ADJUSTMENT
-          - MANAGER_DISCRETION
-          - OTHER
+          description: Reason code for the price override
+          example: PRICE_MATCH
         justification:
           type: string
+        idempotencyKey:
+          type: string
+          description: Optional idempotency key for duplicate prevention
+          example: req-abc123
       required:
       - orderId
       - orderLineId
@@ -274,7 +545,7 @@ components:
       - overridePrice
       - productId
       - reasonCode
-    ApplyPriceOverrideResponse:
+    PriceOverrideResult:
       type: object
       properties:
         overrideId:
@@ -296,26 +567,13 @@ components:
           type: number
         reasonCode:
           type: string
-          enum:
-          - CUSTOMER_LOYALTY
-          - PRICE_MATCH
-          - PROMOTIONAL_PRICING
-          - PRICING_ERROR_CORRECTION
-          - VOLUME_DISCOUNT
-          - GOODWILL_ADJUSTMENT
-          - MANAGER_DISCRETION
-          - OTHER
         justification:
           type: string
         status:
           type: string
-          enum:
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
-          - APPLIED
-          - CANCELLED
         requiresApproval:
+          type: boolean
+        affectsCommission:
           type: boolean
         requestedByUserId:
           type: string
@@ -333,7 +591,7 @@ components:
           type: string
       required:
       - reason
-    PriceOverrideView:
+    PriceOverrideDetail:
       type: object
       properties:
         overrideId:
@@ -355,26 +613,13 @@ components:
           type: number
         reasonCode:
           type: string
-          enum:
-          - CUSTOMER_LOYALTY
-          - PRICE_MATCH
-          - PROMOTIONAL_PRICING
-          - PRICING_ERROR_CORRECTION
-          - VOLUME_DISCOUNT
-          - GOODWILL_ADJUSTMENT
-          - MANAGER_DISCRETION
-          - OTHER
         justification:
           type: string
         status:
           type: string
-          enum:
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
-          - APPLIED
-          - CANCELLED
         requiresApproval:
+          type: boolean
+        affectsCommission:
           type: boolean
         requestedByUserId:
           type: string
@@ -404,3 +649,99 @@ components:
       properties:
         comments:
           type: string
+    CreateCartRequest:
+      type: object
+      properties:
+        clerkId:
+          type: string
+        terminalId:
+          type: string
+        customerId:
+          type: string
+        vehicleId:
+          type: string
+      required:
+      - clerkId
+      - terminalId
+    SalesOrderResponse:
+      type: object
+      properties:
+        orderId:
+          type: string
+        customerId:
+          type: string
+        vehicleId:
+          type: string
+        clerkId:
+          type: string
+        terminalId:
+          type: string
+        status:
+          type: string
+        subtotal:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesOrderLineResponse"
+    AddItemRequest:
+      type: object
+      properties:
+        itemSku:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+        reasonCode:
+          type: string
+        manualPrice:
+          type: number
+      required:
+      - itemSku
+    CancelOrderRequest:
+      type: object
+      properties:
+        cancellationReason:
+          type: string
+        workOrderId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+      required:
+      - cancellationReason
+    CancellationResponse:
+      type: object
+      properties:
+        orderId:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+        cancellationIdempotencyKey:
+          type: string
+    LinkSourceRequest:
+      type: object
+      properties:
+        sourceType:
+          type: string
+        sourceId:
+          type: string
+      required:
+      - sourceId
+      - sourceType

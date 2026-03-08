@@ -30,10 +30,9 @@ public class ApplyPriceOverrideRequest {
     @DecimalMin(value = "0.0", message = "Override price must be non-negative")
     private BigDecimal overridePrice;
 
-        @Schema(description = "Reason code for the price override",
-            example = "PRICE_MATCH", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank
-        private String reasonCode;
+    @Schema(description = "Reason code for the price override", example = "PRICE_MATCH", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank
+    private String reasonCode;
 
     private String justification;
 

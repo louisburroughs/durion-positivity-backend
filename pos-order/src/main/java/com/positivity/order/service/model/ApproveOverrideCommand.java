@@ -4,6 +4,5 @@ import org.jspecify.annotations.NonNull;
 
 public record ApproveOverrideCommand(
         @NonNull String approverRole,
-        String comments
-) {
+        String comments) {
 }

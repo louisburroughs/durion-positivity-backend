@@ -217,16 +217,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SiteDefaultsResponse"
         "200":
           description: Site defaults returned
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/SiteDefaultsResponse"
         "404":

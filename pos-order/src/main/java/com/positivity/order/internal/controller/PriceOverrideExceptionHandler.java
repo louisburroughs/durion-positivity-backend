@@ -30,7 +30,7 @@ public class PriceOverrideExceptionHandler {
     private static final String STATUS = "status";
     private static final String CORRELATION_ID = "correlationId";
     private static final String MESSAGE = "message";
-        private static final String ORDER_PRICE_OVERRIDE_BAD_REQUEST = "ORDER_PRICE_OVERRIDE_BAD_REQUEST";
+    private static final String ORDER_PRICE_OVERRIDE_BAD_REQUEST = "ORDER_PRICE_OVERRIDE_BAD_REQUEST";
 
     private final Clock clock;
 

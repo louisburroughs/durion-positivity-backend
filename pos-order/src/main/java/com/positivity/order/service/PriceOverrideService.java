@@ -15,27 +15,27 @@ import org.jspecify.annotations.NonNull;
  */
 public interface PriceOverrideService {
 
-    @NonNull
-    PriceOverrideResult applyPriceOverride(ApplyPriceOverrideRequest request);
+        @NonNull
+        PriceOverrideResult applyPriceOverride(ApplyPriceOverrideRequest request);
 
-    @NonNull
-    PriceOverrideDetail approveOverride(UUID overrideId, ApproveOverrideCommand command);
+        @NonNull
+        PriceOverrideDetail approveOverride(UUID overrideId, ApproveOverrideCommand command);
 
-    @NonNull
-    PriceOverrideDetail rejectOverride(UUID overrideId, RejectOverrideCommand command);
+        @NonNull
+        PriceOverrideDetail rejectOverride(UUID overrideId, RejectOverrideCommand command);
 
-    @NonNull
-    PriceOverrideDetail getOverrideById(UUID overrideId);
+        @NonNull
+        PriceOverrideDetail getOverrideById(UUID overrideId);
 
-    @NonNull
-    List<PriceOverrideDetail> getOverridesByOrderId(UUID orderId);
+        @NonNull
+        List<PriceOverrideDetail> getOverridesByOrderId(UUID orderId);
 
-    @NonNull
-    List<PriceOverrideDetail> getPendingApprovals();
+        @NonNull
+        List<PriceOverrideDetail> getPendingApprovals();
 
-    @NonNull
-    List<PriceOverrideDetail> getOverridesByDateRange(Instant startDate, Instant endDate);
+        @NonNull
+        List<PriceOverrideDetail> getOverridesByDateRange(Instant startDate, Instant endDate);
 
-    @NonNull
-    List<PriceOverrideDetail> getOverridesByStatus(String status);
+        @NonNull
+        List<PriceOverrideDetail> getOverridesByStatus(String status);
 }

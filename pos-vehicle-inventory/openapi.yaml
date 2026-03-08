@@ -70,14 +70,14 @@ paths:
               $ref: "#/components/schemas/PreferencesUpsertDto"
         required: true
       responses:
-        "400":
-          description: Invalid preference data
+        "201":
+          description: Preferences created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "201":
-          description: Preferences created successfully
+        "400":
+          description: Invalid preference data
           content:
             '*/*':
               schema:

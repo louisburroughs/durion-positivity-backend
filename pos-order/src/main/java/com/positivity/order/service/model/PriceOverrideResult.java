@@ -6,7 +6,8 @@ import java.util.UUID;
 
 /**
  * Result from applying a price override.
- * status = APPROVED means applied immediately; PENDING_APPROVAL means queued for review.
+ * status = APPROVED means applied immediately; PENDING_APPROVAL means queued
+ * for review.
  */
 public record PriceOverrideResult(
         UUID overrideId,
@@ -24,6 +25,5 @@ public record PriceOverrideResult(
         Boolean affectsCommission,
         String requestedByUserId,
         Instant createdAt,
-        String message
-) {
+        String message) {
 }

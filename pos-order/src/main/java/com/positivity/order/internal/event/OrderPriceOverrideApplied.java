@@ -4,7 +4,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * Domain event published when a price override is auto-approved and applied immediately.
+ * Domain event published when a price override is auto-approved and applied
+ * immediately.
  */
 public record OrderPriceOverrideApplied(
         UUID overrideId,
@@ -13,5 +14,5 @@ public record OrderPriceOverrideApplied(
         UUID productId,
         BigDecimal originalPrice,
         BigDecimal overridePrice,
-        String requestedByUsername
-) {}
+        String requestedByUsername) {
+}
