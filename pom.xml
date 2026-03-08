@@ -278,6 +278,7 @@
 		<!-- Build Plugins -->
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<springdoc-openapi-maven-plugin.version>1.5</springdoc-openapi-maven-plugin.version>
+		<sonar.organization>louisburroughs</sonar.organization>
 	</properties>
 
 	<build>
