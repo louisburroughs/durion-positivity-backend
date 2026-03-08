@@ -1,6 +1,8 @@
 package com.positivity.order;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -8,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.order.internal.security.PriceOverridePermissions;
 import com.positivity.order.service.PriceOverrideService;
+import com.positivity.order.service.model.PriceOverrideDetail;
 import com.positivity.order.service.model.PriceOverrideResult;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -98,5 +101,68 @@ class PriceOverrideControllerTest extends BaseContractIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"))
                 .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    @DisplayName("PO-003: Approve derives reviewer role from ROLE_* authority")
+    void approvePriceOverride_whenRoleAuthorityPresent_thenUsesDerivedRole() throws Exception {
+        UUID overrideId = UUID.randomUUID();
+        when(priceOverrideService.approveOverride(any(), any())).thenReturn(sampleDetail("APPROVED"));
+
+        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides/{overrideId}/approve", overrideId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"comments\":\"ok\"}"),
+                PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + ",ROLE_MANAGER"))
+                .andExpect(status().isOk());
+
+        verify(priceOverrideService).approveOverride(any(), argThat(command ->
+                "MANAGER".equals(command.approverRole())
+                        && "ok".equals(command.comments())));
+    }
+
+    @Test
+    @DisplayName("PO-004: Reject falls back to UNKNOWN when no ROLE_* authority exists")
+    void rejectPriceOverride_whenNoRoleAuthority_thenUsesUnknownRole() throws Exception {
+        UUID overrideId = UUID.randomUUID();
+        when(priceOverrideService.rejectOverride(any(), any())).thenReturn(sampleDetail("REJECTED"));
+
+        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides/{overrideId}/reject", overrideId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"policy\",\"comments\":\"no role\"}"),
+                PriceOverridePermissions.PRICE_OVERRIDE_REJECT))
+                .andExpect(status().isOk());
+
+        verify(priceOverrideService).rejectOverride(any(), argThat(command ->
+                "UNKNOWN".equals(command.reviewerRole())
+                        && "policy".equals(command.reason())
+                        && "no role".equals(command.comments())));
+    }
+
+    private PriceOverrideDetail sampleDetail(String status) {
+        UUID id = UUID.randomUUID();
+        String idString = id.toString();
+        return new PriceOverrideDetail(
+                id,
+                idString,
+                idString,
+                idString,
+                BigDecimal.TEN,
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                "PRICE_MATCH",
+                "test",
+                status,
+                false,
+                false,
+                idString,
+                idString,
+                null,
+                null,
+                Instant.now(),
+                Instant.now(),
+                Instant.now(),
+                null,
+                null);
     }
 }
