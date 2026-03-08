@@ -29,6 +29,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * REST API for financial reporting (Income Statement, Balance Sheet,
@@ -44,6 +47,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/v1/accounting/reports/financial")
 @Tag(name = "Financial Reporting", description = "Income Statement and Balance Sheet generation with drilldown")
 @SecurityRequirement(name = "bearerAuth")
+@Validated
 public class FinancialReportingController {
 
         private final FinancialReportingService financialReportingService;
@@ -112,7 +116,7 @@ public class FinancialReportingController {
         @ApiResponse(responseCode = "401", description = "Unauthorized")
         @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
         public ResponseEntity<List<AccountDrilldownResponse>> drilldownToAccounts(
-                        @Parameter(description = "Statement line code (e.g., REVENUE_SALES)", required = true) @PathVariable @NonNull String statementLineCode,
+                        @Parameter(description = "Statement line code (e.g., REVENUE_SALES)", required = true) @PathVariable @NotBlank @Pattern(regexp = "^[A-Z_]{1,100}$", message = "Statement line code must contain only uppercase letters and underscores (max 100 characters)") @NonNull String statementLineCode,
 
                         @Parameter(description = "Period start date (YYYY-MM-DD)", required = true, example = "2024-01-01") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate startDate,
 
@@ -124,16 +128,6 @@ public class FinancialReportingController {
                 // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
                 // This maintains the accounting domain's standard error contract across all
                 // endpoints.
-
-                // Validate statementLineCode to prevent log injection (S5145):
-                // Must match expected format (uppercase letters and underscores only, max 100
-                // chars)
-                // to prevent CRLF injection that could create fake log entries or manipulate
-                // audit trails
-                if (!statementLineCode.matches("^[A-Z_]{1,100}$")) {
-                        throw new IllegalArgumentException(
-                                        "Invalid statement line code format: must contain only uppercase letters and underscores (max 100 characters)");
-                }
 
                 if (endDate.isBefore(startDate)) {
                         throw new IllegalArgumentException("End date cannot be before start date");
@@ -156,7 +150,7 @@ public class FinancialReportingController {
         @ApiResponse(responseCode = "401", description = "Unauthorized")
         @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
         public ResponseEntity<List<JournalLineDrilldownResponse>> drilldownToJournalLines(
-                        @Parameter(description = "GL Account ID (UUID)", required = true, example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable @NonNull String accountId,
+                        @Parameter(description = "GL Account ID (UUID)", required = true, example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable @NotBlank @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", message = "Account ID must be a valid UUID") @NonNull String accountId,
 
                         @Parameter(description = "Period start date (YYYY-MM-DD)", required = true, example = "2024-01-01") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate startDate,
 
@@ -168,14 +162,6 @@ public class FinancialReportingController {
                 // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
                 // This maintains the accounting domain's standard error contract across all
                 // endpoints.
-
-                // Validate accountId is a well-formed UUID to prevent log injection (S5145)
-                // and reject malformed input early with a clear error message
-                if (!accountId.matches(
-                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
-                        throw new IllegalArgumentException(
-                                        "Invalid account ID format: must be a valid UUID (e.g., 123e4567-e89b-12d3-a456-426614174000)");
-                }
 
                 if (endDate.isBefore(startDate)) {
                         throw new IllegalArgumentException("End date cannot be before start date");

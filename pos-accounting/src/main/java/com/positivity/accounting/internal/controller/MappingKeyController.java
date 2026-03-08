@@ -12,12 +12,16 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Set;
@@ -30,6 +34,7 @@ import java.util.UUID;
 @RequestMapping("/v1/accounting")
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Mapping Keys", description = "Manage mapping keys for GL mapping taxonomy")
+@Validated
 public class MappingKeyController {
 
         private static final Logger log = LoggerFactory.getLogger(MappingKeyController.class);
@@ -99,9 +104,9 @@ public class MappingKeyController {
         @EmitEvent(id = "ACCOUNTING_MAPPING_KEY_LIST", apiVersion = "1")
         public ResponseEntity<MappingKeyListResponse> listMappingKeysByCategory(
                         @Parameter(description = "Posting category identifier") @PathVariable @NonNull UUID postingCategoryId,
-                        @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
-                        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-                        @Parameter(description = "Sort field") @RequestParam(defaultValue = "keyName") String sort,
+                        @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
+                        @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size,
+                        @Parameter(description = "Sort field") @NotBlank @RequestParam(defaultValue = "keyName") String sort,
                         @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive) {
                 log.info("List mapping keys for category");
 

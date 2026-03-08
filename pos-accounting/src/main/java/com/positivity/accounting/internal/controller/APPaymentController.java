@@ -29,8 +29,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * REST controller for AP (Accounts Payable) payment operations.
@@ -54,6 +58,7 @@ import lombok.extern.slf4j.Slf4j;
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "AP Payments", description = "Accounts Payable vendor payment operations")
 @RequiredArgsConstructor
+@Validated
 public class APPaymentController {
 
         private final APPaymentService apPaymentService;
@@ -110,21 +115,12 @@ public class APPaymentController {
         @ApiResponse(responseCode = "404", description = "Payment not found")
         @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<APPaymentResponse> getPaymentByRef(
-                        @PathVariable @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012") @NonNull String paymentRef) {
-
-                // Validate paymentRef to prevent log injection (S5145):
-                // Must be 1-100 characters and not contain control characters (newlines,
-                // carriage returns)
-                // to prevent CRLF injection that could create fake log entries or manipulate
-                // audit trails
-                if (paymentRef.isEmpty() || paymentRef.length() > 100) {
-                        throw new IllegalArgumentException(
-                                        "Invalid payment reference: must be 1-100 characters");
-                }
-                if (paymentRef.matches(".*[\\r\\n].*")) {
-                        throw new IllegalArgumentException(
-                                        "Invalid payment reference: must not contain newline characters");
-                }
+                        @PathVariable
+                        @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
+                        @NotBlank
+                        @Size(max = 100)
+                        @Pattern(regexp = "^[^\\r\\n]+$", message = "Payment reference must not contain newline characters")
+                        @NonNull String paymentRef) {
 
                 return apPaymentService.getPaymentByRef(paymentRef)
                                 .map(ResponseEntity::ok)

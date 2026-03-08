@@ -14,6 +14,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +26,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -42,6 +46,7 @@ import java.util.UUID;
 @RequestMapping("/v1/accounting/journal-entries")
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Journal Entries", description = "Manage journal entries including posting and reversal.")
+@Validated
 public class JournalEntryController {
 
         private static final Logger log = LoggerFactory.getLogger(JournalEntryController.class);
@@ -58,9 +63,9 @@ public class JournalEntryController {
         @ApiResponse(responseCode = "403", description = "Forbidden")
         @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_LIST", apiVersion = "1")
         public ResponseEntity<PagedResponse<JournalEntryResponse>> listJournalEntries(
-                        @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
-                        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-                        @Parameter(description = "Sort field") @RequestParam(defaultValue = "createdAt") String sort) {
+                        @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
+                        @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size,
+                        @Parameter(description = "Sort field") @NotBlank @RequestParam(defaultValue = "createdAt") String sort) {
                 log.debug("Listing journal entries: page={}, size={}", page, size);
 
                 Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, sort));

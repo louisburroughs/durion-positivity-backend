@@ -32,6 +32,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * REST Controller for Vendor Bill lifecycle management.
@@ -46,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @Tag(name = "Vendor Bill API", description = "Endpoints for vendor bill creation, matching, retrieval, and exception resolution")
+@Validated
 public class VendorBillController {
 
     private final VendorBillService vendorBillService;

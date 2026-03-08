@@ -30,7 +30,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * REST Controller for GL Account (Chart of Accounts management).
@@ -42,6 +46,7 @@ import lombok.RequiredArgsConstructor;
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "GL Accounts", description = "Manage chart of accounts including lifecycle actions.")
 @RequiredArgsConstructor
+@Validated
 public class GLAccountController {
 
         private static final Logger log = LoggerFactory.getLogger(GLAccountController.class);
@@ -55,9 +60,9 @@ public class GLAccountController {
         @ApiResponse(responseCode = "403", description = "Forbidden")
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_LIST", apiVersion = "1")
         public ResponseEntity<GLAccountListResponse> listGLAccounts(
-                        @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
-                        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-                        @Parameter(description = "Sort field") @RequestParam(defaultValue = "accountCode") String sort,
+                        @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
+                        @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size,
+                        @Parameter(description = "Sort field") @NotBlank @RequestParam(defaultValue = "accountCode") String sort,
                         @Parameter(description = "Filter by account status") @RequestParam(required = false) String status) {
                 log.info("List GL accounts");
                 GLAccountListResponse response = glAccountService.listGLAccounts(page, size, sort, status);
