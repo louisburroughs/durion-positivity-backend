@@ -97,7 +97,8 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
                 paymentIntent.getAuthorizedAmount());
         GatewayPaymentResult voidResult = paymentGatewayPort.voidRemainder(voidRequest);
         if (!voidResult.isSuccessful()) {
-            throw new PaymentGatewayException("Gateway void failed for reference: " + paymentIntent.getGatewayReference());
+            throw new PaymentGatewayException(
+                    "Gateway void failed for reference: " + paymentIntent.getGatewayReference());
         }
 
         paymentIntent.setStatus(PaymentIntentStatus.VOIDED);
