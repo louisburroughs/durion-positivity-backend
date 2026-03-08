@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.util.List;
 
 import static com.positivity.order.internal.security.PriceOverridePermissions.*;
+import static com.positivity.order.internal.security.OrderPermissions.ORDER_CANCEL;
 
 /**
  * Test security configuration that replaces gateway-based authentication
@@ -39,13 +40,16 @@ public class TestSecurityConfig {
 
     /**
      * All order authorities needed by controller {@code @PreAuthorize} checks.
+     * Issue #19: ORDER_CANCEL added for OrderCancellationController tests.
      */
     private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
             new SimpleGrantedAuthority(PRICE_OVERRIDE_VIEW),
             new SimpleGrantedAuthority(PRICE_OVERRIDE_APPLY),
             new SimpleGrantedAuthority(PRICE_OVERRIDE_APPROVE),
             new SimpleGrantedAuthority(PRICE_OVERRIDE_REJECT),
-            new SimpleGrantedAuthority("order:price_override:admin"));
+            new SimpleGrantedAuthority("order:price_override:admin"),
+            // Issue #19: cancellation controller requires ORDER_CANCEL authority
+            new SimpleGrantedAuthority(ORDER_CANCEL));
 
     /**
      * Replaces the production gateway filter chain with a permissive one that

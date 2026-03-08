@@ -77,4 +77,16 @@ public class SalesOrder {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<SalesOrderLine> lines = new ArrayList<>();
+
+    @Column(nullable = true)
+    private String cancellationReason;
+
+    @Column(nullable = true, columnDefinition = "UUID")
+    private UUID workOrderId;
+
+    @Column(nullable = true, columnDefinition = "UUID")
+    private UUID paymentId;
+
+    @Column(nullable = true)
+    private String cancellationIdempotencyKey;
 }
