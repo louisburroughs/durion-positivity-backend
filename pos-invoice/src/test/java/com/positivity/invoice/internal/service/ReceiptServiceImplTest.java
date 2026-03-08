@@ -107,7 +107,7 @@ class ReceiptServiceImplTest {
                 .map(SimpleGrantedAuthority::new)
                 .toList();
         SecurityContextHolder.getContext().setAuthentication(
-            new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants));
+                new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants));
     }
 
     // -------------------------------------------------------------------------
@@ -144,7 +144,7 @@ class ReceiptServiceImplTest {
         ArgumentCaptor<Receipt> captor = ArgumentCaptor.forClass(Receipt.class);
 
         receiptServiceImpl.generateReceipt(
-            INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
+                INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
 
         verify(receiptRepository).save(captor.capture());
         String reference = captor.getValue().getReference();
@@ -179,7 +179,7 @@ class ReceiptServiceImplTest {
         withAuthorities();
 
         assertThatThrownBy(() -> receiptServiceImpl.generateReceipt(
-            INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION))
+                INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -244,7 +244,7 @@ class ReceiptServiceImplTest {
         when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
 
         com.positivity.invoice.service.Receipt saved = receiptServiceImpl.reprintReceipt(RECEIPT_ID,
-            "CUSTOMER_REQUEST");
+                "CUSTOMER_REQUEST");
         assertThat(saved.getReprintCount()).isEqualTo(1);
         assertThat(saved.getLastReprintReason()).isEqualTo("CUSTOMER_REQUEST");
         assertThat(saved.getLastReprintedBy()).isEqualTo(CASHIER_ID);
@@ -308,7 +308,8 @@ class ReceiptServiceImplTest {
     }
 
     /**
-     * recordPrintDelivery must throw ReceiptNotFoundException when receipt is not found.
+     * recordPrintDelivery must throw ReceiptNotFoundException when receipt is not
+     * found.
      * Issue: #7
      */
     @Test
@@ -343,7 +344,8 @@ class ReceiptServiceImplTest {
     }
 
     /**
-     * sendEmailReceipt must throw ReceiptNotFoundException when receipt is not found.
+     * sendEmailReceipt must throw ReceiptNotFoundException when receipt is not
+     * found.
      * Issue: #7
      */
     @Test

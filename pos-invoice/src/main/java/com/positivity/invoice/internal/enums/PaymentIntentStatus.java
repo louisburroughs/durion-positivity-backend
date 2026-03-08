@@ -10,6 +10,7 @@ package com.positivity.invoice.internal.enums;
  * <li>{@code AUTHORIZED} — authorization hold placed (AUTH_ONLY flow)</li>
  * <li>{@code CAPTURED} — funds captured successfully</li>
  * <li>{@code CAPTURE_FAILED} — capture attempt failed; no funds moved</li>
+ * <li>{@code VOIDED} — authorization hold voided before capture</li>
  * <li>{@code EXPIRED} — authorization hold expired before capture</li>
  * </ul>
  */
@@ -18,5 +19,6 @@ public enum PaymentIntentStatus {
     AUTHORIZED,
     CAPTURED,
     CAPTURE_FAILED,
+    VOIDED,
     EXPIRED
 }

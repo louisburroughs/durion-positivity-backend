@@ -100,6 +100,18 @@ public final class InvoiceEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // ==================== STORY #8 — VOID/REFUND EVENTS ====================
+
+        public static final EventTypeRegistration INVOICE_PAYMENT_VOID = EventTypeRegistration
+                        .write("INVOICE_PAYMENT_VOID", "Void an authorized payment for an invoice")
+                        .apiVersion("1")
+                        .build();
+
+        public static final EventTypeRegistration INVOICE_PAYMENT_REFUND = EventTypeRegistration
+                        .write("INVOICE_PAYMENT_REFUND", "Refund a captured payment for an invoice")
+                        .apiVersion("1")
+                        .build();
+
         // ==================== STORY #7 — RECEIPT EVENTS ====================
 
         public static final EventTypeRegistration INVOICE_RECEIPT_GENERATE = EventTypeRegistration
@@ -139,6 +151,8 @@ public final class InvoiceEventTypes {
                                 INVOICE_DRAFT_REVERT,
                                 INVOICE_PAYMENT_INITIATE,
                                 INVOICE_PAYMENT_CAPTURE,
+                                INVOICE_PAYMENT_VOID,
+                                INVOICE_PAYMENT_REFUND,
                                 INVOICE_RECEIPT_GENERATE,
                                 INVOICE_RECEIPT_REPRINT,
                                 INVOICE_RECEIPT_PRINT_DELIVERY,
