@@ -13,6 +13,7 @@ import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.InvalidSkuException;
+import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.internal.service.SalesOrderServiceImpl;
@@ -823,6 +824,218 @@ class SalesOrderServiceImplTest {
 
         // when / then
         assertThatThrownBy(() -> salesOrderService.getOrder(unknownId))
-                .isInstanceOf(com.positivity.order.internal.exception.SalesOrderNotFoundException.class);
+                .isInstanceOf(SalesOrderNotFoundException.class);
+    }
+
+    // -----------------------------------------------------------------------
+    // Coverage: addItem — not found path (covers orElseThrow lambda)
+    // -----------------------------------------------------------------------
+
+    @Test
+    void addItem_whenOrderNotFound_thenThrowsSalesOrderNotFoundException() {
+        // given
+        UUID unknownId = UUID.randomUUID();
+        when(salesOrderRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        // when / then
+        assertThatThrownBy(() -> salesOrderService.addItem(unknownId, "SKU-001", 1, null, null))
+                .isInstanceOf(SalesOrderNotFoundException.class);
+    }
+
+    // -----------------------------------------------------------------------
+    // Coverage: removeItem — happy path and order-not-found
+    // -----------------------------------------------------------------------
+
+    /**
+     * removeItem with an existing line in the order removes it and saves the order.
+     * Covers: removeItem body, removeIf predicate lambda, recalculateSubtotal
+     * lambdas.
+     */
+    @Test
+    void removeItem_whenLineExistsInOrder_thenLineRemovedAndOrderSaved() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        SalesOrder order = SalesOrder.builder()
+                .orderId(orderId)
+                .clerkId("clerk-001")
+                .terminalId("terminal-001")
+                .status(SalesOrderStatus.DRAFT)
+                .subtotal(new BigDecimal("10.00"))
+                .build();
+        SalesOrderLine existingLine = SalesOrderLine.builder()
+                .orderLineId(lineId)
+                .order(order)
+                .itemSku("SKU-001")
+                .itemDescription("Item 1")
+                .quantity(1)
+                .unitPrice(new BigDecimal("10.00"))
+                .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
+                .priceSource(PriceSource.PRICING_SERVICE)
+                .build();
+        order.getLines().add(existingLine);
+
+        when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(order);
+
+        // when
+        salesOrderService.removeItem(orderId, lineId);
+
+        // then
+        assertThat(order.getLines()).doesNotContain(existingLine);
+        assertThat(order.getSubtotal()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    void removeItem_whenOrderNotFound_thenThrowsSalesOrderNotFoundException() {
+        // given
+        UUID unknownId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        when(salesOrderRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        // when / then
+        assertThatThrownBy(() -> salesOrderService.removeItem(unknownId, lineId))
+                .isInstanceOf(SalesOrderNotFoundException.class);
+    }
+
+    // -----------------------------------------------------------------------
+    // Coverage: updateItemQuantity — not-found paths and removeIf lambda
+    // -----------------------------------------------------------------------
+
+    @Test
+    void updateItemQuantity_whenOrderNotFound_thenThrowsSalesOrderNotFoundException() {
+        // given
+        UUID unknownId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        when(salesOrderRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        // when / then
+        assertThatThrownBy(() -> salesOrderService.updateItemQuantity(unknownId, lineId, 3))
+                .isInstanceOf(SalesOrderNotFoundException.class);
+    }
+
+    @Test
+    void updateItemQuantity_whenLineNotFound_thenThrowsSalesOrderNotFoundException() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID unknownLineId = UUID.randomUUID();
+        SalesOrder order = SalesOrder.builder()
+                .orderId(orderId)
+                .clerkId("clerk-001")
+                .terminalId("terminal-001")
+                .status(SalesOrderStatus.DRAFT)
+                .subtotal(BigDecimal.ZERO)
+                .build();
+        when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(salesOrderLineRepository.findById(unknownLineId)).thenReturn(Optional.empty());
+
+        // when / then
+        assertThatThrownBy(() -> salesOrderService.updateItemQuantity(orderId, unknownLineId, 3))
+                .isInstanceOf(SalesOrderNotFoundException.class);
+    }
+
+    /**
+     * When the order already contains the line being updated, the removeIf
+     * predicate is evaluated (covers lambda$updateItemQuantity$N).
+     */
+    @Test
+    void updateItemQuantity_whenOrderHasExistingLine_thenOldLineReplacedAndSubtotalUpdated() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        SalesOrder order = SalesOrder.builder()
+                .orderId(orderId)
+                .clerkId("clerk-001")
+                .terminalId("terminal-001")
+                .status(SalesOrderStatus.DRAFT)
+                .subtotal(new BigDecimal("10.00"))
+                .build();
+        SalesOrderLine existingLine = SalesOrderLine.builder()
+                .orderLineId(lineId)
+                .order(order)
+                .itemSku("SKU-001")
+                .itemDescription("Item 1")
+                .quantity(1)
+                .unitPrice(new BigDecimal("10.00"))
+                .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
+                .priceSource(PriceSource.PRICING_SERVICE)
+                .build();
+        SalesOrderLine updatedLine = SalesOrderLine.builder()
+                .orderLineId(lineId)
+                .order(order)
+                .itemSku("SKU-001")
+                .itemDescription("Item 1")
+                .quantity(3)
+                .unitPrice(new BigDecimal("10.00"))
+                .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
+                .priceSource(PriceSource.PRICING_SERVICE)
+                .build();
+        order.getLines().add(existingLine); // non-empty list → removeIf predicate evaluates
+
+        when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(salesOrderLineRepository.findById(lineId)).thenReturn(Optional.of(existingLine));
+        when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(updatedLine);
+        when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(order);
+
+        // when
+        SalesOrderLineSummary result = salesOrderService.updateItemQuantity(orderId, lineId, 3);
+
+        // then
+        assertThat(result.quantity()).isEqualTo(3);
+        assertThat(order.getLines()).hasSize(1);
+        assertThat(order.getLines().get(0).getOrderLineId()).isEqualTo(lineId);
+    }
+
+    // -----------------------------------------------------------------------
+    // Coverage: linkSource — already-linked deduplication path
+    // -----------------------------------------------------------------------
+
+    /**
+     * When a source line was previously linked (same sourceId + sourceLineId), the
+     * duplicate is skipped. Covers: alreadyLinkedKeys filter/map lambdas and the
+     * {@code continue} branch.
+     */
+    @Test
+    void linkSource_whenSourceLineAlreadyLinked_thenDuplicateIsSkipped() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        String estimateId = "EST-DUP-001";
+        String existingSourceLineId = "EST-LINE-DUP-001";
+
+        SalesOrder order = SalesOrder.builder()
+                .orderId(orderId)
+                .clerkId("clerk-001")
+                .terminalId("terminal-001")
+                .status(SalesOrderStatus.DRAFT)
+                .subtotal(new BigDecimal("100.00"))
+                .build();
+        SalesOrderLine alreadyLinked = SalesOrderLine.builder()
+                .orderLineId(UUID.randomUUID())
+                .order(order)
+                .itemSku("TIRE-001")
+                .itemDescription("Tire")
+                .quantity(1)
+                .unitPrice(new BigDecimal("100.00"))
+                .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
+                .priceSource(PriceSource.PRICING_SERVICE)
+                .sourceType(SourceType.ESTIMATE)
+                .sourceId(estimateId)
+                .sourceLineId(existingSourceLineId)
+                .build();
+        order.getLines().add(alreadyLinked);
+
+        when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(order);
+        // source document returns the same line that is already linked → should be deduped
+        when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
+                .thenReturn(List.of(new SourceDocumentLine(
+                        "TIRE-001", "Tire", 1, new BigDecimal("100.00"), existingSourceLineId)));
+
+        // when
+        SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
+
+        // then – no additional lines added; cart still has exactly 1 line
+        assertThat(result).isNotNull();
+        assertThat(order.getLines()).hasSize(1);
     }
 }
