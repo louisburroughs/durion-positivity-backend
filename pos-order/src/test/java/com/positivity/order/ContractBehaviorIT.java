@@ -10,6 +10,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.order.internal.entity.FulfillmentStatus;
+import com.positivity.order.internal.entity.PriceSource;
+import com.positivity.order.internal.entity.SalesOrder;
+import com.positivity.order.internal.entity.SalesOrderLine;
+import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.repository.SalesOrderLineRepository;
+import com.positivity.order.internal.repository.SalesOrderRepository;
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +42,12 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private ObjectMapper objectMapper;
 
+        @Autowired
+        private SalesOrderRepository salesOrderRepository;
+
+        @Autowired
+        private SalesOrderLineRepository salesOrderLineRepository;
+
         @Override
         protected String defaultAuthorities() {
                 return String.join(",", PRICE_OVERRIDE_VIEW, PRICE_OVERRIDE_APPLY, PRICE_OVERRIDE_APPROVE,
@@ -43,8 +57,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-001: Apply override with small discount returns 201 APPROVED")
         void testApplyPriceOverride_AutoApproved() throws Exception {
-                String payload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(), "100.00",
-                                "95.00");
+                ApplyFixture fixture = createApplyFixture("100.00");
+                String payload = createApplyPayload(fixture.orderId(), fixture.orderLineId(), fixture.productId(),
+                                "100.00", "95.00");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -59,8 +74,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-002: Apply override with large discount returns 201 PENDING_APPROVAL")
         void testApplyPriceOverride_RequiresApproval() throws Exception {
-                String payload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(), "1000.00",
-                                "800.00");
+                ApplyFixture fixture = createApplyFixture("1000.00");
+                String payload = createApplyPayload(fixture.orderId(), fixture.orderLineId(), fixture.productId(),
+                                "1000.00", "800.00");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -75,8 +91,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-003: Get override by ID returns 200")
         void testGetOverride_HappyPath() throws Exception {
-                String orderId = UUID.randomUUID().toString();
-                String payload = createApplyPayload(orderId, newUuid(), newUuid(), "1000.00", "800.00");
+                ApplyFixture fixture = createApplyFixture("1000.00");
+                String orderId = fixture.orderId();
+                String payload = createApplyPayload(orderId, fixture.orderLineId(), fixture.productId(), "1000.00",
+                                "800.00");
 
                 MvcResult create = mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -97,8 +115,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-004: Get overrides by orderId filter returns matching records")
         void testGetOverridesByOrderId_HappyPath() throws Exception {
-                String orderId = UUID.randomUUID().toString();
-                String payload = createApplyPayload(orderId, newUuid(), newUuid(), "500.00", "450.00");
+                ApplyFixture fixture = createApplyFixture("500.00");
+                String orderId = fixture.orderId();
+                String payload = createApplyPayload(orderId, fixture.orderLineId(), fixture.productId(), "500.00",
+                                "450.00");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -119,8 +139,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-005: Pending approvals endpoint returns pending overrides")
         void testGetPendingApprovals_HappyPath() throws Exception {
-                String pendingPayload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(),
-                                "1200.00",
+                ApplyFixture fixture = createApplyFixture("1200.00");
+                String pendingPayload = createApplyPayload(fixture.orderId(), fixture.orderLineId(),
+                                fixture.productId(), "1200.00",
                                 "900.00");
 
                 MvcResult create = mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
@@ -145,8 +166,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-006: Approve pending override returns 200 APPROVED")
         void testApproveOverride_HappyPath() throws Exception {
-                String payload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(), "1000.00",
-                                "800.00");
+                ApplyFixture fixture = createApplyFixture("1000.00");
+                String payload = createApplyPayload(fixture.orderId(), fixture.orderLineId(), fixture.productId(),
+                                "1000.00", "800.00");
 
                 MvcResult create = mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -171,8 +193,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("CP-007: Reject pending override returns 200 REJECTED")
         void testRejectOverride_HappyPath() throws Exception {
-                String payload = createApplyPayload(UUID.randomUUID().toString(), newUuid(), newUuid(), "1000.00",
-                                "800.00");
+                ApplyFixture fixture = createApplyFixture("1000.00");
+                String payload = createApplyPayload(fixture.orderId(), fixture.orderLineId(), fixture.productId(),
+                                "1000.00", "800.00");
 
                 MvcResult create = mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -234,5 +257,40 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         private String readField(MvcResult result, String field) throws Exception {
                 return objectMapper.readTree(result.getResponse().getContentAsString()).get(field).asString();
+        }
+
+        private ApplyFixture createApplyFixture(String unitPriceAmount) {
+                UUID orderId = UUID.randomUUID();
+                UUID orderLineId = UUID.randomUUID();
+                UUID productId = UUID.randomUUID();
+
+                SalesOrder order = SalesOrder.builder()
+                                .orderId(orderId)
+                                .customerId("customer-test")
+                                .clerkId("clerk-test")
+                                .terminalId("terminal-test")
+                                .status(SalesOrderStatus.DRAFT)
+                                .subtotal(new BigDecimal(unitPriceAmount))
+                                .createdBy("contract-test")
+                                .updatedBy("contract-test")
+                                .build();
+                salesOrderRepository.save(order);
+
+                SalesOrderLine line = SalesOrderLine.builder()
+                                .orderLineId(orderLineId)
+                                .order(order)
+                                .itemSku("SKU-" + orderLineId)
+                                .itemDescription("Contract Test Item")
+                                .quantity(1)
+                                .unitPrice(new BigDecimal(unitPriceAmount))
+                                .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
+                                .priceSource(PriceSource.MANUAL)
+                                .build();
+                salesOrderLineRepository.save(line);
+
+                return new ApplyFixture(orderId.toString(), orderLineId.toString(), productId.toString());
+        }
+
+        private record ApplyFixture(String orderId, String orderLineId, String productId) {
         }
 }

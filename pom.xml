@@ -267,7 +267,7 @@
 		<lombok.version>1.18.32</lombok.version>
 		<slf4j.version>2.0.13</slf4j.version>
 		<springdoc-openapi.version>2.8.0</springdoc-openapi.version>
-		<swagger-annotations.version>2.2.27</swagger-annotations.version>
+		<swagger-annotations.version>2.2.44</swagger-annotations.version>
 		<!-- OpenTelemetry -->
 		<opentelemetry.version>1.44.1</opentelemetry.version>
 		<!-- UUID v7 Generator -->
