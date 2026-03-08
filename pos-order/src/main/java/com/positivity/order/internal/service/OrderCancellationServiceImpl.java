@@ -55,7 +55,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
                 SalesOrderStatus.DRAFT,
                 SalesOrderStatus.QUOTED,
                 SalesOrderStatus.CANCEL_FAILED_WORKEXEC,
-            SalesOrderStatus.CANCEL_FAILED_BILLING);
+                SalesOrderStatus.CANCEL_FAILED_BILLING);
 
         if (!cancellable.contains(order.getStatus())) {
             throw new IllegalStateException("Order cannot be cancelled in current state: " + order.getStatus());
@@ -80,14 +80,15 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
                 order.setStatus(SalesOrderStatus.CANCEL_FAILED_WORKEXEC);
                 order.setUpdatedBy(actor);
                 salesOrderRepository.save(order);
-                throw new IllegalStateException("Workorder cannot be cancelled: " + statusResult.nonCancellableReason());
+                throw new IllegalStateException(
+                        "Workorder cannot be cancelled: " + statusResult.nonCancellableReason());
             }
 
             WorkorderCancelResult cancelResult = workexecPort.cancelWorkorder(
                     command.workOrderId(),
                     new CancelWorkorderCommand(
                             orderId,
-                        actor,
+                            actor,
                             command.cancellationReason(),
                             idempotencyKey));
 
@@ -163,6 +164,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         order.setUpdatedBy(actor);
         salesOrderRepository.save(order);
 
-        return new CancellationResult(orderId, STATUS_CANCELLED, "Order cancellation completed on retry", idempotencyKey);
+        return new CancellationResult(orderId, STATUS_CANCELLED, "Order cancellation completed on retry",
+                idempotencyKey);
     }
 }

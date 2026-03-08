@@ -11,7 +11,9 @@ import java.math.BigDecimal;
 /**
  * Request DTO for applying a price override.
  *
- * @deprecated Use {@link com.positivity.order.service.model.ApplyPriceOverrideRequest} instead.
+ * @deprecated Use
+ *             {@link com.positivity.order.service.model.ApplyPriceOverrideRequest}
+ *             instead.
  */
 @Deprecated(since = "2026-03")
 @Data
@@ -34,10 +36,9 @@ public class ApplyPriceOverrideRequest {
     @DecimalMin(value = "0.0", message = "Override price must be non-negative")
     private BigDecimal overridePrice;
 
-        @Schema(description = "Reason code for the price override",
-            example = "PRICE_MATCH", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank
-        private String reasonCode;
+    @Schema(description = "Reason code for the price override", example = "PRICE_MATCH", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank
+    private String reasonCode;
 
     private String justification;
 

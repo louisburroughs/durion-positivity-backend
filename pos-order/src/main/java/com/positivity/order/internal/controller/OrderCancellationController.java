@@ -44,7 +44,7 @@ public class OrderCancellationController {
                 request.getCancellationReason(),
                 request.getWorkOrderId(),
                 request.getPaymentId(),
-            request.getIdempotencyKey());
+                request.getIdempotencyKey());
         CancellationResult result = orderCancellationService.cancelOrder(orderId, command);
         CancellationResponse response = new CancellationResponse();
         response.setOrderId(result.orderId().toString());

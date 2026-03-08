@@ -85,8 +85,8 @@ public class PriceOverrideController {
         String role = "MANAGER";
 
         PriceOverrideDetail override = priceOverrideService.approveOverride(
-            overrideId,
-            new ApproveOverrideCommand(role, request.getComments()));
+                overrideId,
+                new ApproveOverrideCommand(role, request.getComments()));
 
         return ResponseEntity.ok(override);
     }
@@ -110,8 +110,8 @@ public class PriceOverrideController {
         String role = "MANAGER";
 
         PriceOverrideDetail override = priceOverrideService.rejectOverride(
-            overrideId,
-            new RejectOverrideCommand(role, request.getReason(), request.getComments()));
+                overrideId,
+                new RejectOverrideCommand(role, request.getReason(), request.getComments()));
 
         return ResponseEntity.ok(override);
     }

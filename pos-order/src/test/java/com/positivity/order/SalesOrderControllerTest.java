@@ -255,18 +255,18 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
-        // SC-004: Get order — GET /v1/orders/carts/{orderId} → 200 OK
+    // SC-004: Get order — GET /v1/orders/carts/{orderId} → 200 OK
     // -----------------------------------------------------------------------
 
     /**
      * SC-004: Retrieving a sales order by ID must return 200 OK.
      */
     @Test
-        @DisplayName("SC-004: GET /v1/orders/carts/{orderId} returns 200 OK")
+    @DisplayName("SC-004: GET /v1/orders/carts/{orderId} returns 200 OK")
     void getOrder_whenOrderExists_thenReturns200Ok() throws Exception {
         UUID orderId = UUID.randomUUID();
 
-                mockMvc.perform(withGatewayAuth(get("/v1/orders/carts/{orderId}", orderId)))
+        mockMvc.perform(withGatewayAuth(get("/v1/orders/carts/{orderId}", orderId)))
                 .andExpect(status().isOk());
     }
 

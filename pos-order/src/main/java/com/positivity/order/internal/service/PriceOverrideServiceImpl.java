@@ -44,13 +44,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class PriceOverrideServiceImpl implements PriceOverrideService {
-    private final Clock clock;
+        private final Clock clock;
 
-                private final PriceOverrideRepository priceOverrideRepository;
-                private final ApprovalRecordRepository approvalRecordRepository;
-                private final SalesOrderRepository salesOrderRepository;
-                private final SalesOrderLineRepository salesOrderLineRepository;
-                private final ApplicationEventPublisher eventPublisher;
+        private final PriceOverrideRepository priceOverrideRepository;
+        private final ApprovalRecordRepository approvalRecordRepository;
+        private final SalesOrderRepository salesOrderRepository;
+        private final SalesOrderLineRepository salesOrderLineRepository;
+        private final ApplicationEventPublisher eventPublisher;
 
         // Business rule: Discount percentage threshold requiring approval
         private static final BigDecimal APPROVAL_THRESHOLD_PERCENTAGE = BigDecimal.valueOf(10.0);

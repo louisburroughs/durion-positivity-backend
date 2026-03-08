@@ -7,5 +7,5 @@ import java.util.List;
 import java.util.UUID;
 
 public interface SalesOrderLineRepository extends JpaRepository<SalesOrderLine, UUID> {
-	List<SalesOrderLine> findByOrder_OrderId(UUID orderId);
+    List<SalesOrderLine> findByOrder_OrderId(UUID orderId);
 }

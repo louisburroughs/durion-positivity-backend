@@ -35,10 +35,13 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 /**
- * Unit tests for {@link OrderCancellationServiceImpl} covering the POS cancellation
- * saga: state gating, Workexec gating, billing reversal, idempotency, and retry path.
+ * Unit tests for {@link OrderCancellationServiceImpl} covering the POS
+ * cancellation
+ * saga: state gating, Workexec gating, billing reversal, idempotency, and retry
+ * path.
  *
- * <p>Issue: #19
+ * <p>
+ * Issue: #19
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -59,12 +62,9 @@ class OrderCancellationServiceImplTest {
 
     // ── shared fixtures ───────────────────────────────────────────────────────
 
-    private static final UUID ORDER_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID WORKORDER_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final UUID PAYMENT_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID PAYMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
     private SalesOrder draftOrder() {
         return SalesOrder.builder()
@@ -93,13 +93,14 @@ class OrderCancellationServiceImplTest {
 
     private CancelOrderCommand cancelCommand(UUID workOrderId, UUID paymentId) {
         return new CancelOrderCommand(
-                                "Customer request", workOrderId, paymentId, "idem-key-1");
+                "Customer request", workOrderId, paymentId, "idem-key-1");
     }
 
     // ── Issue #19: happy path ─────────────────────────────────────────────────
 
     /**
-     * BR2: No workorder or payment — saga skips external calls and terminates CANCELLED.
+     * BR2: No workorder or payment — saga skips external calls and terminates
+     * CANCELLED.
      */
     @Test
     @DisplayName("CC-001: DRAFT order, no workOrderId, no paymentId → result.status = CANCELLED")
@@ -110,8 +111,7 @@ class OrderCancellationServiceImplTest {
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
-        CancellationResult result =
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null));
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null));
 
         // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
@@ -121,7 +121,8 @@ class OrderCancellationServiceImplTest {
     }
 
     /**
-     * BR2 + BR1: workOrderId present → Workexec pre-check + cancel command issued; saga ends CANCELLED.
+     * BR2 + BR1: workOrderId present → Workexec pre-check + cancel command issued;
+     * saga ends CANCELLED.
      */
     @Test
     @DisplayName("CC-002: QUOTED order with workOrderId → Workexec checked and cancelled, result CANCELLED")
@@ -136,8 +137,7 @@ class OrderCancellationServiceImplTest {
                 .thenReturn(new WorkorderCancelResult(true, "Cancelled"));
 
         // Act
-        CancellationResult result =
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, null));
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, null));
 
         // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
@@ -148,7 +148,8 @@ class OrderCancellationServiceImplTest {
     }
 
     /**
-     * BR2 + BR1: full saga — both Workexec and Billing calls complete, order CANCELLED.
+     * BR2 + BR1: full saga — both Workexec and Billing calls complete, order
+     * CANCELLED.
      */
     @Test
     @DisplayName("CC-003: Order with workOrderId + paymentId → full saga, CANCELLED; both ports called")
@@ -165,8 +166,8 @@ class OrderCancellationServiceImplTest {
                 .thenReturn(new PaymentReversalResult(true, "VOID", "Payment voided"));
 
         // Act
-        CancellationResult result =
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, PAYMENT_ID));
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID,
+                cancelCommand(WORKORDER_ID, PAYMENT_ID));
 
         // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
@@ -178,7 +179,8 @@ class OrderCancellationServiceImplTest {
     // ── Issue #19: Workexec failure paths ────────────────────────────────────
 
     /**
-     * BR1: Workexec pre-check returns cancellable=false → stops saga with CANCEL_FAILED_WORKEXEC.
+     * BR1: Workexec pre-check returns cancellable=false → stops saga with
+     * CANCEL_FAILED_WORKEXEC.
      */
     @Test
     @DisplayName("CC-004: Workexec cancellable=false → IllegalStateException, order CANCEL_FAILED_WORKEXEC")
@@ -191,13 +193,13 @@ class OrderCancellationServiceImplTest {
                 .thenReturn(new WorkorderStatusResult("IN_PROGRESS", false, "Work already started"));
 
         // Act & Assert
-        assertThatThrownBy(() ->
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, null)))
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, null)))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     /**
-     * BR1: Workexec cancel command returns success=false → sets CANCEL_FAILED_WORKEXEC.
+     * BR1: Workexec cancel command returns success=false → sets
+     * CANCEL_FAILED_WORKEXEC.
      */
     @Test
     @DisplayName("CC-005: Workexec cancelWorkorder returns success=false → IllegalStateException, CANCEL_FAILED_WORKEXEC")
@@ -212,15 +214,15 @@ class OrderCancellationServiceImplTest {
                 .thenReturn(new WorkorderCancelResult(false, "Failed to cancel"));
 
         // Act & Assert
-        assertThatThrownBy(() ->
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, null)))
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, null)))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     // ── Issue #19: Billing failure path ──────────────────────────────────────
 
     /**
-     * BR2 + BR3: Workexec succeeds but Billing reversal fails → sets CANCEL_FAILED_BILLING.
+     * BR2 + BR3: Workexec succeeds but Billing reversal fails → sets
+     * CANCEL_FAILED_BILLING.
      */
     @Test
     @DisplayName("CC-006: Workexec succeeds, BillingPort reversal fails → IllegalStateException, CANCEL_FAILED_BILLING")
@@ -237,15 +239,16 @@ class OrderCancellationServiceImplTest {
                 .thenReturn(new PaymentReversalResult(false, null, "Billing system unavailable"));
 
         // Act & Assert
-        assertThatThrownBy(() ->
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, PAYMENT_ID)))
+        assertThatThrownBy(
+                () -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, PAYMENT_ID)))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     // ── Issue #19: Idempotency ────────────────────────────────────────────────
 
     /**
-     * BR4: Same idempotencyKey on already-CANCELLED order → returns existing result, no ports re-invoked.
+     * BR4: Same idempotencyKey on already-CANCELLED order → returns existing
+     * result, no ports re-invoked.
      */
     @Test
     @DisplayName("CC-007: Already CANCELLED + matching idempotencyKey → existing result returned, no ports called")
@@ -257,8 +260,7 @@ class OrderCancellationServiceImplTest {
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
         // Act
-        CancellationResult result =
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null));
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null));
 
         // Assert — should return existing result without re-running saga
         assertThat(result.status()).isEqualTo("CANCELLED");
@@ -281,8 +283,7 @@ class OrderCancellationServiceImplTest {
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
         // Act & Assert
-        assertThatThrownBy(() ->
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null)))
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cancel");
     }
@@ -297,15 +298,15 @@ class OrderCancellationServiceImplTest {
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThatThrownBy(() ->
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null)))
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null)))
                 .isInstanceOf(SalesOrderNotFoundException.class);
     }
 
     // ── Issue #19: Retry path ─────────────────────────────────────────────────
 
     /**
-     * Retry: order in CANCEL_FAILED_BILLING with matching key → billing re-attempted, CANCELLED.
+     * Retry: order in CANCEL_FAILED_BILLING with matching key → billing
+     * re-attempted, CANCELLED.
      */
     @Test
     @DisplayName("CC-010: retryCancellation on CANCEL_FAILED_BILLING → billing retried, result CANCELLED")
@@ -321,8 +322,7 @@ class OrderCancellationServiceImplTest {
                 .thenReturn(new PaymentReversalResult(true, "VOID", "Payment voided"));
 
         // Act
-        CancellationResult result =
-                orderCancellationService.retryCancellation(ORDER_ID, "idem-key-1");
+        CancellationResult result = orderCancellationService.retryCancellation(ORDER_ID, "idem-key-1");
 
         // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
@@ -341,8 +341,7 @@ class OrderCancellationServiceImplTest {
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
         // Act & Assert
-        assertThatThrownBy(() ->
-                orderCancellationService.retryCancellation(ORDER_ID, "idem-key-1"))
+        assertThatThrownBy(() -> orderCancellationService.retryCancellation(ORDER_ID, "idem-key-1"))
                 .isInstanceOf(IllegalStateException.class);
     }
 }

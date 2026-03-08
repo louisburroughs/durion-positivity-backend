@@ -29,6 +29,5 @@ public record PriceOverrideDetail(
         Instant updatedAt,
         Instant approvedAt,
         Instant rejectedAt,
-        Instant appliedAt
-) {
+        Instant appliedAt) {
 }
