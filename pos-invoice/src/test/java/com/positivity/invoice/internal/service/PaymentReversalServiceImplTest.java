@@ -40,6 +40,8 @@ import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.enums.VoidReason;
 import com.positivity.invoice.internal.exception.InsufficientRefundableAmountException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.exception.PaymentGatewayException;
+import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentWindowExpiredException;
 import com.positivity.invoice.internal.payment.GatewayPaymentResult;
 import com.positivity.invoice.internal.payment.GatewayRefundRequest;
@@ -137,7 +139,7 @@ class PaymentReversalServiceImplTest {
 
         ArgumentCaptor<PaymentIntent> captor = ArgumentCaptor.forClass(PaymentIntent.class);
         verify(paymentIntentRepository).save(captor.capture());
-       
+
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentIntentStatus.VOIDED);
         verify(paymentGatewayPort).voidRemainder(any(GatewayVoidRequest.class));
     }
@@ -270,8 +272,8 @@ class PaymentReversalServiceImplTest {
 
         GatewayPaymentResult successResult = successResult();
         when(paymentGatewayPort.refund(any(GatewayRefundRequest.class))).thenReturn(successResult);
-                                                                                                    // refund +
-                                                                                                    // GatewayRefundRequest
+        // refund +
+        // GatewayRefundRequest
 
         ArgumentCaptor<RefundRecord> captor = ArgumentCaptor.forClass(RefundRecord.class);
         when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -383,6 +385,145 @@ class PaymentReversalServiceImplTest {
                 .isInstanceOf(InvalidPaymentStateException.class);
 
         verify(paymentGatewayPort, never()).refund(any());
+    }
+
+    // -------------------------------------------------------------------------
+    // AC-extra: PaymentIntentNotFoundException paths — voidPayment
+    // -------------------------------------------------------------------------
+
+    /**
+     * voidPayment: PaymentIntent not found in repository →
+     * PaymentIntentNotFoundException.
+     */
+    @Test
+    void voidPayment_intentNotFound_throwsPaymentIntentNotFoundException() {
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
+                INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
+                .isInstanceOf(PaymentIntentNotFoundException.class);
+
+        verify(paymentGatewayPort, never()).voidRemainder(any());
+    }
+
+    /**
+     * voidPayment: PaymentIntent belongs to a different invoice →
+     * PaymentIntentNotFoundException.
+     */
+    @Test
+    void voidPayment_invoiceIdMismatch_throwsPaymentIntentNotFoundException() {
+        PaymentIntent pi = authorizedPaymentIntent(); // pi.invoiceId = INVOICE_ID
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        UUID differentInvoice = UUID.fromString("00000000-0000-7000-8000-000000000099");
+        assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
+                differentInvoice, PAYMENT_INTENT_ID, VoidReason.ENTRY_ERROR, null))
+                .isInstanceOf(PaymentIntentNotFoundException.class);
+
+        verify(paymentGatewayPort, never()).voidRemainder(any());
+    }
+
+    /**
+     * voidPayment: gateway returns isSuccessful=false → PaymentGatewayException.
+     * Also exercises the PaymentGatewayException(String) constructor.
+     */
+    @Test
+    void voidPayment_gatewayFailure_throwsPaymentGatewayException() {
+        PaymentIntent pi = authorizedPaymentIntent();
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        GatewayPaymentResult failResult = org.mockito.Mockito.mock(GatewayPaymentResult.class);
+        when(failResult.isSuccessful()).thenReturn(false);
+        when(paymentGatewayPort.voidRemainder(any(GatewayVoidRequest.class))).thenReturn(failResult);
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
+                INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.FRAUD_PREVENTION, null))
+                .isInstanceOf(PaymentGatewayException.class);
+
+        verify(paymentIntentRepository, never()).save(any());
+    }
+
+    // -------------------------------------------------------------------------
+    // AC-extra: PaymentIntentNotFoundException + gateway-failure paths —
+    // refundPayment
+    // -------------------------------------------------------------------------
+
+    /**
+     * refundPayment: PaymentIntent not found in repository →
+     * PaymentIntentNotFoundException.
+     */
+    @Test
+    void refundPayment_intentNotFound_throwsPaymentIntentNotFoundException() {
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
+                INVOICE_ID, PAYMENT_INTENT_ID,
+                BigDecimal.valueOf(100_00, 2), RefundReason.GOODWILL, null))
+                .isInstanceOf(PaymentIntentNotFoundException.class);
+
+        verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
+    }
+
+    /**
+     * refundPayment: PaymentIntent belongs to a different invoice →
+     * PaymentIntentNotFoundException.
+     */
+    @Test
+    void refundPayment_invoiceIdMismatch_throwsPaymentIntentNotFoundException() {
+        PaymentIntent pi = capturedPaymentIntent(); // pi.invoiceId = INVOICE_ID
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        UUID differentInvoice = UUID.fromString("00000000-0000-7000-8000-000000000099");
+        assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
+                differentInvoice, PAYMENT_INTENT_ID,
+                BigDecimal.valueOf(100_00, 2), RefundReason.OVERCHARGE, null))
+                .isInstanceOf(PaymentIntentNotFoundException.class);
+
+        verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
+    }
+
+    /**
+     * refundPayment: gateway returns isSuccessful=false → RefundRecord saved with
+     * status FAILED
+     * (no exception thrown; record is persisted for audit).
+     */
+    @Test
+    void refundPayment_gatewayFailure_savesFailedRefundRecord() {
+        PaymentIntent pi = capturedPaymentIntent();
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+        when(refundRecordRepository.findByPaymentIntentId(PAYMENT_INTENT_ID)).thenReturn(List.of());
+
+        GatewayPaymentResult failResult = org.mockito.Mockito.mock(GatewayPaymentResult.class);
+        when(failResult.isSuccessful()).thenReturn(false);
+        when(paymentGatewayPort.refund(any(GatewayRefundRequest.class))).thenReturn(failResult);
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        paymentReversalServiceImpl.refundPayment(
+                INVOICE_ID, PAYMENT_INTENT_ID,
+                BigDecimal.valueOf(100_00, 2), RefundReason.CUSTOMER_RETURN, null);
+
+        ArgumentCaptor<RefundRecord> captor = ArgumentCaptor.forClass(RefundRecord.class);
+        verify(refundRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(RefundStatus.FAILED);
+        assertThat(captor.getValue().getGatewayReference()).isNull();
+        assertThat(captor.getValue().getCompletedAt()).isNull();
+    }
+
+    // -------------------------------------------------------------------------
+    // PaymentGatewayException — direct constructor coverage
+    // -------------------------------------------------------------------------
+
+    /**
+     * Exercises the PaymentGatewayException(String, Throwable) two-arg constructor
+     * to reach 100% instruction coverage on that exception class.
+     */
+    @Test
+    void paymentGatewayException_withCause_preservesMessageAndCause() {
+        Throwable cause = new RuntimeException("underlying network error");
+        PaymentGatewayException ex = new PaymentGatewayException("gateway timeout", cause);
+
+        assertThat(ex.getMessage()).isEqualTo("gateway timeout");
+        assertThat(ex.getCause()).isSameAs(cause);
     }
 
     // -------------------------------------------------------------------------

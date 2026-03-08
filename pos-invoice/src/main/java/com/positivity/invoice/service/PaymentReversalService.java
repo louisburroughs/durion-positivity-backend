@@ -17,7 +17,7 @@ public interface PaymentReversalService {
             @Nullable String notes);
 
     @NonNull
-        RefundPaymentResult refundPayment(
+    RefundPaymentResult refundPayment(
             @NonNull UUID invoiceId,
             @NonNull UUID paymentIntentId,
             @NonNull BigDecimal amount,
