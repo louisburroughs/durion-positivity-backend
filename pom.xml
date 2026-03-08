@@ -279,6 +279,11 @@
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<springdoc-openapi-maven-plugin.version>1.5</springdoc-openapi-maven-plugin.version>
 		<sonar.organization>louisburroughs</sonar.organization>
+		<!-- Test runtime tuning -->
+		<tests.forkCount>1</tests.forkCount>
+		<tests.reuseForks>true</tests.reuseForks>
+		<tests.jvmArgs/>
+		<argLine/>
 	</properties>
 
 	<build>
@@ -353,25 +358,59 @@
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.5.4</version>
+				<configuration>
+					<forkCount>${tests.forkCount}</forkCount>
+					<reuseForks>${tests.reuseForks}</reuseForks>
+					<argLine>@{argLine} ${tests.jvmArgs}</argLine>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
 				<version>3.5.4</version>
-				<executions>
-					<execution>
-						<id>integration-tests</id>
-						<goals>
-							<goal>integration-test</goal>
-							<goal>verify</goal>
-						</goals>
-						<configuration>
-							<includes>
-								<include>**/*IT.java</include>
-								<include>**/*ITCase.java</include>
-							</includes>
-						</configuration>
-					</execution>
-				</executions>
+				<configuration>
+					<forkCount>${tests.forkCount}</forkCount>
+					<reuseForks>${tests.reuseForks}</reuseForks>
+					<argLine>@{argLine} ${tests.jvmArgs}</argLine>
+					<includes>
+						<include>**/*IT.java</include>
+						<include>**/*ITCase.java</include>
+					</includes>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<id>parallel-tests</id>
+			<activation>
+				<property>
+					<name>parallelTests</name>
+					<value>true</value>
+				</property>
+			</activation>
+			<properties>
+				<tests.forkCount>1C</tests.forkCount>
+				<tests.reuseForks>true</tests.reuseForks>
+			</properties>
+		</profile>
+		<profile>
+			<id>low-resource-tests</id>
+			<activation>
+				<property>
+					<name>lowResourceTests</name>
+					<value>true</value>
+				</property>
+			</activation>
+			<properties>
+				<tests.forkCount>1</tests.forkCount>
+				<tests.reuseForks>true</tests.reuseForks>
+				<tests.jvmArgs>-Xms256m -Xmx1g -XX:MaxMetaspaceSize=512m</tests.jvmArgs>
+			</properties>
+		</profile>
+	</profiles>
 
 </project>

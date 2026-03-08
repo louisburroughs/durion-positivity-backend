@@ -5,6 +5,7 @@ A lightweight authentication/authorization filter enriches requests with user id
 ## What It Does
 
 ### API Versioning & Routing
+
 - **X-API-Version Header (REQUIRED)**: All API calls must include the `X-API-Version` header with a simple integer version (e.g., `1`, `2`, `3`).
   - Header format: `X-API-Version: 1`
   - Missing or invalid header returns `400 Bad Request`
@@ -16,6 +17,7 @@ A lightweight authentication/authorization filter enriches requests with user id
   - Service receives the request after gateway strips `/{domain}` prefix
 
 ### Authentication & Authorization
+
 - Validates JWTs issued by `pos-security-service`
 - Enforces required claims (issuer, audience, expiration, subject, token id) per ADR-0011
 - Uses canonical authorities for downstream authorization decisions
@@ -25,16 +27,19 @@ A lightweight authentication/authorization filter enriches requests with user id
   - `X-API-Version`: forwarded from client request (enables per-endpoint versioning)
 - Public paths bypass authentication: `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/swagger-resources/**`, `/eureka/**`
 
-Source: 
+Source:
+
 - API Versioning & routing: `src/main/java/com/positivity/gateway/filter/ApiVersionHeaderToPathFilter.java`
 - Authentication & authorization: `src/main/java/com/positivity/gateway/config/SecurityGatewayConfig.java`
 
 ## Configuration
+
 - Security service lookup is via Eureka service discovery (`lb://security-service`) in `SecurityGatewayConfig`.
 - Ensure `pos-security-service` is registered in Eureka as `security-service`.
 - Configure JWT validation to trust tokens from `pos-security-service` and audience `api-gateway`.
 
 ## Notes
+
 - **API Versioning is mandatory**: All client requests must include `X-API-Version` with a simple integer (e.g., `1`, `2`). This enables independent versioning of endpoints across the platform.
 - **Gateway is thin & stateless**: Validates versions, injects auth headers, rewrites paths. No policy logic here; services enforce authorization via `@PreAuthorize("hasAuthority('crm:...')")`.
 - **Version header forwarding**: The gateway forwards `X-API-Version` to downstream services, enabling per-endpoint version tracking and observability.
@@ -44,12 +49,15 @@ Source:
 ## Quick Test
 
 ### Basic Request Flow with API Version
+
 1) Build gateway
+
 ```bash
 ./mvnw -pl pos-api-gateway -am -DskipTests clean compile
 ```
 
-2) Issue a token (example)
+1) Issue a token (example)
+
 ```bash
 curl -s -X POST "http://localhost:8086/v1/auth/login" \
   -H "Content-Type: application/json" \
@@ -57,7 +65,8 @@ curl -s -X POST "http://localhost:8086/v1/auth/login" \
 # Returns JSON containing accessToken
 ```
 
-3) Call a backend endpoint **with required X-API-Version header**
+1) Call a backend endpoint **with required X-API-Version header**
+
 ```bash
 # ✓ CORRECT: Version header provided
 curl -X GET "http://localhost:8080/customer/crm/accounts/11111111-1111-1111-1111-111111111111/tier" \
@@ -71,8 +80,9 @@ curl -X GET "http://localhost:8080/customer/crm/accounts/11111111-1111-1111-1111
 # Returns: 400 Bad Request — X-API-Version header required
 ```
 
-4) Downstream service receives (after gateway processing)
-```
+1) Downstream service receives (after gateway processing)
+
+```java
 GET /v1/crm/accounts/11111111-1111-1111-1111-111111111111/tier
 Headers:
   Authorization: Bearer eyJhbGc...token...
