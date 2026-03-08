@@ -501,14 +501,14 @@ paths:
               $ref: "#/components/schemas/GoodsReceivedEvent"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "201":
+          description: Vendor bill created
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
-        "201":
-          description: Vendor bill created
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -1874,6 +1874,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Price override recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid request parameters
           content:
@@ -1884,12 +1890,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Price override recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "422":
           description: Policy validation failed
           content:
@@ -1909,17 +1909,17 @@ paths:
               $ref: "#/components/schemas/CancellationRequest"
         required: true
       responses:
+        "400":
+          description: Invalid request parameters
+          content:
+            '*/*':
+              schema: {}
         "201":
           description: Cancellation recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
-        "400":
-          description: Invalid request parameters
-          content:
-            '*/*':
-              schema: {}
         "500":
           description: Internal server error
           content:
@@ -2214,14 +2214,6 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "200":
-          description: Account drilldown successful
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
         "403":
           description: Forbidden - missing reporting:view:financial-statements
           content:
@@ -2232,6 +2224,14 @@ paths:
                   $ref: "#/components/schemas/AccountDrilldownResponse"
         "400":
           description: Invalid statement line code or date range
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountDrilldownResponse"
+        "200":
+          description: Account drilldown successful
           content:
             application/json:
               schema:
@@ -2266,14 +2266,14 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Balance sheet generated successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceSheetReport"
-        "200":
-          description: Balance sheet generated successfully
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
@@ -2810,12 +2810,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range or exception type
           content:
@@ -2824,6 +2818,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/range:
     get:
       tags:
@@ -2998,12 +2998,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range or actor ID
           content:
@@ -3012,6 +3006,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/ap/payments/{paymentId}:
     get:
       tags:
