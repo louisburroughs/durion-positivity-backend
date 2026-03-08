@@ -126,14 +126,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideView"
-        "403":
-          description: Insufficient rejection permissions
+        "200":
+          description: Override rejected
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideView"
-        "200":
-          description: Override rejected
+        "403":
+          description: Insufficient rejection permissions
           content:
             '*/*':
               schema:
@@ -209,14 +209,14 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "200":
-          description: Override found
+        "404":
+          description: Override not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideView"
-        "404":
-          description: Override not found
+        "200":
+          description: Override found
           content:
             '*/*':
               schema:
