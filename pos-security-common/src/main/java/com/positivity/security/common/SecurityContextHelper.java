@@ -6,7 +6,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.jspecify.annotations.NonNull;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -14,7 +13,27 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Utility class for accessing security context information.
+ * Utility class for accessing authenticated security context information.
+ *
+ * <h2>Identity Semantics</h2>
+ * <ul>
+ * <li><b>username</b> is the human-readable audit identity from {@code X-User}.
+ * Use this for logs, createdBy/updatedBy fields, and operational audit trails.</li>
+ * <li><b>userId</b> is the stable UUID identity sourced from JWT claim
+ * {@code userId}. Use this only when you must resolve user/person records.</li>
+ * </ul>
+ *
+ * <p>
+ * Methods in this helper are intentionally fail-fast for malformed or missing
+ * authentication context. Silent fallbacks hide gateway/security integration
+ * problems.
+ * </p>
+ *
+ * <p>
+ * ADR References:
+ * ADR-0018 (Audit Actor Fields from Security Context as Strings)
+ * and ADR-0022 (Audit Stable Person Identifier Claim Policy).
+ * </p>
  *
  * <h2>Usage</h2>
  * 
@@ -39,148 +58,144 @@ public final class SecurityContextHelper {
 
     /**
      * Get the current authenticated username.
+     * <p>
+     * This is the preferred identifier for audit/logging use cases. The helper
+     * first reads gateway-injected authentication details and then falls back to
+     * principal name.
+     * </p>
+     * <p>
+     * See ADR-0018 for audit actor sourcing rules.
+     * </p>
      *
-     * @return Optional containing username, or empty if not authenticated
+     * @return Optional containing the username
+     * @throws IllegalStateException if authentication is missing/not authenticated,
+     *                               details map is missing, or no username can be
+     *                               resolved
      */
     public static Optional<String> getCurrentUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return Optional.empty();
-        }
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof String username) {
+        Authentication authentication = requireAuthenticatedAuthentication();
+        Map<?, ?> detailsMap = requireAuthenticationDetailsMap(authentication);
+
+        Object detailUsername = detailsMap.get(GatewaySecurityConstants.DETAIL_USERNAME);
+        if (detailUsername instanceof String username && !username.isBlank()) {
             return Optional.of(username);
         }
-        return Optional.of(principal.toString());
+
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof String username && !username.isBlank()) {
+            return Optional.of(username);
+        }
+        if (principal != null) {
+            String principalValue = principal.toString();
+            if (!principalValue.isBlank()) {
+                return Optional.of(principalValue);
+            }
+        }
+
+        throw new IllegalStateException(
+                "Authenticated context is present but no username was found in details or principal");
     }
 
     /**
      * Get the current authenticated username or a default value.
+     * <p>
+     * Prefer {@link #getCurrentUsername()} when authentication is expected.
+     * This method is intended for fallback-only flows (for example,
+     * framework/system contexts without user authentication).
+     * </p>
      *
      * @param defaultValue Value to return if not authenticated
      * @return Username or default value
      */
     public static String getCurrentUsernameOrDefault(@NonNull String defaultValue) {
-        return getCurrentUsername().orElse(defaultValue);
+        try {
+            return getCurrentUsername().orElse(defaultValue);
+        } catch (IllegalStateException ex) {
+            return defaultValue;
+        }
     }
 
     /**
-     * Get the current authenticated stable person identifier.
-     * 
-     * @deprecated Prefer {@link #getCurrentUsername()} for flows requiring a stable
-     *             authenticated identity, and explicitly handle missing/invalid
-     *             user ID cases.
-     * @return stable person identifier
-     * @throws MissingPersonIdException if no authenticated person identifier is
-     *                                  available
-     */
-    @Deprecated(since = "2024-06", forRemoval = true)
-    public static String getCurrentUserIdOrThrowIllegalStateException() throws MissingPersonIdException {
-        return getCurrentUserId()
-                .orElseThrow(() -> new MissingPersonIdException(
-                        "Missing authenticated personId for flow requiring audit identity"));
-    }
-
-    /**
-     * Get the current authenticated stable person identifier.
+     * Get the current authenticated stable user identifier.
      * <p>
-     * Resolves from gateway-injected authentication details (`X-User-Id`) when
-     * available. Falls back to principal/username for compatibility.
+     * This is the machine identity and should be used only for person/user
+     * lookups and relationships requiring stable UUID identity.
+     * See ADR-0022 for canonical stable identity requirements.
+     * </p>
      * 
-     * @deprecated Prefer {@link #getCurrentUsername()} for flows requiring a stable
-     *             authenticated identity, and explicitly handle missing/invalid
-     *             user ID cases.
-     * @return Optional containing stable user ID/person ID, or empty if
-     *         unauthenticated
+     * @return Optional containing stable UUID user ID
+     * @throws IllegalStateException  if authentication/details map is missing
+     * @throws MissingPersonIdException if user id is missing or not a UUID in details map
      */
-    @Deprecated(since = "2024-06", forRemoval = true)
-    public static Optional<String> getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return Optional.empty();
+    private static Optional<UUID> getCurrentUserId() {
+        Authentication authentication = requireAuthenticatedAuthentication();
+        Map<?, ?> detailsMap = requireAuthenticationDetailsMap(authentication);
+
+        Object userId = detailsMap.get(GatewaySecurityConstants.DETAIL_USER_ID);
+        if (userId instanceof UUID userIdUuid) {
+            return Optional.of(userIdUuid);
         }
 
-        Object details = authentication.getDetails();
-        if (details instanceof Map<?, ?> detailsMap) {
-            Object userId = detailsMap.get(GatewaySecurityConstants.DETAIL_USER_ID);
-            if (userId instanceof String userIdStr && !userIdStr.isBlank()) {
-                return Optional.of(userIdStr);
-            }
+        if (userId == null) {
+            throw new MissingPersonIdException(
+                    "Missing authenticated userId in authentication details key '"
+                            + GatewaySecurityConstants.DETAIL_USER_ID + "'");
         }
 
-        return getCurrentUsername();
+        throw new MissingPersonIdException(
+                "Invalid authenticated userId type. Expected UUID in authentication details key '"
+                        + GatewaySecurityConstants.DETAIL_USER_ID + "' but was: "
+                        + userId.getClass().getName());
     }
 
     /**
-     * Get the current authenticated stable person identifier or a default value.
-     * 
-     * @deprecated Prefer {@link #getCurrentUsernameOrDefault(String)} for flows
-     *             requiring a stable authenticated identity, and explicitly handle
-     *             missing/invalid user ID cases.
-     * @param defaultValue value to return if unauthenticated
-     * @return stable user ID/person ID or default value
-     */
-    @Deprecated(since = "2024-06", forRemoval = true)
-    public static String getCurrentUserIdOrDefault(@NonNull String defaultValue) {
-        return getCurrentUserId().orElse(defaultValue);
-    }
-
-    /**
-     * Get the current authenticated stable person identifier as UUID.
+     * Get the current authenticated stable user identifier as UUID.
      *
-     * @return Optional containing UUID person identifier, or empty when absent or
-     *         not a valid UUID
+     * @return Optional containing UUID user identifier
+     * @throws IllegalStateException if authentication/details map is missing
+     * @throws MissingPersonIdException if user id is missing or malformed UUID
      */
     public static Optional<UUID> getCurrentUserIdAsUuid() {
-        return getCurrentUserId().flatMap(SecurityContextHelper::tryParseUuid);
+        return getCurrentUserId();
     }
 
     /**
-     * Get the current authenticated stable person identifier as UUID or default
+     * Get the current authenticated stable user identifier as UUID or default
      * value.
      *
      * @param defaultValue value to return if unauthenticated or invalid UUID
-     * @return stable person identifier UUID or default value
+     * @return stable user identifier UUID or default value
      */
     public static UUID getCurrentUserIdAsUuidOrDefault(@NonNull UUID defaultValue) {
-        return getCurrentUserIdAsUuid().orElse(defaultValue);
+        try {
+            return getCurrentUserIdAsUuid().orElse(defaultValue);
+        } catch (IllegalStateException ex) {
+            return defaultValue;
+        }
     }
 
     /**
-     * Get the current authenticated stable person identifier as UUID.
+     * Get the current authenticated stable user identifier as UUID.
      *
-     * @return stable person identifier UUID
-     * @throws MissingPersonIdException if no authenticated person identifier is
+     * @return stable user identifier UUID
+     * @throws MissingPersonIdException if no authenticated user identifier is
      *                                  available or the value is not a valid UUID
      */
     public static UUID getCurrentUserIdAsUuidOrThrowIllegalStateException() throws MissingPersonIdException {
         return getCurrentUserIdAsUuid()
                 .orElseThrow(() -> new MissingPersonIdException(
-                        "Missing authenticated UUID personId for flow requiring UUID audit identity"));
-    }
-
-    private static Optional<UUID> tryParseUuid(String value) {
-        try {
-            return Optional.of(UUID.fromString(value));
-        } catch (IllegalArgumentException ex) {
-            return Optional.empty();
-        }
+                        "Missing authenticated UUID userId for flow requiring UUID audit identity"));
     }
 
     /**
      * Get all authorities for the current user.
      *
-     * @return Set of authority strings, or empty set if not authenticated
+     * @return Set of authority strings
+     * @throws IllegalStateException if authentication is missing/not authenticated
      */
     public static Set<String> getAuthorities() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return Collections.emptySet();
-        }
+        Authentication authentication = requireAuthenticatedAuthentication();
         Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
-        if (authorities.isEmpty()) {
-            return Collections.emptySet();
-        }
         return authorities.stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.toSet());
@@ -251,5 +266,27 @@ public final class SecurityContextHelper {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null && authentication.isAuthenticated()
                 && !GatewaySecurityConstants.ANONYMOUS_USER.equals(authentication.getPrincipal());
+    }
+
+    private static Authentication requireAuthenticatedAuthentication() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            throw new IllegalStateException("Security context has no Authentication");
+        }
+        if (!authentication.isAuthenticated()) {
+            throw new IllegalStateException("Security context Authentication is not authenticated");
+        }
+        if (GatewaySecurityConstants.ANONYMOUS_USER.equals(authentication.getPrincipal())) {
+            throw new IllegalStateException("Anonymous authentication is not allowed for this helper");
+        }
+        return authentication;
+    }
+
+    private static Map<?, ?> requireAuthenticationDetailsMap(Authentication authentication) {
+        Object details = authentication.getDetails();
+        if (details instanceof Map<?, ?> detailsMap) {
+            return detailsMap;
+        }
+        throw new IllegalStateException("Authentication details map is missing from security context");
     }
 }

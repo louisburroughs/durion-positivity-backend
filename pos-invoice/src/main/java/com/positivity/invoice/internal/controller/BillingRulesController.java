@@ -82,7 +82,7 @@ public class BillingRulesController {
         }
 
         // Get userId from SecurityContext via service
-        String userId = billingRulesService.getCurrentUserId();
+        String userId = billingRulesService.getCurrentUsername();
         // Sanitize userId for logging (prevent log injection)
         String sanitizedUserId = sanitizeForLogging(userId);
         log.debug("PUT /v1/billing/rules/{} by user={}", partyId, sanitizedUserId);

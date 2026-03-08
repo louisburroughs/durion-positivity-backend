@@ -69,6 +69,7 @@ public class SecurityGatewayConfig {
      * - Validates JWT via Security Service
      * - Retrieves expanded authorities and injects as `X-Authorities` header
      * - Optionally injects subject as `X-User`
+     * - Forwards original bearer token; downstream services resolve `userId` from JWT claim
      * - Bypasses public endpoints (actuator, swagger, api-docs)
      */
     @Bean
@@ -131,25 +132,14 @@ public class SecurityGatewayConfig {
                                 .bodyToMono(String.class)
                                 .onErrorReturn("unknown");
 
-                        Mono<String> personIdMono = securityWebClient.get()
-                                .uri(uriBuilder -> uriBuilder.path("/v1/auth/person-id")
-                                        .queryParam(TOKEN2, token)
-                                        .build())
-                                .header(AUTHORIZATION, authHeader)
-                                .retrieve()
-                                .bodyToMono(String.class)
-                                .onErrorReturn("unknown");
-
-                        return Mono.zip(authoritiesMono, subjectMono, personIdMono)
+                        return Mono.zip(authoritiesMono, subjectMono)
                                 .flatMap(tuple -> {
                                     Set<String> authorities = tuple.getT1();
                                     String subject = tuple.getT2();
-                                    String personId = tuple.getT3();
                                     String authHeaderValue = String.join(",", authorities);
                                     ServerHttpRequest mutated = exchange.getRequest().mutate()
                                             .header("X-Authorities", authHeaderValue)
                                             .header("X-User", subject)
-                                            .header("X-User-Id", personId)
                                             .build();
                                     return chain.filter(exchange.mutate().request(mutated).build());
                                 });

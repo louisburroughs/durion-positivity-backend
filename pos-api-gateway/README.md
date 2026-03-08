@@ -22,7 +22,6 @@ A lightweight authentication/authorization filter enriches requests with user id
 - Injects headers to downstream services:
   - `X-Authorities`: comma-separated authorities (e.g., `crm:party:view,crm:vehicle:edit,...`)
   - `X-User`: token subject (username)
-  - `X-User-Id`: stable user/person ID from token when available
   - `X-API-Version`: forwarded from client request (enables per-endpoint versioning)
 - Public paths bypass authentication: `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/swagger-resources/**`, `/eureka/**`
 
@@ -79,6 +78,5 @@ Headers:
   Authorization: Bearer eyJhbGc...token...
   X-Authorities: crm:party:view,crm:vehicle:edit,...
   X-User: alice
-  X-User-Id: person-uuid
   X-API-Version: 1
 ```

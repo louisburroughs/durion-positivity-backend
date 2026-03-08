@@ -5,27 +5,21 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Set;
 
 /**
- * Request DTO for JWT token generation (login).
+ * Request DTO for internal JWT token issuance.
  * 
- * Used by POST /v1/auth/login endpoint.
+ * Used by POST /v1/auth/internal/token endpoint.
  * Implements BACKEND_CONTRACT_GUIDE.md requirements:
  * - camelCase field naming
  * - Validation: subject required, roles optional
  * 
  * @since 1.0
- * @see com.positivity.securityservice.internal.controller.JwtController#generateToken
+ * @see com.positivity.securityservice.internal.controller.JwtController#issueInternalToken
  */
 @Schema(description = "Request to generate a single JWT token for user authentication")
 public record LoginRequest(
         @JsonProperty("subject") @Schema(description = "User identifier (subject claim)", example = "user123", requiredMode = Schema.RequiredMode.REQUIRED) String subject,
 
-        @JsonProperty("personId") @Schema(description = "Stable person identifier for audit lineage", example = "01HZX3T7X6C4Z8N8R8R7H6K5J4", requiredMode = Schema.RequiredMode.NOT_REQUIRED) String personId,
-
         @JsonProperty("roles") @Schema(description = "Optional set of role names to include in token", example = "[\"SHOP_MGR\", \"ACCOUNTING_CLERK\"]") Set<String> roles) {
-
-    public LoginRequest(String subject, Set<String> roles) {
-        this(subject, null, roles);
-    }
 
     /**
      * Validates request constraints.

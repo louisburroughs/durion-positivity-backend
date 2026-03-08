@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -82,8 +83,8 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String generateToken(String username, String personId, Set<String> roles) {
-        return generateTokenPair(username, personId, roles).accessToken();
+    public String generateToken(String username, UUID userId, Set<String> roles) {
+        return generateTokenPair(username, userId, roles).accessToken();
     }
 
     @Override
@@ -129,15 +130,19 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String getPersonIdFromToken(String token) {
+    public UUID getUserIdFromToken(String token) {
         Claims claims = jwtParser()
                 .parseSignedClaims(token)
                 .getPayload();
-        String personId = claims.get(PERSON_ID, String.class);
-        if (personId != null && !personId.isBlank()) {
-            return personId;
+        String userId = claims.get(USER_ID, String.class);
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("Missing required JWT userId claim");
         }
-        return claims.getSubject();
+        try {
+            return UUID.fromString(userId);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid JWT userId claim. Expected UUID but was: " + userId, ex);
+        }
     }
 
     @Override
@@ -222,14 +227,16 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public TokenPair generateTokenPair(String username, String personId, Set<String> roles) {
+    public TokenPair generateTokenPair(String username, UUID userId, Set<String> roles) {
         if (username == null || username.isBlank()) {
             throw new IllegalArgumentException("Username cannot be blank");
+        }
+        if (userId == null) {
+            throw new IllegalArgumentException("UserId cannot be null");
         }
         if (roles == null || roles.isEmpty()) {
             throw new IllegalArgumentException("Roles cannot be empty");
         }
-        String resolvedPersonId = resolvePersonId(username, personId);
 
         Instant now = Instant.now(clock);
         Instant accessExpiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
@@ -243,7 +250,7 @@ public class JwtServiceImpl implements JwtService {
         String accessToken = Jwts.builder()
                 .id(accessJti)
                 .subject(username)
-                .claim(PERSON_ID, resolvedPersonId)
+                .claim(USER_ID, userId.toString())
                 .claim(ROLES, roles)
                 .claim(AUTHORITIES, authorities)
                 .issuedAt(Date.from(now))
@@ -254,7 +261,7 @@ public class JwtServiceImpl implements JwtService {
         String refreshToken = Jwts.builder()
                 .id(refreshJti)
                 .subject(username)
-                .claim(PERSON_ID, resolvedPersonId)
+                .claim(USER_ID, userId.toString())
                 .claim("type", "refresh")
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(refreshExpiry))
@@ -270,8 +277,8 @@ public class JwtServiceImpl implements JwtService {
         jwtToken.setSubject(username);
         jwtTokenRepository.save(jwtToken);
 
-        log.debug("Generated token pair: username={}, personId={}, accessJti={}, refreshJti={}",
-                username, resolvedPersonId, accessJti, refreshJti);
+        log.debug("Generated token pair: username={}, userId={}, accessJti={}, refreshJti={}",
+                username, userId, accessJti, refreshJti);
 
         return new TokenPair(accessToken, refreshToken);
     }
@@ -352,16 +359,8 @@ public class JwtServiceImpl implements JwtService {
 
         log.debug("Refreshed token pair: username={}", username);
 
-        String personId = getPersonIdFromToken(refreshToken);
-        return generateTokenPair(username, personId, roles);
-    }
-
-    private String resolvePersonId(String username, String personId) {
-        if (personId == null || personId.isBlank()) {
-            log.warn("JWT generation without personId claim for subject '{}'; falling back to subject", username);
-            return username;
-        }
-        return personId;
+        UUID userId = getUserIdFromToken(refreshToken);
+        return generateTokenPair(username, userId, roles);
     }
 
     private JwtParser jwtParser() {

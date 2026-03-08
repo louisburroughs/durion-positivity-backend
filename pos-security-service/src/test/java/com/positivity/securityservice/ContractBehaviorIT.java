@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,6 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -38,7 +40,9 @@ import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.RoleRepository;
+import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.TokenRevocationManager;
 import com.positivity.securityservice.service.JwtService;
 
@@ -68,7 +72,7 @@ import io.jsonwebtoken.Jwts;
  *
  * **Contract References:**
  * - See /durion/domains/security/.business-rules/BACKEND_CONTRACT_GUIDE.md
- * - JWT Endpoints: POST /v1/auth/login, /token-pair, /refresh, etc.
+ * - JWT Endpoints: POST /v1/auth/internal/token, /token-pair, /refresh, etc.
  * - User Endpoints: POST /v1/users, /v1/users/login, PUT
  * /v1/users/{username}/roles
  * - Role Endpoints: POST /v1/roles, PUT /v1/roles/permissions, GET
@@ -90,6 +94,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
         private static final String TEST_SUBJECT = "john.doe";
+        private static final UUID TEST_USER_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
         private static final Set<String> TEST_ROLES = Set.of("SHOP_MGR", "INVENTORY_MGR");
 
         @Autowired
@@ -100,6 +105,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private RoleRepository roleRepository;
+        @Autowired
+        private UserRepository userRepository;
+        @Autowired
+        private PasswordEncoder passwordEncoder;
 
         @Value("${security.jwt.secret}")
         private String jwtSecret;
@@ -113,25 +122,26 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 ensureRoleExists("ROLE1");
                 ensureRoleExists("ROLE2");
                 ensureRoleExists("ROLE3");
+                ensureUserExists(TEST_USER_ID, TEST_SUBJECT, TEST_ROLES);
         }
 
         // ========== JWT AUTHENTICATION & TOKEN MANAGEMENT TESTS ==========
 
         /**
-         * Test 1: Happy Path - POST /v1/auth/login
+         * Test 1: Happy Path - POST /v1/auth/internal/token
          *
-         * **Scenario:** Valid login request issues access token
+         * **Scenario:** Valid internal token request issues access token
          * **Expected:** 200 OK with TokenResponse containing valid JWT
          * **Contract:** BACKEND_CONTRACT_GUIDE.md §Login Endpoint
          */
         @Test
-        @DisplayName("T1: Login endpoint issues valid access token")
+        @DisplayName("T1: Internal token endpoint issues valid access token")
         void testLoginIssuesValidAccessToken() throws Exception {
                 // Arrange
                 LoginRequest request = new LoginRequest(TEST_SUBJECT, TEST_ROLES);
 
                 // Act
-                MvcResult result = mockMvc.perform(post("/v1/auth/login")
+                MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isOk())
@@ -240,7 +250,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T3: Refresh endpoint exchanges refresh token for new pair")
         void testRefreshTokenExchangeFlow() throws Exception {
                 // Arrange: Issue initial token pair
-                JwtService.TokenPair initialPair = jwtService.generateTokenPair(TEST_SUBJECT, TEST_ROLES);
+                JwtService.TokenPair initialPair = jwtService.generateTokenPair(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
 
                 RefreshTokenRequest request = new RefreshTokenRequest(initialPair.refreshToken());
 
@@ -271,7 +281,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T4: Validate endpoint returns correct validity status")
         void testTokenValidation() throws Exception {
                 // Arrange
-                String validToken = jwtService.generateToken(TEST_SUBJECT, TEST_ROLES);
+                String validToken = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
                 String invalidToken = "invalid.jwt.token";
 
                 // Act & Assert - Valid token
@@ -297,7 +307,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T5: Revoke endpoint invalidates token for future validation")
         void testTokenRevocation() throws Exception {
                 // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_ROLES);
+                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
 
                 // Act - Revoke token
                 mockMvc.perform(delete("/v1/auth/revoke")
@@ -324,7 +334,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 LoginRequest request = new LoginRequest("", TEST_ROLES);
 
                 // Act & Assert
-                mockMvc.perform(post("/v1/auth/login")
+                mockMvc.perform(post("/v1/auth/internal/token")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isBadRequest())
@@ -383,7 +393,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T9: Extract roles from valid token")
         void testExtractRoles() throws Exception {
                 // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_ROLES);
+                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
 
                 // Act & Assert
                 mockMvc.perform(get("/v1/auth/roles")
@@ -404,7 +414,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T10: Extract subject from valid token")
         void testExtractSubject() throws Exception {
                 // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_ROLES);
+                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
 
                 // Act & Assert
                 mockMvc.perform(get("/v1/auth/subject")
@@ -441,7 +451,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 LoginRequest request = new LoginRequest("", TEST_ROLES);
 
                 // Act & Assert
-                mockMvc.perform(post("/v1/auth/login")
+                mockMvc.perform(post("/v1/auth/internal/token")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .header("X-Correlation-Id", "test-correlation-123")
                                 .content(objectMapper.writeValueAsString(request)))
@@ -463,7 +473,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 LoginRequest request = new LoginRequest(TEST_SUBJECT, multipleRoles);
 
                 // Act
-                MvcResult result = mockMvc.perform(post("/v1/auth/login")
+                MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isOk())
@@ -488,7 +498,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T14: Access token has 1-hour lifetime")
         void testAccessTokenLifetime() throws Exception {
                 // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_ROLES);
+                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
                 Instant afterCreation = Instant.now();
 
                 // Act
@@ -524,7 +534,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T15: Concurrent token revocation is handled safely")
         void testConcurrentTokenRevocation() throws Exception {
                 // Arrange
-                String token = jwtService.generateToken(TEST_SUBJECT, TEST_ROLES);
+                String token = jwtService.generateToken(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
                 int threadCount = 5;
                 CountDownLatch startLatch = new CountDownLatch(1); // Barrier to start all threads simultaneously
                 CountDownLatch doneLatch = new CountDownLatch(threadCount);
@@ -919,7 +929,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 LoginRequest request = new LoginRequest("", TEST_ROLES);
 
                 // Act & Assert
-                MvcResult result = mockMvc.perform(post("/v1/auth/login")
+                MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .header("X-Correlation-Id", "error-format-test")
                                 .content(objectMapper.writeValueAsString(request)))
@@ -945,5 +955,22 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 role.setDescription("Contract test role");
                 role.setCreatedBy("contract-test");
                 roleRepository.save(role);
+        }
+
+        private void ensureUserExists(UUID userId, String username, Set<String> roleNames) {
+                if (userRepository.findByUsername(username).isPresent()) {
+                        return;
+                }
+
+                User user = new User();
+                user.setId(userId);
+                user.setUsername(username);
+                user.setPassword(passwordEncoder.encode("ContractPass123!"));
+                user.setRoles(roleNames.stream()
+                                .map(roleName -> roleRepository.findByName(roleName)
+                                                .orElseThrow(() -> new IllegalStateException(
+                                                                "Missing role for contract test setup: " + roleName)))
+                                .collect(java.util.stream.Collectors.toSet()));
+                userRepository.save(user);
         }
 }

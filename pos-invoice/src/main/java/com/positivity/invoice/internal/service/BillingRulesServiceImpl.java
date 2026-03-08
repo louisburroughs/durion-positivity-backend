@@ -62,11 +62,15 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         BillingRules billingRules;
         if (existing.isPresent()) {
             billingRules = existing.get();
-            log.info("Updating billing rules for partyId(mask)={}", maskForLog(billingRulesDTO.getPartyId()));
+            if (log.isInfoEnabled()) {
+                log.info("Updating billing rules for partyId(mask)={}", maskForLog(billingRulesDTO.getPartyId()));
+            }
         } else {
             billingRules = new BillingRules();
             billingRules.setPartyId(billingRulesDTO.getPartyId());
-            log.info("Creating billing rules for partyId(mask)={}", maskForLog(billingRulesDTO.getPartyId()));
+            if (log.isInfoEnabled()) {
+                log.info("Creating billing rules for partyId(mask)={}", maskForLog(billingRulesDTO.getPartyId()));
+            }
         }
 
         billingRules.setPurchaseOrderRequired(billingRulesDTO.isPurchaseOrderRequired());
@@ -85,12 +89,14 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         // Idempotent - check if exists first
         Optional<BillingRules> existing = repository.findByPartyId(partyId);
         if (existing.isPresent()) {
-            log.debug("Billing rules already exist for partyId(mask)={}, returning existing", maskForLog(partyId));
+            if (log.isDebugEnabled()) {
+                log.debug("Billing rules already exist for partyId(mask)={}, returning existing", maskForLog(partyId));
+            }
             return toDTO(existing.get());
         }
-
-        log.info("Creating default billing rules for new commercial account partyId(mask)={}", maskForLog(partyId));
-
+        if (log.isInfoEnabled()) {
+            log.info("Creating default billing rules for new commercial account partyId(mask)={}", maskForLog(partyId));
+        }
         BillingRules billingRules = new BillingRules();
         billingRules.setPartyId(partyId);
         billingRules.setPurchaseOrderRequired(defaultPurchaseOrderRequired);
@@ -105,7 +111,7 @@ public class BillingRulesServiceImpl implements BillingRulesService {
 
     @Override
     @NonNull
-    public String getCurrentUserId() {
+    public String getCurrentUsername() {
         return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
     }
 

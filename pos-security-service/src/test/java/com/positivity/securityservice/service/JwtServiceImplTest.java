@@ -21,6 +21,7 @@ import com.positivity.securityservice.internal.service.TokenRevocationManager;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class JwtServiceImplTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final UUID TEST_USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     @Spy
     Clock clock = TEST_CLOCK;
@@ -62,7 +64,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("generateToken saves token and returns signed JWT")
     void generateToken_success() {
-        String token = sut.generateToken("alice", "person-1", Set.of("ADMIN"));
+        String token = sut.generateToken("alice", TEST_USER_ID, Set.of("ADMIN"));
 
         assertThat(token).isNotBlank();
         verify(jwtTokenRepository).save(any(JwtToken.class));
@@ -71,7 +73,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("validateToken returns true for stored non-revoked token")
     void validateToken_validStoredToken_returnsTrue() {
-        String token = sut.generateToken("alice", "person-1", Set.of("ADMIN"));
+        String token = sut.generateToken("alice", TEST_USER_ID, Set.of("ADMIN"));
         JwtToken stored = new JwtToken();
         stored.setToken(token);
         stored.setRefreshToken("refresh");
@@ -89,19 +91,19 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("validateToken returns false for revoked token")
     void validateToken_revoked_returnsFalse() {
-        String token = sut.generateToken("alice", "person-1", Set.of("ADMIN"));
+        String token = sut.generateToken("alice", TEST_USER_ID, Set.of("ADMIN"));
         when(tokenRevocationManager.isRevoked(anyString())).thenReturn(true);
 
         assertThat(sut.validateToken(token)).isFalse();
     }
 
     @Test
-    @DisplayName("extractors return username, personId, roles, and authorities")
+    @DisplayName("extractors return username, userId, roles, and authorities")
     void extractors_returnClaims() {
-        String token = sut.generateToken("alice", "person-1", Set.of("ADMIN"));
+        String token = sut.generateToken("alice", TEST_USER_ID, Set.of("ADMIN"));
 
         assertThat(sut.getUsernameFromToken(token)).isEqualTo("alice");
-        assertThat(sut.getPersonIdFromToken(token)).isEqualTo("person-1");
+        assertThat(sut.getUserIdFromToken(token)).isEqualTo(TEST_USER_ID);
         assertThat(sut.getRolesFromToken(token)).contains("ADMIN");
         assertThat(sut.getAuthoritiesFromToken(token)).contains("ROLE_ADMIN");
     }
@@ -109,7 +111,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("deleteToken removes from DB and revokes by JTI")
     void deleteToken_existingToken_revokes() {
-        String token = sut.generateToken("alice", "person-1", Set.of("ADMIN"));
+        String token = sut.generateToken("alice", TEST_USER_ID, Set.of("ADMIN"));
         JwtToken stored = new JwtToken();
         stored.setToken(token);
         stored.setRefreshToken("refresh");
@@ -130,7 +132,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("token pair flow validates and refreshes")
     void tokenPair_validateAndRefresh_success() {
-        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", "person-1", Set.of("ADMIN"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", TEST_USER_ID, Set.of("ADMIN"));
 
         JwtToken stored = new JwtToken();
         stored.setToken(tokenPair.accessToken());

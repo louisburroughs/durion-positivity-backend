@@ -1,10 +1,16 @@
 package com.positivity.security.common;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +65,9 @@ import jakarta.servlet.http.HttpServletResponse;
 @Order(1)
 public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
     private static final Logger loggr = LoggerFactory.getLogger(GatewayAuthoritiesFilter.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -74,24 +83,25 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
 
         String authoritiesHeader = request.getHeader(GatewaySecurityConstants.HEADER_AUTHORITIES);
         String userHeader = request.getHeader(GatewaySecurityConstants.HEADER_USER);
-        String userIdHeader = request.getHeader(GatewaySecurityConstants.HEADER_USER_ID);
+        String authorizationHeader = request.getHeader(AUTHORIZATION_HEADER);
 
         if (authoritiesHeader != null && !authoritiesHeader.isBlank()) {
             List<SimpleGrantedAuthority> authorities = parseAuthorities(authoritiesHeader);
             String username = userHeader != null ? userHeader : GatewaySecurityConstants.ANONYMOUS_USER;
-            String userId = userIdHeader != null && !userIdHeader.isBlank() ? userIdHeader : username;
+            Optional<UUID> userId = resolveUserIdFromToken(authorizationHeader, username);
 
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(username, null,
                     authorities);
-            authentication.setDetails(Map.of(
-                    GatewaySecurityConstants.DETAIL_USER_ID, userId,
-                    GatewaySecurityConstants.DETAIL_USERNAME, username));
+            Map<String, Object> details = new HashMap<>();
+            details.put(GatewaySecurityConstants.DETAIL_USERNAME, username);
+            userId.ifPresent(id -> details.put(GatewaySecurityConstants.DETAIL_USER_ID, id));
+            authentication.setDetails(Map.copyOf(details));
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             if (loggr.isDebugEnabled()) {
                 loggr.debug("Authenticated user '{}' (userId='{}') with {} authorities from gateway headers",
-                        username, userId, authorities.size());
+                        username, userId.orElse(null), authorities.size());
             }
         } else {
             // No authentication headers - clear any existing context
@@ -104,6 +114,42 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private Optional<UUID> resolveUserIdFromToken(String authorizationHeader, String username) {
+        if (authorizationHeader == null || authorizationHeader.isBlank()
+                || !authorizationHeader.startsWith(BEARER_PREFIX)) {
+            loggr.warn("Missing bearer token while resolving userId for user '{}'", username);
+            return Optional.empty();
+        }
+
+        String token = authorizationHeader.substring(BEARER_PREFIX.length()).trim();
+        if (token.isBlank()) {
+            loggr.warn("Blank bearer token while resolving userId for user '{}'", username);
+            return Optional.empty();
+        }
+
+        try {
+            String[] jwtParts = token.split("\\.");
+            if (jwtParts.length < 2) {
+                loggr.warn("Invalid JWT format while resolving userId for user '{}'", username);
+                return Optional.empty();
+            }
+
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(jwtParts[1]);
+            JsonNode payloadNode = objectMapper.readTree(payloadBytes);
+            JsonNode userIdNode = payloadNode.get(GatewaySecurityConstants.DETAIL_USER_ID);
+            if (userIdNode == null || userIdNode.asText().isBlank()) {
+                loggr.warn("Missing JWT '{}' claim for user '{}'",
+                        GatewaySecurityConstants.DETAIL_USER_ID, username);
+                return Optional.empty();
+            }
+
+            return Optional.of(UUID.fromString(userIdNode.asText()));
+        } catch (Exception ex) {
+            loggr.warn("Failed to resolve userId from JWT token for user '{}': {}", username, ex.getMessage());
+            return Optional.empty();
+        }
     }
 
     /**

@@ -8,6 +8,7 @@ import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
 import com.positivity.securityservice.service.JwtService;
+import com.positivity.securityservice.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -32,7 +33,7 @@ import java.util.Set;
  * - Gateway performs role-to-authority mapping (not this service)
  * 
  * **Endpoints:**
- * - POST /v1/auth/login - Issue single access token
+ * - POST /v1/auth/internal/token - Issue single access token (internal-only)
  * - POST /v1/auth/token-pair - Issue access + refresh tokens
  * - POST /v1/auth/refresh - Refresh access token
  * - GET /v1/auth/validate - Validate token
@@ -53,39 +54,47 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class JwtController {
     private final JwtService jwtService;
+    private final UserService userService;
 
     /**
-     * Issues a single JWT access token.
+     * Issues a single JWT access token for internal trusted callers.
      * 
      * **Contract:**
-     * - Request: POST /v1/auth/login with LoginRequest body
+     * - Request: POST /v1/auth/internal/token with LoginRequest body
      * - Response: TokenResponse (single accessToken field)
      * - Success: 200 OK
-     * - Errors: 400 (invalid request), 409 (concurrency), 500 (server error)
+     * - Errors: 400 (invalid request), 403 (forbidden), 500 (server error)
      * 
      * **See BACKEND_CONTRACT_GUIDE.md: Login Endpoint (page 3)**
      * 
-     * @param request login request with username and optional roles
+     * @param request token issuance request with subject and optional roles
      * @return token response containing access token
      * 
      * @throws IllegalArgumentException if username is blank or roles are empty
      */
-    @Operation(summary = "Issue JWT access token", description = "Authenticate and receive a JWT access token (1-hour expiration). "
+    @Operation(summary = "Issue internal JWT access token", description = "Internal endpoint to issue a JWT access token (1-hour expiration). "
             +
             "See BACKEND_CONTRACT_GUIDE.md §Login Endpoint for full specification.")
     @ApiResponse(responseCode = "200", description = "JWT token issued successfully", content = @Content(schema = @Schema(implementation = TokenResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request (blank username or empty roles)", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "403", description = "Forbidden: internal admin context required", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @EmitEvent(id = "SECURITY_AUTH_LOGIN", apiVersion = "1")
-    @PreAuthorize("permitAll()")
-    @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        log.info("Login request received: subject={}, rolesCount={}",
+    @EmitEvent(id = "SECURITY_AUTH_INTERNAL_TOKEN_ISSUE", apiVersion = "1")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/internal/token")
+    public ResponseEntity<TokenResponse> issueInternalToken(@Valid @RequestBody LoginRequest request) {
+        log.info("Internal token issuance request received: subject={}, rolesCount={}",
                 request.subject(), request.roles() != null ? request.roles().size() : 0);
+
+        var user = userService.getUserByUsername(request.subject())
+                .orElseThrow(() -> new IllegalArgumentException("User not found for subject: " + request.subject()));
+        if (user.getId() == null) {
+            throw new IllegalStateException("User exists but id is missing for subject: " + request.subject());
+        }
 
         String token = jwtService.generateToken(
                 request.subject(),
-                request.personId(),
+                user.getId(),
                 request.roles() != null ? request.roles() : Set.of());
 
         return ResponseEntity.ok(TokenResponse.of(token));
@@ -126,9 +135,15 @@ public class JwtController {
         log.info("Token pair request received: subject={}, rolesCount={}",
                 request.subject(), request.roles() != null ? request.roles().size() : 0);
 
+        var user = userService.getUserByUsername(request.subject())
+                .orElseThrow(() -> new IllegalArgumentException("User not found for subject: " + request.subject()));
+        if (user.getId() == null) {
+            throw new IllegalStateException("User exists but id is missing for subject: " + request.subject());
+        }
+
         JwtService.TokenPair tokenPair = jwtService.generateTokenPair(
                 request.subject(),
-                request.personId(),
+                user.getId(),
                 request.roles() != null ? request.roles() : Set.of());
 
         return ResponseEntity.ok(TokenPairResponse.of(tokenPair.accessToken(), tokenPair.refreshToken()));
@@ -287,22 +302,21 @@ public class JwtController {
     }
 
     /**
-     * Extracts and returns the stable person identifier from a valid JWT token.
+     * Extracts and returns the stable user identifier from a valid JWT token.
      *
      * @param token JWT token
-     * @return personId or 401 if token invalid
+     * @return userId or 401 if token invalid
      */
-    @Operation(summary = "Extract personId from JWT token", description = "Get the stable person identifier from a JWT token")
-    @ApiResponse(responseCode = "200", description = "personId extracted successfully")
+    @Operation(summary = "Extract userId from JWT token", description = "Get the stable user identifier from a JWT token")
+    @ApiResponse(responseCode = "200", description = "userId extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
     @PreAuthorize("isAuthenticated()")
-    @GetMapping("/person-id")
-    public ResponseEntity<String> getPersonId(@RequestParam String token) {
+    @GetMapping("/user-id")
+    public ResponseEntity<String> getUserId(@RequestParam String token) {
         if (!jwtService.validateToken(token)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        String personId = jwtService.getPersonIdFromToken(token);
-        return ResponseEntity.ok(personId);
+        return ResponseEntity.ok(jwtService.getUserIdFromToken(token).toString());
     }
 
     /**
