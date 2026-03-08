@@ -1,4 +1,4 @@
-package com.positivity.accounting.controller;
+package com.positivity.accounting.internal.controller;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;

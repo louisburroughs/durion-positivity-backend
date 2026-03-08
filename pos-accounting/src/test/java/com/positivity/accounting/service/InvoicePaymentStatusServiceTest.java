@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.positivity.accounting.config.TestSecurityConfig;
+import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
 import com.positivity.accounting.internal.entity.InvoiceStatusView;

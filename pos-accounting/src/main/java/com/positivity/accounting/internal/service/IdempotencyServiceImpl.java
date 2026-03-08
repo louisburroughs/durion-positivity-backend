@@ -9,6 +9,7 @@ import com.positivity.accounting.service.IdempotencyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -23,7 +24,6 @@ import java.util.UUID;
 public class IdempotencyServiceImpl implements IdempotencyService {
     private final Clock clock;
 
-
     private static final Logger log = LoggerFactory.getLogger(IdempotencyServiceImpl.class);
     private static final Duration KEY_EXPIRATION = Duration.ofHours(24);
 
@@ -36,11 +36,15 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Check if an idempotency key exists and is valid.
-     * 
+     *
+     * <p>
+     * Uses {@code SUPPORTS} propagation to avoid overriding flush mode when called
+     * from within an existing write transaction.
+     *
      * @return true if the key has been processed before
      */
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
     public boolean isKeyProcessed(String keyValue) {
         Optional<IdempotencyKey> existing = repository.findByKeyValue(keyValue);
         if (existing.isPresent()) {
@@ -55,13 +59,17 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /**
      * Register a new idempotency key.
+     *
+     * <p>
+     * Uses {@code saveAndFlush} to ensure the key is immediately visible to
+     * subsequent DB queries within the same transaction.
      */
     @Override
     @Transactional
     public void registerKey(String keyValue, UUID invoiceId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         IdempotencyKey key = new IdempotencyKey(keyValue, invoiceId, expiresAt);
-        repository.save(key);
+        repository.saveAndFlush(key);
         log.info("Registered idempotency key {} for invoice {}", keyValue, invoiceId);
     }
 

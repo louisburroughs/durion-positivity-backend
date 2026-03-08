@@ -17,8 +17,9 @@ public final class AccountingEventTypes {
 
         /**
          * All event type registrations for the accounting module.
-         * Total: 42 event types (updated for CAP-053 Vendor Bill workflow + GL
-         * Mapping).
+         * Total: 46 event types (includes +2 from CAP-251 #5:
+         * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
+         * CAP-053 Vendor Bill workflow + GL Mapping).
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -139,6 +140,13 @@ public final class AccountingEventTypes {
 
                                 // AP Payment GL Posting - 1 event (Issue #128)
                                 EventTypeRegistration.write("AP_PAYMENT_GL_POSTING",
-                                                "Post AP payment to GL (Dr AP, Cr Cash/Bank)").build());
+                                                "Post AP payment to GL (Dr AP, Cr Cash/Bank)").build(),
+
+                                // AccountingStatusSyncService — 2 events (CAP-251 #5)
+                                EventTypeRegistration.write("ACCOUNTING_STATUS_SYNC_PROCESS",
+                                                "Process accounting status change event for invoice reconciliation")
+                                                .build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_STATUS_VIEW",
+                                                "View current accounting status for an invoice").build());
         }
 }

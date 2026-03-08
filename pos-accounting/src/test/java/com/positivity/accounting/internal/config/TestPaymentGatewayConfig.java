@@ -1,4 +1,4 @@
-package com.positivity.accounting.config;
+package com.positivity.accounting.internal.config;
 
 import java.util.Map;
 import java.util.Optional;

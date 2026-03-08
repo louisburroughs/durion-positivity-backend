@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
 
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 
 /**
@@ -87,7 +88,7 @@ public class APPaymentExceptionHandler {
     public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
         String message = ex.getConstraintViolations().stream()
                 .findFirst()
-                .map(violation -> violation.getMessage())
+                .map(ConstraintViolation::getMessage)
                 .orElse("Validation failed");
 
         log.warn("Validation error: {}", message);

@@ -1,4 +1,4 @@
-package com.positivity.accounting.controller;
+package com.positivity.accounting.internal.controller;
 
 import java.time.ZoneOffset;
 import java.time.Clock;
@@ -47,11 +47,11 @@ import com.positivity.accounting.internal.repository.ReceivablePaymentRepository
 @DisplayName("Payment Application Controller Integration Tests")
 class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
-    private static final AtomicInteger UUID_COUNTER = new AtomicInteger(1000);
+        private static final AtomicInteger UUID_COUNTER = new AtomicInteger(1000);
 
-    private static UUID nextUuid() {
-        return UUID.fromString(String.format("00000000-0000-0000-0000-%012x", UUID_COUNTER.getAndIncrement()));
-    }
+        private static UUID nextUuid() {
+                return UUID.fromString(String.format("00000000-0000-0000-0000-%012x", UUID_COUNTER.getAndIncrement()));
+        }
 
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 

@@ -1,4 +1,4 @@
-package com.positivity.accounting.controller;
+package com.positivity.accounting.internal.controller;
 
 import java.time.ZoneOffset;
 import java.time.Clock;

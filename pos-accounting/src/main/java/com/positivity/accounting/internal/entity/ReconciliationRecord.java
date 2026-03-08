@@ -22,7 +22,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * Reconciliation record created when invoice posting retry is exhausted.
  * Used for manual reconciliation of failed postings (Story #6 — CAP-251).
  *
- * <p>This entity is intentionally append-only (ADR-0024 @Immutable exemption):
+ * <p>
+ * This entity is intentionally append-only (ADR-0024 @Immutable exemption):
  * reconciliation records are never updated after creation.
  */
 @Getter

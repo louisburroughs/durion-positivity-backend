@@ -128,10 +128,9 @@ public class APPaymentController {
         }
 
         @GetMapping("/bills")
-        @Operation(summary = "List eligible vendor bills", description = "Get eligible vendor bills for payment (status = APPROVED). "
-                        +
-                        "Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID.")
+        @Operation(summary = "List eligible vendor bills", description = "Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID.")
         @ApiResponse(responseCode = "200", description = "Bills retrieved successfully")
+
         @ApiResponse(responseCode = "400", description = "Invalid vendor ID")
         @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<List<VendorBillSummaryResponse>> listBills(
