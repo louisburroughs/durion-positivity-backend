@@ -178,7 +178,8 @@ public class PriceOverride {
     @Column(unique = true, length = 128)
     private String idempotencyKey;
 
-    /     * Calculates the absolute discount amount.
+    /**
+     * Calculates the absolute discount amount.
      * 
      * @return originalPrice - overridePrice
      */

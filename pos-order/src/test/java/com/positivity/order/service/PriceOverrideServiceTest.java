@@ -4,18 +4,27 @@ import com.positivity.order.config.TestSecurityConfig;
 import com.positivity.order.internal.entity.OverrideStatus;
 import com.positivity.order.internal.entity.PriceOverride;
 import com.positivity.order.internal.entity.PriceOverrideReasonCode;
+import com.positivity.order.internal.entity.PriceSource;
+import com.positivity.order.internal.entity.FulfillmentStatus;
+import com.positivity.order.internal.entity.SalesOrder;
+import com.positivity.order.internal.entity.SalesOrderLine;
+import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.event.OrderPriceOverrideApplied;
 import com.positivity.order.internal.exception.InvalidPriceOverrideException;
 import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
 import com.positivity.order.internal.repository.ApprovalRecordRepository;
 import com.positivity.order.internal.repository.PriceOverrideRepository;
+import com.positivity.order.internal.repository.SalesOrderLineRepository;
+import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.service.model.ApplyPriceOverrideRequest;
 import com.positivity.order.service.model.ApproveOverrideCommand;
 import com.positivity.order.service.model.PriceOverrideDetail;
 import com.positivity.order.service.model.PriceOverrideResult;
 import com.positivity.order.service.model.RejectOverrideCommand;
+import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
@@ -53,12 +62,20 @@ class PriceOverrideServiceTest {
         private ApprovalRecordRepository approvalRecordRepository;
 
         @Autowired
+        private SalesOrderRepository salesOrderRepository;
+
+        @Autowired
+        private SalesOrderLineRepository salesOrderLineRepository;
+
+        @Autowired
         private ApplicationEvents applicationEvents;
 
         @BeforeEach
         void setUp() {
                 priceOverrideRepository.deleteAll();
                 approvalRecordRepository.deleteAll();
+                salesOrderLineRepository.deleteAll();
+                salesOrderRepository.deleteAll();
         }
 
         @AfterEach
@@ -69,6 +86,11 @@ class PriceOverrideServiceTest {
         @Test
         void testApplyPriceOverride_SmallDiscount_AutoApproved() {
                 // Given: Small discount (5%) that doesn't require approval
+                createOrderWithLine(
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000009"),
+                                BigDecimal.valueOf(100.00));
+
                 ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
                 request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
                 request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000009").toString());
@@ -122,6 +144,10 @@ class PriceOverrideServiceTest {
         @Test
         void testApplyPriceOverride_WithIdempotencyKey_ReturnsSameOverride() {
                 String idempotencyKey = "idem-key-" + UUID.randomUUID();
+                createOrderWithLine(
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000009"),
+                                BigDecimal.valueOf(100.00));
 
                 ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
                 request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
@@ -162,6 +188,17 @@ class PriceOverrideServiceTest {
 
         @Test
         void testApplyPriceOverride_AutoApproved_MissingOrderLine_ThrowsException() {
+                SalesOrder order = SalesOrder.builder()
+                                .orderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .clerkId("clerk-1")
+                                .terminalId("terminal-1")
+                                .status(SalesOrderStatus.DRAFT)
+                                .subtotal(BigDecimal.ZERO)
+                                .createdBy("test-user")
+                                .updatedBy("test-user")
+                                .build();
+                salesOrderRepository.save(order);
+
                 ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
                 request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
                 request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000099").toString());
@@ -182,6 +219,11 @@ class PriceOverrideServiceTest {
 
         @Test
         void testApplyPriceOverride_AutoApproved_MissingOrder_ThrowsException() {
+                createOrderWithLine(
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000009"),
+                                BigDecimal.valueOf(100.00));
+
                 ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
                 request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000099").toString());
                 request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000009").toString());
@@ -363,8 +405,36 @@ class PriceOverrideServiceTest {
                 return priceOverrideRepository.save(override);
         }
 
+        private SalesOrderLine createOrderWithLine(UUID orderId, UUID orderLineId, BigDecimal unitPrice) {
+                SalesOrder order = SalesOrder.builder()
+                                .orderId(orderId)
+                                .clerkId("clerk-1")
+                                .terminalId("terminal-1")
+                                .status(SalesOrderStatus.DRAFT)
+                                .subtotal(unitPrice.setScale(4))
+                                .createdBy("test-user")
+                                .updatedBy("test-user")
+                                .build();
+                salesOrderRepository.save(order);
+
+                SalesOrderLine line = SalesOrderLine.builder()
+                                .orderLineId(orderLineId)
+                                .order(order)
+                                .itemSku("SKU-1")
+                                .itemDescription("Test item")
+                                .quantity(1)
+                                .unitPrice(unitPrice.setScale(4))
+                                .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
+                                .priceSource(PriceSource.MANUAL)
+                                .build();
+                return salesOrderLineRepository.save(line);
+        }
+
         private void setAuthenticatedUser(String username) {
                 var authentication = new UsernamePasswordAuthenticationToken(username, "N/A", List.of());
+                authentication.setDetails(Map.of(
+                                GatewaySecurityConstants.DETAIL_USERNAME, username,
+                                GatewaySecurityConstants.DETAIL_USER_ID, UUID.fromString(username)));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 }

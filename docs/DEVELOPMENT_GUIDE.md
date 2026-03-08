@@ -107,7 +107,7 @@ All dependency versions are centralized in the root `pom.xml`:
     <lombok.version>1.18.32</lombok.version>
     <slf4j.version>2.0.13</slf4j.version>
     <springdoc-openapi.version>2.7.0</springdoc-openapi.version>
-    <swagger-annotations.version>2.2.22</swagger-annotations.version>
+    <swagger-annotations.version>2.2.44</swagger-annotations.version>
     <opentelemetry.version>1.40.0</opentelemetry.version>
 </properties>
 ```
