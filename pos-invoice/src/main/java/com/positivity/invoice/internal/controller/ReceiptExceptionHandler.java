@@ -43,20 +43,20 @@ public class ReceiptExceptionHandler {
                         MESSAGE, ex.getMessage()));
     }
 
-                @ExceptionHandler(ReceiptNotFoundException.class)
-                public ResponseEntity<Object> handleReceiptNotFoundException(
-                    ReceiptNotFoundException ex, HttpServletRequest request) {
-                String correlationId = correlationId(request);
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .header(X_CORRELATION_ID, correlationId)
-                    .body(Map.of(
+    @ExceptionHandler(ReceiptNotFoundException.class)
+    public ResponseEntity<Object> handleReceiptNotFoundException(
+            ReceiptNotFoundException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(Map.of(
                         TIMESTAMP, Instant.now(clock).toString(),
                         ERROR, "NOT_FOUND",
                         CODE, "NOT_FOUND",
                         STATUS, HttpStatus.NOT_FOUND.value(),
                         CORRELATION_ID, correlationId,
                         MESSAGE, ex.getMessage()));
-                }
+    }
 
     private static String correlationId(HttpServletRequest request) {
         String header = request.getHeader(X_CORRELATION_ID);

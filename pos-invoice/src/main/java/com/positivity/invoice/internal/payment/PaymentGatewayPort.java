@@ -28,4 +28,7 @@ public interface PaymentGatewayPort {
 
     @NonNull
     GatewayPaymentResult voidRemainder(@NonNull GatewayVoidRequest request);
+
+    @NonNull
+    GatewayPaymentResult refund(@NonNull GatewayRefundRequest request);
 }

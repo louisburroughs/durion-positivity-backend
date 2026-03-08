@@ -103,8 +103,8 @@ class ReceiptControllerTest {
                           "templateVersion": "1.0"
                         }
                         """))
-                                                                .andExpect(status().isCreated())
-                                                                .andExpect(jsonPath("$.receiptId", notNullValue()));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.receiptId", notNullValue()));
     }
 
     /**
@@ -133,7 +133,8 @@ class ReceiptControllerTest {
         receipt.setReprintCount(1);
         when(receiptService.reprintReceipt(eq(RECEIPT_ID), any())).thenReturn(receipt);
 
-        // reprintedBy resolved from security context per ADR-0018 — not submitted by caller
+        // reprintedBy resolved from security context per ADR-0018 — not submitted by
+        // caller
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/reprint",
                 INVOICE_ID, RECEIPT_ID)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -184,7 +185,8 @@ class ReceiptControllerTest {
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/reprint",
                 INVOICE_ID, RECEIPT_ID)
                 .contentType(MediaType.APPLICATION_JSON)
-                // reprintedBy resolved from security context per ADR-0018 — not submitted by caller
+                // reprintedBy resolved from security context per ADR-0018 — not submitted by
+                // caller
                 .content("""
                         {
                           "reason": "CUSTOMER_REQUEST"
@@ -196,7 +198,7 @@ class ReceiptControllerTest {
     @Test
     void recordPrintDelivery_receiptNotFound_returns404() throws Exception {
         doThrow(new ReceiptNotFoundException("Receipt not found"))
-                                .when(receiptService).recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS);
+                .when(receiptService).recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS);
 
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/print", INVOICE_ID, RECEIPT_ID)
                 .contentType(MediaType.APPLICATION_JSON)

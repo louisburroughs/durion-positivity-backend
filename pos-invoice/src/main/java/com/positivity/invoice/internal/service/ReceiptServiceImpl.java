@@ -54,14 +54,14 @@ public class ReceiptServiceImpl implements ReceiptService {
         requireAuthority(GENERATE_RECEIPT);
 
         Invoice invoice = invoiceRepository.findById(invoiceId)
-            .orElseThrow(() -> new ReceiptNotFoundException("Invoice not found: " + invoiceId));
+                .orElseThrow(() -> new ReceiptNotFoundException("Invoice not found: " + invoiceId));
 
         String cashierId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
 
         String reference = "RCP-" + invoice.getInvoiceNumber() + "-"
-            + DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
-                .withZone(ZoneOffset.UTC)
-                .format(Instant.now(clock))
+                + DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+                        .withZone(ZoneOffset.UTC)
+                        .format(Instant.now(clock))
                 + "-001";
 
         com.positivity.invoice.internal.entity.Receipt receiptEntity = new com.positivity.invoice.internal.entity.Receipt();

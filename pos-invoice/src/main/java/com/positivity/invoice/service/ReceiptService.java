@@ -17,7 +17,7 @@ public interface ReceiptService {
 
     void recordPrintDelivery(@NonNull UUID receiptId, @NonNull ReceiptDeliveryStatus status);
 
-        void sendEmailReceipt(@NonNull UUID receiptId, @NonNull String emailAddress,
+    void sendEmailReceipt(@NonNull UUID receiptId, @NonNull String emailAddress,
             @NonNull ReceiptDeliveryStatus status);
 
     @NonNull
