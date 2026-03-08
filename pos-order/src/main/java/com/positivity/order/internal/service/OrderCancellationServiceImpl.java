@@ -69,8 +69,12 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         order.setStatus(SalesOrderStatus.CANCEL_REQUESTED);
         order.setCancellationReason(command.cancellationReason());
         order.setCancellationIdempotencyKey(idempotencyKey);
-        order.setWorkOrderId(command.workOrderId());
-        order.setPaymentId(command.paymentId());
+        if (command.workOrderId() != null) {
+            order.setWorkOrderId(command.workOrderId());
+        }
+        if (command.paymentId() != null) {
+            order.setPaymentId(command.paymentId());
+        }
         order.setUpdatedBy(actor);
         salesOrderRepository.save(order);
 

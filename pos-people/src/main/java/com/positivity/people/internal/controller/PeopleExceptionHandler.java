@@ -2,6 +2,8 @@ package com.positivity.people.internal.controller;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import com.positivity.people.internal.client.SecurityServiceException;
 import com.positivity.people.internal.client.WorkexecClientException;
@@ -13,10 +15,13 @@ import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
@@ -108,6 +113,19 @@ public class PeopleExceptionHandler {
 		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
 		problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
 		return problem;
+	}
+
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ResponseEntity<Map<String, Object>> handleHttpMessageNotReadable(
+			HttpMessageNotReadableException ex,
+			HttpServletRequest request) {
+		Map<String, Object> body = new LinkedHashMap<>();
+		body.put(TIMESTAMP_PROPERTY, Instant.now(clock));
+		body.put("status", HttpStatus.BAD_REQUEST.value());
+		body.put("error", "Bad Request");
+		body.put("path", request.getRequestURI());
+		body.put("message", "Malformed JSON request");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
 	}
 
 	@ExceptionHandler(SecurityServiceException.class)

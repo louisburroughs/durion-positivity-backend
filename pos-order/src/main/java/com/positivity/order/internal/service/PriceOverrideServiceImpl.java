@@ -120,25 +120,27 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 PriceOverride savedOverride = priceOverrideRepository.save(override);
 
                 if (!requiresApproval) {
-                        // Update the order line's unit price to reflect the approved override
-                        salesOrderLineRepository.findById(savedOverride.getOrderLineId()).ifPresent(line -> {
-                                line.setUnitPrice(savedOverride.getOverridePrice());
-                                salesOrderLineRepository.save(line);
+                        // Update the order line's unit price to reflect the approved override.
+                        SalesOrderLine line = salesOrderLineRepository.findById(savedOverride.getOrderLineId())
+                                        .orElseThrow(() -> new InvalidPriceOverrideException(
+                                                        "Order line not found: " + savedOverride.getOrderLineId()));
+                        line.setUnitPrice(savedOverride.getOverridePrice());
+                        salesOrderLineRepository.save(line);
 
-                                // Recalculate order subtotal
-                                salesOrderRepository.findById(savedOverride.getOrderId()).ifPresent(order -> {
-                                        List<SalesOrderLine> lines = salesOrderLineRepository
-                                                        .findByOrder_OrderId(order.getOrderId());
-                                        BigDecimal newSubtotal = lines.stream()
-                                                        .map(l -> l.getUnitPrice().multiply(
-                                                                        BigDecimal.valueOf(l.getQuantity())))
-                                                        .reduce(BigDecimal.ZERO, BigDecimal::add)
-                                                        .setScale(4, RoundingMode.HALF_UP);
-                                        order.setSubtotal(newSubtotal);
-                                        order.setUpdatedBy(actorUsername);
-                                        salesOrderRepository.save(order);
-                                });
-                        });
+                        // Recalculate order subtotal.
+                        var order = salesOrderRepository.findById(savedOverride.getOrderId())
+                                        .orElseThrow(() -> new InvalidPriceOverrideException(
+                                                        "Order not found: " + savedOverride.getOrderId()));
+                        List<SalesOrderLine> lines = salesOrderLineRepository
+                                        .findByOrder_OrderId(order.getOrderId());
+                        BigDecimal newSubtotal = lines.stream()
+                                        .map(l -> l.getUnitPrice().multiply(
+                                                        BigDecimal.valueOf(l.getQuantity())))
+                                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+                                        .setScale(4, RoundingMode.HALF_UP);
+                        order.setSubtotal(newSubtotal);
+                        order.setUpdatedBy(actorUsername);
+                        salesOrderRepository.save(order);
 
                         // Publish domain event
                         eventPublisher.publishEvent(new OrderPriceOverrideApplied(
@@ -344,13 +346,7 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
         }
 
         private UUID resolveActorUuid() {
-                String name = SecurityContextHelper
-                                .getCurrentUsernameOrDefault("00000000-0000-0000-0000-000000000000");
-                try {
-                        return UUID.fromString(name);
-                } catch (IllegalArgumentException e) {
-                        return new UUID(0L, 0L);
-                }
+                return SecurityContextHelper.getCurrentUserIdAsUuidOrThrowIllegalStateException();
         }
 
         /**

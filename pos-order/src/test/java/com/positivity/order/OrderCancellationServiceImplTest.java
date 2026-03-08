@@ -344,4 +344,24 @@ class OrderCancellationServiceImplTest {
         assertThatThrownBy(() -> orderCancellationService.retryCancellation(ORDER_ID, "idem-key-1"))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    @DisplayName("CC-012: cancelOrder omitting optional IDs preserves persisted workOrderId/paymentId")
+    void cancelOrder_omitOptionalIds_preservesPersistedIds() {
+        // Arrange
+        SalesOrder order = orderWithWorkorderAndPayment();
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Act
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null));
+
+        // Assert
+        assertThat(result.status()).isEqualTo("CANCELLED");
+        assertThat(order.getWorkOrderId()).isEqualTo(WORKORDER_ID);
+        assertThat(order.getPaymentId()).isEqualTo(PAYMENT_ID);
+        verify(workexecPort, never()).checkWorkorderStatus(any());
+        verify(workexecPort, never()).cancelWorkorder(any(), any());
+        verify(billingPort, never()).reversePayment(any(), any());
+    }
 }
