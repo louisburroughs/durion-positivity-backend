@@ -1,28 +1,34 @@
 package com.positivity.order.service;
 
 import com.positivity.order.config.TestSecurityConfig;
-import com.positivity.order.internal.dto.ApplyPriceOverrideRequest;
-import com.positivity.order.internal.dto.ApplyPriceOverrideResponse;
-import com.positivity.order.internal.dto.ApprovePriceOverrideRequest;
-import com.positivity.order.internal.dto.RejectPriceOverrideRequest;
 import com.positivity.order.internal.entity.OverrideStatus;
 import com.positivity.order.internal.entity.PriceOverride;
 import com.positivity.order.internal.entity.PriceOverrideReasonCode;
+import com.positivity.order.internal.event.OrderPriceOverrideApplied;
 import com.positivity.order.internal.exception.InvalidPriceOverrideException;
 import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
 import com.positivity.order.internal.repository.ApprovalRecordRepository;
 import com.positivity.order.internal.repository.PriceOverrideRepository;
+import com.positivity.order.service.model.ApplyPriceOverrideRequest;
+import com.positivity.order.service.model.ApproveOverrideCommand;
+import com.positivity.order.service.model.PriceOverrideDetail;
+import com.positivity.order.service.model.PriceOverrideResult;
+import com.positivity.order.service.model.RejectOverrideCommand;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @ActiveProfiles("test")
 @Transactional
 @Import(TestSecurityConfig.class)
+@RecordApplicationEvents
 class PriceOverrideServiceTest {
 
         @Autowired
@@ -45,10 +52,18 @@ class PriceOverrideServiceTest {
         @Autowired
         private ApprovalRecordRepository approvalRecordRepository;
 
+        @Autowired
+        private ApplicationEvents applicationEvents;
+
         @BeforeEach
         void setUp() {
                 priceOverrideRepository.deleteAll();
                 approvalRecordRepository.deleteAll();
+        }
+
+        @AfterEach
+        void tearDown() {
+                SecurityContextHolder.clearContext();
         }
 
         @Test
@@ -60,21 +75,26 @@ class PriceOverrideServiceTest {
                 request.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000011").toString());
                 request.setOriginalPrice(BigDecimal.valueOf(100.00));
                 request.setOverridePrice(BigDecimal.valueOf(95.00));
-                request.setReasonCode(PriceOverrideReasonCode.CUSTOMER_LOYALTY);
+                request.setReasonCode("CUSTOMER_LOYALTY");
                 request.setJustification("Loyal customer discount");
 
                 // When
-                ApplyPriceOverrideResponse response = priceOverrideService.applyPriceOverride(request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+                PriceOverrideResult response = priceOverrideService.applyPriceOverride(request);
 
                 // Then
                 assertThat(response).isNotNull();
-                assertThat(response.getOverrideId()).isNotNull();
-                assertThat(response.getStatus()).isEqualTo(OverrideStatus.APPROVED);
-                assertThat(response.getRequiresApproval()).isFalse();
-                assertThat(response.getDiscountAmount()).isEqualByComparingTo(BigDecimal.valueOf(5.00));
-                assertThat(response.getDiscountPercentage()).isEqualByComparingTo(BigDecimal.valueOf(5.0));
-                assertThat(response.getMessage()).contains("approved");
+                assertThat(response.overrideId()).isNotNull();
+                assertThat(response.status()).isEqualTo(OverrideStatus.APPROVED.name());
+                assertThat(response.requiresApproval()).isFalse();
+                assertThat(response.discountAmount()).isEqualByComparingTo(BigDecimal.valueOf(5.00));
+                assertThat(response.discountPercentage()).isEqualByComparingTo(BigDecimal.valueOf(5.0));
+                assertThat(response.message()).contains("Approved");
+
+                List<OrderPriceOverrideApplied> events = applicationEvents
+                                .stream(OrderPriceOverrideApplied.class)
+                                .toList();
+                assertThat(events).hasSize(1);
+                assertThat(events.get(0).overrideId()).isEqualTo(response.overrideId());
         }
 
         @Test
@@ -86,18 +106,41 @@ class PriceOverrideServiceTest {
                 request.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000011").toString());
                 request.setOriginalPrice(BigDecimal.valueOf(1000.00));
                 request.setOverridePrice(BigDecimal.valueOf(800.00));
-                request.setReasonCode(PriceOverrideReasonCode.PRICE_MATCH);
+                request.setReasonCode("PRICE_MATCH");
                 request.setJustification("Competitor match");
 
                 // When
-                ApplyPriceOverrideResponse response = priceOverrideService.applyPriceOverride(request,
-                                UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+                PriceOverrideResult response = priceOverrideService.applyPriceOverride(request);
 
                 // Then
                 assertThat(response).isNotNull();
-                assertThat(response.getStatus()).isEqualTo(OverrideStatus.PENDING_APPROVAL);
-                assertThat(response.getRequiresApproval()).isTrue();
-                assertThat(response.getMessage()).contains("pending manager approval");
+                assertThat(response.status()).isEqualTo(OverrideStatus.PENDING_APPROVAL.name());
+                assertThat(response.requiresApproval()).isTrue();
+                assertThat(response.message()).contains("Pending manager approval");
+        }
+
+        @Test
+        void testApplyPriceOverride_WithIdempotencyKey_ReturnsSameOverride() {
+                String idempotencyKey = "idem-key-" + UUID.randomUUID();
+
+                ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
+                request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+                request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000009").toString());
+                request.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000011").toString());
+                request.setOriginalPrice(BigDecimal.valueOf(100.00));
+                request.setOverridePrice(BigDecimal.valueOf(95.00));
+                request.setReasonCode("CUSTOMER_LOYALTY");
+                request.setJustification("Loyal customer discount");
+                request.setIdempotencyKey(idempotencyKey);
+
+                int sizeBefore = priceOverrideRepository.findAll().size();
+
+                PriceOverrideResult first = priceOverrideService.applyPriceOverride(request);
+                PriceOverrideResult second = priceOverrideService.applyPriceOverride(request);
+
+                assertThat(second.overrideId()).isEqualTo(first.overrideId());
+                int sizeAfter = priceOverrideRepository.findAll().size();
+                assertThat(sizeAfter).isEqualTo(sizeBefore + 1);
         }
 
         @Test
@@ -109,10 +152,10 @@ class PriceOverrideServiceTest {
                 request.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000011").toString());
                 request.setOriginalPrice(BigDecimal.valueOf(100.00));
                 request.setOverridePrice(BigDecimal.valueOf(150.00));
-                request.setReasonCode(PriceOverrideReasonCode.OTHER);
+                request.setReasonCode("OTHER");
 
                 // When/Then
-                assertThatThrownBy(() -> priceOverrideService.applyPriceOverride(request, "user789"))
+                assertThatThrownBy(() -> priceOverrideService.applyPriceOverride(request))
                                 .isInstanceOf(InvalidPriceOverrideException.class)
                                 .hasMessageContaining("cannot be greater than original price");
         }
@@ -122,18 +165,17 @@ class PriceOverrideServiceTest {
                 // Given: Pending override
                 PriceOverride override = createPendingOverride();
                 UUID managerUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                setAuthenticatedUser(managerUserId.toString());
 
                 // When
-                ApprovePriceOverrideRequest approveRequest = new ApprovePriceOverrideRequest();
-                approveRequest.setComments("Approved for customer retention");
-
-                PriceOverride approved = priceOverrideService.approvePriceOverride(
-                                override.getOverrideId(), approveRequest, managerUserId, "MANAGER");
+                PriceOverrideDetail approved = priceOverrideService.approveOverride(
+                                override.getOverrideId(),
+                                new ApproveOverrideCommand("MANAGER", "Approved for customer retention"));
 
                 // Then
-                assertThat(approved.getStatus()).isEqualTo(OverrideStatus.APPROVED);
-                assertThat(approved.getApprovedByUserId()).isEqualTo(managerUserId);
-                assertThat(approved.getApprovedAt()).isNotNull();
+                assertThat(approved.status()).isEqualTo(OverrideStatus.APPROVED.name());
+                assertThat(approved.approvedByUserId()).isEqualTo(managerUserId.toString());
+                assertThat(approved.approvedAt()).isNotNull();
 
                 // Verify approval record created
                 assertThat(approvalRecordRepository.findByPriceOverrideId(override.getOverrideId()))
@@ -151,20 +193,19 @@ class PriceOverrideServiceTest {
                 // Given: Pending override
                 PriceOverride override = createPendingOverride();
                 UUID managerUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                setAuthenticatedUser(managerUserId.toString());
 
                 // When
-                RejectPriceOverrideRequest rejectRequest = new RejectPriceOverrideRequest();
-                rejectRequest.setReason("Discount too high");
-                rejectRequest.setComments("Please revise and resubmit");
-
-                PriceOverride rejected = priceOverrideService.rejectPriceOverride(
-                                override.getOverrideId(), rejectRequest, managerUserId, "MANAGER");
+                PriceOverrideDetail rejected = priceOverrideService.rejectOverride(
+                                override.getOverrideId(),
+                                new RejectOverrideCommand("MANAGER", "Discount too high",
+                                                "Please revise and resubmit"));
 
                 // Then
-                assertThat(rejected.getStatus()).isEqualTo(OverrideStatus.REJECTED);
-                assertThat(rejected.getRejectedByUserId()).isEqualTo(managerUserId);
-                assertThat(rejected.getRejectionReason()).isEqualTo("Discount too high");
-                assertThat(rejected.getRejectedAt()).isNotNull();
+                assertThat(rejected.status()).isEqualTo(OverrideStatus.REJECTED.name());
+                assertThat(rejected.rejectedByUserId()).isEqualTo(managerUserId.toString());
+                assertThat(rejected.rejectionReason()).isEqualTo("Discount too high");
+                assertThat(rejected.rejectedAt()).isNotNull();
 
                 // Verify approval record created
                 assertThat(approvalRecordRepository.findByPriceOverrideId(override.getOverrideId()))
@@ -181,11 +222,11 @@ class PriceOverrideServiceTest {
                 PriceOverride override = createPendingOverride();
 
                 // When
-                PriceOverride found = priceOverrideService.getOverrideById(override.getOverrideId());
+                PriceOverrideDetail found = priceOverrideService.getOverrideById(override.getOverrideId());
 
                 // Then
                 assertThat(found).isNotNull();
-                assertThat(found.getOverrideId()).isEqualTo(override.getOverrideId());
+                assertThat(found.overrideId()).isEqualTo(override.getOverrideId());
         }
 
         @Test
@@ -210,7 +251,7 @@ class PriceOverrideServiceTest {
                                 OverrideStatus.APPROVED);
 
                 // When
-                List<PriceOverride> overrides = priceOverrideService.getOverridesByOrderId(orderId1);
+                List<PriceOverrideDetail> overrides = priceOverrideService.getOverridesByOrderId(orderId1);
 
                 // Then
                 assertThat(overrides).hasSize(2);
@@ -231,11 +272,11 @@ class PriceOverrideServiceTest {
                                 UUID.fromString("00000000-0000-0000-0000-000000000011"), OverrideStatus.REJECTED);
 
                 // When
-                List<PriceOverride> pending = priceOverrideService.getPendingApprovals();
+                List<PriceOverrideDetail> pending = priceOverrideService.getPendingApprovals();
 
                 // Then
                 assertThat(pending).hasSize(2);
-                assertThat(pending).allMatch(o -> o.getStatus() == OverrideStatus.PENDING_APPROVAL);
+                assertThat(pending).allMatch(o -> o.status().equals(OverrideStatus.PENDING_APPROVAL.name()));
         }
 
         @Test
@@ -249,7 +290,7 @@ class PriceOverrideServiceTest {
                                 UUID.fromString("00000000-0000-0000-0000-000000000006"), OverrideStatus.REJECTED);
 
                 // When
-                List<PriceOverride> approved = priceOverrideService.getOverridesByStatus(OverrideStatus.APPROVED);
+                List<PriceOverrideDetail> approved = priceOverrideService.getOverridesByStatus("APPROVED");
 
                 // Then
                 assertThat(approved).hasSize(2);
@@ -275,8 +316,15 @@ class PriceOverrideServiceTest {
                                 .status(status)
                                 .requiresApproval(status == OverrideStatus.PENDING_APPROVAL)
                                 .requestedByUserId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                                .createdBy("test-user")
+                                .updatedBy("test-user")
                                 .build();
 
                 return priceOverrideRepository.save(override);
+        }
+
+        private void setAuthenticatedUser(String username) {
+                var authentication = new UsernamePasswordAuthenticationToken(username, "N/A", List.of());
+                SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 }

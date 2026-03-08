@@ -2,7 +2,9 @@ package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import lombok.Data;
@@ -127,6 +129,14 @@ public class PriceOverride {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    @CreatedBy
+    @Column(nullable = false, updatable = false, length = 255)
+    private String createdBy;
+
+    @LastModifiedBy
+    @Column(nullable = false, length = 255)
+    private String updatedBy;
+
     /**
      * Timestamp when the override was approved.
      */
@@ -147,6 +157,17 @@ public class PriceOverride {
      */
     @Column(nullable = false)
     private Boolean requiresApproval;
+
+    /**
+     * Whether this override affects commission calculation.
+     * True for auto-approved overrides; false for pending-approval overrides.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean affectsCommission = false;
+
+    @Column(unique = true, length = 128)
+    private String idempotencyKey;
 
     /**
      * Calculates the absolute discount amount.
