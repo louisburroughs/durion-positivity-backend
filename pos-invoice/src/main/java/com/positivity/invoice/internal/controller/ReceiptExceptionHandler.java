@@ -1,6 +1,7 @@
 package com.positivity.invoice.internal.controller;
 
 import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.ReceiptNotFoundException;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -46,6 +47,16 @@ public class ReceiptExceptionHandler {
     @ExceptionHandler(ReceiptNotFoundException.class)
     public ResponseEntity<Object> handleReceiptNotFoundException(
             ReceiptNotFoundException ex, HttpServletRequest request) {
+        return handleNotFound(ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvoiceNotFoundException.class)
+    public ResponseEntity<Object> handleInvoiceNotFoundException(
+            InvoiceNotFoundException ex, HttpServletRequest request) {
+        return handleNotFound(ex.getMessage(), request);
+    }
+
+    private ResponseEntity<Object> handleNotFound(String message, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header(X_CORRELATION_ID, correlationId)
@@ -55,7 +66,7 @@ public class ReceiptExceptionHandler {
                         CODE, "NOT_FOUND",
                         STATUS, HttpStatus.NOT_FOUND.value(),
                         CORRELATION_ID, correlationId,
-                        MESSAGE, ex.getMessage()));
+                        MESSAGE, message));
     }
 
     private static String correlationId(HttpServletRequest request) {

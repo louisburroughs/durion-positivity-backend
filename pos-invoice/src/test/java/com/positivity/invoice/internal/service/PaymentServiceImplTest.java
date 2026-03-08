@@ -73,6 +73,7 @@ class PaymentServiceImplTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
     private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID OTHER_INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
     private static final UUID PAYMENT_INTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final String IDEMPOTENCY_KEY = "idem-key-001";
     private static final String CAPTURE_IDEMPOTENCY_KEY = "capture-idempotency-key-001";
@@ -178,6 +179,24 @@ class PaymentServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(PaymentIntentStatus.CAPTURED);
         verify(gatewayPort, never()).saleCapture(any());
         verify(gatewayPort, never()).authorize(any());
+    }
+
+    @Test
+    void initiatePayment_idempotent_differentInvoice_throwsPaymentIntentNotFound() {
+        withAuthorities("PROCESS_PAYMENT");
+        var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+        var existing = capturedPaymentIntent();
+        existing.setInvoiceId(OTHER_INVOICE_ID);
+        when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+                .isInstanceOf(PaymentIntentNotFoundException.class)
+                .hasMessageContaining("not found under invoice");
+
+        verify(gatewayPort, never()).saleCapture(any());
+        verify(gatewayPort, never()).authorize(any());
+        verify(paymentIntentRepository, never()).save(any(PaymentIntent.class));
     }
 
     // -------------------------------------------------------------------------
@@ -458,6 +477,7 @@ class PaymentServiceImplTest {
     private PaymentIntent capturedPaymentIntent() {
         var intent = new PaymentIntent();
         intent.setId(PAYMENT_INTENT_ID);
+        intent.setInvoiceId(INVOICE_ID);
         intent.setIdempotencyKey(IDEMPOTENCY_KEY);
         intent.setStatus(PaymentIntentStatus.CAPTURED);
         intent.setAuthorizedAmount(AMOUNT_BELOW_LIMIT);
