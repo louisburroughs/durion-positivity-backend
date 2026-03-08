@@ -10,6 +10,8 @@ import com.positivity.order.service.model.ApproveOverrideCommand;
 import com.positivity.order.service.model.PriceOverrideDetail;
 import com.positivity.order.service.model.PriceOverrideResult;
 import com.positivity.order.service.model.RejectOverrideCommand;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -43,6 +46,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PriceOverrideController {
+
+    private static final String UNKNOWN_REVIEWER_ROLE = "UNKNOWN";
 
     private final PriceOverrideService priceOverrideService;
 
@@ -82,7 +87,7 @@ public class PriceOverrideController {
             @Parameter(description = "Price override ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID overrideId,
             @Valid @RequestBody ApprovePriceOverrideRequest request) {
 
-        String role = "MANAGER";
+        String role = resolveReviewerRole();
 
         PriceOverrideDetail override = priceOverrideService.approveOverride(
                 overrideId,
@@ -107,7 +112,7 @@ public class PriceOverrideController {
             @Parameter(description = "Price override ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID overrideId,
             @Valid @RequestBody RejectPriceOverrideRequest request) {
 
-        String role = "MANAGER";
+        String role = resolveReviewerRole();
 
         PriceOverrideDetail override = priceOverrideService.rejectOverride(
                 overrideId,
@@ -174,5 +179,15 @@ public class PriceOverrideController {
     public ResponseEntity<List<PriceOverrideDetail>> getPendingApprovals() {
         List<PriceOverrideDetail> overrides = priceOverrideService.getPendingApprovals();
         return ResponseEntity.ok(overrides);
+    }
+
+    private String resolveReviewerRole() {
+        Set<String> authorities = SecurityContextHelper.getAuthorities();
+        return authorities.stream()
+                .filter(authority -> authority.startsWith(GatewaySecurityConstants.ROLE_PREFIX))
+                .map(authority -> authority.substring(GatewaySecurityConstants.ROLE_PREFIX.length()))
+                .sorted()
+                .findFirst()
+                .orElse(UNKNOWN_REVIEWER_ROLE);
     }
 }
