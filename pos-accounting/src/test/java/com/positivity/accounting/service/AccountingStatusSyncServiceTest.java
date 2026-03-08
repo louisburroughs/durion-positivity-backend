@@ -41,6 +41,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
+import jakarta.persistence.EntityNotFoundException;
+
 import com.positivity.accounting.internal.dto.AccountingStatusChangedEvent;
 import com.positivity.accounting.internal.dto.AccountingStatusView;
 import com.positivity.accounting.internal.entity.AccountingStatusSyncAudit;
@@ -512,6 +514,148 @@ class AccountingStatusSyncServiceTest {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // getInvoiceAccountingStatusDetail — VIEW_ACCOUNTING_DETAIL authority
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getInvoiceAccountingStatusDetail — VIEW_ACCOUNTING_DETAIL authority required")
+    class GetInvoiceAccountingStatusDetail {
+
+        @Test
+        @DisplayName("returns stale=false when accountingStatusUpdatedAt is within 1 hour")
+        void whenRecentlyUpdated_thenStaleIsFalse() {
+            setDetailViewerSecurityContext();
+            existingStatusView.setAccountingStatusUpdatedAt(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
+
+            AccountingStatusView result = service.getInvoiceAccountingStatusDetail(INVOICE_ID);
+
+            assertThat(result.isStale()).isFalse();
+            assertThat(result.getInvoiceId()).isEqualTo(INVOICE_ID);
+        }
+
+        @Test
+        @DisplayName("throws EntityNotFoundException when invoice not found")
+        void whenInvoiceNotFound_thenEntityNotFoundException() {
+            setDetailViewerSecurityContext();
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getInvoiceAccountingStatusDetail(INVOICE_ID))
+                    .isInstanceOf(EntityNotFoundException.class);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // refreshAccountingStatus — REFRESH_ACCOUNTING_STATUS authority
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("refreshAccountingStatus — REFRESH_ACCOUNTING_STATUS authority required")
+    class RefreshAccountingStatus {
+
+        @Test
+        @DisplayName("returns current status view for a known invoice")
+        void whenInvoiceFound_thenReturnsStatusView() {
+            setRefreshStatusSecurityContext();
+            existingStatusView.setAccountingStatus(AccountingStatus.POSTED);
+            existingStatusView.setAccountingStatusUpdatedAt(Instant.now(TEST_CLOCK).minus(10, ChronoUnit.MINUTES));
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
+
+            AccountingStatusView result = service.refreshAccountingStatus(INVOICE_ID);
+
+            assertThat(result.getAccountingStatus()).isEqualTo(AccountingStatus.POSTED);
+            assertThat(result.isStale()).isFalse();
+            assertThat(result.getInvoiceId()).isEqualTo(INVOICE_ID);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // recoverProcessStatusEvent — IllegalStateException after retry exhaustion
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("recoverProcessStatusEvent — throws IllegalStateException after retry exhaustion")
+    class RecoverProcessStatusEvent {
+
+        @Test
+        @DisplayName("throws IllegalStateException wrapping the original cause")
+        void whenRetryExhausted_thenIllegalStateExceptionWithOriginalCause() {
+            AccountingStatusChangedEvent event = AccountingStatusChangedEvent.builder()
+                    .invoiceId(INVOICE_ID)
+                    .newStatus(AccountingStatus.POSTED)
+                    .timestamp(Instant.now(TEST_CLOCK))
+                    .eventId("evt-recover-001")
+                    .build();
+            RuntimeException cause = new RuntimeException("DB unavailable");
+
+            // Instantiate directly to bypass AOP proxy and invoke @Recover method
+            AccountingStatusSyncServiceImpl impl = new AccountingStatusSyncServiceImpl(
+                    statusViewRepository, idempotencyService, TEST_CLOCK, auditRepository);
+
+            assertThatThrownBy(() -> impl.recoverProcessStatusEvent(cause, event))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("evt-recover-001")
+                    .hasCause(cause);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // processStatusEvent — null timestamp: latencyMs is null in audit record
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("processStatusEvent — null event timestamp: latencyMs is null in audit")
+    class NullTimestampAudit {
+
+        @Test
+        @DisplayName("when event.timestamp is null, audit latencyMs is null")
+        void whenEventTimestampIsNull_thenAuditLatencyMsIsNull() {
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existingStatusView));
+            when(idempotencyService.isKeyProcessed("evt-null-ts-001")).thenReturn(false);
+
+            AccountingStatusChangedEvent event = AccountingStatusChangedEvent.builder()
+                    .invoiceId(INVOICE_ID)
+                    .newStatus(AccountingStatus.ON_HOLD)
+                    .timestamp(null)
+                    .eventId("evt-null-ts-001")
+                    .build();
+
+            service.processStatusEvent(event);
+
+            ArgumentCaptor<AccountingStatusSyncAudit> captor =
+                    ArgumentCaptor.forClass(AccountingStatusSyncAudit.class);
+            verify(auditRepository).save(captor.capture());
+            assertThat(captor.getValue().getLatencyMs()).isNull();
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // processStatusEvent — invoice not found: EntityNotFoundException
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("processStatusEvent — invoice not found: EntityNotFoundException thrown")
+    class ProcessStatusEventInvoiceNotFound {
+
+        @Test
+        @DisplayName("throws EntityNotFoundException when no InvoiceStatusView exists for invoiceId")
+        void whenInvoiceNotFound_thenEntityNotFoundException() {
+            when(statusViewRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.empty());
+            when(idempotencyService.isKeyProcessed("evt-notfound-001")).thenReturn(false);
+
+            AccountingStatusChangedEvent event = AccountingStatusChangedEvent.builder()
+                    .invoiceId(INVOICE_ID)
+                    .newStatus(AccountingStatus.POSTED)
+                    .timestamp(Instant.now(TEST_CLOCK))
+                    .eventId("evt-notfound-001")
+                    .build();
+
+            assertThatThrownBy(() -> service.processStatusEvent(event))
+                    .isInstanceOf(EntityNotFoundException.class);
+        }
+    }
+
     @TestConfiguration(proxyBeanMethods = false)
     @EnableMethodSecurity(prePostEnabled = true)
     @Profile("accounting-status-sync-unit")
@@ -552,13 +696,37 @@ class AccountingStatusSyncServiceTest {
 
     /**
      * Sets up a security context with {@code VIEW_ACCOUNTING_STATUS} authority,
-        * as required by AC3 (permission gating) and AC6 (stale indicator) test scenarios.
+     * as required by AC3 (permission gating) and AC6 (stale indicator) test scenarios.
      */
     private void setViewerSecurityContext() {
         SecurityContext ctx = SecurityContextHolder.createEmptyContext();
         ctx.setAuthentication(new UsernamePasswordAuthenticationToken(
                 "viewer", "password",
                 List.of(new SimpleGrantedAuthority("VIEW_ACCOUNTING_STATUS"))));
+        SecurityContextHolder.setContext(ctx);
+    }
+
+    /**
+     * Sets up a security context with {@code VIEW_ACCOUNTING_DETAIL} authority,
+     * as required by {@code getInvoiceAccountingStatusDetail} permission gate.
+     */
+    private void setDetailViewerSecurityContext() {
+        SecurityContext ctx = SecurityContextHolder.createEmptyContext();
+        ctx.setAuthentication(new UsernamePasswordAuthenticationToken(
+                "detail-viewer", "password",
+                List.of(new SimpleGrantedAuthority("VIEW_ACCOUNTING_DETAIL"))));
+        SecurityContextHolder.setContext(ctx);
+    }
+
+    /**
+     * Sets up a security context with {@code REFRESH_ACCOUNTING_STATUS} authority,
+     * as required by {@code refreshAccountingStatus} permission gate.
+     */
+    private void setRefreshStatusSecurityContext() {
+        SecurityContext ctx = SecurityContextHolder.createEmptyContext();
+        ctx.setAuthentication(new UsernamePasswordAuthenticationToken(
+                "refresher", "password",
+                List.of(new SimpleGrantedAuthority("REFRESH_ACCOUNTING_STATUS"))));
         SecurityContextHolder.setContext(ctx);
     }
 }
