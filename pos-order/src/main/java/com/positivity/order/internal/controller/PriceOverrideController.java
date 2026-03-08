@@ -1,9 +1,15 @@
 package com.positivity.order.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.order.internal.dto.*;
+import com.positivity.order.internal.dto.ApprovePriceOverrideRequest;
+import com.positivity.order.internal.dto.RejectPriceOverrideRequest;
 import com.positivity.order.internal.security.PriceOverridePermissions;
 import com.positivity.order.service.PriceOverrideService;
+import com.positivity.order.service.model.ApplyPriceOverrideRequest;
+import com.positivity.order.service.model.ApproveOverrideCommand;
+import com.positivity.order.service.model.PriceOverrideDetail;
+import com.positivity.order.service.model.PriceOverrideResult;
+import com.positivity.order.service.model.RejectOverrideCommand;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -14,10 +20,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -46,21 +51,19 @@ public class PriceOverrideController {
      * Requires order:price_override:apply permission.
      */
     @Operation(summary = "Apply price override", description = "Apply a price override to an order line. May require approval based on override amount.")
-    @ApiResponse(responseCode = "201", description = "Override created", content = @Content(schema = @Schema(implementation = ApplyPriceOverrideResponse.class)))
+    @ApiResponse(responseCode = "201", description = "Override created", content = @Content(schema = @Schema(implementation = PriceOverrideResult.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @PostMapping
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPLY + "')")
     @EmitEvent(id = "ORDER_PRICE_OVERRIDE_APPLY", apiVersion = "1")
-    public ResponseEntity<ApplyPriceOverrideResponse> applyPriceOverride(
-            @Valid @RequestBody ApplyPriceOverrideRequest request,
-            Authentication authentication) {
+    public ResponseEntity<PriceOverrideResult> applyPriceOverride(
+            @Valid @RequestBody ApplyPriceOverrideRequest request) {
 
-        String userId = authentication.getName();
-        log.info("User {} applying price override for order {}", userId, request.getOrderId());
+        log.info("Applying price override for order {}", request.getOrderId());
 
-        ApplyPriceOverrideResponse response = priceOverrideService.applyPriceOverride(request, userId);
-        return ResponseEntity.status(201).body(response);
+        PriceOverrideResult result = priceOverrideService.applyPriceOverride(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
     /**
@@ -68,25 +71,22 @@ public class PriceOverrideController {
      * Requires order:price_override:approve permission.
      */
     @Operation(summary = "Approve price override", description = "Approve a pending price override. Validates approver permission level.")
-    @ApiResponse(responseCode = "200", description = "Override approved", content = @Content(schema = @Schema(implementation = PriceOverrideView.class)))
+    @ApiResponse(responseCode = "200", description = "Override approved", content = @Content(schema = @Schema(implementation = PriceOverrideDetail.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request or override not in pending state")
     @ApiResponse(responseCode = "403", description = "Insufficient approval permissions")
     @ApiResponse(responseCode = "404", description = "Override not found")
     @PostMapping("/{overrideId}/approve")
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + "')")
     @EmitEvent(id = "ORDER_PRICE_OVERRIDE_APPROVE", apiVersion = "1")
-    public ResponseEntity<PriceOverrideView> approvePriceOverride(
+    public ResponseEntity<PriceOverrideDetail> approvePriceOverride(
             @Parameter(description = "Price override ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID overrideId,
-            @Valid @RequestBody ApprovePriceOverrideRequest request,
-            Authentication authentication) {
+            @Valid @RequestBody ApprovePriceOverrideRequest request) {
 
-        String userId = authentication.getName();
-        String role = extractPrimaryRole(authentication);
+        String role = "MANAGER";
 
-        log.info("User {} ({}) approving price override {}", userId, role, overrideId);
-
-        PriceOverrideView override = priceOverrideService.approvePriceOverrideView(
-                overrideId, request, UUID.fromString(userId), role);
+        PriceOverrideDetail override = priceOverrideService.approveOverride(
+            overrideId,
+            new ApproveOverrideCommand(role, request.getComments()));
 
         return ResponseEntity.ok(override);
     }
@@ -96,25 +96,22 @@ public class PriceOverrideController {
      * Requires order:price_override:reject permission.
      */
     @Operation(summary = "Reject price override", description = "Reject a pending price override with a reason.")
-    @ApiResponse(responseCode = "200", description = "Override rejected", content = @Content(schema = @Schema(implementation = PriceOverrideView.class)))
+    @ApiResponse(responseCode = "200", description = "Override rejected", content = @Content(schema = @Schema(implementation = PriceOverrideDetail.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request or override not in pending state")
     @ApiResponse(responseCode = "403", description = "Insufficient rejection permissions")
     @ApiResponse(responseCode = "404", description = "Override not found")
     @PostMapping("/{overrideId}/reject")
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_REJECT + "')")
     @EmitEvent(id = "ORDER_PRICE_OVERRIDE_REJECT", apiVersion = "1")
-    public ResponseEntity<PriceOverrideView> rejectPriceOverride(
+    public ResponseEntity<PriceOverrideDetail> rejectPriceOverride(
             @Parameter(description = "Price override ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID overrideId,
-            @Valid @RequestBody RejectPriceOverrideRequest request,
-            Authentication authentication) {
+            @Valid @RequestBody RejectPriceOverrideRequest request) {
 
-        String userId = authentication.getName();
-        String role = extractPrimaryRole(authentication);
+        String role = "MANAGER";
 
-        log.info("User {} ({}) rejecting price override {}", userId, role, overrideId);
-
-        PriceOverrideView override = priceOverrideService.rejectPriceOverrideView(
-                overrideId, request, UUID.fromString(userId), role);
+        PriceOverrideDetail override = priceOverrideService.rejectOverride(
+            overrideId,
+            new RejectOverrideCommand(role, request.getReason(), request.getComments()));
 
         return ResponseEntity.ok(override);
     }
@@ -124,13 +121,13 @@ public class PriceOverrideController {
      * Requires order:price_override:view permission.
      */
     @Operation(summary = "Get price override", description = "Retrieve a specific price override by ID.")
-    @ApiResponse(responseCode = "200", description = "Override found", content = @Content(schema = @Schema(implementation = PriceOverrideView.class)))
+    @ApiResponse(responseCode = "200", description = "Override found", content = @Content(schema = @Schema(implementation = PriceOverrideDetail.class)))
     @ApiResponse(responseCode = "404", description = "Override not found")
     @GetMapping("/{overrideId}")
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_VIEW + "')")
-    public ResponseEntity<PriceOverrideView> getOverride(
+    public ResponseEntity<PriceOverrideDetail> getOverride(
             @Parameter(description = "Price override ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID overrideId) {
-        PriceOverrideView override = priceOverrideService.getOverrideViewById(overrideId);
+        PriceOverrideDetail override = priceOverrideService.getOverrideById(overrideId);
         return ResponseEntity.ok(override);
     }
 
@@ -144,20 +141,20 @@ public class PriceOverrideController {
     @GetMapping
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_VIEW + "')")
     @EmitEvent(id = "ORDER_PRICE_OVERRIDE_SEARCH", apiVersion = "1")
-    public ResponseEntity<List<PriceOverrideView>> getOverridesByOrder(
+    public ResponseEntity<List<PriceOverrideDetail>> getOverridesByOrder(
             @Parameter(description = "Order ID filter") @RequestParam(required = false) String orderId,
             @Parameter(description = "Override status filter") @RequestParam(required = false) String status,
             @Parameter(description = "Start date for date range filter") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @Parameter(description = "End date for date range filter") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
 
-        List<PriceOverrideView> overrides;
+        List<PriceOverrideDetail> overrides;
 
         if (orderId != null) {
-            overrides = priceOverrideService.getOverrideViewsByOrderId(UUID.fromString(orderId));
+            overrides = priceOverrideService.getOverridesByOrderId(UUID.fromString(orderId));
         } else if (status != null) {
-            overrides = priceOverrideService.getOverrideViewsByStatus(status);
+            overrides = priceOverrideService.getOverridesByStatus(status);
         } else if (startDate != null && endDate != null) {
-            overrides = priceOverrideService.getOverrideViewsByDateRange(startDate, endDate);
+            overrides = priceOverrideService.getOverridesByDateRange(startDate, endDate);
         } else {
             throw new IllegalArgumentException("At least one filter parameter is required");
         }
@@ -174,19 +171,8 @@ public class PriceOverrideController {
     @GetMapping("/pending")
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + "')")
     @EmitEvent(id = "ORDER_PRICE_OVERRIDE_LIST_PENDING", apiVersion = "1")
-    public ResponseEntity<List<PriceOverrideView>> getPendingApprovals() {
-        List<PriceOverrideView> overrides = priceOverrideService.getPendingApprovalViews();
+    public ResponseEntity<List<PriceOverrideDetail>> getPendingApprovals() {
+        List<PriceOverrideDetail> overrides = priceOverrideService.getPendingApprovals();
         return ResponseEntity.ok(overrides);
-    }
-
-    /**
-     * Extract the primary role from authentication.
-     */
-    private String extractPrimaryRole(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .filter(auth -> auth.startsWith("ROLE_"))
-                .findFirst()
-                .orElse("UNKNOWN");
     }
 }

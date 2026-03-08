@@ -51,4 +51,6 @@ public interface PriceOverrideRepository extends JpaRepository<PriceOverride, UU
      * Find overrides approved by a specific manager.
      */
     List<PriceOverride> findByApprovedByUserId(UUID userId);
+
+    Optional<PriceOverride> findByIdempotencyKey(String idempotencyKey);
 }

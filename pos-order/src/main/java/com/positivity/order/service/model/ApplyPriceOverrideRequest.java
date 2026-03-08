@@ -1,19 +1,15 @@
-package com.positivity.order.internal.dto;
+package com.positivity.order.service.model;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
 import java.math.BigDecimal;
+import lombok.Data;
 
 /**
  * Request DTO for applying a price override.
- *
- * @deprecated Use {@link com.positivity.order.service.model.ApplyPriceOverrideRequest} instead.
  */
-@Deprecated(since = "2026-03")
 @Data
 public class ApplyPriceOverrideRequest {
 

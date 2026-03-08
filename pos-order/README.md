@@ -27,7 +27,7 @@ The service implements role-based access control with the following permissions:
 
 **Automatic Approval Thresholds:**
 - Discount percentage ≤ 10%
-- Discount amount ≤ $100
+- Discount amount ≤ $50
 
 **Validation Rules:**
 - Override price cannot exceed original price
