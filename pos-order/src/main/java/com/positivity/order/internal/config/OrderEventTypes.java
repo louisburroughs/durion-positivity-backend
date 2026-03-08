@@ -52,6 +52,16 @@ public final class OrderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        public static final EventTypeRegistration ORDER_CART_CANCEL_REQUEST = EventTypeRegistration
+                        .write("ORDER_CART_CANCEL_REQUEST", "Cancellation requested for a cart order")
+                        .apiVersion("1")
+                        .build();
+
+        public static final EventTypeRegistration ORDER_CART_CANCEL_RETRY = EventTypeRegistration
+                        .write("ORDER_CART_CANCEL_RETRY", "Retry of a failed cancellation billing step")
+                        .apiVersion("1")
+                        .build();
+
         // ==================== ALL EVENT TYPES ====================
 
         /** All event types for registration at startup */
@@ -61,6 +71,8 @@ public final class OrderEventTypes {
                         ORDER_PRICE_OVERRIDE_REJECT,
                         ORDER_PRICE_OVERRIDE_SEARCH,
                         ORDER_PRICE_OVERRIDE_LIST_PENDING,
+                        ORDER_CART_CANCEL_REQUEST,
+                        ORDER_CART_CANCEL_RETRY,
                         EventTypeRegistration.write("ORDER_CART_CREATE", "Sales order cart created").build(),
                         EventTypeRegistration.write("ORDER_CART_ITEM_ADD", "Item added to sales order cart").build(),
                         EventTypeRegistration.write("ORDER_CART_ITEM_UPDATE", "Sales order cart item quantity updated")
