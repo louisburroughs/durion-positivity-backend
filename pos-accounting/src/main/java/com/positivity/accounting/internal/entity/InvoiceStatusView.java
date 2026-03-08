@@ -16,6 +16,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 /**
  * Entity representing the current payment status of an invoice.
  * This is a denormalized view for quick status lookups.
@@ -54,6 +55,21 @@ public class InvoiceStatusView {
 
     @Column
     private String latestTransactionReference;
+
+    @Column(nullable = true)
+    private Long totalAmountMinor;
+
+    @Column(nullable = true)
+    private Long outstandingAmountMinor;
+
+    @Column(nullable = true)
+    private Long paidAmountMinor;
+
+    @Column(nullable = false)
+    private boolean postingError;
+
+    @Column(nullable = true)
+    private String latestIdempotencyKey;
 
     public InvoiceStatusView(UUID invoiceId, PaymentStatus currentStatus,
             BigDecimal totalPaid, BigDecimal invoiceTotal) {

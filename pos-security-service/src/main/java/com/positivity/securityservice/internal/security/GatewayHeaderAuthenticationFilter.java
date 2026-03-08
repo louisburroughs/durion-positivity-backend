@@ -23,23 +23,20 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String HEADER_AUTHORITIES = "X-Authorities";
     private static final String HEADER_USER = "X-User";
-    private static final String HEADER_USER_ID = "X-User-Id";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String authoritiesHeader = request.getHeader(HEADER_AUTHORITIES);
         String userHeader = request.getHeader(HEADER_USER);
-        String userIdHeader = request.getHeader(HEADER_USER_ID);
 
         if (authoritiesHeader != null && !authoritiesHeader.isBlank()) {
             List<SimpleGrantedAuthority> authorities = parseAuthorities(authoritiesHeader);
             String username = userHeader != null && !userHeader.isBlank() ? userHeader : "gateway-user";
-            String userId = userIdHeader != null && !userIdHeader.isBlank() ? userIdHeader : username;
 
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     username, null, authorities);
-            authentication.setDetails(Map.of("userId", userId, "username", username));
+            authentication.setDetails(Map.of("username", username));
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 

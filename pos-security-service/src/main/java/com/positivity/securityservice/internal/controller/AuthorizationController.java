@@ -2,6 +2,10 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.securityservice.internal.dto.AuthorizationDecisionResponse;
 import com.positivity.securityservice.service.AuthorizationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,26 +22,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/users")
 @RequiredArgsConstructor
+@Tag(name = "Authorization", description = "Authorization decision endpoints for principal permissions")
 public class AuthorizationController {
 
     private final AuthorizationService authorizationService;
 
     @GetMapping("/authorization/decision")
     @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Get authorization decision", description = "Returns allow or deny for a principal and permission key")
+    @ApiResponse(responseCode = "200", description = "Authorization decision returned")
+    @ApiResponse(responseCode = "403", description = "Forbidden: admin role required")
     public ResponseEntity<AuthorizationDecisionResponse> getDecision(
-            @RequestParam String principalId,
-            @RequestParam(name = "permission") String permission) {
+            @Parameter(description = "Principal identifier to evaluate", example = "userA") @RequestParam String principalId,
+            @Parameter(description = "Permission key to evaluate", example = "pricing:msrp:edit") @RequestParam(name = "permission") String permission) {
         var decision = authorizationService.authorize(principalId, permission);
         return ResponseEntity.ok(new AuthorizationDecisionResponse(decision.name().toLowerCase()));
     }
 
-    /** this is redundant */
-    @GetMapping("/authorize")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<AuthorizationDecisionResponse> authorize(
-            @RequestParam String principalId,
-            @RequestParam String permissionKey) {
-        var decision = authorizationService.authorize(principalId, permissionKey);
-        return ResponseEntity.ok(new AuthorizationDecisionResponse(decision.name().toLowerCase()));
-    }
 }

@@ -68,8 +68,11 @@ public class UserController {
             return ResponseEntity.status(401)
                     .body(Map.of("code", "INVALID_CREDENTIALS", "message", "Invalid credentials"));
         }
+        if (user.getId() == null) {
+            throw new IllegalStateException("User exists but id is missing for username: " + username);
+        }
         Set<String> roles = user.getRoles();
-        String token = jwtService.generateToken(username, roles);
+        String token = jwtService.generateToken(username, user.getId(), roles);
         return ResponseEntity.ok(Map.of("token", token));
     }
 

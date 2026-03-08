@@ -6,13 +6,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * Response DTO for single JWT token generation.
  * 
- * Returned by POST /v1/auth/login endpoint.
+ * Returned by POST /v1/auth/internal/token endpoint.
  * Implements BACKEND_CONTRACT_GUIDE.md requirements:
  * - camelCase field naming
  * - Compact JWT string as response
  * 
  * @since 1.0
- * @see com.positivity.securityservice.internal.controller.JwtController#generateToken
+ * @see com.positivity.securityservice.internal.controller.JwtController#issueInternalToken
  */
 @Schema(description = "Response containing a JWT access token")
 public record TokenResponse(

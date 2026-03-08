@@ -1,6 +1,7 @@
 package com.positivity.securityservice.service;
 
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Service for handling JWT token operations such as generation, validation,
@@ -26,8 +27,8 @@ public interface JwtService {
     public static final String ROLES = "roles";
     /** Claim key for expanded authorities in the JWT. */
     public static final String AUTHORITIES = "authorities";
-    /** Claim key for stable person identifier used by audit lineage. */
-    public static final String PERSON_ID = "personId";
+    /** Claim key for stable user identifier used by audit lineage. */
+    public static final String USER_ID = "userId";
     /** Claim key for JWT ID (unique identifier for revocation). */
     public static final String JTI = "jti";
 
@@ -42,16 +43,13 @@ public interface JwtService {
      * - Revocation: Token stored in Redis with 1-hour TTL
      * 
      * @param username the subject for the token
+     * @param userId   stable user identifier for audit lineage
      * @param roles    the set of roles to include in the token
      * @return the generated JWT token string
      * 
-     * @throws IllegalArgumentException if username or roles are invalid
+     * @throws IllegalArgumentException if username, userId, or roles are invalid
      */
-    default String generateToken(String username, Set<String> roles) {
-        return generateToken(username, username, roles);
-    }
-
-    String generateToken(String username, String personId, Set<String> roles);
+    String generateToken(String username, UUID userId, Set<String> roles);
 
     /**
      * Validates the given JWT token by checking:
@@ -82,12 +80,12 @@ public interface JwtService {
     String getUsernameFromToken(String token);
 
     /**
-     * Extracts the stable person identifier from the given JWT token.
+     * Extracts the stable user identifier from the given JWT token.
      *
      * @param token the JWT token string
-     * @return the person identifier claim, or subject when claim is absent
+     * @return stable user identifier claim
      */
-    String getPersonIdFromToken(String token);
+    UUID getUserIdFromToken(String token);
 
     /**
      * Extracts the set of roles from the given JWT token.
@@ -151,16 +149,13 @@ public interface JwtService {
      * - Each token has separate JTI (not shared)
      * 
      * @param username the subject for the tokens
+     * @param userId   stable user identifier for audit lineage
      * @param roles    the set of roles to include in the access token
      * @return a TokenPair containing the access and refresh tokens
      * 
-     * @throws IllegalArgumentException if username or roles are invalid
+     * @throws IllegalArgumentException if username, userId, or roles are invalid
      */
-    default TokenPair generateTokenPair(String username, Set<String> roles) {
-        return generateTokenPair(username, username, roles);
-    }
-
-    TokenPair generateTokenPair(String username, String personId, Set<String> roles);
+    TokenPair generateTokenPair(String username, UUID userId, Set<String> roles);
 
     /**
      * Validates the given refresh token by checking:

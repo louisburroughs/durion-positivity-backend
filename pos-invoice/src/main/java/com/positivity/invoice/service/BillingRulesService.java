@@ -48,5 +48,5 @@ public interface BillingRulesService {
      * @return the current user ID or a default value if not authenticated
      */
     @NonNull
-    String getCurrentUserId();
+    String getCurrentUsername();
 }

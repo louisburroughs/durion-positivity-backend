@@ -117,6 +117,7 @@ public class UserServiceImpl implements UserService {
 
     private UserAuthContext toAuthContext(User user) {
         return UserAuthContext.builder()
+                .id(user.getId())
                 .username(user.getUsername())
                 .passwordHash(user.getPassword())
                 .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))

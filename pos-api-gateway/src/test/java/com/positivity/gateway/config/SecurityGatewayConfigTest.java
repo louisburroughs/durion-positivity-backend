@@ -48,9 +48,9 @@ class SecurityGatewayConfigTest {
         assertThat(Arrays.asList(downstreamHeaders.get().getFirst("X-Authorities").split(",")))
                 .containsExactlyInAnyOrder("people:person:view", "people:person:create");
         assertThat(downstreamHeaders.get().getFirst("X-User")).isEqualTo("alice");
-        assertThat(downstreamHeaders.get().getFirst("X-User-Id")).isEqualTo("person-123");
+        assertThat(downstreamHeaders.get().getFirst("X-User-Id")).isNull();
 
-        assertThat(securityCalls).hasSize(4);
+        assertThat(securityCalls).hasSize(3);
         assertThat(securityCalls)
                 .allMatch(call -> "Bearer test-token".equals(call.headers().getFirst(HttpHeaders.AUTHORIZATION)));
     }
@@ -83,9 +83,6 @@ class SecurityGatewayConfigTest {
             }
             if ("/v1/auth/subject".equals(path)) {
                 return Mono.just(textResponse("alice"));
-            }
-            if ("/v1/auth/person-id".equals(path)) {
-                return Mono.just(textResponse("person-123"));
             }
             return Mono.just(ClientResponse.create(HttpStatus.NOT_FOUND).build());
         };

@@ -22,8 +22,8 @@ public final class SecurityEventTypes {
         public static List<EventTypeRegistration> all() {
                 return List.of(
                                 // JwtController - 4 events
-                                EventTypeRegistration.write("SECURITY_AUTH_LOGIN",
-                                                "Authenticate user and issue JWT token").build(),
+                                EventTypeRegistration.write("SECURITY_AUTH_INTERNAL_TOKEN_ISSUE",
+                                                "Issue JWT token for internal trusted caller").build(),
                                 EventTypeRegistration.write("SECURITY_AUTH_TOKEN_PAIR",
                                                 "Generate access and refresh token pair").build(),
                                 EventTypeRegistration.write("SECURITY_AUTH_REFRESH",

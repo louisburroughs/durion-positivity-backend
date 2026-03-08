@@ -185,5 +185,5 @@ See [pos-api-gateway/README.md](pos-api-gateway/README.md) for gateway authentic
 - Injected headers:
   - X-Authorities: canonical authority list for service-level `@PreAuthorize` checks
   - X-User: authenticated subject
-  - X-User-Id: stable user/person identifier when available
+  - userId is read from JWT `userId` claim (not forwarded as a separate header)
 - JWT issuer and role/permission authority: `pos-security-service` (see [ADR-0011](../durion/docs/adr/0011-api-gateway-security-architecture.adr.md))

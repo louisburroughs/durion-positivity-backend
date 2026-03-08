@@ -22,5 +22,10 @@ public enum PaymentStatus {
     /**
      * Payment attempt failed
      */
-    FAILED
+    FAILED,
+
+    /**
+     * Payment was reversed due to chargeback
+     */
+    CHARGEBACK
 }

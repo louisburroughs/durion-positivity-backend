@@ -58,7 +58,6 @@ public class SiteDefaultsClient {
         copyHeaderIfPresent(request, headers, HttpHeaders.AUTHORIZATION);
         copyHeaderIfPresent(request, headers, GatewaySecurityConstants.HEADER_TOKEN);
         copyHeaderIfPresent(request, headers, GatewaySecurityConstants.HEADER_USER);
-        copyHeaderIfPresent(request, headers, GatewaySecurityConstants.HEADER_USER_ID);
         copyHeaderIfPresent(request, headers, GatewaySecurityConstants.HEADER_AUTHORITIES);
     }
 
