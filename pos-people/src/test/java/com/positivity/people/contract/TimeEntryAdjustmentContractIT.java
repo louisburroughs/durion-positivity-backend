@@ -9,6 +9,7 @@ import com.positivity.people.BaseContractIntegrationTest;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
+import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +22,9 @@ class TimeEntryAdjustmentContractIT extends BaseContractIntegrationTest {
 
 	@Autowired
 	private TimeEntryRepository timeEntryRepository;
+
+	@Autowired
+	private PersonRepository personRepository;
 
 	@Test
 	@DisplayName("CP-120-010: create adjustment returns 201")
@@ -76,8 +80,16 @@ class TimeEntryAdjustmentContractIT extends BaseContractIntegrationTest {
 	}
 
 	private UUID seedPendingApprovalTimeEntry() {
+		UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		Person person = personRepository.findById(personId).orElseGet(() -> personRepository.save(Person.builder()
+				.id(personId)
+				.firstName("Contract")
+				.lastName("User")
+				.primaryEmail("contract-user@example.com")
+				.build()));
+
 		TimeEntry timeEntry = new TimeEntry();
-		timeEntry.setPerson(Person.builder().id(UUID.fromString("00000000-0000-0000-0000-000000000001")).build());
+		timeEntry.setPerson(person);
 		timeEntry.setTimesheetId("timesheet-1");
 		timeEntry.setStatus(TimeEntryStatus.PENDING_APPROVAL);
 		return timeEntryRepository.save(timeEntry).getTimeEntryId();

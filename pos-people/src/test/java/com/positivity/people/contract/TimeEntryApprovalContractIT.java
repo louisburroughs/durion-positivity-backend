@@ -7,6 +7,7 @@ import com.positivity.people.BaseContractIntegrationTest;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
+import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +20,9 @@ class TimeEntryApprovalContractIT extends BaseContractIntegrationTest {
 
 	@Autowired
 	private TimeEntryRepository timeEntryRepository;
+
+	@Autowired
+	private PersonRepository personRepository;
 
 	@Test
 	@DisplayName("CP-120-020: batch approve returns 200")
@@ -94,8 +98,16 @@ class TimeEntryApprovalContractIT extends BaseContractIntegrationTest {
 	}
 
 	private UUID seedSubmittedTimeEntry() {
+		UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+		Person person = personRepository.findById(personId).orElseGet(() -> personRepository.save(Person.builder()
+				.id(personId)
+				.firstName("Contract")
+				.lastName("Approver")
+				.primaryEmail("contract-approver@example.com")
+				.build()));
+
 		TimeEntry timeEntry = new TimeEntry();
-		timeEntry.setPerson(Person.builder().id(UUID.fromString("00000000-0000-0000-0000-000000000001")).build());
+		timeEntry.setPerson(person);
 		timeEntry.setTimesheetId("timesheet-2");
 		timeEntry.setStatus(TimeEntryStatus.SUBMITTED);
 		return timeEntryRepository.save(timeEntry).getTimeEntryId();

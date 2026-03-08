@@ -189,7 +189,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 		seedTechnician(technicianId, "Jane", "Doe");
 
 		TimeEntry approved = new TimeEntry();
-		approved.setPerson(Person.builder().id(technicianId).build());
+		approved.setPerson(personRepository.findById(technicianId)
+				.orElseThrow(() -> new IllegalStateException("Technician not found for seeded approved export")));
 		approved.setLocationId(locationId);
 		approved.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.APPROVED);
 		approved.setAttendanceStartAt(Instant.parse("2026-02-16T08:00:00Z"));
@@ -240,12 +241,15 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("dependency failure: approved time export propagates 503")
 	void approvedTimeExport_dependencyFailure() throws Exception {
+		seedTechnician(technicianId, "Jane", "Doe");
+
 		when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
 		when(locationReferenceClient.getLocationName(locationId))
 				.thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to fetch location"));
 
 		TimeEntry approved = new TimeEntry();
-		approved.setPerson(Person.builder().id(technicianId).build());
+		approved.setPerson(personRepository.findById(technicianId)
+				.orElseThrow(() -> new IllegalStateException("Technician not found for dependency failure export")));
 		approved.setLocationId(locationId);
 		approved.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.APPROVED);
 		approved.setAttendanceStartAt(Instant.parse("2026-02-16T08:00:00Z"));
@@ -516,7 +520,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 	private void seedAttendance(UUID technicianId, UUID locationId, Instant attendanceStartAt,
 			Instant attendanceEndAt) {
 		TimeEntry entry = new TimeEntry();
-		entry.setPerson(Person.builder().id(technicianId).build());
+		entry.setPerson(personRepository.findById(technicianId)
+				.orElseThrow(() -> new IllegalStateException("Technician must be seeded before attendance")));
 		entry.setLocationId(locationId);
 		entry.setAttendanceStartAt(attendanceStartAt);
 		entry.setAttendanceEndAt(attendanceEndAt);

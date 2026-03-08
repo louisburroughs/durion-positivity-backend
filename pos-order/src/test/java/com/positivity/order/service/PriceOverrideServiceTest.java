@@ -161,6 +161,46 @@ class PriceOverrideServiceTest {
         }
 
         @Test
+        void testApplyPriceOverride_AutoApproved_MissingOrderLine_ThrowsException() {
+                ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
+                request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+                request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000099").toString());
+                request.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000011").toString());
+                request.setOriginalPrice(BigDecimal.valueOf(100.00));
+                request.setOverridePrice(BigDecimal.valueOf(95.00));
+                request.setReasonCode("CUSTOMER_LOYALTY");
+                request.setJustification("Loyal customer discount");
+
+                assertThatThrownBy(() -> priceOverrideService.applyPriceOverride(request))
+                                .isInstanceOf(InvalidPriceOverrideException.class)
+                                .hasMessageContaining("Order line not found");
+
+                List<OrderPriceOverrideApplied> events = applicationEvents.stream(OrderPriceOverrideApplied.class)
+                                .toList();
+                assertThat(events).isEmpty();
+        }
+
+        @Test
+        void testApplyPriceOverride_AutoApproved_MissingOrder_ThrowsException() {
+                ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
+                request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000099").toString());
+                request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000009").toString());
+                request.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000011").toString());
+                request.setOriginalPrice(BigDecimal.valueOf(100.00));
+                request.setOverridePrice(BigDecimal.valueOf(95.00));
+                request.setReasonCode("CUSTOMER_LOYALTY");
+                request.setJustification("Loyal customer discount");
+
+                assertThatThrownBy(() -> priceOverrideService.applyPriceOverride(request))
+                                .isInstanceOf(InvalidPriceOverrideException.class)
+                                .hasMessageContaining("Order not found");
+
+                List<OrderPriceOverrideApplied> events = applicationEvents.stream(OrderPriceOverrideApplied.class)
+                                .toList();
+                assertThat(events).isEmpty();
+        }
+
+        @Test
         void testApprovePriceOverride_Success() {
                 // Given: Pending override
                 PriceOverride override = createPendingOverride();
