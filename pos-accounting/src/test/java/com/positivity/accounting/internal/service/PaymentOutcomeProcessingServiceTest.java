@@ -1,4 +1,4 @@
-package com.positivity.accounting.service;
+package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,6 +41,7 @@ import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.ReconciliationRecordRepository;
 import com.positivity.accounting.internal.service.PaymentOutcomeProcessingServiceImpl;
+import com.positivity.accounting.service.OutboxService;
 
 /**
  * Unit tests for PaymentOutcomeProcessingService.

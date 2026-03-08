@@ -16,6 +16,8 @@ import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
 
+import jakarta.validation.ConstraintViolationException;
+
 /**
  * Global exception handler for AP Payment operations.
  * 
@@ -76,6 +78,22 @@ public class APPaymentExceptionHandler {
         ErrorResponse body = ErrorResponse.builder()
                 .errorCode("VALIDATION_ERROR")
                 .message(ex.getMessage())
+                .timestamp(Instant.now(clock).toEpochMilli())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
+        String message = ex.getConstraintViolations().stream()
+                .findFirst()
+                .map(violation -> violation.getMessage())
+                .orElse("Validation failed");
+
+        log.warn("Validation error: {}", message);
+        ErrorResponse body = ErrorResponse.builder()
+                .errorCode("VALIDATION_ERROR")
+                .message(message)
                 .timestamp(Instant.now(clock).toEpochMilli())
                 .build();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);

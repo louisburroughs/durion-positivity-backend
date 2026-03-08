@@ -25,7 +25,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Stub implementation for payment outcome processing workflows.
+ * Processes invoice payment outcomes by dispatching behavior per outcome type,
+ * enforcing idempotency guards, and persisting asynchronous posting intents
+ * through
+ * the outbox. Also handles posting retry exhaustion by flagging invoice posting
+ * failure state, recording reconciliation data, and emitting escalation events.
  */
 @Service
 public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProcessingService {
@@ -55,10 +59,9 @@ public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProces
     @Override
     @Transactional
     public PaymentOutcomeResponse processPaymentOutcome(@NonNull PaymentOutcomeRequest request) {
-        assertDependenciesPresent();
-
         InvoiceStatusView view = statusViewRepository.findByInvoiceId(request.getInvoiceId())
-                .orElseThrow(() -> new EntityNotFoundException("Invoice status view not found: " + request.getInvoiceId()));
+                .orElseThrow(
+                        () -> new EntityNotFoundException("Invoice status view not found: " + request.getInvoiceId()));
 
         if (request.getTransactionId() != null
                 && request.getTransactionId().equals(view.getLatestTransactionReference())) {
@@ -119,7 +122,8 @@ public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProces
                     "Invoice",
                     request.getInvoiceId(),
                     "InvoicePaymentRecorded",
-                    new InvoicePaymentRecorded(request.getInvoiceId(), request.getTransactionId(), request.getAmountMinor()));
+                    new InvoicePaymentRecorded(request.getInvoiceId(), request.getTransactionId(),
+                            request.getAmountMinor()));
         } else if (outcomeType == PaymentOutcomeType.CHARGEBACK) {
             view.setCurrentStatus(PaymentStatus.CHARGEBACK);
             view.setLatestTransactionReference(request.getTransactionId());
@@ -156,7 +160,8 @@ public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProces
                     "Invoice",
                     request.getInvoiceId(),
                     "InvoicePaymentRecorded",
-                    new InvoicePaymentRecorded(request.getInvoiceId(), request.getTransactionId(), request.getAmountMinor()));
+                    new InvoicePaymentRecorded(request.getInvoiceId(), request.getTransactionId(),
+                            request.getAmountMinor()));
         }
 
         return PaymentOutcomeResponse.builder()
@@ -171,8 +176,6 @@ public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProces
     @Override
     @Transactional
     public void handlePostingRetryExhausted(@NonNull UUID invoiceId, @NonNull String transactionId, int retryCount) {
-        assertDependenciesPresent();
-
         InvoiceStatusView view = statusViewRepository.findByInvoiceId(invoiceId)
                 .orElseThrow(() -> new EntityNotFoundException("Invoice status view not found: " + invoiceId));
 
@@ -185,16 +188,5 @@ public class PaymentOutcomeProcessingServiceImpl implements PaymentOutcomeProces
         reconciliationRecordRepository.save(rec);
 
         eventPublisher.publishEvent(new InvoicePostingFailed(invoiceId, transactionId, retryCount));
-    }
-
-    private void assertDependenciesPresent() {
-        if (statusViewRepository == null
-                || customerCreditRepository == null
-                || reconciliationRecordRepository == null
-                || outboxService == null
-                || eventPublisher == null
-                || clock == null) {
-            throw new IllegalStateException("Required dependencies are not initialized");
-        }
     }
 }
