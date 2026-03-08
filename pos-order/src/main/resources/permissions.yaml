@@ -18,6 +18,8 @@ permissions:
     description: "Edit order lines"
   - name: "order:line:delete"
     description: "Remove order lines"
+  - name: "order:line:enter_manual_price"
+    description: "Allows a POS clerk to manually enter a price for an order line when the pricing service is unavailable"
   - name: "order:price_override:view"
     description: "View price override history and reports"
   - name: "order:price_override:apply"
