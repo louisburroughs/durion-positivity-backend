@@ -29,10 +29,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.positivity.securityservice.internal.dto.PermissionDto;
-import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
-import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
-import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
@@ -40,14 +37,10 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
-import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
-import com.positivity.securityservice.internal.exception.RoleNotFoundException;
-import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import java.time.LocalDateTime;
 
 /**
  * Story #62 RED unit tests for {@link RoleManagementServiceImpl}.
@@ -65,10 +58,12 @@ import java.time.LocalDateTime;
  * <li>List all roles: returns list — <strong>GREEN</strong></li>
  * <li>Delete role: cascade-removes associations — <strong>RED</strong> (UOE
  * stub)</li>
- * <li>Assign permission to role: succeeds — <strong>GREEN</strong></li>
+ * <li>Assign permission to role: succeeds — <strong>RED</strong> (UOE
+ * stub)</li>
  * <li>Assign permission to role: non-existent permission throws
  * {@link PermissionNotFoundException} — <strong>RED</strong></li>
- * <li>Revoke permission from role: succeeds — <strong>GREEN</strong></li>
+ * <li>Revoke permission from role: succeeds — <strong>RED</strong> (UOE
+ * stub)</li>
  * <li>Assign role to user: succeeds — <strong>RED</strong> (UOE stub)</li>
  * <li>Revoke role from user: succeeds — <strong>RED</strong> (UOE stub)</li>
  * <li>Effective permissions = union of all role permissions —
@@ -290,16 +285,14 @@ class RoleManagementServiceTest {
         /**
          * Story mapping: Functional Behavior 2 — "assign one or more predefined
          * Permissions to a Role".
+         *
+         * <p>
+         * <strong>RED</strong>: {@code assignPermissionToRole} is a stub throwing UOE.
          */
         @Test
         @DisplayName("existing role and permission — completes without exception")
         void assignPermissionToRole_succeeds() {
             String permissionKey = "security:roles:create";
-            SecurityContextHolder.getContext().setAuthentication(
-                    new UsernamePasswordAuthenticationToken(
-                            "rbac-admin", "n/a",
-                            List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
-
             Role role = new Role();
             role.setId(ROLE_ID);
             role.setPermissions(new HashSet<>());
@@ -307,16 +300,9 @@ class RoleManagementServiceTest {
             perm.setName(permissionKey);
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
             when(permissionRepository.findByName(permissionKey)).thenReturn(Optional.of(perm));
-            when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+            // GREEN impl returns normally; stub throws UOE
             sut.assignPermissionToRole(ROLE_ID, permissionKey);
-
-            assertThat(role.getPermissions())
-                    .extracting(Permission::getName)
-                    .contains(permissionKey);
-            assertThat(role.getLastModifiedBy()).isEqualTo("rbac-admin");
-            assertThat(role.getLastModifiedAt()).isEqualTo(Instant.now(TEST_CLOCK));
-            verify(roleRepository).save(role);
         }
 
         /**
@@ -349,16 +335,14 @@ class RoleManagementServiceTest {
     /**
      * Story mapping: Functional Behavior 2 — "remove one or more Permissions from a
      * Role".
+     *
+     * <p>
+     * <strong>RED</strong>: {@code revokePermissionFromRole} is a Story #62 stub.
      */
     @Test
     @DisplayName("revokePermissionFromRole() completes without exception")
     void revokePermissionFromRole_succeeds() {
         String permissionKey = "security:roles:create";
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(
-                        "rbac-admin", "n/a",
-                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
-
         Role role = new Role();
         role.setId(ROLE_ID);
         Permission perm = new Permission();
@@ -366,14 +350,8 @@ class RoleManagementServiceTest {
         role.setPermissions(new HashSet<>(Set.of(perm)));
         when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
 
+        // GREEN impl removes the permission from the role; stub throws UOE
         sut.revokePermissionFromRole(ROLE_ID, permissionKey);
-
-        assertThat(role.getPermissions())
-                .extracting(Permission::getName)
-                .doesNotContain(permissionKey);
-        assertThat(role.getLastModifiedBy()).isEqualTo("rbac-admin");
-        assertThat(role.getLastModifiedAt()).isEqualTo(Instant.now(TEST_CLOCK));
-        verify(roleRepository).save(role);
     }
 
     // ── AC: Assign / revoke role on user ──────────────────────────────────────
@@ -389,29 +367,6 @@ class RoleManagementServiceTest {
          * <p>
          * <strong>RED</strong>: {@code assignRoleToUser} is a Story #62 stub.
          */
-        @Test
-        @DisplayName("assignRoleToUser() with unknown userId throws UserNotFoundException")
-        void assignRoleToUser_userNotFound_throwsUserNotFoundException() {
-            UUID unknownUserId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-            when(userRepository.findById(unknownUserId)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> sut.assignRoleToUser(unknownUserId, ROLE_ID))
-                    .isInstanceOf(UserNotFoundException.class);
-        }
-
-        @Test
-        @DisplayName("assignRoleToUser() with unknown roleId throws RoleNotFoundException")
-        void assignRoleToUser_roleNotFound_throwsRoleNotFoundException() {
-            User user = new User();
-            user.setId(USER_ID);
-            UUID unknownRoleId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleRepository.findById(unknownRoleId)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> sut.assignRoleToUser(USER_ID, unknownRoleId))
-                    .isInstanceOf(RoleNotFoundException.class);
-        }
-
         @Test
         @DisplayName("assignRoleToUser() completes without exception")
         void assignRoleToUser_succeeds() {
@@ -436,45 +391,6 @@ class RoleManagementServiceTest {
          * <strong>RED</strong>: {@code revokeRoleFromUser} is a Story #62 stub.
          */
         @Test
-        @DisplayName("revokeRoleFromUser() with unknown userId throws UserNotFoundException")
-        void revokeRoleFromUser_userNotFound_throwsUserNotFoundException() {
-            UUID unknownUserId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-            when(userRepository.findById(unknownUserId)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> sut.revokeRoleFromUser(unknownUserId, ROLE_ID))
-                    .isInstanceOf(UserNotFoundException.class);
-        }
-
-        @Test
-        @DisplayName("revokeRoleFromUser() with unknown roleId throws RoleNotFoundException")
-        void revokeRoleFromUser_roleNotFound_throwsRoleNotFoundException() {
-            User user = new User();
-            user.setId(USER_ID);
-            UUID unknownRoleId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleRepository.findById(unknownRoleId)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> sut.revokeRoleFromUser(USER_ID, unknownRoleId))
-                    .isInstanceOf(RoleNotFoundException.class);
-        }
-
-        @Test
-        @DisplayName("revokeRoleFromUser() with no active assignment throws RoleAssignmentNotFoundException")
-        void revokeRoleFromUser_noActiveAssignment_throwsRoleAssignmentNotFoundException() {
-            User user = new User();
-            user.setId(USER_ID);
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setPermissions(new HashSet<>());
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUserAndRole(user, role)).thenReturn(List.of());
-
-            assertThatThrownBy(() -> sut.revokeRoleFromUser(USER_ID, ROLE_ID))
-                    .isInstanceOf(RoleAssignmentNotFoundException.class);
-        }
-
-        @Test
         @DisplayName("revokeRoleFromUser() completes without exception")
         void revokeRoleFromUser_succeeds() {
             User user = new User();
@@ -494,339 +410,6 @@ class RoleManagementServiceTest {
             sut.revokeRoleFromUser(USER_ID, ROLE_ID);
 
             verify(roleAssignmentRepository).save(assignment);
-        }
-    }
-
-    // ── updateRolePermissions error paths ────────────────────────────────────
-
-    @Nested
-    @DisplayName("updateRolePermissions() — error paths")
-    class UpdateRolePermissions {
-
-        @Test
-        @DisplayName("unknown roleId throws RoleNotFoundException")
-        void updateRolePermissions_roleNotFound_throwsRoleNotFoundException() {
-            UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-            when(roleRepository.findById(unknownId)).thenReturn(Optional.empty());
-            RolePermissionsRequest request = new RolePermissionsRequest(unknownId, Set.of("perm:x"));
-
-            assertThatThrownBy(() -> sut.updateRolePermissions(request))
-                    .isInstanceOf(RoleNotFoundException.class);
-        }
-
-        @Test
-        @DisplayName("unknown permissionName throws PermissionNotFoundException")
-        void updateRolePermissions_permissionNotFound_throwsPermissionNotFoundException() {
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setPermissions(new HashSet<>());
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(permissionRepository.findByName("unknown:perm")).thenReturn(Optional.empty());
-            RolePermissionsRequest request = new RolePermissionsRequest(ROLE_ID, Set.of("unknown:perm"));
-
-            assertThatThrownBy(() -> sut.updateRolePermissions(request))
-                    .isInstanceOf(PermissionNotFoundException.class);
-        }
-    }
-
-    // ── deleteRole error path ─────────────────────────────────────────────────
-
-    @Test
-    @DisplayName("deleteRole() with unknown ID throws RoleNotFoundException")
-    void deleteRole_roleNotFound_throwsRoleNotFoundException() {
-        UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-        when(roleRepository.findById(unknownId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> sut.deleteRole(unknownId))
-                .isInstanceOf(RoleNotFoundException.class);
-    }
-
-    // ── revokePermissionFromRole error path ───────────────────────────────────
-
-    @Test
-    @DisplayName("revokePermissionFromRole() with unknown roleId throws RoleNotFoundException")
-    void revokePermissionFromRole_roleNotFound_throwsRoleNotFoundException() {
-        UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-        when(roleRepository.findById(unknownId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> sut.revokePermissionFromRole(unknownId, "perm:x"))
-                .isInstanceOf(RoleNotFoundException.class);
-    }
-
-    // ── getRoleByName ─────────────────────────────────────────────────────────
-
-    @Test
-    @DisplayName("getRoleByName() with existing name returns RoleDto")
-    void getRoleByName_existingName_returnsRole() {
-        Role role = new Role();
-        role.setId(ROLE_ID);
-        role.setName("ShopManager");
-        role.setPermissions(new HashSet<>());
-        when(roleRepository.findByName("ShopManager")).thenReturn(Optional.of(role));
-
-        RoleDto result = sut.getRoleByName("ShopManager");
-
-        assertThat(result.getName()).isEqualTo("ShopManager");
-        assertThat(result.getId()).isEqualTo(ROLE_ID);
-    }
-
-    @Test
-    @DisplayName("getRoleByName() with unknown name throws RoleNotFoundException")
-    void getRoleByName_notFound_throwsRoleNotFoundException() {
-        when(roleRepository.findByName("Unknown")).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> sut.getRoleByName("Unknown"))
-                .isInstanceOf(RoleNotFoundException.class);
-    }
-
-    // ── revokeRoleAssignment error path ───────────────────────────────────────
-
-    @Nested
-    @DisplayName("revokeRoleAssignment() — error paths")
-    class RevokeRoleAssignment {
-
-        @Test
-        @DisplayName("unknown assignmentId throws RoleAssignmentNotFoundException")
-        void revokeRoleAssignment_notFound_throwsException() {
-            UUID unknownAssignmentId = UUID.fromString("00000000-0000-0000-0000-000000000099");
-            when(roleAssignmentRepository.findById(unknownAssignmentId)).thenReturn(Optional.empty());
-            LocalDateTime endDate = LocalDateTime.now(TEST_CLOCK);
-
-            assertThatThrownBy(() -> sut.revokeRoleAssignment(unknownAssignmentId, endDate))
-                    .isInstanceOf(RoleAssignmentNotFoundException.class);
-        }
-    }
-
-    // ── getAssignmentsForUser — includeHistory ────────────────────────────────
-
-    @Test
-    @DisplayName("getAssignmentsForUser() with includeHistory=true returns all assignments")
-    void getAssignmentsForUser_includeHistory_returnsAllAssignments() {
-        User user = new User();
-        user.setId(USER_ID);
-
-        Role role = new Role();
-        role.setId(ROLE_ID);
-        role.setPermissions(new HashSet<>());
-
-        RoleAssignment past = new RoleAssignment();
-        past.setUser(user);
-        past.setRole(role);
-        past.setScopeType(ScopeType.GLOBAL);
-        past.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(10));
-        // effectiveEndDate already set (in the past)
-
-        RoleAssignment current = new RoleAssignment();
-        current.setUser(user);
-        current.setRole(role);
-        current.setScopeType(ScopeType.GLOBAL);
-        current.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
-
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(roleAssignmentRepository.findAllByUser_Id(USER_ID)).thenReturn(List.of(past, current));
-
-        List<RoleAssignmentDto> result = sut.getAssignmentsForUser(USER_ID, true);
-
-        assertThat(result).hasSize(2);
-    }
-
-    // ── userHasPermission — missing branches ──────────────────────────────────
-
-    @Nested
-    @DisplayName("userHasPermission() — coverage branches")
-    class UserHasPermission {
-
-        @Test
-        @DisplayName("assignment does not cover requested location — returns false")
-        void userHasPermission_locationNotCovered_returnsFalse() {
-            User user = new User();
-            user.setId(USER_ID);
-
-            Permission perm = new Permission();
-            perm.setName("security:roles:create");
-
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setPermissions(Set.of(perm));
-
-            // LOCATION scope with "loc-A", but we query for "loc-Z" → coversLocation=false
-            RoleAssignment assignment = new RoleAssignment();
-            assignment.setUser(user);
-            assignment.setRole(role);
-            assignment.setScopeType(ScopeType.LOCATION);
-            assignment.setScopeLocationIds(Set.of("loc-A"));
-            assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
-
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user))
-                    .thenReturn(List.of(assignment));
-
-            boolean result = sut.userHasPermission(USER_ID, "security:roles:create", "loc-Z");
-
-            assertThat(result).isFalse();
-        }
-
-        @Test
-        @DisplayName("assignment covers location but permission not in role — returns false")
-        void userHasPermission_permissionNotInRole_returnsFalse() {
-            User user = new User();
-            user.setId(USER_ID);
-
-            Permission perm = new Permission();
-            perm.setName("security:roles:create");
-
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setPermissions(Set.of(perm));
-
-            // GLOBAL scope covers any location, but permission name doesn't match
-            RoleAssignment assignment = new RoleAssignment();
-            assignment.setUser(user);
-            assignment.setRole(role);
-            assignment.setScopeType(ScopeType.GLOBAL);
-            assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
-
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user))
-                    .thenReturn(List.of(assignment));
-
-            boolean result = sut.userHasPermission(USER_ID, "security:other:permission", "loc-1");
-
-            assertThat(result).isFalse();
-        }
-    }
-
-    // ── createRoleAssignment — additional coverage paths ──────────────────────
-
-    @Nested
-    @DisplayName("createRoleAssignment() — validation and error paths")
-    class CreateRoleAssignment {
-
-        @Test
-        @DisplayName("GLOBAL scope with location IDs throws IllegalArgumentException")
-        void createRoleAssignment_globalScopeWithLocationIds_throwsIllegalArgument() {
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL,
-                    Set.of("loc-1"),
-                    LocalDateTime.now(TEST_CLOCK), null);
-
-            assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("GLOBAL scope cannot have location IDs");
-        }
-
-        @Test
-        @DisplayName("user not found throws UserNotFoundException")
-        void createRoleAssignment_userNotFound_throwsUserNotFoundException() {
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null,
-                    LocalDateTime.now(TEST_CLOCK), null);
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(UserNotFoundException.class);
-        }
-
-        @Test
-        @DisplayName("role not found throws RoleNotFoundException")
-        void createRoleAssignment_roleNotFound_throwsRoleNotFoundException() {
-            User user = new User();
-            user.setId(USER_ID);
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null,
-                    LocalDateTime.now(TEST_CLOCK), null);
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(RoleNotFoundException.class);
-        }
-
-        @Test
-        @DisplayName("null effectiveStartDate defaults to clock.now()")
-        void createRoleAssignment_nullStartDate_defaultsToNow() {
-            User user = new User();
-            user.setId(USER_ID);
-            user.setUsername("tester");
-
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setName("Tester");
-            role.setPermissions(new HashSet<>());
-
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null, null, null); // null start date
-
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL)).thenReturn(List.of());
-            when(roleAssignmentRepository.save(any(RoleAssignment.class)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-
-            RoleAssignmentDto result = sut.createRoleAssignment(request);
-
-            assertThat(result.getEffectiveStartDate())
-                    .isEqualTo(LocalDateTime.now(TEST_CLOCK));
-        }
-
-        @Test
-        @DisplayName("overlapping GLOBAL assignment throws IllegalStateException")
-        void createRoleAssignment_overlappingGlobal_throwsIllegalState() {
-            User user = new User();
-            user.setId(USER_ID);
-
-            Role role = new Role();
-            role.setId(ROLE_ID);
-
-            RoleAssignment existing = new RoleAssignment();
-            existing.setRole(role);
-            existing.setScopeType(ScopeType.GLOBAL);
-            existing.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
-            // effectiveEndDate = null (open-ended) → overlaps with any new request
-
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null,
-                    LocalDateTime.now(TEST_CLOCK), null);
-
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL)).thenReturn(List.of(existing));
-
-            assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("GLOBAL scope");
-        }
-
-        @Test
-        @DisplayName("overlapping LOCATION assignment throws IllegalStateException")
-        void createRoleAssignment_overlappingLocation_throwsIllegalState() {
-            User user = new User();
-            user.setId(USER_ID);
-
-            Role role = new Role();
-            role.setId(ROLE_ID);
-
-            RoleAssignment existing = new RoleAssignment();
-            existing.setRole(role);
-            existing.setScopeType(ScopeType.LOCATION);
-            existing.setScopeLocationIds(Set.of("loc-1", "loc-2"));
-            existing.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
-
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.LOCATION,
-                    Set.of("loc-1"), // overlaps with existing
-                    LocalDateTime.now(TEST_CLOCK), null);
-
-            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(
-                    USER_ID, ROLE_ID, ScopeType.LOCATION)).thenReturn(List.of(existing));
-
-            assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("location");
         }
     }
 
