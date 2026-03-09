@@ -2,21 +2,21 @@ name: Backend CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'pos-*/**'
-      - 'pom.xml'
-      - '.github/workflows/ci.yml'
-      - 'Dockerfile'
-      - 'docker-compose.yml'
+      - "pos-*/**"
+      - "pom.xml"
+      - ".github/workflows/ci.yml"
+      - "Dockerfile"
+      - "docker-compose.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'pos-*/**'
-      - 'pom.xml'
-      - '.github/workflows/ci.yml'
-      - 'Dockerfile'
-      - 'docker-compose.yml'
+      - "pos-*/**"
+      - "pom.xml"
+      - ".github/workflows/ci.yml"
+      - "Dockerfile"
+      - "docker-compose.yml"
   workflow_dispatch:
 
 concurrency:
@@ -24,8 +24,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  JAVA_VERSION: '21'
-  JAVA_DISTRIBUTION: 'temurin'
+  JAVA_VERSION: "21"
+  JAVA_DISTRIBUTION: "temurin"
   MAVEN_OPTS: -Xmx3072m
   DOCKER_BUILDKIT: 1
 
@@ -33,20 +33,20 @@ jobs:
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for better change detection
-      
+          fetch-depth: 0 # Full history for better change detection
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
-      
+
       - name: Cache Maven packages
         uses: actions/cache@v4
         with:
@@ -57,10 +57,10 @@ jobs:
 
       - name: Enforce no-arg now() policy
         run: ./scripts/check-noarg-now.sh
-      
+
       - name: Run tests (unit + integration)
-        run: ./mvnw verify -B
-      
+        run: ./mvnw verify -B -q
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,7 +70,7 @@ jobs:
             **/target/surefire-reports/*.xml
             **/target/failsafe-reports/*.xml
           retention-days: 30
-      
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -87,28 +87,28 @@ jobs:
     needs: build-and-test
     # Only run on main branch pushes or when pom.xml files change (dependency updates)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' || contains(github.event.pull_request.changed_files, 'pom.xml')
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
-      
+
       - name: Run OWASP Dependency Check
         run: ./mvnw org.owasp:dependency-check-maven:check -B
         continue-on-error: true
-      
+
       - name: Upload dependency check report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
-          path: '**/target/dependency-check-report.html'
+          path: "**/target/dependency-check-report.html"
           retention-days: 30
 
   docker-build:
@@ -119,19 +119,19 @@ jobs:
     outputs:
       services: ${{ steps.detect-services.outputs.services }}
       has-changes: ${{ steps.detect-services.outputs.has-changes }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Need history to detect changes
-      
+          fetch-depth: 0 # Need history to detect changes
+
       - name: Detect changed services
         id: detect-services
         run: |
           # Get all pos-* services that changed since last main commit
           CHANGED_SERVICES=$(git diff --name-only HEAD~1 HEAD | grep '^pos-' | cut -d'/' -f1 | sort -u)
-          
+
           if [ -z "$CHANGED_SERVICES" ]; then
             echo "No service changes detected, skipping Docker builds"
             echo "services=[]" >> $GITHUB_OUTPUT
@@ -143,40 +143,40 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "Changed services: $SERVICES_JSON"
           fi
-  
+
   docker-build-matrix:
     name: Build Docker Image (${{ matrix.service }})
     runs-on: ubuntu-latest
     needs: docker-build
     if: needs.docker-build.outputs.has-changes == 'true'
-    
+
     strategy:
       fail-fast: false
       matrix:
         service: ${{ fromJson(needs.docker-build.outputs.services) }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
-      
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: maven-artifacts
-      
+
       - name: Build service JAR
         run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -B
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
@@ -186,50 +186,50 @@ jobs:
           tags: ${{ matrix.service }}:latest,${{ matrix.service }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      
+
         # Uncomment below to push to Docker registry
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-            username: ${{ secrets.DOCKER_USERNAME }}
-            password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Push Docker image
         uses: docker/build-push-action@v5
         with:
-            context: ./${{ matrix.service }}
-            file: ./${{ matrix.service }}/Dockerfile
-            push: true
-            tags: |
-                ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:latest
-                ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:latest
+            ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
 
   code-quality:
     name: Code Quality Analysis
     runs-on: ubuntu-latest
     needs: build-and-test
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
-      
+
       - name: Run Checkstyle
         run: ./mvnw checkstyle:check -B
         continue-on-error: true
-      
+
       - name: Run SpotBugs
         run: ./mvnw spotbugs:check -B
         continue-on-error: true
-      
+
       # Uncomment to enable SonarCloud CI-based analysis
       # This provides deeper analysis than SonarCloud's automatic analysis
       - name: Cache SonarCloud packages
@@ -238,11 +238,11 @@ jobs:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
-      
+
       - name: SonarCloud Scan
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}  # Needed for PR decoration
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Get from sonarcloud.io
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # Needed for PR decoration
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} # Get from sonarcloud.io
         run: |
           ./mvnw test-compile sonar:sonar -DskipTests -DskipITs \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
@@ -255,34 +255,34 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+
     env:
       OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${{ secrets.GRAFANA_TOKEN }}"
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
-      
+
       - name: Build all modules
         run: ./mvnw clean package -DskipTests -DskipITs -B
-      
+
       - name: Start services with Docker Compose
         run: docker-compose up -d
-      
+
       - name: Wait for services to be healthy
         run: |
           echo "Waiting for Eureka to be ready..."
           timeout 300 bash -c 'until curl -sf http://localhost:8761/actuator/health; do sleep 5; done'
           echo "Waiting for API Gateway to be ready..."
           timeout 300 bash -c 'until curl -sf http://localhost:8080/actuator/health; do sleep 5; done'
-      
+
       - name: Run smoke tests
         run: |
           # Test Eureka
@@ -290,11 +290,11 @@ jobs:
           # Test API Gateway
           curl -f http://localhost:8080/actuator/health || exit 1
           echo "Smoke tests passed!"
-      
+
       - name: Show service logs on failure
         if: failure()
         run: docker-compose logs
-      
+
       - name: Shut down services
         if: always()
         run: docker-compose down -v
@@ -302,9 +302,16 @@ jobs:
   notify:
     name: Notify Build Status
     runs-on: ubuntu-latest
-    needs: [build-and-test, security-scan, docker-build, docker-build-matrix, code-quality]
+    needs:
+      [
+        build-and-test,
+        security-scan,
+        docker-build,
+        docker-build-matrix,
+        code-quality,
+      ]
     if: always()
-    
+
     steps:
       - name: Check build status
         run: |
@@ -313,7 +320,7 @@ jobs:
             exit 1
           fi
           echo "Build succeeded!"
-      
+
       # Uncomment to enable Slack notifications
       # - name: Send Slack notification
       #   if: always()
