@@ -82,6 +82,10 @@ public class DashboardServiceImpl implements DashboardService {
             shopmgrDegraded = true;
             shopmgrBays = List.of();
         }
+        if (shopmgrBays == null || shopmgrBays.isEmpty()) {
+            shopmgrDegraded = true;
+            shopmgrBays = List.of();
+        }
 
         List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(workorders);
         List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people);
