@@ -483,6 +483,27 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderResponse"
+  /v1/workorders/{workorderId}/suggestSubstitutes:
+    post:
+      tags:
+      - substitute-link-controller
+      operationId: suggestSubstitutes
+      parameters:
+      - name: workorderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubstituteLinkResponse"
   /v1/workorders/{workorderId}/start:
     post:
       tags:
@@ -729,18 +750,6 @@ paths:
                   notes: Equivalent OEM part
         required: true
       responses:
-        "409":
-          description: Idempotency conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Part substituted successfully
           content:
@@ -756,6 +765,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Idempotency conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "400":
           description: "Invalid request (part already consumed, etc.)"
           content:
@@ -810,12 +831,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts returned successfully
           content:
@@ -831,6 +846,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/parts/returnUnused:
     post:
       tags:
@@ -875,6 +896,18 @@ paths:
                   notes: Returned to stock
         required: true
       responses:
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Unused quantity returned successfully
           content:
@@ -890,18 +923,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
   /v1/workorders/{workorderId}/parts/issue:
     post:
       tags:
@@ -945,18 +966,6 @@ paths:
                   quantity: 2
         required: true
       responses:
-        "409":
-          description: Idempotency conflict (duplicate key)
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts issued successfully
           content:
@@ -972,6 +981,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Idempotency conflict (duplicate key)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "400":
           description: "Invalid request (negative quantity, etc.)"
           content:
@@ -2550,8 +2571,8 @@ paths:
           content:
             '*/*':
               schema: {}
-        "200":
-          description: Idempotent replay returned existing timer
+        "201":
+          description: Timer started successfully
           content:
             '*/*':
               schema:
@@ -2565,8 +2586,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "201":
-          description: Timer started successfully
+        "200":
+          description: Idempotent replay returned existing timer
           content:
             '*/*':
               schema:
@@ -2641,8 +2662,8 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Labor entry created successfully
+        "200":
+          description: Idempotent replay returned existing labor entry
           content:
             '*/*':
               schema:
@@ -2656,8 +2677,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "200":
-          description: Idempotent replay returned existing labor entry
+        "201":
+          description: Labor entry created successfully
           content:
             '*/*':
               schema:
@@ -3042,14 +3063,6 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "200":
           description: Adjustment history retrieved successfully (newest first)
           content:
@@ -3065,6 +3078,14 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
   /v1/workorders/{workorderId}/operationalContext:
     get:
       tags:
@@ -3278,13 +3299,6 @@ paths:
               schema:
                 type: string
                 format: byte
-        "502":
-          description: Document service unavailable
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: byte
         "200":
           description: PDF generated successfully
           content:
@@ -3293,6 +3307,13 @@ paths:
                 additionalProperties:
                   default: "##default"
                 default: "##default"
+        "502":
+          description: Document service unavailable
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: byte
   /v1/workorders/estimates/shop/{locationId}:
     get:
       tags:
@@ -4112,6 +4133,39 @@ components:
           example: Assigned to senior tech for brake system work
       required:
       - technicianId
+    SubstituteLinkResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        substitutePartId:
+          type: string
+          format: uuid
+        substituteType:
+          type: string
+          enum:
+          - EQUIVALENT
+          - APPROVED_ALTERNATIVE
+          - UPGRADE
+          - DOWNGRADE
+        priority:
+          type: integer
+          format: int32
+        version:
+          type: integer
+          format: int32
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+        isAutoSuggest:
+          type: boolean
+        isActive:
+          type: boolean
     StartWorkorderRequest:
       type: object
       default: "##default"
@@ -6718,10 +6772,6 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
@@ -6734,6 +6784,10 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -6937,10 +6991,6 @@ components:
           format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         size:
           type: integer
           format: int32
@@ -6953,6 +7003,10 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         numberOfElements:
           type: integer
           format: int32

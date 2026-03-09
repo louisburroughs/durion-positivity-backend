@@ -18,6 +18,8 @@ tags:
   description: Price normalization and standardization operations
 - name: Price Restrictions
   description: Price restriction evaluation and override operations
+- name: Restriction Rules
+  description: CRUD operations for price restriction rules
 - name: Promotion Eligibility Rules
   description: Promotion eligibility rule management and evaluation operations
 - name: Price Quotes
@@ -38,6 +40,11 @@ paths:
               $ref: "#/components/schemas/CreatePromotionOfferRequest"
         required: true
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "409":
           description: Promotion code already exists.
           content:
@@ -80,6 +87,11 @@ paths:
           type: string
           format: uuid
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "200":
           description: Eligibility rules returned.
           content:
@@ -127,6 +139,11 @@ paths:
               $ref: "#/components/schemas/AddEligibilityRuleRequest"
         required: true
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "201":
           description: Eligibility rule created.
           content:
@@ -175,6 +192,11 @@ paths:
               $ref: "#/components/schemas/EligibilityContext"
         required: true
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "400":
           description: Invalid evaluation request.
           content:
@@ -216,6 +238,11 @@ paths:
               $ref: "#/components/schemas/ApplyPromotionRequest"
         required: true
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "400":
           description: Invalid promotion application request.
           content:
@@ -247,7 +274,8 @@ paths:
       tags:
       - Price Restrictions
       summary: Override price restrictions
-      description: Override price restrictions for a specific context or condition.
+      description: Issues an override for price restrictions. Requires pricing:restriction:override
+        authority.
       operationId: overrideRestrictions
       requestBody:
         content:
@@ -256,8 +284,19 @@ paths:
               $ref: "#/components/schemas/RestrictionOverrideRequest"
         required: true
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "200":
-          description: Restriction override created.
+          description: Override issued. Returns overrideId and expiresAt.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionOverrideResponse"
+        "401":
+          description: Authentication required.
           content:
             '*/*':
               schema:
@@ -267,25 +306,20 @@ paths:
           content:
             '*/*':
               schema:
-                type: object
-        "401":
-          description: Unauthorized.
-          content:
-            '*/*':
-              schema:
-                type: object
+                $ref: "#/components/schemas/RestrictionOverrideResponse"
         "403":
           description: Insufficient permissions to override restrictions.
           content:
             '*/*':
               schema:
-                type: object
+                $ref: "#/components/schemas/RestrictionOverrideResponse"
   /v1/price/restrictions:evaluate:
     post:
       tags:
       - Price Restrictions
       summary: Evaluate price restrictions
-      description: Evaluate whether a price is within allowed restrictions.
+      description: Evaluates whether products are subject to restrictions in the given
+        context.
       operationId: evaluateRestrictions
       requestBody:
         content:
@@ -294,8 +328,19 @@ paths:
               $ref: "#/components/schemas/RestrictionEvaluationRequest"
         required: true
       responses:
+        "503":
+          description: Restriction evaluation service unavailable (commit path only).
+          content:
+            '*/*':
+              schema: {}
         "200":
-          description: Restriction evaluation completed.
+          description: Evaluation results per product.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionEvaluationResponse"
+        "401":
+          description: Authentication required.
           content:
             '*/*':
               schema:
@@ -305,19 +350,76 @@ paths:
           content:
             '*/*':
               schema:
-                type: object
-        "401":
-          description: Unauthorized.
-          content:
-            '*/*':
-              schema:
-                type: object
+                $ref: "#/components/schemas/RestrictionEvaluationResponse"
+  /v1/price/restrictions/rules:
+    get:
+      tags:
+      - Restriction Rules
+      summary: List all active restriction rules
+      operationId: listRules
+      responses:
         "503":
-          description: Service unavailable.
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
+        "200":
+          description: List of restriction rules.
           content:
             '*/*':
               schema:
-                type: object
+                type: array
+                items:
+                  $ref: "#/components/schemas/RestrictionRuleResponse"
+        "401":
+          description: Authentication required.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RestrictionRuleResponse"
+    post:
+      tags:
+      - Restriction Rules
+      summary: Create a restriction rule
+      operationId: createRule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRestrictionRuleRequest"
+        required: true
+      responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
+        "201":
+          description: Restriction rule created.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
+        "400":
+          description: Invalid request.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
+        "401":
+          description: Authentication required.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
+        "403":
+          description: Insufficient permissions.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
   /v1/price/quotes:
     post:
       tags:
@@ -333,6 +435,11 @@ paths:
               $ref: "#/components/schemas/PriceQuoteRequest"
         required: true
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "403":
           description: Forbidden.
           content:
@@ -363,6 +470,11 @@ paths:
           application/json:
             schema: {}
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "400":
           description: Invalid request body.
           content:
@@ -393,6 +505,11 @@ paths:
           type: string
           format: uuid
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "403":
           description: Forbidden.
           content:
@@ -428,6 +545,11 @@ paths:
           type: string
           format: uuid
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "200":
           description: Promotion offer activated.
           content:
@@ -469,6 +591,11 @@ paths:
           type: string
           format: uuid
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "200":
           description: Promotion offer returned.
           content:
@@ -503,6 +630,11 @@ paths:
         schema:
           type: string
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "200":
           description: Promotion offer returned.
           content:
@@ -538,6 +670,11 @@ paths:
           type: string
           format: uuid
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "200":
           description: Pricing snapshot returned.
           content:
@@ -556,6 +693,85 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PricingSnapshotResponse"
+  /v1/price/restrictions/rules/{ruleId}:
+    get:
+      tags:
+      - Restriction Rules
+      summary: Get a restriction rule by ID
+      operationId: getRuleById
+      parameters:
+      - name: ruleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
+        "200":
+          description: Restriction rule found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
+        "401":
+          description: Authentication required.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
+        "404":
+          description: Restriction rule not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
+    delete:
+      tags:
+      - Restriction Rules
+      summary: Deactivate a restriction rule
+      operationId: deactivateRule
+      parameters:
+      - name: ruleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
+        "200":
+          description: Restriction rule deactivated.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
+        "401":
+          description: Authentication required.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
+        "404":
+          description: Restriction rule not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
+        "403":
+          description: Insufficient permissions.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionRuleResponse"
   /v1/promotions/offers/{promotionId}/rules/{ruleId}:
     delete:
       tags:
@@ -577,6 +793,11 @@ paths:
           type: string
           format: uuid
       responses:
+        "503":
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema: {}
         "403":
           description: Forbidden.
         "204":
@@ -963,20 +1184,49 @@ components:
           example: -100.0
         metadata:
           description: Optional adjustment metadata bag
-    RestrictionEvaluationRequest:
+    RestrictionOverrideRequest:
       type: object
-      description: Request payload for evaluating product price restrictions
       properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/RestrictionEvaluationItem"
-          minItems: 1
+        ruleId:
+          type: string
+          format: uuid
+        transactionId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        overrideContext:
+          type: string
+          enum:
+          - BROWSE
+          - QUOTE
+          - CHECKOUT
+          - INVOICE_FINALIZE
+          - COMMIT_SALE
+        reasonCode:
+          type: string
+        notes:
+          type: string
+        approvedBy:
+          type: string
       required:
-      - items
+      - overrideContext
+      - productId
+      - reasonCode
+      - ruleId
+      - transactionId
+    RestrictionOverrideResponse:
+      type: object
+      properties:
+        overrideId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
     RestrictionEvaluationItem:
       type: object
-      description: Single product evaluation input for restriction decisioning
       properties:
         productId:
           type: string
@@ -984,17 +1234,20 @@ components:
         locationTag:
           type: string
           enum:
-          - TAXABLE_JURISDICTION
-          - SERVICE_ZONE
-          - RESTRICTED_REGION
-          - UNRESTRICTED_ZONE
+          - ALL_LOCATIONS
+          - RETAIL_STORE
+          - WAREHOUSE
+          - MOBILE_SERVICE
+          - FRANCHISE
+          - TEST_LOCATION
         serviceTag:
           type: string
           enum:
-          - WARRANTY_ONLY
-          - LABOR_ONLY
-          - PARTS_ONLY
-          - FULL_SERVICE
+          - POS_SALE
+          - WORKORDER
+          - ESTIMATE
+          - INVOICE
+          - DELIVERY
         context:
           type: string
           enum:
@@ -1004,13 +1257,28 @@ components:
           - INVOICE_FINALIZE
           - COMMIT_SALE
       required:
-      - productId
-      - locationTag
-      - serviceTag
       - context
+      - locationTag
+      - productId
+      - serviceTag
+    RestrictionEvaluationRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RestrictionEvaluationItem"
+      required:
+      - items
+    RestrictionEvaluationResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/RestrictionEvaluationResult"
     RestrictionEvaluationResult:
       type: object
-      description: Restriction evaluation decision for a single product
       properties:
         productId:
           type: string
@@ -1031,56 +1299,8 @@ components:
           type: array
           items:
             type: string
-      required:
-      - productId
-      - decision
-      - ruleIds
-      - reasonCodes
-    RestrictionEvaluationResponse:
-      type: object
-      description: Response payload for restriction evaluation operation
-      properties:
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/RestrictionEvaluationResult"
-      required:
-      - results
-    RestrictionOverrideRequest:
-      type: object
-      description: Request payload for creating a restriction override
-      properties:
-        overrideContext:
-          type: string
-          enum:
-          - BROWSE
-          - QUOTE
-          - CHECKOUT
-          - INVOICE_FINALIZE
-          - COMMIT_SALE
-        reasonCode:
-          type: string
-        notes:
-          type: string
-      required:
-      - overrideContext
-      - reasonCode
-    RestrictionOverrideResponse:
-      type: object
-      description: Response payload for created restriction override
-      properties:
-        overrideId:
-          type: string
-          format: uuid
-        expiresAt:
-          type: string
-          format: date-time
-      required:
-      - overrideId
-      - expiresAt
     CreateRestrictionRuleRequest:
       type: object
-      description: Request payload for creating a price restriction rule
       properties:
         productId:
           type: string
@@ -1088,34 +1308,38 @@ components:
         locationTag:
           type: string
           enum:
-          - TAXABLE_JURISDICTION
-          - SERVICE_ZONE
-          - RESTRICTED_REGION
-          - UNRESTRICTED_ZONE
+          - ALL_LOCATIONS
+          - RETAIL_STORE
+          - WAREHOUSE
+          - MOBILE_SERVICE
+          - FRANCHISE
+          - TEST_LOCATION
         serviceTag:
           type: string
           enum:
-          - WARRANTY_ONLY
-          - LABOR_ONLY
-          - PARTS_ONLY
-          - FULL_SERVICE
+          - POS_SALE
+          - WORKORDER
+          - ESTIMATE
+          - INVOICE
+          - DELIVERY
         effectiveFrom:
           type: string
           format: date
         effectiveTo:
           type: string
           format: date
+        policyVersion:
+          type: integer
+          format: int32
         overrideable:
           type: boolean
       required:
-      - productId
-      - locationTag
-      - serviceTag
       - effectiveFrom
-      - overrideable
+      - locationTag
+      - productId
+      - serviceTag
     RestrictionRuleResponse:
       type: object
-      description: Response payload representing a restriction rule
       properties:
         ruleId:
           type: string
@@ -1126,17 +1350,20 @@ components:
         locationTag:
           type: string
           enum:
-          - TAXABLE_JURISDICTION
-          - SERVICE_ZONE
-          - RESTRICTED_REGION
-          - UNRESTRICTED_ZONE
+          - ALL_LOCATIONS
+          - RETAIL_STORE
+          - WAREHOUSE
+          - MOBILE_SERVICE
+          - FRANCHISE
+          - TEST_LOCATION
         serviceTag:
           type: string
           enum:
-          - WARRANTY_ONLY
-          - LABOR_ONLY
-          - PARTS_ONLY
-          - FULL_SERVICE
+          - POS_SALE
+          - WORKORDER
+          - ESTIMATE
+          - INVOICE
+          - DELIVERY
         active:
           type: boolean
         effectiveFrom:
@@ -1145,13 +1372,6 @@ components:
         effectiveTo:
           type: string
           format: date
-      required:
-      - ruleId
-      - productId
-      - locationTag
-      - serviceTag
-      - active
-      - effectiveFrom
     PriceQuoteRequest:
       type: object
       description: Request payload for calculating contextual price quotes

@@ -39,8 +39,7 @@ public class PriceRestrictionsController {
         this.overrideService = overrideService;
     }
 
-    @Operation(summary = "Evaluate price restrictions",
-            description = "Evaluates whether products are subject to restrictions in the given context.")
+    @Operation(summary = "Evaluate price restrictions", description = "Evaluates whether products are subject to restrictions in the given context.")
     @ApiResponse(responseCode = "200", description = "Evaluation results per product.")
     @ApiResponse(responseCode = "400", description = "Invalid request body.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
@@ -71,3 +70,5 @@ public class PriceRestrictionsController {
         return ResponseEntity.ok(response);
     }
 }
+
+     

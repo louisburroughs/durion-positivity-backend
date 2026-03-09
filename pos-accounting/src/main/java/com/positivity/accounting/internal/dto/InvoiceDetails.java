@@ -47,14 +47,25 @@ public class InvoiceDetails implements Serializable {
     @NonNull
     private InvoiceStatus status;
 
+    public void setStatus(@NonNull InvoiceStatus status) {
+        if (status == null) {
+            throw new IllegalStateException("Invoice status cannot be null");
+        }
+        if (status == InvoiceStatus.UNKNOWN) {
+            throw new IllegalStateException("Invoice status cannot be UNKNOWN");
+        }
+        this.status = status;
+    }
+
     @Tolerate
     public void setStatus(String status) {
-        if (status != null) {
-            try {
-                this.status = InvoiceStatus.valueOf(status);
-            } catch (IllegalArgumentException e) {
-                this.status = null;
-            }
+        if (status == null || status.isBlank()) {
+            throw new IllegalStateException("Invoice status cannot be null or blank");
+        }
+        try {
+            setStatus(InvoiceStatus.valueOf(status.trim()));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Unknown invoice status: " + status, e);
         }
     }
 
