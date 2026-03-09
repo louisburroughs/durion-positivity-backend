@@ -1,7 +1,5 @@
 package com.positivity.securityservice.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -55,8 +53,4 @@ public class Role {
 
     @Column(length = 255)
     private String lastModifiedBy;
-    @PreUpdate
-    protected void onUpdate() {
-        lastModifiedAt = Instant.now(Clock.systemUTC());
-    }
 }
