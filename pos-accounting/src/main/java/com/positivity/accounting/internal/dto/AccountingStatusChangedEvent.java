@@ -36,7 +36,10 @@ public class AccountingStatusChangedEvent {
     /** Wall-clock time at which this status transition occurred. */
     Instant timestamp;
 
-    /** Human-readable reason supplied by the accounting system when REJECTED. May be null. */
+    /**
+     * Human-readable reason supplied by the accounting system when REJECTED. May be
+     * null.
+     */
     @Nullable
     String discrepancyReason;
 

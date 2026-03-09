@@ -84,27 +84,25 @@ paths:
         description: Order ID filter
         required: false
         schema:
-          type: string
+          default: "##default"
       - name: status
         in: query
         description: Override status filter
         required: false
         schema:
-          type: string
+          default: "##default"
       - name: startDate
         in: query
         description: Start date for date range filter
         required: false
         schema:
-          type: string
-          format: date-time
+          default: "##default"
       - name: endDate
         in: query
         description: End date for date range filter
         required: false
         schema:
-          type: string
-          format: date-time
+          default: "##default"
       responses:
         "200":
           description: Overrides retrieved
@@ -142,6 +140,15 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideResult"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "403":
           description: Insufficient permissions
           content:
@@ -167,8 +174,7 @@ paths:
         description: Price override ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
         content:
@@ -201,6 +207,15 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/orders/price-overrides/{overrideId}/approve:
     post:
       tags:
@@ -215,8 +230,7 @@ paths:
         description: Price override ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
         content:
@@ -231,14 +245,23 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
-        "404":
-          description: Override not found
+        "200":
+          description: Override approved
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
-        "200":
-          description: Override approved
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: Override not found
           content:
             '*/*':
               schema:
@@ -426,8 +449,7 @@ paths:
         description: Price override ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
         "200":
@@ -436,6 +458,15 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: Override not found
           content:
@@ -530,12 +561,14 @@ components:
           minimum: 0.0
         reasonCode:
           type: string
+          default: "##default"
           description: Reason code for the price override
           example: PRICE_MATCH
         justification:
           type: string
         idempotencyKey:
           type: string
+          default: "##default"
           description: Optional idempotency key for duplicate prevention
           example: req-abc123
       required:

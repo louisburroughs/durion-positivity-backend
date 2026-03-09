@@ -567,14 +567,14 @@ paths:
               $ref: "#/components/schemas/VendorInvoiceReceivedEvent"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "201":
+          description: Invoice matched and bill created/updated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
-        "201":
-          description: Invoice matched and bill created/updated
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -634,6 +634,7 @@ paths:
           type: integer
           format: int32
           default: 0
+          minimum: 0
       - name: size
         in: query
         description: Page size
@@ -645,7 +646,7 @@ paths:
       - name: sort
         in: query
         description: Sort field
-        required: false
+        required: true
         schema:
           type: string
           default: createdAt
@@ -779,6 +780,7 @@ paths:
           type: integer
           format: int32
           default: 0
+          minimum: 0
       - name: size
         in: query
         description: Page size
@@ -790,7 +792,7 @@ paths:
       - name: sort
         in: query
         description: Sort field
-        required: false
+        required: true
         schema:
           type: string
           default: categoryName
@@ -1048,14 +1050,14 @@ paths:
               $ref: "#/components/schemas/GLMappingResolveRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request payload
+        "200":
+          description: GL mapping resolved
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/GLMappingResolveResponse"
-        "200":
-          description: GL mapping resolved
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
@@ -1130,6 +1132,7 @@ paths:
           type: integer
           format: int32
           default: 0
+          minimum: 0
       - name: size
         in: query
         description: Page size
@@ -1141,7 +1144,7 @@ paths:
       - name: sort
         in: query
         description: Sort field
-        required: false
+        required: true
         schema:
           type: string
           default: createdAt
@@ -1314,6 +1317,7 @@ paths:
           type: integer
           format: int32
           default: 0
+          minimum: 0
       - name: size
         in: query
         description: Page size
@@ -1325,7 +1329,7 @@ paths:
       - name: sort
         in: query
         description: Sort field
-        required: false
+        required: true
         schema:
           type: string
           default: accountCode
@@ -1504,6 +1508,7 @@ paths:
           type: integer
           format: int32
           default: 0
+          minimum: 0
       - name: size
         in: query
         description: Page size
@@ -1659,6 +1664,7 @@ paths:
           type: integer
           format: int32
           default: 0
+          minimum: 0
       - name: size
         in: query
         description: Page size
@@ -1832,12 +1838,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Refund recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid request parameters
           content:
@@ -1853,6 +1853,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Refund recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/price-override:
     post:
       tags:
@@ -1874,12 +1880,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Price override recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid request parameters
           content:
@@ -1895,6 +1895,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Price override recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/cancellation:
     post:
       tags:
@@ -1919,17 +1925,17 @@ paths:
           content:
             '*/*':
               schema: {}
-        "404":
-          description: Source document not found
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Cancellation recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
+        "404":
+          description: Source document not found
+          content:
+            '*/*':
+              schema: {}
   /v1/accounting/ap/payments:
     post:
       tags:
@@ -2131,6 +2137,7 @@ paths:
         required: true
         schema:
           type: string
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
         example: 123e4567-e89b-12d3-a456-426614174000
       - name: startDate
         in: query
@@ -2197,6 +2204,7 @@ paths:
         required: true
         schema:
           type: string
+          pattern: "^[A-Z_]{1,100}$"
       - name: startDate
         in: query
         description: Period start date (YYYY-MM-DD)
@@ -2222,16 +2230,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AccountDrilldownResponse"
-        "400":
-          description: Invalid statement line code or date range
+        "200":
+          description: Account drilldown successful
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/AccountDrilldownResponse"
-        "200":
-          description: Account drilldown successful
+        "400":
+          description: Invalid statement line code or date range
           content:
             application/json:
               schema:
@@ -2266,14 +2274,14 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Balance sheet generated successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceSheetReport"
-        "200":
-          description: Balance sheet generated successfully
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
@@ -2315,6 +2323,7 @@ paths:
           type: integer
           format: int32
           default: 0
+          minimum: 0
       - name: size
         in: query
         description: Page size
@@ -2365,6 +2374,7 @@ paths:
           type: integer
           format: int32
           default: 0
+          minimum: 0
       - name: size
         in: query
         description: Page size
@@ -2376,7 +2386,7 @@ paths:
       - name: sort
         in: query
         description: Sort field
-        required: false
+        required: true
         schema:
           type: string
           default: keyName
@@ -2459,14 +2469,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
-        "200":
-          description: Invoice status returned
+        "404":
+          description: Invoice not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
-        "404":
-          description: Invoice not found
+        "200":
+          description: Invoice status returned
           content:
             '*/*':
               schema:
@@ -2802,6 +2812,12 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2810,12 +2826,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range or exception type
           content:
@@ -2857,6 +2867,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2865,12 +2881,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/order/{orderId}:
     get:
       tags:
@@ -2896,6 +2906,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2904,12 +2920,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/invoice/{invoiceId}:
     get:
       tags:
@@ -2927,6 +2937,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Invoice not found
           content:
@@ -2943,12 +2959,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/actor/{actorId}:
     get:
       tags:
@@ -2990,6 +3000,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2998,12 +3014,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid date range or actor ID
           content:
@@ -3058,6 +3068,9 @@ paths:
         required: true
         schema:
           type: string
+          maxLength: 100
+          minLength: 1
+          pattern: "^[^\\r\\n]+$"
         example: 01936e5c-7890-7a3d-8b6e-2b3456789012
       responses:
         "200":
@@ -3282,142 +3295,250 @@ components:
           type: string
     JournalEntryCreateRequest:
       type: object
+      description: Request payload for creating or updating a journal entry
       properties:
         organizationId:
           type: string
           format: uuid
+          description: Organization UUID
+          example: 00000000-0000-4000-a000-000000000010
         transactionDate:
           type: string
           format: date-time
+          description: Journal transaction date and time
+          example: 2026-01-15T10:30:00
         description:
           type: string
+          description: Journal entry description
+          example: Invoice accrual posting
+          maxLength: 500
+          minLength: 0
         sourceEventId:
           type: string
           format: uuid
+          description: Source event UUID
+          example: 01936e5c-1234-7a3d-8b6e-123456789012
         sourceEventType:
           type: string
+          description: Source event type
+          example: INVOICE_RECEIVED
+          maxLength: 100
+          minLength: 0
         postingRuleSetId:
           type: string
           format: uuid
+          description: Posting rule set UUID used to generate this journal entry
         postingRuleVersionId:
           type: string
           format: uuid
+          description: Posting rule version UUID used to generate this journal entry
         lines:
           type: array
+          description: Journal lines (must net to a balanced entry)
           items:
             $ref: "#/components/schemas/JournalEntryLineRequest"
+      required:
+      - lines
+      - transactionDate
     JournalEntryLineRequest:
       type: object
+      description: Journal entry line request
       properties:
         glAccountId:
           type: string
           format: uuid
+          description: GL account UUID
+          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
         debitAmount:
           type: number
+          description: Debit amount for this line
+          example: 1250.0
+          minimum: 0.00
         creditAmount:
           type: number
+          description: Credit amount for this line
+          example: 1250.0
+          minimum: 0.00
         description:
           type: string
+          description: Line description
+          example: Recognize receivable
+          maxLength: 500
+          minLength: 0
         dimensions:
           type: object
           additionalProperties:
             type: string
+          description: Optional dimensional attributes for reporting
+          example:
+            department: SERVICE
+        singleSidedAmount:
+          type: boolean
+      required:
+      - glAccountId
     JournalEntryLineResponse:
       type: object
+      description: Journal entry line response
       properties:
         lineId:
           type: string
           format: uuid
+          description: Line UUID
+          example: 01936e60-1234-7a3d-8b6e-6f7890123456
         lineNumber:
           type: integer
           format: int32
+          description: Line sequence number
+          example: 1
         glAccountId:
           type: string
           format: uuid
+          description: GL account UUID
+          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
         accountCode:
           type: string
+          description: GL account code
+          example: 1100-000
         accountName:
           type: string
+          description: GL account name
+          example: Accounts Receivable
         debitAmount:
           type: number
+          description: Debit amount
+          example: 1250.0
         creditAmount:
           type: number
+          description: Credit amount
+          example: 0.0
         description:
           type: string
+          description: Line description
+          example: Recognize receivable
         dimensions:
           type: object
           additionalProperties:
             type: string
+          description: Optional dimensional attributes
+          example:
+            department: SERVICE
     JournalEntryResponse:
       type: object
+      description: Journal entry response payload
       properties:
         journalEntryId:
           type: string
           format: uuid
+          description: Journal entry UUID
+          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
         status:
           type: string
+          description: Journal entry status
           enum:
           - DRAFT
           - PENDING
           - POSTED
           - REVERSED
+          example: DRAFT
         transactionDate:
           type: string
           format: date-time
+          description: Transaction date and time
+          example: 2026-01-15T10:30:00
         description:
           type: string
+          description: Journal entry description
+          example: Invoice accrual posting
         sourceEventId:
           type: string
           format: uuid
+          description: Source event UUID
+          example: 01936e5c-1234-7a3d-8b6e-123456789012
         sourceEventType:
           type: string
+          description: Source event type
+          example: INVOICE_RECEIVED
         postingRuleSetId:
           type: string
           format: uuid
+          description: Posting rule set UUID
         postingRuleVersionId:
           type: string
           format: uuid
+          description: Posting rule version UUID
         reversalJournalEntryId:
           type: string
           format: uuid
+          description: Original journal entry UUID when this entry is a reversal
         reversedByJournalEntryId:
           type: string
           format: uuid
+          description: Reversal journal entry UUID when this entry has been reversed
         totalDebits:
           type: number
+          description: Total debits
+          example: 1250.0
         totalCredits:
           type: number
+          description: Total credits
+          example: 1250.0
         isBalanced:
           type: boolean
+          description: Whether total debits equal total credits
+          example: true
         lines:
           type: array
+          description: Journal entry lines
           items:
             $ref: "#/components/schemas/JournalEntryLineResponse"
         createdAt:
           type: string
           format: date-time
+          description: Created timestamp
+          example: 2026-01-15T10:31:00Z
         createdBy:
           type: string
+          description: Created by username
+          example: accounting.user
         modifiedAt:
           type: string
           format: date-time
+          description: Last modified timestamp
+          example: 2026-01-15T10:32:00Z
         modifiedBy:
           type: string
+          description: Last modified by username
+          example: accounting.user
         postedAt:
           type: string
           format: date-time
+          description: Posted timestamp
+          example: 2026-01-15T10:40:00Z
         postedBy:
           type: string
+          description: Posted by username
+          example: accounting.manager
         reversedAt:
           type: string
           format: date-time
+          description: Reversed timestamp
+          example: 2026-01-16T08:20:00Z
     GLAccountUpdateRequest:
       type: object
+      description: Request payload for updating mutable GL account fields
       properties:
         accountName:
           type: string
+          description: Updated account name
+          example: Accounts Receivable - Trade
+          maxLength: 100
+          minLength: 0
         description:
           type: string
+          description: Updated account description
+          example: Primary receivables account
+          maxLength: 500
+          minLength: 0
     GLAccountResponse:
       type: object
       properties:
@@ -3587,8 +3708,6 @@ components:
       type: object
       description: Line item received from vendor
       properties:
-        inventoryItem:
-          type: boolean
         productId:
           type: string
           format: uuid
@@ -4128,23 +4247,45 @@ components:
       - effectiveDate
     AccountingEventSubmitRequest:
       type: object
+      description: Request payload for submitting an accounting event for ingestion
       properties:
         eventId:
           type: string
           format: uuid
+          description: "Optional event UUID (idempotency key). If omitted, service\
+            \ computes idempotency hash."
+          example: 01936e5c-1234-7a3d-8b6e-123456789012
         eventType:
           type: string
+          description: Event type identifier
+          example: INVOICE_RECEIVED
+          maxLength: 100
+          minLength: 0
         organizationId:
           type: string
           format: uuid
+          description: Organization UUID
+          example: 00000000-0000-4000-a000-000000000010
         sourceSystem:
           type: string
+          description: "Source system name. If omitted, defaults to POS_ACCOUNTING_API."
+          example: POS_ORDER
+          maxLength: 100
+          minLength: 0
         transactionDate:
           type: string
           format: date-time
+          description: "Event transaction timestamp. If omitted, defaults to current\
+            \ time."
+          example: 2026-01-15T10:30:00
         payload:
           type: object
           additionalProperties: {}
+          description: Event-specific payload content
+      required:
+      - eventType
+      - organizationId
+      - payload
     AccountingEventResponse:
       type: object
       properties:
@@ -4417,7 +4558,12 @@ components:
           enum:
           - PENDING_POSTING
           - POSTED
-          - FAILED
+          - RECONCILED
+          - REJECTED
+          - REVERSED
+          - VOIDED
+          - ON_HOLD
+          - DISPUTED
         expectedAccountingOutcome:
           type: string
         sourceEventId:
@@ -4908,6 +5054,7 @@ components:
           - PARTIALLY_PAID
           - UNPAID
           - FAILED
+          - CHARGEBACK
         totalPaid:
           type: number
         invoiceTotal:
@@ -5066,12 +5213,12 @@ components:
     PageCreditMemoResponse:
       type: object
       properties:
-        totalPages:
-          type: integer
-          format: int32
         totalElements:
           type: integer
           format: int64
+        totalPages:
+          type: integer
+          format: int32
         pageable:
           $ref: "#/components/schemas/Pageablenull"
         first:
