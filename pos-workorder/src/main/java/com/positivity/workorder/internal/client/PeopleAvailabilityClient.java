@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.time.LocalDate;
 
@@ -46,9 +47,9 @@ public class PeopleAvailabilityClient {
                     .location(locationId)
                     .people(java.util.List.of())
                     .build();
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             log.error("Failed to fetch people availability for locationId={} date={}", locationId, date, e);
-            throw new RuntimeException(
+            throw new RestClientException(
                     "Failed to fetch people availability for locationId=" + locationId + " date=" + date, e);
         }
     }

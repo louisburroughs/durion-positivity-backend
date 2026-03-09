@@ -33,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Implementation of {@link DashboardService} for the Daily Dispatch Board
@@ -57,33 +58,25 @@ public class DashboardServiceImpl implements DashboardService {
 
         List<Workorder> workorders = workorderRepository.findByScheduledDateAndLocationId(date, locationUuid);
 
-        boolean peopleDegraded = false;
-        PeopleAvailabilityResponse availability;
+        PeopleAvailabilityResponse availability = null;
         try {
             availability = peopleAvailabilityClient.fetchAvailability(locationId, date);
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             log.warn("People service unavailable for dashboard locationId={} date={}", locationId, date, e);
-            peopleDegraded = true;
-            availability = null;
         }
-        if (availability == null) {
-            peopleDegraded = true;
-        }
+        boolean peopleDegraded = availability == null;
         List<PersonAvailability> people = availability != null && availability.getPeople() != null
                 ? availability.getPeople()
                 : List.of();
 
-        boolean shopmgrDegraded = false;
-        List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays;
+        List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays = null;
         try {
             shopmgrBays = shopmgrOperationalContextClient.getBayStatusForLocation(locationUuid);
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             log.warn("Shopmgr service unavailable for dashboard locationId={}", locationId, e);
-            shopmgrDegraded = true;
-            shopmgrBays = List.of();
         }
-        if (shopmgrBays == null || shopmgrBays.isEmpty()) {
-            shopmgrDegraded = true;
+        boolean shopmgrDegraded = shopmgrBays == null;
+        if (shopmgrBays == null) {
             shopmgrBays = List.of();
         }
 

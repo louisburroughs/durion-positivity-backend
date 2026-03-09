@@ -1,12 +1,16 @@
-# Canonical Permission Registry — v1
+# Canonical Permission Registry — v1 (DEPRECATED)
 # Domain owner: domain:security
 # Model: Operation-specific permissions with optional threshold qualifiers
 # Version: v1
+#
+# NOTE:
+# - This file is retained for historical traceability (including references from issue #2).
+# - Active canonical registry is: .github/permissions/permissions_v2.yml
 
 version: v1
 domain: security
 model: operation-specific
-notes: "Threshold-based permissions are evaluated with configuration values; registry is code-backed and versioned."
+notes: "DEPRECATED. Historical UPPER_SNAKE_CASE draft model retained for traceability. Use permissions_v2.yml and module permissions.yaml manifests."
 
 permissions:
   payment:
@@ -99,4 +103,6 @@ machine_readable_identifiers:
 
 status:
   version: v1
-  stability: stable
+  stability: deprecated
+  replacedBy: ".github/permissions/permissions_v2.yml"
+  deprecatedOn: "2026-03-09"
