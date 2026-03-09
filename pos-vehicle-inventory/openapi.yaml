@@ -135,14 +135,14 @@ paths:
               $ref: "#/components/schemas/PreferencesMergeDto"
         required: true
       responses:
-        "200":
-          description: Preferences merged successfully
+        "404":
+          description: No existing preferences to merge into
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "404":
-          description: No existing preferences to merge into
+        "200":
+          description: Preferences merged successfully
           content:
             '*/*':
               schema:

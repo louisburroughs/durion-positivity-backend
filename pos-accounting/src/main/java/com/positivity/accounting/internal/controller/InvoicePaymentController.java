@@ -103,7 +103,7 @@ public class InvoicePaymentController {
     @EmitEvent(id = "ACCOUNTING_INVOICE_REGENERATE", apiVersion = "1")
     public ResponseEntity<InvoiceGenerationResponse> regenerateInvoiceFromWorkorder(
             @Valid @RequestBody RegenerateInvoiceFromWorkorderRequest request) {
-        log.info("Regenerating invoice from workorder {}", request.getWorkorderId());
+
         InvoiceGenerationResponse response = invoiceRegenerationService.regenerateInvoiceFromWorkorder(
                 request.getWorkorderId(),
                 request.getIdempotencyKey());

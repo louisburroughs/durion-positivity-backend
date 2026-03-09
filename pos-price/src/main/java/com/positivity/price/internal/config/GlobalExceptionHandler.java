@@ -41,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
+        private static final String MESSAGE = "message";
         private final Clock clock;
         private static final String PROMOTION_ERROR = "Promotion error [{}]: {}";
         private static final String CORRELATION_HEADER = "X-Correlation-Id";
@@ -163,7 +164,7 @@ public class GlobalExceptionHandler {
                         RestrictionServiceUnavailableException ex) {
                 log.error("Restriction evaluation service unavailable: {}", ex.getMessage());
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                                .body(Map.of("error", Map.of("code", "SERVICE_UNAVAILABLE", "message", ex.getMessage())));
+                                .body(Map.of("error", Map.of("code", "SERVICE_UNAVAILABLE", MESSAGE, ex.getMessage())));
         }
 
         @ExceptionHandler(RestrictionRuleNotFoundException.class)

@@ -70,6 +70,7 @@ class TimeEntryServiceImplTest {
         SecurityContextHolder.clearContext();
     }
 
+    
     @Mock
     private TimeEntryRepository timeEntryRepository;
     @Mock

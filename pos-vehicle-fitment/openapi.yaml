@@ -311,12 +311,6 @@ components:
           description: Updated fitment tags for the hint
           items:
             $ref: "#/components/schemas/FitmentTagDto"
-        updatedBy:
-          type: string
-          description: User or system identity updating the hint
-          example: advisor@durion.local
-          maxLength: 128
-          minLength: 0
       required:
       - fitmentTags
     HintResponse:
@@ -374,12 +368,6 @@ components:
           description: Fitment tags used to determine product applicability
           items:
             $ref: "#/components/schemas/FitmentTagDto"
-        createdBy:
-          type: string
-          description: User or system identity creating the hint
-          example: tech.ops@durion.local
-          maxLength: 128
-          minLength: 0
       required:
       - fitmentTags
       - productId
