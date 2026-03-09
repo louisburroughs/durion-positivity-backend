@@ -159,7 +159,6 @@ public class GlobalExceptionHandler {
         }
 
         @ExceptionHandler(RestrictionServiceUnavailableException.class)
-        @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
         public ResponseEntity<Object> handleRestrictionServiceUnavailable(
                         RestrictionServiceUnavailableException ex) {
                 log.error("Restriction evaluation service unavailable: {}", ex.getMessage());

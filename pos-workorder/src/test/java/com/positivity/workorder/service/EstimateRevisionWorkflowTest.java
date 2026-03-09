@@ -71,7 +71,7 @@ class EstimateRevisionWorkflowTest {
                                 "ROLE_USER");
 
                 authentication.setDetails(Map.of(
-                                GatewaySecurityConstants.DETAIL_USER_ID, TEST_USER_ID.toString(),
+                                GatewaySecurityConstants.DETAIL_USER_ID, TEST_USER_ID,
                                 GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
 
                 authentication.setAuthenticated(true);

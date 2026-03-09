@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.positivity.price.dto.CreateRestrictionRuleRequest;
-import com.positivity.price.enums.LocationTag;
-import com.positivity.price.enums.ServiceTag;
+import com.positivity.price.internal.dto.CreateRestrictionRuleRequest;
 import com.positivity.price.internal.entity.RestrictionRule;
+import com.positivity.price.internal.enums.LocationTag;
+import com.positivity.price.internal.enums.ServiceTag;
 import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
 import java.time.LocalDate;
@@ -27,8 +27,10 @@ import org.mockito.quality.Strictness;
 /**
  * Unit tests for {@link RestrictionRuleServiceImpl} rule lifecycle behavior.
  *
- * <p>Covers creation, lookup, active-list retrieval, and deactivation semantics,
- * including not-found and already-inactive rule paths.</p>
+ * <p>
+ * Covers creation, lookup, active-list retrieval, and deactivation semantics,
+ * including not-found and already-inactive rule paths.
+ * </p>
  *
  * Issue: #43
  */
@@ -63,7 +65,8 @@ class RestrictionRuleServiceImplTest {
     }
 
     /**
-     * Happy-path: valid request must return a response with a non-null ruleId and active=true.
+     * Happy-path: valid request must return a response with a non-null ruleId and
+     * active=true.
      *
      * @see RestrictionRuleServiceImpl#createRule(CreateRestrictionRuleRequest)
      */
@@ -72,12 +75,12 @@ class RestrictionRuleServiceImplTest {
     void givenValidRequest_whenCreateRule_thenReturnsRuleResponse() {
         var request = new CreateRestrictionRuleRequest(
                 UUID.randomUUID(),
-            LocationTag.RETAIL_STORE,
-            ServiceTag.WORKORDER,
+                LocationTag.RETAIL_STORE,
+                ServiceTag.WORKORDER,
                 LocalDate.now(),
-            null,
-            null,
-            true);
+                null,
+                null,
+                true);
 
         var result = service.createRule(request);
 
@@ -104,13 +107,13 @@ class RestrictionRuleServiceImplTest {
     }
 
     /**
-        * Unknown ID must throw a specific not-found runtime exception.
+     * Unknown ID must throw a specific not-found runtime exception.
      */
     @Test
     @DisplayName("RRS-003: unknown id → throws not-found exception")
     void givenUnknownId_whenGetRuleById_thenThrowsNotFoundException() {
         assertThatThrownBy(() -> service.getRuleById(unknownId))
-            .isInstanceOf(RestrictionRuleNotFoundException.class);
+                .isInstanceOf(RestrictionRuleNotFoundException.class);
     }
 
     /**
@@ -125,9 +128,13 @@ class RestrictionRuleServiceImplTest {
     }
 
     /**
-     * Creating a rule with an explicit policyVersion must preserve that value in the saved entity.
+     * Creating a rule with an explicit policyVersion must preserve that value in
+     * the saved entity.
      *
-     * <p>Covers the non-null branch of {@code request.policyVersion() == null ? 1 : request.policyVersion()}.</p>
+     * <p>
+     * Covers the non-null branch of
+     * {@code request.policyVersion() == null ? 1 : request.policyVersion()}.
+     * </p>
      */
     @Test
     @DisplayName("RRS-005b: createRule with explicit policyVersion preserves provided version")
@@ -162,7 +169,8 @@ class RestrictionRuleServiceImplTest {
     }
 
     /**
-     * Deactivating an already-inactive rule must throw {@code IllegalStateException}.
+     * Deactivating an already-inactive rule must throw
+     * {@code IllegalStateException}.
      */
     @Test
     @DisplayName("RRS-006: already-inactive rule → IllegalStateException")

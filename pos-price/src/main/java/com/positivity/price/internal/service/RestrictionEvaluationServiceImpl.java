@@ -1,11 +1,11 @@
 package com.positivity.price.internal.service;
 
-import com.positivity.price.dto.RestrictionEvaluationItem;
-import com.positivity.price.dto.RestrictionEvaluationRequest;
-import com.positivity.price.dto.RestrictionEvaluationResult;
+import com.positivity.price.internal.dto.RestrictionEvaluationItem;
+import com.positivity.price.internal.dto.RestrictionEvaluationRequest;
+import com.positivity.price.internal.dto.RestrictionEvaluationResult;
 import com.positivity.price.internal.entity.RestrictionRule;
-import com.positivity.price.enums.EvaluationContext;
-import com.positivity.price.enums.RestrictionDecision;
+import com.positivity.price.internal.enums.EvaluationContext;
+import com.positivity.price.internal.enums.RestrictionDecision;
 import com.positivity.price.internal.exception.RestrictionServiceUnavailableException;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
 import com.positivity.price.service.RestrictionEvaluationService;
@@ -76,7 +76,8 @@ public class RestrictionEvaluationServiceImpl implements RestrictionEvaluationSe
         if (isCommitPath(context)) {
             throw new RestrictionServiceUnavailableException("Evaluation failed on commit path", cause);
         }
-        return new RestrictionEvaluationResult(productId, RestrictionDecision.RESTRICTION_UNKNOWN, List.of(), List.of());
+        return new RestrictionEvaluationResult(productId, RestrictionDecision.RESTRICTION_UNKNOWN, List.of(),
+                List.of());
     }
 
     private boolean isCommitPath(EvaluationContext context) {

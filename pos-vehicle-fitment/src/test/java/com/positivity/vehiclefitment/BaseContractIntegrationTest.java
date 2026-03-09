@@ -1,5 +1,8 @@
 package com.positivity.vehiclefitment;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
@@ -10,7 +13,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  *
  * <p>Starts the full Spring Boot context with an in-memory H2 database and
  * MockMvc wired up. Subclasses can call {@link #withGatewayAuth} to inject
- * the gateway security headers ({@code X-User} / {@code X-Authorities}) that
+ * the gateway security headers ({@code Authorization}, {@code X-User-Id},
+ * {@code X-User}, {@code X-Authorities}) that
  * the {@code GatewaySecurityConfig} filter uses to authenticate requests.</p>
  *
  * <p>ADR compliance:</p>
@@ -27,16 +31,21 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 public abstract class BaseContractIntegrationTest {
+    private static final String SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
+    private static final String SYSTEM_USERNAME = "contract-test-user";
+    private static final String TEST_BEARER_TOKEN = buildUnsignedTestToken(SYSTEM_USER_ID);
 
     /**
      * Adds gateway authentication headers to the provided request builder.
      *
      * @param requestBuilder the MockMvc request to decorate
-     * @return the request builder with {@code X-User} and {@code X-Authorities} headers set
+     * @return the request builder with gateway auth headers set
      */
     protected MockHttpServletRequestBuilder withGatewayAuth(MockHttpServletRequestBuilder requestBuilder) {
         return requestBuilder
-                .header("X-User", "contract-test-user")
+                .header("Authorization", "Bearer " + TEST_BEARER_TOKEN)
+                .header("X-User-Id", SYSTEM_USER_ID)
+                .header("X-User", SYSTEM_USERNAME)
                 .header("X-Authorities", defaultAuthorities());
     }
 
@@ -48,5 +57,15 @@ public abstract class BaseContractIntegrationTest {
      */
     protected String defaultAuthorities() {
         return "*";
+    }
+
+    private static String buildUnsignedTestToken(String userId) {
+        String headerJson = "{\"alg\":\"none\"}";
+        String payloadJson = "{\"userId\":\"" + userId + "\"}";
+        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+        String encodedPayload = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
+        return encodedHeader + "." + encodedPayload + ".test-signature";
     }
 }

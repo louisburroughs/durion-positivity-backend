@@ -1,8 +1,8 @@
 package com.positivity.price.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.price.dto.CreateRestrictionRuleRequest;
-import com.positivity.price.dto.RestrictionRuleResponse;
+import com.positivity.price.internal.dto.CreateRestrictionRuleRequest;
+import com.positivity.price.internal.dto.RestrictionRuleResponse;
 import com.positivity.price.service.RestrictionRuleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

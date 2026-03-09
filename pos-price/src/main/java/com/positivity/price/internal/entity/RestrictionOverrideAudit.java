@@ -5,8 +5,8 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.positivity.price.enums.EvaluationContext;
-import com.positivity.price.enums.OverrideStatus;
+import com.positivity.price.internal.enums.EvaluationContext;
+import com.positivity.price.internal.enums.OverrideStatus;
 import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;

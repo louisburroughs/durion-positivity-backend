@@ -6,13 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
-import com.positivity.price.dto.RestrictionEvaluationItem;
-import com.positivity.price.dto.RestrictionEvaluationRequest;
+import com.positivity.price.internal.dto.RestrictionEvaluationItem;
+import com.positivity.price.internal.dto.RestrictionEvaluationRequest;
 import com.positivity.price.internal.entity.RestrictionRule;
-import com.positivity.price.enums.EvaluationContext;
-import com.positivity.price.enums.LocationTag;
-import com.positivity.price.enums.RestrictionDecision;
-import com.positivity.price.enums.ServiceTag;
+import com.positivity.price.internal.enums.EvaluationContext;
+import com.positivity.price.internal.enums.LocationTag;
+import com.positivity.price.internal.enums.RestrictionDecision;
+import com.positivity.price.internal.enums.ServiceTag;
 import com.positivity.price.internal.exception.RestrictionServiceUnavailableException;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
 import java.time.LocalDate;
@@ -30,9 +30,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * Unit tests for {@link RestrictionEvaluationServiceImpl} evaluation logic.
  *
- * <p>Covers decision outcomes (ALLOW, BLOCK, ALLOW_WITH_OVERRIDE, RESTRICTION_UNKNOWN),
- * fail-safe semantics on service unavailability by context (BROWSE → RESTRICTION_UNKNOWN,
- * COMMIT/CHECKOUT → exception), and multi-item result cardinality.</p>
+ * <p>
+ * Covers decision outcomes (ALLOW, BLOCK, ALLOW_WITH_OVERRIDE,
+ * RESTRICTION_UNKNOWN),
+ * fail-safe semantics on service unavailability by context (BROWSE →
+ * RESTRICTION_UNKNOWN,
+ * COMMIT/CHECKOUT → exception), and multi-item result cardinality.
+ * </p>
  *
  * Issue: #43
  */
@@ -59,7 +63,7 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.BROWSE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-            item.productId(), item.locationTag(), item.serviceTag())).thenReturn(List.of());
+                item.productId(), item.locationTag(), item.serviceTag())).thenReturn(List.of());
 
         var results = service.evaluate(request);
 
@@ -76,7 +80,7 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.BROWSE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-            item.productId(), item.locationTag(), item.serviceTag())).thenReturn(List.of(rule(false)));
+                item.productId(), item.locationTag(), item.serviceTag())).thenReturn(List.of(rule(false)));
 
         var results = service.evaluate(request);
 
@@ -93,7 +97,7 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.QUOTE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-            item.productId(), item.locationTag(), item.serviceTag())).thenReturn(List.of(rule(true)));
+                item.productId(), item.locationTag(), item.serviceTag())).thenReturn(List.of(rule(true)));
 
         var results = service.evaluate(request);
 
@@ -102,8 +106,10 @@ class RestrictionEvaluationServiceImplTest {
     }
 
     /**
-     * On BROWSE path when the underlying rule data source is unavailable, the service must
-     * degrade gracefully and return RESTRICTION_UNKNOWN rather than propagate an exception.
+     * On BROWSE path when the underlying rule data source is unavailable, the
+     * service must
+     * degrade gracefully and return RESTRICTION_UNKNOWN rather than propagate an
+     * exception.
      */
     @Test
     @DisplayName("RES-004: BROWSE context + service unavailable → RESTRICTION_UNKNOWN (no exception)")
@@ -111,7 +117,7 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.BROWSE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-            item.productId(), item.locationTag(), item.serviceTag())).thenThrow(new RuntimeException("down"));
+                item.productId(), item.locationTag(), item.serviceTag())).thenThrow(new RuntimeException("down"));
 
         var results = service.evaluate(request);
 
@@ -120,8 +126,10 @@ class RestrictionEvaluationServiceImplTest {
     }
 
     /**
-     * On COMMIT_SALE path when the rule data source is unavailable, the service must
-     * throw {@link RestrictionServiceUnavailableException} (no silent degradation on
+     * On COMMIT_SALE path when the rule data source is unavailable, the service
+     * must
+     * throw {@link RestrictionServiceUnavailableException} (no silent degradation
+     * on
      * commit-critical paths).
      */
     @Test
@@ -130,14 +138,15 @@ class RestrictionEvaluationServiceImplTest {
         var request = evaluationRequest(EvaluationContext.COMMIT_SALE, 1);
         var item = request.items().get(0);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(
-            item.productId(), item.locationTag(), item.serviceTag())).thenThrow(new RuntimeException("down"));
+                item.productId(), item.locationTag(), item.serviceTag())).thenThrow(new RuntimeException("down"));
 
         assertThatThrownBy(() -> service.evaluate(request))
                 .isInstanceOf(RestrictionServiceUnavailableException.class);
     }
 
     /**
-     * With N items in the request, the result list must contain exactly N entries — one
+     * With N items in the request, the result list must contain exactly N entries —
+     * one
      * per submitted product.
      */
     @Test
@@ -145,7 +154,7 @@ class RestrictionEvaluationServiceImplTest {
     void givenMultipleProducts_whenEvaluate_thenReturnsOneResultPerProduct() {
         var request = evaluationRequest(EvaluationContext.BROWSE, 3);
         when(repository.findByProductIdAndActiveTrueAndLocationTagAndServiceTag(any(), any(), any()))
-            .thenReturn(List.of());
+                .thenReturn(List.of());
 
         var results = service.evaluate(request);
 
@@ -153,7 +162,8 @@ class RestrictionEvaluationServiceImplTest {
     }
 
     /**
-     * When evaluation exceeds the 800 ms SLA on a commit-critical context, the service must
+     * When evaluation exceeds the 800 ms SLA on a commit-critical context, the
+     * service must
      * throw {@link RestrictionServiceUnavailableException}.
      */
     @Test
@@ -178,8 +188,8 @@ class RestrictionEvaluationServiceImplTest {
         List<RestrictionEvaluationItem> items = IntStream.range(0, itemCount)
                 .mapToObj(i -> new RestrictionEvaluationItem(
                         UUID.randomUUID(),
-                    LocationTag.RETAIL_STORE,
-                    ServiceTag.WORKORDER,
+                        LocationTag.RETAIL_STORE,
+                        ServiceTag.WORKORDER,
                         context))
                 .toList();
         return new RestrictionEvaluationRequest(items);
