@@ -32,6 +32,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Unit tests for CAP-142 Story #60: Daily Dispatch Board Dashboard service
@@ -733,7 +734,7 @@ class DashboardServiceTest {
         // -----------------------------------------------------------------------
 
         @Test
-        @DisplayName("AC-DQ-1: dataQualityWarning is true and mechanics is empty when people service throws RuntimeException")
+        @DisplayName("AC-DQ-1: dataQualityWarning is true and mechanics is empty when people service throws RestClientException")
         void whenPeopleServiceUnavailable_dashboardReturnsWithDataQualityWarningTrue() {
                 // Arrange
                 // Issue CAP-142 Story #60: data quality warning — people service unavailable
@@ -742,7 +743,7 @@ class DashboardServiceTest {
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                                 "MECH-DQ1", null)));
                 when(peopleAvailabilityClient.fetchAvailability(any(), any()))
-                                .thenThrow(new RuntimeException("people service unavailable"));
+                                .thenThrow(new RestClientException("people service unavailable"));
                 when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
                 // Act
@@ -805,7 +806,7 @@ class DashboardServiceTest {
         // -----------------------------------------------------------------------
 
         @Test
-        @DisplayName("AC-DQ-4: dataQualityWarning is true and bays is empty when shopmgr service throws RuntimeException")
+        @DisplayName("AC-DQ-4: dataQualityWarning is true and bays is empty when shopmgr service throws RestClientException")
         void whenShopmgrUnavailableViaCatch_dataQualityWarningIsTrue() {
                 // Arrange
                 // Issue CAP-142 Story #60: data quality warning — shopmgr service unavailable
@@ -814,7 +815,7 @@ class DashboardServiceTest {
                 when(peopleAvailabilityClient.fetchAvailability(any(), any()))
                                 .thenReturn(emptyAvailability());
                 when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
-                                .thenThrow(new RuntimeException("shopmgr service unavailable"));
+                                .thenThrow(new RestClientException("shopmgr service unavailable"));
 
                 // Act
                 DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
