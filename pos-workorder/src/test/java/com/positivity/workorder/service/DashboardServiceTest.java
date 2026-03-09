@@ -728,6 +728,102 @@ class DashboardServiceTest {
                                 .noneMatch(c -> "MECHANIC_BREAK_OVERLAP".equals(c.getConflictType()));
         }
 
+        // -----------------------------------------------------------------------
+        // AC-DQ-1: dataQualityWarning=true when PeopleAvailabilityClient throws
+        // -----------------------------------------------------------------------
+
+        @Test
+        @DisplayName("AC-DQ-1: dataQualityWarning is true and mechanics is empty when people service throws RuntimeException")
+        void whenPeopleServiceUnavailable_dashboardReturnsWithDataQualityWarningTrue() {
+                // Arrange
+                // Issue CAP-142 Story #60: data quality warning — people service unavailable
+                when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                                .thenReturn(List.of(buildWorkorder(
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                                "MECH-DQ1", null)));
+                when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                                .thenThrow(new RuntimeException("people service unavailable"));
+                when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
+
+                // Act
+                DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+                // Assert
+                assertThat(response).isNotNull();
+                assertThat(response.getDataQualityWarning()).isTrue();
+                assertThat(response.getMechanics()).isEmpty();
+                assertThat(response.getWorkorders()).isNotNull();
+        }
+
+        // -----------------------------------------------------------------------
+        // AC-DQ-2: dataQualityWarning=true when PeopleAvailabilityClient returns null
+        // -----------------------------------------------------------------------
+
+        @Test
+        @DisplayName("AC-DQ-2: dataQualityWarning is true and mechanics is empty when people service returns null")
+        void whenPeopleServiceReturnsNull_dashboardReturnsWithDataQualityWarningTrue() {
+                // Arrange
+                // Issue CAP-142 Story #60: data quality warning — people service returns null
+                when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                                .thenReturn(List.of());
+                when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                                .thenReturn(null);
+                when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
+
+                // Act
+                DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+                // Assert
+                assertThat(response.getDataQualityWarning()).isTrue();
+                assertThat(response.getMechanics()).isEmpty();
+        }
+
+        // -----------------------------------------------------------------------
+        // AC-DQ-3: dataQualityWarning=false when both services healthy
+        // -----------------------------------------------------------------------
+
+        @Test
+        @DisplayName("AC-DQ-3: dataQualityWarning is false when both people and shopmgr services return normally")
+        void whenBothServicesAvailable_dataQualityWarningIsFalse() {
+                // Arrange
+                // Issue CAP-142 Story #60: data quality warning — happy path, no degradation
+                when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                                .thenReturn(List.of());
+                when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                                .thenReturn(emptyAvailability());
+                when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
+
+                // Act
+                DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+                // Assert: no degradation — warning must not be true
+                assertThat(response.getDataQualityWarning()).isFalse();
+        }
+
+        // -----------------------------------------------------------------------
+        // AC-DQ-4: dataQualityWarning=true when ShopmgrOperationalContextClient throws
+        // -----------------------------------------------------------------------
+
+        @Test
+        @DisplayName("AC-DQ-4: dataQualityWarning is true and bays is empty when shopmgr service throws RuntimeException")
+        void whenShopmgrUnavailableViaCatch_dataQualityWarningIsTrue() {
+                // Arrange
+                // Issue CAP-142 Story #60: data quality warning — shopmgr service unavailable
+                when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                                .thenReturn(List.of());
+                when(peopleAvailabilityClient.fetchAvailability(any(), any()))
+                                .thenReturn(emptyAvailability());
+                when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
+                                .thenThrow(new RuntimeException("shopmgr service unavailable"));
+
+                // Act
+                DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+                // Assert
+                assertThat(response.getDataQualityWarning()).isTrue();
+                assertThat(response.getBays()).isEmpty();
+        }
+
         private Workorder buildWorkorder(UUID id, String mechanicId, UUID resourceId) {
                 return Workorder.builder()
                                 .id(id)

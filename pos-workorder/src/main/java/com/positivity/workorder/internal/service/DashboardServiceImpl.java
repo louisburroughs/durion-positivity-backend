@@ -57,13 +57,31 @@ public class DashboardServiceImpl implements DashboardService {
 
         List<Workorder> workorders = workorderRepository.findByScheduledDateAndLocationId(date, locationUuid);
 
-        PeopleAvailabilityResponse availability = peopleAvailabilityClient.fetchAvailability(locationId, date);
+        boolean peopleDegraded = false;
+        PeopleAvailabilityResponse availability;
+        try {
+            availability = peopleAvailabilityClient.fetchAvailability(locationId, date);
+        } catch (Exception e) {
+            log.warn("People service unavailable for dashboard locationId={} date={}", locationId, date, e);
+            peopleDegraded = true;
+            availability = null;
+        }
+        if (availability == null) {
+            peopleDegraded = true;
+        }
         List<PersonAvailability> people = availability != null && availability.getPeople() != null
                 ? availability.getPeople()
                 : List.of();
 
-        List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays = shopmgrOperationalContextClient
-                .getBayStatusForLocation(locationUuid);
+        boolean shopmgrDegraded = false;
+        List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays;
+        try {
+            shopmgrBays = shopmgrOperationalContextClient.getBayStatusForLocation(locationUuid);
+        } catch (Exception e) {
+            log.warn("Shopmgr service unavailable for dashboard locationId={}", locationId, e);
+            shopmgrDegraded = true;
+            shopmgrBays = List.of();
+        }
 
         List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(workorders);
         List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people);
@@ -79,6 +97,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .bays(bayStatuses)
                 .conflicts(conflicts)
                 .lastRefreshed(Instant.now(clock))
+                .dataQualityWarning(peopleDegraded || shopmgrDegraded)
                 .build();
     }
 
