@@ -12,7 +12,9 @@ import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
+import com.positivity.security.common.GatewaySecurityConstants;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -73,9 +75,25 @@ class InvoiceFinalizationServiceTest {
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 
+    @BeforeEach
+    void setUpSecurityContext() {
+        withServiceAdvisorContext();
+    }
+
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    /**
+     * Sets up a SERVICE_ADVISOR role in the security context.
+     */
+    private void withServiceAdvisorContext() {
+        var auth = new UsernamePasswordAuthenticationToken(
+                "advisor-001", null,
+                List.of(new SimpleGrantedAuthority("ROLE_SERVICE_ADVISOR")));
+        auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "advisor-001"));
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     /**
@@ -85,6 +103,7 @@ class InvoiceFinalizationServiceTest {
         var auth = new UsernamePasswordAuthenticationToken(
                 "manager-001", null,
                 List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
+        auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "manager-001"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
@@ -197,8 +216,8 @@ class InvoiceFinalizationServiceTest {
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
         assertThat(response.getFinalizedAt()).isNotNull();
-        // ADR-0018: actor from SecurityContext; no auth in test → defaults to "system"
-        assertThat(response.getFinalizedBy()).isEqualTo("system");
+        // ADR-0018: actor from SecurityContext
+        assertThat(response.getFinalizedBy()).isEqualTo("advisor-001");
     }
 
     /**
@@ -333,8 +352,8 @@ class InvoiceFinalizationServiceTest {
         InvoiceDetailsResponse response = service.revert(invoiceId, "MGR-APPROVAL-001", "Customer dispute");
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
-        // ADR-0018: actor from SecurityContext; no auth in test → defaults to "system"
-        assertThat(response.getRevertedBy()).isEqualTo("system");
+        // ADR-0018: actor from SecurityContext
+        assertThat(response.getRevertedBy()).isEqualTo("advisor-001");
     }
 
     /**
@@ -394,8 +413,8 @@ class InvoiceFinalizationServiceTest {
      * Builds a {@link FinalizationRequest} for a SERVICE_ADVISOR actor.
      *
      * <p>
-     * Role is derived from SecurityContext (no SecurityContext = SERVICE_ADVISOR
-     * constraints apply).
+     * Role is derived from SecurityContext (this test class sets
+     * ROLE_SERVICE_ADVISOR by default in {@code @BeforeEach}).
      *
      * @param managerApprovalCode optional manager code; {@code null} means no
      *                            approval supplied

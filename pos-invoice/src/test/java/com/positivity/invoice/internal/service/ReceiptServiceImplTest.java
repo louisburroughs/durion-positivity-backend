@@ -38,6 +38,7 @@ import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.ReceiptRepository;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 /**
  * Unit tests for {@link ReceiptServiceImpl} covering Story #7:
@@ -107,8 +108,9 @@ class ReceiptServiceImplTest {
         var grants = List.of(authorities).stream()
                 .map(SimpleGrantedAuthority::new)
                 .toList();
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants));
+        var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
+        auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, CASHIER_ID));
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     // -------------------------------------------------------------------------

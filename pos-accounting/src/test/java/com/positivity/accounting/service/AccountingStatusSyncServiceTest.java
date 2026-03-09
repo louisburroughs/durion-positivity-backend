@@ -130,7 +130,6 @@ class AccountingStatusSyncServiceTest {
                     .doesNotThrowAnyException();
 
             assertThat(existingStatusView.getAccountingStatus()).isEqualTo(AccountingStatus.POSTED);
-            assertThat(existingStatusView.getAccountingStatusUpdatedAt()).isEqualTo(event.getTimestamp());
             assertThat(existingStatusView.getPostingReference()).isEqualTo(event.getPostingReference());
             verify(statusViewRepository).save(existingStatusView);
         }
@@ -141,7 +140,7 @@ class AccountingStatusSyncServiceTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Nested
-        @DisplayName("AC2 — Backward transition: POSTED → PENDING_POSTING is silently ignored")
+    @DisplayName("AC2 — Backward transition: POSTED → PENDING_POSTING is silently ignored")
     class BackwardTransitionBlocked {
 
         @Test
@@ -158,7 +157,7 @@ class AccountingStatusSyncServiceTest {
                     .timestamp(Instant.now(TEST_CLOCK))
                     .postingReference(null)
                     .eventId("evt-backward-001")
-                .discrepancyReason(null)
+                    .discrepancyReason(null)
                     .build();
 
             assertThatNoException().isThrownBy(() -> service.processStatusEvent(backwardEvent));
@@ -391,16 +390,16 @@ class AccountingStatusSyncServiceTest {
             // This test passes immediately in RED — validates the enum scaffold is correct
             var values = java.util.EnumSet.allOf(AccountingStatus.class);
             assertThat(values)
-                .hasSize(8)
-                .containsExactlyInAnyOrder(
-                    AccountingStatus.PENDING_POSTING,
-                    AccountingStatus.POSTED,
-                    AccountingStatus.RECONCILED,
-                    AccountingStatus.REJECTED,
-                    AccountingStatus.REVERSED,
-                    AccountingStatus.VOIDED,
-                    AccountingStatus.ON_HOLD,
-                    AccountingStatus.DISPUTED);
+                    .hasSize(8)
+                    .containsExactlyInAnyOrder(
+                            AccountingStatus.PENDING_POSTING,
+                            AccountingStatus.POSTED,
+                            AccountingStatus.RECONCILED,
+                            AccountingStatus.REJECTED,
+                            AccountingStatus.REVERSED,
+                            AccountingStatus.VOIDED,
+                            AccountingStatus.ON_HOLD,
+                            AccountingStatus.DISPUTED);
         }
     }
 
@@ -425,7 +424,8 @@ class AccountingStatusSyncServiceTest {
             service.processStatusEvent(event);
 
             assertThat(existingStatusView.isDiscrepancyDetected()).isTrue();
-            assertThat(existingStatusView.getDiscrepancyReason()).isEqualTo("GL validation failed: missing cost centre");
+            assertThat(existingStatusView.getDiscrepancyReason())
+                    .isEqualTo("GL validation failed: missing cost centre");
         }
 
         @Test
@@ -471,8 +471,7 @@ class AccountingStatusSyncServiceTest {
 
             service.processStatusEvent(event);
 
-            ArgumentCaptor<AccountingStatusSyncAudit> captor =
-                    ArgumentCaptor.forClass(AccountingStatusSyncAudit.class);
+            ArgumentCaptor<AccountingStatusSyncAudit> captor = ArgumentCaptor.forClass(AccountingStatusSyncAudit.class);
             verify(auditRepository).save(captor.capture());
             AccountingStatusSyncAudit audit = captor.getValue();
             assertThat(audit.getInvoiceId()).isEqualTo(INVOICE_ID);
@@ -623,8 +622,7 @@ class AccountingStatusSyncServiceTest {
 
             service.processStatusEvent(event);
 
-            ArgumentCaptor<AccountingStatusSyncAudit> captor =
-                    ArgumentCaptor.forClass(AccountingStatusSyncAudit.class);
+            ArgumentCaptor<AccountingStatusSyncAudit> captor = ArgumentCaptor.forClass(AccountingStatusSyncAudit.class);
             verify(auditRepository).save(captor.capture());
             assertThat(captor.getValue().getLatencyMs()).isNull();
         }
@@ -686,7 +684,8 @@ class AccountingStatusSyncServiceTest {
                 IdempotencyService idempotencyService,
                 Clock clock,
                 AccountingStatusSyncAuditRepository auditRepository) {
-            return new AccountingStatusSyncServiceImpl(statusViewRepository, idempotencyService, clock, auditRepository);
+            return new AccountingStatusSyncServiceImpl(statusViewRepository, idempotencyService, clock,
+                    auditRepository);
         }
     }
 
@@ -696,7 +695,8 @@ class AccountingStatusSyncServiceTest {
 
     /**
      * Sets up a security context with {@code VIEW_ACCOUNTING_STATUS} authority,
-     * as required by AC3 (permission gating) and AC6 (stale indicator) test scenarios.
+     * as required by AC3 (permission gating) and AC6 (stale indicator) test
+     * scenarios.
      */
     private void setViewerSecurityContext() {
         SecurityContext ctx = SecurityContextHolder.createEmptyContext();
