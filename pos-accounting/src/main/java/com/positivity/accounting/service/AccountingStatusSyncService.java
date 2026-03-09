@@ -35,9 +35,10 @@ public interface AccountingStatusSyncService {
      * with the new accounting status, timestamp, and posting reference.
      * Enforces idempotency: events with a previously seen {@code eventId} are
      * ignored.
-    *
-    * <p>Backward status transitions (terminal → early state) are silently ignored
-    * with a warning log; they do NOT throw.
+     *
+     * <p>
+     * Backward status transitions (terminal → early state) are silently ignored
+     * with a warning log; they do NOT throw.
      * </p>
      *
      * @param event the accounting status changed event; must not be {@code null}
@@ -70,9 +71,12 @@ public interface AccountingStatusSyncService {
     AccountingStatusView getInvoiceAccountingStatus(@NonNull UUID invoiceId);
 
     /**
-     * Returns the full accounting status detail for an invoice, including discrepancy fields.
+     * Returns the full accounting status detail for an invoice, including
+     * discrepancy fields.
      *
-     * <p>Requires {@code VIEW_ACCOUNTING_DETAIL} authority.</p>
+     * <p>
+     * Requires {@code VIEW_ACCOUNTING_DETAIL} authority.
+     * </p>
      *
      * @param invoiceId the invoice identifier; must not be {@code null}
      * @return the full accounting status view including discrepancy fields
@@ -85,10 +89,14 @@ public interface AccountingStatusSyncService {
     /**
      * Stub: re-reads and returns the current accounting status for an invoice.
      *
-     * <p>Pending event-driven refresh implementation. For now this is a read-through
-     * stub that returns current persisted state.</p>
+     * <p>
+     * Pending event-driven refresh implementation. For now this is a read-through
+     * stub that returns current persisted state.
+     * </p>
      *
-     * <p>Requires {@code REFRESH_ACCOUNTING_STATUS} authority.</p>
+     * <p>
+     * Requires {@code REFRESH_ACCOUNTING_STATUS} authority.
+     * </p>
      *
      * @param invoiceId the invoice identifier; must not be {@code null}
      * @return the current accounting status view

@@ -9,7 +9,9 @@ import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
+import com.positivity.security.common.GatewaySecurityConstants;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -71,9 +73,25 @@ class InvoiceFinalizationPermissionTest {
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 
+    @BeforeEach
+    void setUpSecurityContext() {
+        withServiceAdvisorContext();
+    }
+
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    /**
+     * Sets up a SERVICE_ADVISOR role in the security context.
+     */
+    private void withServiceAdvisorContext() {
+        var auth = new UsernamePasswordAuthenticationToken(
+                "advisor-001", null,
+                List.of(new SimpleGrantedAuthority("ROLE_SERVICE_ADVISOR")));
+        auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "advisor-001"));
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     /**
@@ -83,6 +101,7 @@ class InvoiceFinalizationPermissionTest {
         var auth = new UsernamePasswordAuthenticationToken(
                 "manager-001", null,
                 List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
+        auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "manager-001"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
@@ -98,8 +117,7 @@ class InvoiceFinalizationPermissionTest {
     @Test
     void serviceAdvisor_canFinalize_invoiceBelow500() {
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        // SERVICE_ADVISOR (no SecurityContext = default, not SHOP_MANAGER); $499.99
-        // within cap
+        // SERVICE_ADVISOR context is configured in @BeforeEach; $499.99 within cap
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
                         new BigDecimal("499.99"))));
@@ -118,7 +136,7 @@ class InvoiceFinalizationPermissionTest {
     @Test
     void serviceAdvisor_cannotFinalize_invoiceAbove500_withoutManagerApproval() {
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        // SERVICE_ADVISOR (no context); invoice total $500.01 > cap; no approval code
+        // SERVICE_ADVISOR context; invoice total $500.01 > cap; no approval code
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"),
                         new BigDecimal("500.01"))));

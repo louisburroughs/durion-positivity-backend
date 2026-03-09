@@ -7,8 +7,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 /**
  * Repository for append-only accounting status sync audit records.
  *
- * <p>Only {@code save()} and read operations are expected. No delete or update
- * operations are performed on this table.</p>
+ * <p>
+ * Only {@code save()} and read operations are expected. No delete or update
+ * operations are performed on this table.
+ * </p>
  */
 public interface AccountingStatusSyncAuditRepository extends JpaRepository<AccountingStatusSyncAudit, UUID> {
 }

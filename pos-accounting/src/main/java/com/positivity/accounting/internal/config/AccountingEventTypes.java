@@ -17,7 +17,7 @@ public final class AccountingEventTypes {
 
         /**
          * All event type registrations for the accounting module.
-         * Total: 46 event types (includes +2 from CAP-251 #5:
+         * Total: 47 event types (includes +2 from CAP-251 #5:
          * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
          * CAP-053 Vendor Bill workflow + GL Mapping).
          */

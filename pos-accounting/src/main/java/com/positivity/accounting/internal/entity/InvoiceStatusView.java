@@ -87,15 +87,18 @@ public class InvoiceStatusView {
     private boolean archived;
 
     /**
-     * True when the accounting system reported a reconciliation discrepancy for this invoice.
-     * Set to {@code true} when accounting status is {@code REJECTED}; reset to {@code false}
+     * True when the accounting system reported a reconciliation discrepancy for
+     * this invoice.
+     * Set to {@code true} when accounting status is {@code REJECTED}; reset to
+     * {@code false}
      * on any subsequent status update to a non-rejected state.
      */
     @Column(name = "discrepancy_detected", nullable = false)
     private boolean discrepancyDetected;
 
     /**
-     * Human-readable explanation of the discrepancy provided by the accounting system.
+     * Human-readable explanation of the discrepancy provided by the accounting
+     * system.
      * Populated when {@code discrepancyDetected} is {@code true}; null otherwise.
      */
     @Column(name = "discrepancy_reason", length = 1000)

@@ -27,4 +27,39 @@ public class ErrorResponse {
     private String correlationId;
     private Long timestamp;
     private Map<String, String> fieldErrors;
+    private Error error;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Error {
+        private String code;
+        private String message;
+        private Long timestamp;
+    }
+
+    public static ErrorResponse of(String code, String message) {
+        return of(code, message, null);
+    }
+
+    /**
+     * Builds a response that supports both formats:
+     * <ul>
+     * <li>Top-level: {@code errorCode}/{@code message}</li>
+     * <li>Envelope: {@code error.code}/{@code error.message}</li>
+     * </ul>
+     */
+    public static ErrorResponse of(String code, String message, Long timestamp) {
+        return ErrorResponse.builder()
+                .errorCode(code)
+                .message(message)
+                .timestamp(timestamp)
+                .error(Error.builder()
+                        .code(code)
+                        .message(message)
+                        .timestamp(timestamp)
+                        .build())
+                .build();
+    }
 }

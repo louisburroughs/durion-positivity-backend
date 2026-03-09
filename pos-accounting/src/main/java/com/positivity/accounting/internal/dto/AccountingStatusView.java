@@ -38,7 +38,9 @@ public class AccountingStatusView {
     /** True when the accounting system reported a discrepancy for this invoice. */
     boolean discrepancyDetected;
 
-    /** Explanation of the discrepancy when discrepancyDetected=true. May be null. */
+    /**
+     * Explanation of the discrepancy when discrepancyDetected=true. May be null.
+     */
     @Nullable
     String discrepancyReason;
 
