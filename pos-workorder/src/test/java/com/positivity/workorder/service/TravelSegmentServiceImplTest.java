@@ -27,9 +27,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -67,10 +69,14 @@ class TravelSegmentServiceImplTest {
         @BeforeEach
         void setUpSecurityContext() {
                 var context = SecurityContextHolder.createEmptyContext();
-                context.setAuthentication(new UsernamePasswordAuthenticationToken(
+                var authentication = new UsernamePasswordAuthenticationToken(
                                 TECHNICIAN_ID.toString(),
                                 "N/A",
-                                List.of()));
+                                List.of());
+                authentication.setDetails(Map.of(
+                                GatewaySecurityConstants.DETAIL_USERNAME, TECHNICIAN_ID.toString(),
+                                GatewaySecurityConstants.DETAIL_USER_ID, TECHNICIAN_ID));
+                context.setAuthentication(authentication);
                 SecurityContextHolder.setContext(context);
         }
 

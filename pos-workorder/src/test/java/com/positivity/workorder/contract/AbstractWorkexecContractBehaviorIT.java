@@ -37,7 +37,7 @@ import jakarta.servlet.http.HttpServletResponse;
  */
 abstract class AbstractWorkexecContractBehaviorIT {
 
-    private static final String TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+    private static final UUID TEST_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String TEST_USERNAME = "workorder-test-user";
 
     private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
@@ -73,10 +73,20 @@ abstract class AbstractWorkexecContractBehaviorIT {
                             HttpServletRequest request,
                             HttpServletResponse response,
                             FilterChain filterChain) throws ServletException, IOException {
+                        UUID userId = TEST_USER_ID;
+                        String userIdHeader = request.getHeader("X-User-Id");
+                        if (userIdHeader != null && !userIdHeader.isBlank()) {
+                            try {
+                                userId = UUID.fromString(userIdHeader);
+                            } catch (IllegalArgumentException ignored) {
+                                userId = TEST_USER_ID;
+                            }
+                        }
+
                         var authentication = new UsernamePasswordAuthenticationToken(
                                 TEST_USERNAME, null, TEST_AUTHORITIES);
                         authentication.setDetails(Map.of(
-                                GatewaySecurityConstants.DETAIL_USER_ID, TEST_USER_ID,
+                                GatewaySecurityConstants.DETAIL_USER_ID, userId,
                                 GatewaySecurityConstants.DETAIL_USERNAME, TEST_USERNAME));
                         SecurityContextHolder.getContext().setAuthentication(authentication);
                         filterChain.doFilter(request, response);

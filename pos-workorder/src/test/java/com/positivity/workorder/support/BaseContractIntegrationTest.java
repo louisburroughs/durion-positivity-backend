@@ -1,5 +1,8 @@
 package com.positivity.workorder.support;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,6 +37,7 @@ public abstract class BaseContractIntegrationTest {
     private IdempotencyKeyRepository idempotencyKeyRepository;
 
     protected static final String SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
+    private static final String TEST_BEARER_TOKEN = buildUnsignedTestToken(SYSTEM_USER_ID);
 
     protected static final String TEST_AUTHORITIES = String.join(",",
             "workorder:approval_config:view",
@@ -101,6 +105,7 @@ public abstract class BaseContractIntegrationTest {
     protected RequestSpecification givenWithGatewayAuth() {
         return RestAssured.given()
                 .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + TEST_BEARER_TOKEN)
                 .header("X-User-Id", SYSTEM_USER_ID)
                 .header("X-User", SYSTEM_USER_ID)
                 .header("X-Authorities", TEST_AUTHORITIES);
@@ -108,8 +113,19 @@ public abstract class BaseContractIntegrationTest {
 
     protected MockHttpServletRequestBuilder withAuthMvc(MockHttpServletRequestBuilder req) {
         return req
+                .header("Authorization", "Bearer " + TEST_BEARER_TOKEN)
                 .header("X-User-Id", SYSTEM_USER_ID)
                 .header("X-User", SYSTEM_USER_ID)
                 .header("X-Authorities", TEST_AUTHORITIES);
+    }
+
+    private static String buildUnsignedTestToken(String userId) {
+        String headerJson = "{\"alg\":\"none\"}";
+        String payloadJson = "{\"userId\":\"" + userId + "\"}";
+        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+        String encodedPayload = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
+        return encodedHeader + "." + encodedPayload + ".test-signature";
     }
 }

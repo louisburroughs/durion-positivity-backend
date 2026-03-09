@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,12 +28,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.dto.AddBreakSegmentRequest;
 import com.positivity.workorder.internal.dto.BreakSegmentResponse;
 import com.positivity.workorder.internal.dto.StartWorkSessionRequest;
@@ -108,6 +109,7 @@ class WorkSessionServiceImplTest {
         @BeforeEach
         void setUp() {
                 ReflectionTestUtils.setField(workSessionService, "allowOverlappingSessions", false);
+                setAuthenticatedUser(List.of(), SYSTEM_USER_ID.toString());
         }
 
         @AfterEach
@@ -136,6 +138,17 @@ class WorkSessionServiceImplTest {
                                 .locked(false)
                                 .totalDurationSeconds(0)
                                 .build();
+        }
+
+        private void setAuthenticatedUser(List<String> authorities, String username) {
+                var grantedAuthorities = authorities.stream().map(SimpleGrantedAuthority::new).toList();
+                var authentication = new UsernamePasswordAuthenticationToken(username, "N/A", grantedAuthorities);
+                authentication.setDetails(Map.of(
+                                GatewaySecurityConstants.DETAIL_USERNAME, username,
+                                GatewaySecurityConstants.DETAIL_USER_ID, SYSTEM_USER_ID));
+                var context = SecurityContextHolder.createEmptyContext();
+                context.setAuthentication(authentication);
+                SecurityContextHolder.setContext(context);
         }
 
         // ── AC1: Start session — happy path ───────────────────────────────────────
@@ -180,16 +193,7 @@ class WorkSessionServiceImplTest {
         void startSession_overlap_allowedWhenAllThreeConditionsMet() {
                 // Issue CAP-139 Story #68: overlap override — all three conditions
                 ReflectionTestUtils.setField(workSessionService, "allowOverlappingSessions", true);
-
-                Authentication auth = mock(Authentication.class);
-                SecurityContext secCtx = mock(SecurityContext.class);
-                when(secCtx.getAuthentication()).thenReturn(auth);
-                when(auth.getAuthorities())
-                                .thenAnswer(inv -> List.of(new SimpleGrantedAuthority("timekeeping:overlap_override")));
-                when(auth.isAuthenticated()).thenReturn(true);
-                when(auth.getPrincipal()).thenReturn(SYSTEM_USER_ID.toString());
-                when(auth.getName()).thenReturn(SYSTEM_USER_ID.toString());
-                SecurityContextHolder.setContext(secCtx);
+                setAuthenticatedUser(List.of("timekeeping:overlap_override"), SYSTEM_USER_ID.toString());
 
                 WorkSession existing = inProgressSession(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
                 when(workSessionRepository.findByMechanicIdAndStatus(MECHANIC_ID, WorkSessionStatus.IN_PROGRESS))
@@ -218,14 +222,7 @@ class WorkSessionServiceImplTest {
         void startSession_overlap_throwsWhenFlagTrueButNoPermission() {
                 // Issue CAP-139 Story #68: overlap rejected — flag=true but no authority
                 ReflectionTestUtils.setField(workSessionService, "allowOverlappingSessions", true);
-                // SecurityContext has no timekeeping:overlap_override authority
-                Authentication auth = mock(Authentication.class);
-                SecurityContext secCtx = mock(SecurityContext.class);
-                when(secCtx.getAuthentication()).thenReturn(auth);
-                when(auth.getAuthorities()).thenAnswer(inv -> List.of());
-                when(auth.isAuthenticated()).thenReturn(true);
-                when(auth.getPrincipal()).thenReturn(SYSTEM_USER_ID.toString());
-                SecurityContextHolder.setContext(secCtx);
+                setAuthenticatedUser(List.of(), SYSTEM_USER_ID.toString());
 
                 WorkSession existing = inProgressSession(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
                 when(workSessionRepository.findByMechanicIdAndStatus(MECHANIC_ID, WorkSessionStatus.IN_PROGRESS))
@@ -247,13 +244,7 @@ class WorkSessionServiceImplTest {
                 // Issue CAP-139 Story #68: all 3 conditions must be met; flag=false alone
                 // blocks override
                 ReflectionTestUtils.setField(workSessionService, "allowOverlappingSessions", false);
-                Authentication auth = mock(Authentication.class);
-                SecurityContext secCtx = mock(SecurityContext.class);
-                when(secCtx.getAuthentication()).thenReturn(auth);
-                when(auth.getAuthorities())
-                                .thenAnswer(inv -> List.of(new SimpleGrantedAuthority("timekeeping:overlap_override")));
-                when(auth.getName()).thenReturn(SYSTEM_USER_ID.toString());
-                SecurityContextHolder.setContext(secCtx);
+                setAuthenticatedUser(List.of("timekeeping:overlap_override"), SYSTEM_USER_ID.toString());
 
                 WorkSession existing = inProgressSession(Instant.now(TEST_CLOCK).minus(30, ChronoUnit.MINUTES));
                 when(workSessionRepository.findByMechanicIdAndStatus(MECHANIC_ID, WorkSessionStatus.IN_PROGRESS))

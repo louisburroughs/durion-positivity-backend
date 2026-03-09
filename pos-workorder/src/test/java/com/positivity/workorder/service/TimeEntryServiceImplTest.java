@@ -14,14 +14,21 @@ import com.positivity.workorder.internal.repository.TimeEntryRepository;
 import com.positivity.workorder.internal.service.TimeEntryServiceImpl;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("TimeEntryServiceImpl Unit Tests")
@@ -42,6 +50,25 @@ class TimeEntryServiceImplTest {
     private static final UUID TIME_ENTRY_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID WORK_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID PERSON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    @BeforeEach
+    void setUpSecurityContext() {
+        var context = SecurityContextHolder.createEmptyContext();
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "time-entry-test-user",
+                "N/A",
+                List.of(new SimpleGrantedAuthority("workorder:workorder:approve")));
+        authentication.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME, "time-entry-test-user",
+                GatewaySecurityConstants.DETAIL_USER_ID, PERSON_ID));
+        context.setAuthentication(authentication);
+        SecurityContextHolder.setContext(context);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Mock
     private TimeEntryRepository timeEntryRepository;
