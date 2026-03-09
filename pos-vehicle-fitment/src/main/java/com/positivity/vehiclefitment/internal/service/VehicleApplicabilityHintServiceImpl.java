@@ -1,5 +1,6 @@
 package com.positivity.vehiclefitment.internal.service;
 
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.vehiclefitment.internal.dto.*;
 import com.positivity.vehiclefitment.internal.entity.FitmentTag;
 import com.positivity.vehiclefitment.internal.entity.TagType;
@@ -35,8 +36,9 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
 
         VehicleApplicabilityHint hint = new VehicleApplicabilityHint();
         hint.setProductId(request.getProductId());
-        hint.setCreatedBy(request.getCreatedBy());
-        hint.setUpdatedBy(request.getCreatedBy());
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        hint.setCreatedBy(actor);
+        hint.setUpdatedBy(actor);
 
         for (FitmentTagDto tagDto : request.getFitmentTags()) {
             FitmentTag tag = new FitmentTag();
@@ -71,7 +73,7 @@ public class VehicleApplicabilityHintServiceImpl implements VehicleApplicability
             hint.addFitmentTag(tag);
         }
 
-        hint.setUpdatedBy(request.getUpdatedBy());
+        hint.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
 
         VehicleApplicabilityHint updatedHint = hintRepository.save(hint);
         log.info("Updated hint {}", hintId);

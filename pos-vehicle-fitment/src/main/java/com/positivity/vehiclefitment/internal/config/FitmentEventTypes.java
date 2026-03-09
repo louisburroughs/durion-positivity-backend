@@ -22,11 +22,11 @@ public final class FitmentEventTypes {
     public static List<EventTypeRegistration> all() {
         return List.of(
                 // VehicleApplicabilityHintController - 3 events
-                EventTypeRegistration.write("FITMENT_HINT_CREATE",
+                EventTypeRegistration.write("VEHICLE_HINT_CREATED",
                         "Create a new vehicle applicability hint with fitment tags for a product").build(),
-                EventTypeRegistration.write("FITMENT_HINT_UPDATE",
+                EventTypeRegistration.write("VEHICLE_HINT_UPDATED",
                         "Update the fitment tags for an existing vehicle applicability hint").build(),
-                EventTypeRegistration.write("FITMENT_HINT_DELETE",
+                EventTypeRegistration.write("VEHICLE_HINT_DELETED",
                         "Delete an existing vehicle applicability hint").build(),
                 EventTypeRegistration.search("FITMENT_PRODUCTS_FILTER",
                         "Filter products by vehicle attributes to find matching products").build());

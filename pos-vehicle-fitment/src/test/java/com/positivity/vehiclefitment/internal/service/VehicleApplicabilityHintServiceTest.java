@@ -1,4 +1,4 @@
-package com.positivity.vehiclefitment.service;
+package com.positivity.vehiclefitment.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,7 +34,6 @@ import com.positivity.vehiclefitment.internal.dto.UpdateHintRequest;
 import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
 import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
-import com.positivity.vehiclefitment.internal.service.VehicleApplicabilityHintServiceImpl;
 
 /**
  * Unit tests for VehicleApplicabilityHintService.
@@ -68,7 +67,7 @@ class VehicleApplicabilityHintServiceTest {
                 new FitmentTagDto(TagType.MODEL, "Camry"),
                 new FitmentTagDto(TagType.YEAR_RANGE, "2018-2022"));
 
-        createRequest = new CreateHintRequest(TEST_PRODUCT_ID, tags, "testUser");
+        createRequest = new CreateHintRequest(TEST_PRODUCT_ID, tags);
 
         mockHint = new VehicleApplicabilityHint();
         mockHint.setHintId(TEST_HINT_ID);
@@ -97,8 +96,7 @@ class VehicleApplicabilityHintServiceTest {
     void testUpdateHint_Success() {
         // Given
         UpdateHintRequest updateRequest = new UpdateHintRequest(
-                Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")),
-                "updater");
+            Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
 
         when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.of(mockHint));
         when(hintRepository.save(any(VehicleApplicabilityHint.class)))
@@ -117,8 +115,7 @@ class VehicleApplicabilityHintServiceTest {
     void testUpdateHint_NotFound() {
         // Given
         UpdateHintRequest updateRequest = new UpdateHintRequest(
-                Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")),
-                "updater");
+            Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
 
         when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.empty());
 

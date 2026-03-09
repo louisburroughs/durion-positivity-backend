@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -29,8 +28,4 @@ public class CreateHintRequest {
     @NotEmpty(message = "At least one fitment tag is required")
     @Valid
     private List<FitmentTagDto> fitmentTags;
-
-    @Schema(description = "User or system identity creating the hint", example = "tech.ops@durion.local")
-    @Size(max = 128, message = "createdBy must not exceed 128 characters")
-    private String createdBy;
 }

@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: pos-vehicle-fitment-test
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    defer-datasource-initialization: true
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  sql:
+    init:
+      mode: always
+  main:
+    allow-bean-definition-overriding: true
+
+# Disable eureka for tests
+eureka:
+  client:
+    enabled: false
+
+# Disable event initializer external call during tests
+pos:
+  events:
+    base-url: http://localhost:9999
+    api-secret: test-secret
+
+logging:
+  level:
+    com:
+      positivity: DEBUG
+    org:
+      springframework:
+        security: DEBUG

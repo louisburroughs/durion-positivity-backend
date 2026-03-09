@@ -48,7 +48,7 @@ public class VehicleApplicabilityHintController {
     @ApiResponse(responseCode = "201", description = "Hint created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request data")
     @ApiResponse(responseCode = "404", description = "Product not found")
-    @EmitEvent(id = "FITMENT_HINT_CREATE", apiVersion = "1")
+    @EmitEvent(id = "VEHICLE_HINT_CREATED", apiVersion = "1")
     @PostMapping
     public ResponseEntity<HintResponse> createHint(@Valid @RequestBody CreateHintRequest request) {
         try {
@@ -64,7 +64,7 @@ public class VehicleApplicabilityHintController {
     @ApiResponse(responseCode = "200", description = "Hint updated successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request data")
     @ApiResponse(responseCode = "404", description = "Hint not found")
-    @EmitEvent(id = "FITMENT_HINT_UPDATE", apiVersion = "1")
+    @EmitEvent(id = "VEHICLE_HINT_UPDATED", apiVersion = "1")
     @PutMapping("/{hintId}")
     public ResponseEntity<HintResponse> updateHint(
             @Parameter(description = "ID of the hint to update") @PathVariable UUID hintId,
@@ -81,7 +81,7 @@ public class VehicleApplicabilityHintController {
     @Operation(summary = "Delete a vehicle applicability hint", description = "Remove a hint and all its associated tags")
     @ApiResponse(responseCode = "204", description = "Hint deleted successfully")
     @ApiResponse(responseCode = "404", description = "Hint not found")
-    @EmitEvent(id = "FITMENT_HINT_DELETE", apiVersion = "1")
+    @EmitEvent(id = "VEHICLE_HINT_DELETED", apiVersion = "1")
     @DeleteMapping("/{hintId}")
     public ResponseEntity<Void> deleteHint(
             @Parameter(description = "ID of the hint to delete") @PathVariable UUID hintId) {
