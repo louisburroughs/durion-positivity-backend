@@ -62,8 +62,11 @@ public class MappingKeyServiceImpl implements MappingKeyService {
         @Override
         @Transactional
         public MappingKeyResponse createMappingKey(@NonNull MappingKeyCreateRequest request) {
-                log.info("Creating mapping key: {} for category: {}", request.getKeyName(),
-                                request.getPostingCategoryId());
+
+                if (log.isInfoEnabled()) {
+                        log.info("Creating mapping key: {} for category: {}", maskText(request.getKeyName()),
+                                        maskUUID(request.getPostingCategoryId()));
+                }
 
                 // Validate posting category exists
                 PostingCategory category = postingCategoryRepository.findById(request.getPostingCategoryId())
@@ -89,7 +92,8 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 mappingKey.setModifiedBy(request.getCreatedBy());
 
                 MappingKey saved = mappingKeyRepository.save(mappingKey);
-                log.info("Created mapping key: {} with ID: {}", saved.getKeyName(), saved.getMappingKeyId());
+                log.info("Created mapping key: {} with ID: {}", maskText(saved.getKeyName()),
+                                maskUUID(saved.getMappingKeyId()));
 
                 return toResponse(saved, category.getCategoryName());
         }
@@ -299,5 +303,26 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 // Example: "8f47e0c1-****-****-****-a1b2" from
                 // "8f47e0c1-1234-5678-9abc-a1b2c3d4e5f6"
                 return uuidString.substring(0, 8) + "-****-****-****-" + uuidString.substring(32);
+        }
+
+        /**
+         * Masks free-text values for safe logging.
+         * Preserves only short prefix/suffix for correlation.
+         *
+         * @param value text to mask
+         * @return masked text, or "null" if input is null
+         */
+        private String maskText(String value) {
+                if (value == null) {
+                        return "null";
+                }
+                String trimmed = value.trim();
+                if (trimmed.isEmpty()) {
+                        return "***";
+                }
+                if (trimmed.length() <= 4) {
+                        return "****";
+                }
+                return trimmed.substring(0, 2) + "****" + trimmed.substring(trimmed.length() - 2);
         }
 }
