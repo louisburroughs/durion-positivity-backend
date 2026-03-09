@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -29,7 +30,7 @@ class SecurityGatewayConfigTest {
                 .exchangeFunction(securityExchangeFunction(securityCalls))
                 .build();
 
-        GlobalFilter filter = new SecurityGatewayConfig().authFilter(securityWebClient);
+        GlobalFilter filter = new SecurityGatewayConfig(false, Set.of("HS256")).authFilter(securityWebClient);
         var exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/people/v1/people")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer test-token")
@@ -62,13 +63,80 @@ class SecurityGatewayConfigTest {
                 .exchangeFunction(securityExchangeFunction(securityCalls))
                 .build();
 
-        GlobalFilter filter = new SecurityGatewayConfig().authFilter(securityWebClient);
+        GlobalFilter filter = new SecurityGatewayConfig(false, Set.of("HS256")).authFilter(securityWebClient);
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/people").build());
 
         filter.filter(exchange, ignored -> Mono.empty()).block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(securityCalls).isEmpty();
+    }
+
+    @Test
+    void shouldRejectAlgNoneTokenBeforeCallingSecurityServiceWhenStrictModeEnabled() {
+        List<ClientRequest> securityCalls = new ArrayList<>();
+        WebClient securityWebClient = WebClient.builder()
+                .exchangeFunction(securityExchangeFunction(securityCalls))
+                .build();
+
+        GlobalFilter filter = new SecurityGatewayConfig(true, Set.of("HS256")).authFilter(securityWebClient);
+        String noneAlgToken = tokenWith("{\"alg\":\"none\"}", "{\"sub\":\"alice\"}", "irrelevant");
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/people/v1/people")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + noneAlgToken)
+                        .build());
+
+        AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+        GatewayFilterChain chain = chainedExchange -> {
+            downstreamHeaders.set(chainedExchange.getRequest().getHeaders());
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(securityCalls).isEmpty();
+        assertThat(downstreamHeaders.get()).isNull();
+    }
+
+    @Test
+    void shouldRejectSyntheticSignatureMarkerBeforeCallingSecurityServiceWhenStrictModeEnabled() {
+        List<ClientRequest> securityCalls = new ArrayList<>();
+        WebClient securityWebClient = WebClient.builder()
+                .exchangeFunction(securityExchangeFunction(securityCalls))
+                .build();
+
+        GlobalFilter filter = new SecurityGatewayConfig(true, Set.of("HS256")).authFilter(securityWebClient);
+        String syntheticToken = tokenWith("{\"alg\":\"HS256\"}", "{\"sub\":\"alice\"}", "test-signature-not-verified");
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/people/v1/people")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + syntheticToken)
+                        .build());
+
+        filter.filter(exchange, ignored -> Mono.empty()).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(securityCalls).isEmpty();
+    }
+
+    @Test
+    void shouldAllowSyntheticSignatureMarkerWhenStrictModeDisabled() {
+        List<ClientRequest> securityCalls = new ArrayList<>();
+        WebClient securityWebClient = WebClient.builder()
+                .exchangeFunction(securityExchangeFunction(securityCalls))
+                .build();
+
+        GlobalFilter filter = new SecurityGatewayConfig(false, Set.of("HS256")).authFilter(securityWebClient);
+        String syntheticToken = tokenWith("{\"alg\":\"HS256\"}", "{\"sub\":\"alice\"}", "test-signature-not-verified");
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/people/v1/people")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + syntheticToken)
+                        .build());
+
+        filter.filter(exchange, ignored -> Mono.empty()).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        assertThat(securityCalls).hasSize(3);
     }
 
     private static ExchangeFunction securityExchangeFunction(List<ClientRequest> captured) {
@@ -100,5 +168,14 @@ class SecurityGatewayConfigTest {
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN_VALUE)
                 .body(body)
                 .build();
+    }
+
+    private static String tokenWith(String headerJson, String payloadJson, String signature) {
+        return base64Url(headerJson) + "." + base64Url(payloadJson) + "." + signature;
+    }
+
+    private static String base64Url(String value) {
+        return java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

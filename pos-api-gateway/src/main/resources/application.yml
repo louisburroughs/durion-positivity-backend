@@ -144,6 +144,15 @@ eureka:
     serviceUrl:
       defaultZone: http://localhost:8761/eureka # Address of your Eureka Server
 
+pos:
+  gateway:
+    security:
+      # Keep false for local/dev tests. Set true in production to block obviously
+      # unsafe/synthetic bearer token patterns before introspection.
+      strict-jwt-header-validation: false
+      # Allowed JWT 'alg' values when strict header validation is enabled.
+      allowed-jwt-algorithms: HS256
+
 springdoc:
   api-docs:
     enabled: true
@@ -199,3 +208,14 @@ logging:
     com:
       positivity:
         gateway: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+pos:
+  gateway:
+    security:
+      strict-jwt-header-validation: true
+      allowed-jwt-algorithms: HS256
