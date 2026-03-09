@@ -252,28 +252,34 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              $ref: "#/components/schemas/RestrictionOverrideRequest"
+        required: true
       responses:
+        "200":
+          description: Restriction override created.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionOverrideResponse"
         "400":
           description: Invalid request body.
           content:
             '*/*':
-              schema: {}
-        "501":
-          description: Not yet implemented.
+              schema:
+                type: object
+        "401":
+          description: Unauthorized.
           content:
             '*/*':
-              schema: {}
-        "500":
-          description: Internal server error.
-          content:
-            '*/*':
-              schema: {}
+              schema:
+                type: object
         "403":
           description: Insufficient permissions to override restrictions.
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
   /v1/price/restrictions:evaluate:
     post:
       tags:
@@ -284,23 +290,34 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: {}
+            schema:
+              $ref: "#/components/schemas/RestrictionEvaluationRequest"
+        required: true
       responses:
+        "200":
+          description: Restriction evaluation completed.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionEvaluationResponse"
         "400":
           description: Invalid request body.
           content:
             '*/*':
-              schema: {}
-        "501":
-          description: Not yet implemented.
+              schema:
+                type: object
+        "401":
+          description: Unauthorized.
           content:
             '*/*':
-              schema: {}
-        "500":
-          description: Internal server error.
+              schema:
+                type: object
+        "503":
+          description: Service unavailable.
           content:
             '*/*':
-              schema: {}
+              schema:
+                type: object
   /v1/price/quotes:
     post:
       tags:
@@ -946,6 +963,195 @@ components:
           example: -100.0
         metadata:
           description: Optional adjustment metadata bag
+    RestrictionEvaluationRequest:
+      type: object
+      description: Request payload for evaluating product price restrictions
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RestrictionEvaluationItem"
+          minItems: 1
+      required:
+      - items
+    RestrictionEvaluationItem:
+      type: object
+      description: Single product evaluation input for restriction decisioning
+      properties:
+        productId:
+          type: string
+          format: uuid
+        locationTag:
+          type: string
+          enum:
+          - TAXABLE_JURISDICTION
+          - SERVICE_ZONE
+          - RESTRICTED_REGION
+          - UNRESTRICTED_ZONE
+        serviceTag:
+          type: string
+          enum:
+          - WARRANTY_ONLY
+          - LABOR_ONLY
+          - PARTS_ONLY
+          - FULL_SERVICE
+        context:
+          type: string
+          enum:
+          - BROWSE
+          - QUOTE
+          - CHECKOUT
+          - INVOICE_FINALIZE
+          - COMMIT_SALE
+      required:
+      - productId
+      - locationTag
+      - serviceTag
+      - context
+    RestrictionEvaluationResult:
+      type: object
+      description: Restriction evaluation decision for a single product
+      properties:
+        productId:
+          type: string
+          format: uuid
+        decision:
+          type: string
+          enum:
+          - ALLOW
+          - BLOCK
+          - ALLOW_WITH_OVERRIDE
+          - RESTRICTION_UNKNOWN
+        ruleIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        reasonCodes:
+          type: array
+          items:
+            type: string
+      required:
+      - productId
+      - decision
+      - ruleIds
+      - reasonCodes
+    RestrictionEvaluationResponse:
+      type: object
+      description: Response payload for restriction evaluation operation
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/RestrictionEvaluationResult"
+      required:
+      - results
+    RestrictionOverrideRequest:
+      type: object
+      description: Request payload for creating a restriction override
+      properties:
+        overrideContext:
+          type: string
+          enum:
+          - BROWSE
+          - QUOTE
+          - CHECKOUT
+          - INVOICE_FINALIZE
+          - COMMIT_SALE
+        reasonCode:
+          type: string
+        notes:
+          type: string
+      required:
+      - overrideContext
+      - reasonCode
+    RestrictionOverrideResponse:
+      type: object
+      description: Response payload for created restriction override
+      properties:
+        overrideId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+      - overrideId
+      - expiresAt
+    CreateRestrictionRuleRequest:
+      type: object
+      description: Request payload for creating a price restriction rule
+      properties:
+        productId:
+          type: string
+          format: uuid
+        locationTag:
+          type: string
+          enum:
+          - TAXABLE_JURISDICTION
+          - SERVICE_ZONE
+          - RESTRICTED_REGION
+          - UNRESTRICTED_ZONE
+        serviceTag:
+          type: string
+          enum:
+          - WARRANTY_ONLY
+          - LABOR_ONLY
+          - PARTS_ONLY
+          - FULL_SERVICE
+        effectiveFrom:
+          type: string
+          format: date
+        effectiveTo:
+          type: string
+          format: date
+        overrideable:
+          type: boolean
+      required:
+      - productId
+      - locationTag
+      - serviceTag
+      - effectiveFrom
+      - overrideable
+    RestrictionRuleResponse:
+      type: object
+      description: Response payload representing a restriction rule
+      properties:
+        ruleId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        locationTag:
+          type: string
+          enum:
+          - TAXABLE_JURISDICTION
+          - SERVICE_ZONE
+          - RESTRICTED_REGION
+          - UNRESTRICTED_ZONE
+        serviceTag:
+          type: string
+          enum:
+          - WARRANTY_ONLY
+          - LABOR_ONLY
+          - PARTS_ONLY
+          - FULL_SERVICE
+        active:
+          type: boolean
+        effectiveFrom:
+          type: string
+          format: date
+        effectiveTo:
+          type: string
+          format: date
+      required:
+      - ruleId
+      - productId
+      - locationTag
+      - serviceTag
+      - active
+      - effectiveFrom
     PriceQuoteRequest:
       type: object
       description: Request payload for calculating contextual price quotes

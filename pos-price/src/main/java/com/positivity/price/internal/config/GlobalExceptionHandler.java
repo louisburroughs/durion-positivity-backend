@@ -14,11 +14,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
 import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
 import com.positivity.price.internal.exception.ProductNotFoundException;
+import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
+import com.positivity.price.internal.exception.RestrictionServiceUnavailableException;
 import com.positivity.price.internal.exception.PromotionCodeNotFoundException;
 import com.positivity.price.internal.exception.PromotionMultipleNotAllowedException;
 import com.positivity.price.internal.exception.PromotionNotApplicableException;
@@ -150,6 +153,27 @@ public class GlobalExceptionHandler {
                                 HttpStatus.BAD_REQUEST,
                                 "PROMO_MULTIPLE_NOT_ALLOWED",
                                 ex.getMessage(),
+                                null,
+                                request);
+        }
+
+        @ExceptionHandler(RestrictionServiceUnavailableException.class)
+        @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+        public ResponseEntity<Object> handleRestrictionServiceUnavailable(
+                        RestrictionServiceUnavailableException ex) {
+                log.error("Restriction evaluation service unavailable: {}", ex.getMessage());
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                .body(Map.of("error", Map.of("code", "SERVICE_UNAVAILABLE", "message", ex.getMessage())));
+        }
+
+        @ExceptionHandler(RestrictionRuleNotFoundException.class)
+        public ResponseEntity<Map<String, Object>> handleRestrictionRuleNotFound(
+                        RestrictionRuleNotFoundException exception,
+                        HttpServletRequest request) {
+                return buildErrorResponse(
+                                HttpStatus.NOT_FOUND,
+                                "RESTRICTION_RULE_NOT_FOUND",
+                                exception.getMessage(),
                                 null,
                                 request);
         }
