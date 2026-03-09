@@ -23,6 +23,11 @@ import io.restassured.specification.RequestSpecification;
 
 /**
  * Shared contract-test scaffolding for REST Assured based tests.
+ *
+ * <p>Test requests include both gateway auth headers and a synthetic bearer
+ * token. The token exists only to provide a decodable {@code userId} claim
+ * for {@code GatewayAuthoritiesFilter} in test runtime. It is not signed or
+ * validated and must never be reused outside tests.</p>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
@@ -37,7 +42,7 @@ public abstract class BaseContractIntegrationTest {
     private IdempotencyKeyRepository idempotencyKeyRepository;
 
     protected static final String SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
-    private static final String TEST_BEARER_TOKEN = buildUnsignedTestToken(SYSTEM_USER_ID);
+    private static final String TEST_BEARER_TOKEN = buildTestOnlyBearerToken(SYSTEM_USER_ID);
 
     protected static final String TEST_AUTHORITIES = String.join(",",
             "workorder:approval_config:view",
@@ -119,13 +124,20 @@ public abstract class BaseContractIntegrationTest {
                 .header("X-Authorities", TEST_AUTHORITIES);
     }
 
-    private static String buildUnsignedTestToken(String userId) {
-        String headerJson = "{\"alg\":\"none\"}";
+    /**
+     * Builds a synthetic JWT-like token for tests only.
+     *
+     * <p>This token is intentionally unsigned and used only so
+     * {@code GatewayAuthoritiesFilter} can decode the payload and extract
+     * {@code userId}. It must never be used in production code.</p>
+     */
+    private static String buildTestOnlyBearerToken(String userId) {
+        String headerJson = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
         String payloadJson = "{\"userId\":\"" + userId + "\"}";
         String encodedHeader = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
         String encodedPayload = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
-        return encodedHeader + "." + encodedPayload + ".test-signature";
+        return encodedHeader + "." + encodedPayload + ".test-signature-not-verified";
     }
 }
