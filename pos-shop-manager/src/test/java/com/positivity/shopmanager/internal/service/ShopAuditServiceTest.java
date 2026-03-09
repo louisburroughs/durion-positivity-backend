@@ -6,21 +6,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
-import com.positivity.shopmanager.internal.dto.ShopAuditFilter;
-import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
-import com.positivity.shopmanager.internal.repository.ShopAuditRepository;
-import com.positivity.shopmanager.service.ShopAuditService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
-import com.positivity.shopmanager.internal.entity.ShopAuditEntry;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +27,13 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
+import com.positivity.shopmanager.internal.dto.ShopAuditFilter;
+import com.positivity.shopmanager.internal.entity.ShopAuditEntry;
+import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
+import com.positivity.shopmanager.internal.repository.ShopAuditRepository;
+import com.positivity.shopmanager.service.ShopAuditService;
 
 /**
  * RED tests for Story #61 — Audit Trail for Schedule and Assignment Changes.
@@ -91,14 +92,17 @@ class ShopAuditServiceTest {
                 "Created schedule for 2:00 PM", null, null, null);
 
         // assert — actor MUST come from security context
-        assertThat(result).isNotNull();
-        assertThat(result.getActorUserId())
-                .as("actorUserId must be sourced from SecurityContextHolder (ADR-0018)")
-                .isEqualTo("dispatcher@shop.com");
-        assertThat(result.getEventType()).isEqualTo(ShopAuditEventType.SCHEDULE_CREATED);
-        assertThat(result.getAppointmentId()).isEqualTo("AP-789");
-        assertThat(result.getWorkorderId()).isEqualTo("WO-123");
-        assertThat(result.getId()).isNotNull();
+        assertThat(result)
+                .isNotNull()
+                .satisfies(r -> {
+                    assertThat(r.getActorUserId())
+                            .as("actorUserId must be sourced from SecurityContextHolder (ADR-0018)")
+                            .isEqualTo("dispatcher@shop.com");
+                    assertThat(r.getEventType()).isEqualTo(ShopAuditEventType.SCHEDULE_CREATED);
+                    assertThat(r.getAppointmentId()).isEqualTo("AP-789");
+                    assertThat(r.getWorkorderId()).isEqualTo("WO-123");
+                    assertThat(r.getId()).isNotNull();
+                });
     }
 
     // ─── AC: Assignment change triggers audit entry ───────────────────────────
@@ -123,14 +127,17 @@ class ShopAuditServiceTest {
                 "Assigned mechanic M-456 to WO-123", null, null, null);
 
         // assert
-        assertThat(result).isNotNull();
-        assertThat(result.getActorUserId())
-                .as("actorUserId must be sourced from SecurityContextHolder (ADR-0018)")
-                .isEqualTo("advisor@shop.com");
-        assertThat(result.getEventType()).isEqualTo(ShopAuditEventType.ASSIGNMENT_CREATED);
-        assertThat(result.getWorkorderId()).isEqualTo("WO-123");
-        assertThat(result.getMechanicId()).isEqualTo("M-456");
-        assertThat(result.getId()).isNotNull();
+        assertThat(result)
+                .isNotNull()
+                .satisfies(r -> {
+                    assertThat(r.getActorUserId())
+                            .as("actorUserId must be sourced from SecurityContextHolder (ADR-0018)")
+                            .isEqualTo("advisor@shop.com");
+                    assertThat(r.getEventType()).isEqualTo(ShopAuditEventType.ASSIGNMENT_CREATED);
+                    assertThat(r.getWorkorderId()).isEqualTo("WO-123");
+                    assertThat(r.getMechanicId()).isEqualTo("M-456");
+                    assertThat(r.getId()).isNotNull();
+                });
     }
 
     /**
@@ -150,9 +157,12 @@ class ShopAuditServiceTest {
                 "WO-123", "M-456", "LOC-1",
                 "Removed mechanic M-456 from WO-123", null, "workexec:MECHANIC_UNAVAILABLE", null);
 
-        assertThat(result).isNotNull();
-        assertThat(result.getActorUserId()).isEqualTo("advisor@shop.com");
-        assertThat(result.getEventType()).isEqualTo(ShopAuditEventType.ASSIGNMENT_REMOVED);
+        assertThat(result)
+                .isNotNull()
+                .satisfies(r -> {
+                    assertThat(r.getActorUserId()).isEqualTo("advisor@shop.com");
+                    assertThat(r.getEventType()).isEqualTo(ShopAuditEventType.ASSIGNMENT_REMOVED);
+                });
     }
 
     // ─── ADR-0018: Actor must come from SecurityContext only ──────────────────
@@ -172,7 +182,7 @@ class ShopAuditServiceTest {
     void shopAuditService_recordMethods_doNotExposeActorAsParameter() {
         var recordMethods = Arrays.stream(ShopAuditService.class.getDeclaredMethods())
                 .filter(m -> m.getName().startsWith("record"))
-                .collect(Collectors.toList());
+                .toList();
 
         assertThat(recordMethods)
                 .as("ShopAuditService must expose at least one recordXxx method")
@@ -181,7 +191,7 @@ class ShopAuditServiceTest {
         for (var method : recordMethods) {
             var paramNames = Arrays.stream(method.getParameters())
                     .map(p -> p.getName().toLowerCase())
-                    .collect(Collectors.toList());
+                    .toList();
 
             assertThat(paramNames)
                     .as("Method '%s' must NOT declare actor/actorId/changedBy/userId as a parameter "
@@ -208,7 +218,7 @@ class ShopAuditServiceTest {
     void shopAuditService_hasNoMutationMethodsOtherThanRecord() {
         var methodNames = Arrays.stream(ShopAuditService.class.getDeclaredMethods())
                 .map(m -> m.getName().toLowerCase())
-                .collect(Collectors.toList());
+                .toList();
 
         assertThat(methodNames)
                 .as("ShopAuditService must not expose update/delete/patch/modify/edit methods "
@@ -241,8 +251,7 @@ class ShopAuditServiceTest {
 
         assertThat(results)
                 .as("search by workorderId must return a non-null list")
-                .isNotNull();
-        assertThat(results)
+                .isNotNull()
                 .as("all returned entries must match workorderId WO-123")
                 .allSatisfy(r -> assertThat(r.getWorkorderId()).isEqualTo("WO-123"));
     }
@@ -271,8 +280,7 @@ class ShopAuditServiceTest {
 
         assertThat(results)
                 .as("search by mechanicId must return a non-null list")
-                .isNotNull();
-        assertThat(results)
+                .isNotNull()
                 .as("all returned entries must match mechanicId M-456")
                 .allSatisfy(r -> assertThat(r.getMechanicId()).isEqualTo("M-456"));
     }
@@ -299,8 +307,7 @@ class ShopAuditServiceTest {
 
         assertThat(results)
                 .as("search by eventType must return a non-null list")
-                .isNotNull();
-        assertThat(results)
+                .isNotNull()
                 .as("all returned entries must have eventType ASSIGNMENT_CREATED")
                 .allSatisfy(r -> assertThat(r.getEventType())
                         .isEqualTo(ShopAuditEventType.ASSIGNMENT_CREATED));
@@ -324,9 +331,9 @@ class ShopAuditServiceTest {
 
         List<ShopAuditEntryResponse> results = service.search(filter);
 
-        assertThat(results).isNotNull();
-        // All returned entries must fall within [now-90d, now]
         assertThat(results)
+                .isNotNull()
+                // All returned entries must fall within [now-90d, now]
                 .allSatisfy(r -> assertThat(r.getRecordedAt())
                         .as("entry recordedAt must be within the default 90-day window")
                         .isAfterOrEqualTo(expectedFrom)
@@ -402,8 +409,9 @@ class ShopAuditServiceTest {
 
         var result = service.findById(knownId);
 
-        assertThat(result).isPresent();
-        assertThat(result.get().getId()).isEqualTo(knownId);
+        assertThat(result)
+                .isPresent()
+                .hasValueSatisfying(r -> assertThat(r.getId()).isEqualTo(knownId));
     }
 
     /**
@@ -495,7 +503,8 @@ class ShopAuditServiceTest {
 
         assertThat(results)
                 .as("search with explicit date range must return results")
-                .hasSize(1);
-        assertThat(results.get(0).getWorkorderId()).isEqualTo("WO-RANGE-001");
+                .hasSize(1)
+                .singleElement()
+                .satisfies(r -> assertThat(r.getWorkorderId()).isEqualTo("WO-RANGE-001"));
     }
 }
