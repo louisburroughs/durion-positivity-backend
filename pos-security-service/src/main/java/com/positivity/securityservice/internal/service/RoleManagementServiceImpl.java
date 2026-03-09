@@ -12,6 +12,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.ScopeType;
+import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
@@ -34,6 +35,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -47,7 +49,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class RoleManagementServiceImpl implements RoleManagementService {
     private final Clock clock;
-
 
     private static final String ROLE_NOT_FOUND_PREFIX = "Role not found: ";
     private static final String USER_NOT_FOUND_PREFIX = "User not found: ";
@@ -63,8 +64,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional
     public RoleDto createRole(String name, String description) {
-        if (roleRepository.existsByName(name)) {
-            throw new IllegalArgumentException("Role with name " + name + " already exists");
+        if (roleRepository.existsByNameIgnoreCase(name)) {
+            throw new DuplicateRoleNameException("Role with name " + name + " already exists");
         }
 
         Role role = new Role();
@@ -289,6 +290,90 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     public RoleDto getRoleByName(String name) {
         return toRoleDto(roleRepository.findByName(name)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + name)));
+    }
+
+    // ── Story #62 implementations ─────────────────────────────────────────────
+
+    @Override
+    public Optional<RoleDto> getRoleById(@NonNull UUID id) {
+        return roleRepository.findById(id).map(this::toRoleDto);
+    }
+
+    @Override
+    @Transactional
+    public void deleteRole(@NonNull UUID id) {
+        Role role = roleRepository.findById(id)
+                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + id));
+        role.getPermissions().clear();
+        roleRepository.save(role);
+        roleAssignmentRepository.deleteByRole_Id(id);
+        roleRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional
+    public void assignPermissionToRole(@NonNull UUID roleId, @NonNull String permissionKey) {
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
+        Permission permission = permissionRepository.findByName(permissionKey)
+                .orElseThrow(() -> new PermissionNotFoundException(
+                        "Permission not found: " + permissionKey + ". It must be registered first."));
+        role.getPermissions().add(permission);
+        role.setLastModifiedBy(getCurrentUsername());
+        role.setLastModifiedAt(Instant.now(clock));
+        roleRepository.save(role);
+    }
+
+    @Override
+    @Transactional
+    public void revokePermissionFromRole(@NonNull UUID roleId, @NonNull String permissionKey) {
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
+        role.getPermissions().removeIf(p -> p.getName().equals(permissionKey));
+        role.setLastModifiedBy(getCurrentUsername());
+        role.setLastModifiedAt(Instant.now(clock));
+        roleRepository.save(role);
+    }
+
+    @Override
+    @Transactional
+    public void assignRoleToUser(@NonNull UUID userId, @NonNull UUID roleId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
+
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setUser(user);
+        assignment.setRole(role);
+        assignment.setScopeType(ScopeType.GLOBAL);
+        assignment.setEffectiveStartDate(LocalDateTime.now(clock));
+        assignment.setCreatedBy(getCurrentUsername());
+        assignment.setCreatedAt(Instant.now(clock));
+
+        roleAssignmentRepository.save(assignment);
+    }
+
+    @Override
+    @Transactional
+    public void revokeRoleFromUser(@NonNull UUID userId, @NonNull UUID roleId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
+
+        RoleAssignment assignment = roleAssignmentRepository.findByUserAndRole(user, role)
+                .stream()
+                .filter(RoleAssignment::isEffective)
+                .findFirst()
+                .orElseThrow(() -> new RoleAssignmentNotFoundException(
+                        "No active assignment for user " + userId + " and role " + roleId));
+
+        assignment.setEffectiveEndDate(LocalDateTime.now(clock));
+        assignment.setLastModifiedBy(getCurrentUsername());
+        assignment.setLastModifiedAt(Instant.now(clock));
+
+        roleAssignmentRepository.save(assignment);
     }
 
     private String getCurrentUsername() {

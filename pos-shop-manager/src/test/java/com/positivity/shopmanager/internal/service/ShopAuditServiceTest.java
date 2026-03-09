@@ -75,7 +75,7 @@ class ShopAuditServiceTest {
      * security context.
      * ADR-0018: actorId resolved from authenticated principal — never from a
      * caller-supplied field.
-     *     */
+     */
     @Test
     void recordScheduleChange_scheduleCreate_persistsEntryWithActorFromSecurityContext() {
         // arrange — set authenticated actor in security context (ADR-0018)
@@ -107,7 +107,7 @@ class ShopAuditServiceTest {
      * AC: A mechanic assignment produces an audit entry with actor from security
      * context.
      * ADR-0018: actorId resolved from authenticated principal.
-     *     */
+     */
     @Test
     void recordAssignmentChange_mechanicAssigned_persistsEntryWithActorFromSecurityContext() {
         // arrange
@@ -136,7 +136,7 @@ class ShopAuditServiceTest {
     /**
      * AC: A mechanic unassignment also produces an audit entry with actor from
      * security context.
-     *     */
+     */
     @Test
     void recordAssignmentChange_mechanicUnassigned_persistsEntryWithActorFromSecurityContext() {
         // arrange
@@ -222,7 +222,7 @@ class ShopAuditServiceTest {
     /**
      * AC: Search by workorderId returns all matching audit entries in
      * reverse-chronological order.
-     *     */
+     */
     @Test
     void search_byWorkorderId_returnsMatchingEntriesForThatWorkorder() {
         ShopAuditFilter filter = ShopAuditFilter.builder()
@@ -252,7 +252,7 @@ class ShopAuditServiceTest {
     /**
      * AC: Search by mechanicId returns all assignment audit entries for that
      * mechanic.
-     *     */
+     */
     @Test
     void search_byMechanicId_returnsMatchingEntriesForThatMechanic() {
         ShopAuditFilter filter = ShopAuditFilter.builder()
@@ -281,7 +281,7 @@ class ShopAuditServiceTest {
 
     /**
      * AC: Search by eventType returns only audit entries of the specified type.
-     *     */
+     */
     @Test
     void search_byEventType_returnsOnlyEntriesOfThatType() {
         ShopAuditFilter filter = ShopAuditFilter.builder()
@@ -311,7 +311,7 @@ class ShopAuditServiceTest {
     /**
      * AC (RQ5): When no {@code fromDateTime} is supplied, the service must default
      * to the last 90 days to prevent unbounded full-table scans.
-     *     */
+     */
     @Test
     void search_withNoFromDateTime_defaultsToLast90DaysWindow() {
         // Arrange — filter has workorderId but no explicit fromDateTime
@@ -339,7 +339,7 @@ class ShopAuditServiceTest {
      * AC (RQ5): At least one filter criterion must be provided. An empty filter
      * must be rejected with {@link IllegalArgumentException} to prevent full-table
      * scans.
-     *     */
+     */
     @Test
     void search_withEmptyFilter_throwsIllegalArgumentException() {
         ShopAuditFilter emptyFilter = ShopAuditFilter.builder().build(); // all fields null
@@ -361,7 +361,7 @@ class ShopAuditServiceTest {
      * AC (RQ3): Audit entries must be persisted with the default 7-year retention
      * period
      * unless an explicit override is provided by tenant configuration.
-     *     */
+     */
     @Test
     void recordScheduleChange_withoutExplicitRetentionOverride_persistsWith7YearDefault() {
         // arrange
@@ -389,7 +389,7 @@ class ShopAuditServiceTest {
 
     /**
      * AC: A single audit entry can be retrieved by its UUID.
-     *     */
+     */
     @Test
     void findById_withExistingId_returnsEntry() {
         UUID knownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -408,7 +408,7 @@ class ShopAuditServiceTest {
 
     /**
      * AC: A missing audit entry returns an empty Optional (not an exception).
-     *     */
+     */
     @Test
     void findById_withNonExistentId_returnsEmpty() {
         UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000099");

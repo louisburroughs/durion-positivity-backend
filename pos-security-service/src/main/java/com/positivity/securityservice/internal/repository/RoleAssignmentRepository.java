@@ -23,6 +23,8 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
 
         List<RoleAssignment> findByRole(Role role);
 
+        void deleteByRole_Id(UUID roleId);
+
         List<RoleAssignment> findByUserAndRole(User user, Role role);
 
         @Query("SELECT ra FROM RoleAssignment ra WHERE ra.user = :user " +

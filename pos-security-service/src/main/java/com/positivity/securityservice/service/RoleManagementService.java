@@ -9,6 +9,7 @@ import org.jspecify.annotations.NonNull;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -21,12 +22,12 @@ public interface RoleManagementService {
     /**
      * Create a new role
      */
-    RoleDto createRole(String name, String description);
+    RoleDto createRole(@NonNull String name, @NonNull String description);
 
     /**
      * Update permissions for a role
      */
-    RoleDto updateRolePermissions(RolePermissionsRequest request);
+    RoleDto updateRolePermissions(@NonNull RolePermissionsRequest request);
 
     /**
      * Create a role assignment for a user
@@ -67,4 +68,43 @@ public interface RoleManagementService {
      * Get role by name
      */
     RoleDto getRoleByName(String name);
+
+    /**
+     * Get a role by its UUID (Story #62).
+     *
+     * @return present if found, empty if not found
+     */
+    Optional<RoleDto> getRoleById(@NonNull UUID id);
+
+    /**
+     * Delete a role and cascade-remove all role_permission and user_role
+     * associations (Story #62).
+     */
+    void deleteRole(@NonNull UUID id);
+
+    /**
+     * Assign a permission to a role by permission key (Story #62).
+     *
+     * @throws com.positivity.securityservice.internal.exception.PermissionNotFoundException if
+     *                                                                                       permissionKey
+     *                                                                                       is
+     *                                                                                       not
+     *                                                                                       registered
+     */
+    void assignPermissionToRole(@NonNull UUID roleId, @NonNull String permissionKey);
+
+    /**
+     * Revoke a permission from a role (Story #62).
+     */
+    void revokePermissionFromRole(@NonNull UUID roleId, @NonNull String permissionKey);
+
+    /**
+     * Assign a role to a user (Story #62).
+     */
+    void assignRoleToUser(@NonNull UUID userId, @NonNull UUID roleId);
+
+    /**
+     * Revoke a role from a user (Story #62).
+     */
+    void revokeRoleFromUser(@NonNull UUID userId, @NonNull UUID roleId);
 }
