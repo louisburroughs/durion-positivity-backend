@@ -38,7 +38,7 @@ import java.util.UUID;
  * user role assignments.
  */
 @RestController
-@RequestMapping({ "/v1/roles", "/v1/users/roles" })
+@RequestMapping({ "/v1/roles", "/v1/users/roles", "/v1/users" })
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Role Management", description = "Manage roles, permissions, and user assignments")
@@ -91,10 +91,25 @@ public class RoleController {
     @DeleteMapping("/{roleId}/permissions/{permissionKey}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Revoke permission from a role")
-    public ResponseEntity<RoleDto> revokePermissionFromRole(
+    public ResponseEntity<Void> revokePermissionFromRole(
             @PathVariable UUID roleId,
             @PathVariable String permissionKey) {
-        return ResponseEntity.ok(rolePermissionService.revokePermission(roleId, permissionKey));
+        roleManagementService.revokePermissionFromRole(roleId, permissionKey);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Story #62: Assign a permission to a role by permission key.
+     */
+    @EmitEvent(id = "SECURITY_ROLE_PERMISSION_ASSIGN", apiVersion = "1")
+    @PutMapping("/{roleId}/permissions/{permissionKey}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Assign permission to a role by key")
+    public ResponseEntity<Void> assignPermissionToRole(
+            @PathVariable UUID roleId,
+            @PathVariable String permissionKey) {
+        roleManagementService.assignPermissionToRole(roleId, permissionKey);
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -143,9 +158,9 @@ public class RoleController {
      */
     @GetMapping("/permissions/user/{userId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Get user permissions", description = "Returns all permissions for a user from their role assignments")
+    @Operation(summary = "Get user permissions (legacy path)", description = "Returns all permissions for a user from their role assignments")
     @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<Set<PermissionDto>> getUserPermissions(@PathVariable UUID userId) {
+    public ResponseEntity<Set<PermissionDto>> getUserPermissionsByUserId(@PathVariable UUID userId) {
         Set<PermissionDto> permissions = roleManagementService.getUserPermissions(userId);
         return ResponseEntity.ok(permissions);
     }
@@ -196,14 +211,65 @@ public class RoleController {
     }
 
     /**
-     * Get role by name
+     * Story #62: Get role by UUID.
      */
-    @GetMapping("/{name}")
+    @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Get role by name", description = "Returns a specific role by its name")
+    @Operation(summary = "Get role by ID", description = "Returns a specific role by its UUID")
     @ApiResponse(responseCode = "404", description = "Role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<RoleDto> getRoleByName(@PathVariable String name) {
-        RoleDto role = roleManagementService.getRoleByName(name);
-        return ResponseEntity.ok(role);
+    public ResponseEntity<RoleDto> getRoleById(@PathVariable UUID id) {
+        return roleManagementService.getRoleById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Story #62: Delete a role and cascade-remove all associations.
+     */
+    @EmitEvent(id = "SECURITY_ROLE_DELETE", apiVersion = "1")
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Delete a role")
+    public ResponseEntity<Void> deleteRole(@PathVariable UUID id) {
+        roleManagementService.deleteRole(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Story #62: Assign a role to a user. Resolved via /v1/users base.
+     */
+    @EmitEvent(id = "SECURITY_USER_ROLE_ASSIGN", apiVersion = "1")
+    @PutMapping("/{userId}/roles/{roleId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Assign a role to a user")
+    public ResponseEntity<Void> assignRoleToUser(
+            @PathVariable UUID userId,
+            @PathVariable UUID roleId) {
+        roleManagementService.assignRoleToUser(userId, roleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Story #62: Revoke a role from a user. Resolved via /v1/users base.
+     */
+    @EmitEvent(id = "SECURITY_USER_ROLE_REVOKE", apiVersion = "1")
+    @DeleteMapping("/{userId}/roles/{roleId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Revoke a role from a user")
+    public ResponseEntity<Void> revokeRoleFromUser(
+            @PathVariable UUID userId,
+            @PathVariable UUID roleId) {
+        roleManagementService.revokeRoleFromUser(userId, roleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Story #62: Get all effective permissions for a user. Resolved via /v1/users base.
+     */
+    @GetMapping("/{userId}/permissions")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @Operation(summary = "Get user permissions", description = "Returns all effective permissions for a user")
+    public ResponseEntity<Set<PermissionDto>> getUserPermissions(@PathVariable UUID userId) {
+        return ResponseEntity.ok(roleManagementService.getUserPermissions(userId));
     }
 }

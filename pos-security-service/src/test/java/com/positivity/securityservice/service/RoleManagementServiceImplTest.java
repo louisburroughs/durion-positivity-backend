@@ -79,7 +79,7 @@ class RoleManagementServiceImplTest {
                 Permission permission = new Permission();
                 permission.setName("security:role:grant");
 
-                when(roleRepository.existsByName("MANAGER")).thenReturn(false);
+                when(roleRepository.existsByNameIgnoreCase("MANAGER")).thenReturn(false);
                 when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
                 when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
                 when(permissionRepository.findByName("security:role:grant")).thenReturn(Optional.of(permission));
