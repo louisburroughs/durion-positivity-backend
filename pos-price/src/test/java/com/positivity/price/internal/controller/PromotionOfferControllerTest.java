@@ -381,17 +381,17 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
         }
 
         @Test
-        @DisplayName("POC-403A: GET /v1/promotions/offers/{id} without gateway auth \u2192 403 Forbidden")
-        void getOfferById_withoutAuth_returns403() throws Exception {
+        @DisplayName("POC-401A: GET /v1/promotions/offers/{id} without gateway auth \u2192 401 Unauthorized")
+        void getOfferById_withoutAuth_returns401() throws Exception {
                 UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 mockMvc.perform(get("/v1/promotions/offers/{id}", id))
-                                .andExpect(status().isForbidden());
+                                .andExpect(status().isUnauthorized());
         }
 
         @Test
-        @DisplayName("POC-403B: GET /v1/promotions/offers/by-code/{code} without gateway auth \u2192 403 Forbidden")
-        void getOfferByCode_withoutAuth_returns403() throws Exception {
+        @DisplayName("POC-401B: GET /v1/promotions/offers/by-code/{code} without gateway auth \u2192 401 Unauthorized")
+        void getOfferByCode_withoutAuth_returns401() throws Exception {
                 mockMvc.perform(get("/v1/promotions/offers/by-code/SUMMER10"))
-                                .andExpect(status().isForbidden());
+                                .andExpect(status().isUnauthorized());
         }
 }

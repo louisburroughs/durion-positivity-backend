@@ -318,12 +318,12 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     }
 
     @Test
-    @DisplayName("ERC-403: POST /v1/promotions/offers/{promotionId}/rules/evaluate without gateway auth \u2192 403 Forbidden")
-    void evaluateEligibility_withoutAuth_returns403() throws Exception {
+    @DisplayName("ERC-401: POST /v1/promotions/offers/{promotionId}/rules/evaluate without gateway auth → 401 Unauthorized")
+    void evaluateEligibility_withoutAuth_returns401() throws Exception {
         UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         mockMvc.perform(post("/v1/promotions/offers/{promotionId}/rules/evaluate", promotionId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"accountId\":null,\"vehicleId\":null}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }

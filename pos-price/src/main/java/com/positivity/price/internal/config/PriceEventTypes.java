@@ -17,7 +17,7 @@ public final class PriceEventTypes {
 
         /**
          * All event type registrations for the price module.
-         * Total: 10 event types.
+         * Total: 13 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -30,6 +30,14 @@ public final class PriceEventTypes {
                                                 "Evaluate whether a price is within allowed restrictions").build(),
                                 EventTypeRegistration.write("PRICE_RESTRICTIONS_OVERRIDE",
                                                 "Override price restrictions for a specific context or condition")
+                                                .build(),
+
+                                // RestrictionRuleController - 2 events
+                                EventTypeRegistration.write("PRICE_RESTRICTION_RULE_CREATE", "Create a restriction rule")
+                                                .apiVersion("1")
+                                                .build(),
+                                EventTypeRegistration.write("PRICE_RESTRICTION_RULE_DEACTIVATE", "Deactivate a restriction rule")
+                                                .apiVersion("1")
                                                 .build(),
 
                                 // PriceQuoteController - 1 event
