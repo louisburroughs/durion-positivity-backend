@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.positivity.accounting.internal.dto.DuplicateEventException;
-import com.positivity.accounting.internal.dto.EnvelopeErrorResponse;
 import com.positivity.accounting.internal.dto.ErrorResponse;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
@@ -49,33 +48,33 @@ public class AccountingExceptionHandler {
     }
 
     @ExceptionHandler(DuplicateEventException.class)
-    public ResponseEntity<EnvelopeErrorResponse> handleDuplicateEvent(DuplicateEventException ex) {
+    public ResponseEntity<ErrorResponse> handleDuplicateEvent(DuplicateEventException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(EnvelopeErrorResponse.of("DUPLICATE_EVENT", ex.getMessage(), Instant.now(clock).toEpochMilli()));
+                .body(ErrorResponse.of("DUPLICATE_EVENT", ex.getMessage(), Instant.now(clock).toEpochMilli()));
     }
 
     @ExceptionHandler(UnbalancedEntryException.class)
-    public ResponseEntity<EnvelopeErrorResponse> handleUnbalancedEntry(UnbalancedEntryException ex) {
+    public ResponseEntity<ErrorResponse> handleUnbalancedEntry(UnbalancedEntryException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
-                .body(EnvelopeErrorResponse.of("UNBALANCED_ENTRY", ex.getMessage(), Instant.now(clock).toEpochMilli()));
+                .body(ErrorResponse.of("UNBALANCED_ENTRY", ex.getMessage(), Instant.now(clock).toEpochMilli()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<EnvelopeErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         String fieldName = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
                 .map(fe -> fe.getField())
                 .orElse("unknown");
         String message = fieldName + " is required";
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(EnvelopeErrorResponse.of("ARGUMENT_NOT_VALID", message, Instant.now(clock).toEpochMilli()));
+                .body(ErrorResponse.of("ARGUMENT_NOT_VALID", message, Instant.now(clock).toEpochMilli()));
     }
 
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<EnvelopeErrorResponse> handleIllegalState(IllegalStateException ex) {
+    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex) {
         String code = resolveStateErrorCode(ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(EnvelopeErrorResponse.of(code, ex.getMessage(), Instant.now(clock).toEpochMilli()));
+                .body(ErrorResponse.of(code, ex.getMessage(), Instant.now(clock).toEpochMilli()));
     }
 
     @ExceptionHandler(DuplicateAccountCodeException.class)

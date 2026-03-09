@@ -41,8 +41,7 @@ paths:
         description: ID of the product to be obtained
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: Successfully retrieved product
@@ -50,6 +49,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: Product not found
           content:
@@ -68,8 +76,7 @@ paths:
         description: ID of the product to update
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -89,16 +96,25 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "200":
           description: Product updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: Product not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
   /v1/products/{productId}/msrp/{msrpId}:
@@ -113,14 +129,12 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       - name: msrpId
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -128,6 +142,21 @@ paths:
               $ref: "#/components/schemas/UpdateMsrpRequestDto"
         required: true
       responses:
+        "200":
+          description: MSRP updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "400":
           description: Invalid payload
           content:
@@ -152,12 +181,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
-        "200":
-          description: MSRP updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/{productId}/lifecycle:
     get:
       tags:
@@ -171,21 +194,29 @@ paths:
         description: ID of the product
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
-        "200":
-          description: Successfully retrieved lifecycle state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
         "404":
           description: Product not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
+        "200":
+          description: Successfully retrieved lifecycle state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
     put:
       tags:
       - Products API
@@ -199,8 +230,7 @@ paths:
         description: ID of the product
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -214,6 +244,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "400":
           description: Validation error
           content:
@@ -251,21 +290,29 @@ paths:
         description: Conversion ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
-        "200":
-          description: Conversion found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UomConversionDto"
         "404":
           description: Conversion not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
+        "200":
+          description: Conversion found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UomConversionDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
     put:
       tags:
       - UOM Conversion API
@@ -279,8 +326,7 @@ paths:
         description: Conversion ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -294,6 +340,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: Conversion not found
           content:
@@ -319,8 +374,7 @@ paths:
         description: Conversion ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "204":
           description: Conversion deactivated
@@ -337,21 +391,29 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
-        "200":
-          description: Found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
         "404":
           description: Not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
+        "200":
+          description: Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
     put:
       tags:
       - Supplier Item Cost API
@@ -362,8 +424,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -371,16 +432,25 @@ paths:
               $ref: "#/components/schemas/SupplierItemCostUpdateRequestDto"
         required: true
       responses:
-        "404":
-          description: Not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
         "200":
           description: Updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: Not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
     delete:
@@ -393,8 +463,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "204":
           description: Deleted
@@ -412,19 +481,27 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
-        "404":
-          description: Price book not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookDto"
         "200":
           description: Price book returned
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/PriceBookDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: Price book not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
     put:
@@ -438,8 +515,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -447,16 +523,25 @@ paths:
               $ref: "#/components/schemas/PriceBookCreateRequestDto"
         required: true
       responses:
-        "404":
-          description: Price book not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookDto"
         "200":
           description: Price book updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/PriceBookDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: Price book not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
   /v1/products/price-books/{priceBookId}/rules/{ruleId}:
@@ -471,14 +556,12 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       - name: ruleId
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -486,16 +569,25 @@ paths:
               $ref: "#/components/schemas/PriceBookRuleCreateRequestDto"
         required: true
       responses:
-        "409":
-          description: Rule conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookRuleDto"
         "200":
           description: Price book rule updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/PriceBookRuleDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "409":
+          description: Rule conflict
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
     delete:
@@ -510,14 +602,12 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       - name: ruleId
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "204":
           description: Rule deactivated
@@ -532,8 +622,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -553,6 +642,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ItemCostsDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/catalogs/{catalogId}:
     get:
       tags:
@@ -566,8 +664,7 @@ paths:
         description: ID of the catalog to be obtained
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: Successfully retrieved catalog
@@ -575,6 +672,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: Catalog not found
           content:
@@ -593,14 +699,22 @@ paths:
         description: ID of the catalog to update
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         description: Updated catalog object
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/CatalogDto"
+              additionalProperties:
+                default: "##default"
+              contains:
+                default: "##default"
+              default: "##default"
+              items:
+                default: "##default"
+              unevaluatedItems:
+                default: "##default"
         required: true
       responses:
         "400":
@@ -615,6 +729,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: Catalog not found
           content:
@@ -633,8 +756,7 @@ paths:
         description: ID of the catalog to delete
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "204":
           description: Catalog deleted successfully
@@ -654,14 +776,13 @@ paths:
         description: "Type of catalog item (product, service, noninventory)"
         required: true
         schema:
-          type: string
+          default: "##default"
       - name: catalogId
         in: path
         description: ID of the catalog item to update
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -669,12 +790,6 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        "200":
-          description: Catalog item updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
         "400":
           description: Invalid item type or request body
           content:
@@ -687,6 +802,21 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
+        "200":
+          description: Catalog item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
     delete:
       tags:
       - Catalog Items API
@@ -700,14 +830,13 @@ paths:
         description: "Type of catalog item (product, service, noninventory)"
         required: true
         schema:
-          type: string
+          default: "##default"
       - name: catalogId
         in: path
         description: ID of the catalog item to delete
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "204":
           description: Catalog item deleted successfully
@@ -748,6 +877,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/{productId}/replacements:
     get:
       tags:
@@ -761,8 +899,7 @@ paths:
         description: ID of the product
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: Replacements listed
@@ -784,8 +921,7 @@ paths:
         description: ID of discontinued product
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -823,8 +959,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: MSRP records returned
@@ -832,6 +967,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
     post:
       tags:
       - Product MSRP API
@@ -843,8 +987,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -876,6 +1019,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/uom-conversions:
     get:
       tags:
@@ -890,8 +1042,19 @@ paths:
             application/json:
               schema:
                 type: array
+                contains:
+                  default: "##default"
                 items:
                   $ref: "#/components/schemas/UomConversionDto"
+                  additionalProperties:
+                    default: "##default"
+                  contains:
+                    default: "##default"
+                  default: "##default"
+                  unevaluatedItems:
+                    default: "##default"
+                unevaluatedItems:
+                  default: "##default"
     post:
       tags:
       - UOM Conversion API
@@ -911,6 +1074,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UomConversionDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "400":
           description: Invalid request
           content:
@@ -930,12 +1102,6 @@ paths:
               $ref: "#/components/schemas/SupplierItemCostCreateRequestDto"
         required: true
       responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
         "400":
           description: Invalid payload
           content:
@@ -948,6 +1114,21 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/pricing/location-overrides:
     post:
       tags:
@@ -963,6 +1144,21 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideCreateRequestDto"
         required: true
       responses:
+        "201":
+          description: Override created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "400":
           description: Guardrail validation failed
           content:
@@ -973,12 +1169,6 @@ paths:
           description: Forbidden
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
-        "201":
-          description: Override created
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
   /v1/products/pricing/location-overrides/{overrideId}/reject:
@@ -995,8 +1185,7 @@ paths:
         description: Override ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -1004,18 +1193,27 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "200":
-          description: Override rejected
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "404":
           description: Override or approval request not found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "200":
+          description: Override rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "400":
           description: Invalid rejection request
           content:
@@ -1042,8 +1240,7 @@ paths:
         description: Override ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -1051,16 +1248,25 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "404":
-          description: Override or approval request not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "200":
           description: Override approved
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: Override or approval request not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "409":
@@ -1096,6 +1302,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "400":
           description: Invalid policy payload
           content:
@@ -1128,6 +1343,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/price-books/{priceBookId}/rules:
     get:
       tags:
@@ -1140,8 +1364,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: Rule list returned
@@ -1149,6 +1372,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
     post:
       tags:
       - Price Book API
@@ -1160,8 +1392,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -1169,18 +1400,27 @@ paths:
               $ref: "#/components/schemas/PriceBookRuleCreateRequestDto"
         required: true
       responses:
-        "201":
-          description: Price book rule created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PriceBookRuleDto"
         "409":
           description: Rule conflict
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceBookRuleDto"
+        "201":
+          description: Price book rule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceBookRuleDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/price-books/resolve-price:
     post:
       tags:
@@ -1202,6 +1442,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResolvePriceResponseDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/catalogs:
     post:
       tags:
@@ -1215,20 +1464,38 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CatalogDto"
+              additionalProperties:
+                default: "##default"
+              contains:
+                default: "##default"
+              default: "##default"
+              items:
+                default: "##default"
+              unevaluatedItems:
+                default: "##default"
         required: true
       responses:
-        "201":
-          description: Catalog created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogDto"
         "400":
           description: Invalid request body
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CatalogDto"
+        "201":
+          description: Catalog created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/catalog-items/{type}:
     post:
       tags:
@@ -1242,7 +1509,7 @@ paths:
         description: "Type of catalog item (product, service, noninventory)"
         required: true
         schema:
-          type: string
+          default: "##default"
       requestBody:
         content:
           application/json:
@@ -1250,18 +1517,27 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        "201":
-          description: Catalog item created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
         "400":
           description: Invalid item type or request body
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CatalogItemResponseDto"
+        "201":
+          description: Catalog item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/{productId}/substitutes:
     get:
       tags:
@@ -1275,8 +1551,7 @@ paths:
         description: ID of the product
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: Substitute parts returned
@@ -1284,6 +1559,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: Product not found
           content:
@@ -1304,8 +1588,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       - name: asOf
         in: query
         required: false
@@ -1313,18 +1596,27 @@ paths:
           type: string
           format: date
       responses:
-        "200":
-          description: Active MSRP returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "404":
           description: No active MSRP for date
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+        "200":
+          description: Active MSRP returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/{productId}/detail:
     get:
       tags:
@@ -1340,27 +1632,34 @@ paths:
         description: ID of the product
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       - name: location_id
         in: query
         description: Location/store ID for location-specific data
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
-        "400":
-          description: Invalid location ID
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDetailView"
         "200":
           description: Successfully retrieved product details (may be partial if some
             services unavailable)
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetailView"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "400":
+          description: Invalid location ID
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
         "404":
@@ -1388,8 +1687,7 @@ paths:
         description: ID of the service to be obtained
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: Successfully retrieved service
@@ -1397,6 +1695,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: Service not found
           content:
@@ -1416,7 +1723,7 @@ paths:
         description: Name of the services to be obtained
         required: true
         schema:
-          type: string
+          default: "##default"
       responses:
         "200":
           description: Successfully retrieved services
@@ -1424,6 +1731,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/search:
     get:
       tags:
@@ -1438,52 +1754,59 @@ paths:
         description: Free-text search query (matches product name and description)
         required: false
         schema:
-          type: string
+          default: "##default"
       - name: brand
         in: query
         description: "Filter by manufacturer brand (exact, case-insensitive)"
         required: false
         schema:
-          type: string
+          default: "##default"
       - name: category
         in: query
         description: "Filter by category name (exact, case-insensitive)"
         required: false
         schema:
-          type: string
+          default: "##default"
       - name: sku
         in: query
         description: "Filter by SKU (exact match, case-insensitive)"
         required: false
         schema:
-          type: string
+          default: "##default"
       - name: cursor
         in: query
         description: Pagination cursor from previous response
         required: false
         schema:
-          type: string
+          default: "##default"
       - name: limit
         in: query
         description: Maximum number of results (1–100)
         required: false
         schema:
-          type: integer
-          format: int32
-          default: 20
+          default: "##default"
       responses:
-        "200":
-          description: Search results
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogSearchResultDto"
         "400":
           description: "Invalid request parameter (e.g., non-numeric limit)"
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CatalogSearchResultDto"
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSearchResultDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/pricing/effective-price/{locationId}/{productId}:
     get:
       tags:
@@ -1498,15 +1821,13 @@ paths:
         description: Location ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       - name: productId
         in: path
         description: Product ID
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "404":
           description: No pricing context found
@@ -1520,6 +1841,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EffectiveLocationPriceResponseDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/noninventory/{productId}:
     get:
       tags:
@@ -1533,8 +1863,7 @@ paths:
         description: ID of the non-inventory product to be obtained
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: Successfully retrieved non-inventory product
@@ -1542,6 +1871,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NonInventoryProductDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: Non-inventory product not found
           content:
@@ -1561,7 +1899,7 @@ paths:
         description: Name of the non-inventory products to be obtained
         required: true
         schema:
-          type: string
+          default: "##default"
       responses:
         "200":
           description: Successfully retrieved non-inventory products
@@ -1569,6 +1907,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NonInventoryProductDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/name/{name}:
     get:
       tags:
@@ -1582,7 +1929,7 @@ paths:
         description: Name of the products to be obtained
         required: true
         schema:
-          type: string
+          default: "##default"
       responses:
         "200":
           description: Successfully retrieved products
@@ -1590,6 +1937,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/items/{itemId}/costs:
     get:
       tags:
@@ -1601,8 +1957,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: Found
@@ -1610,6 +1965,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ItemCostsDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/items/{itemId}/costs/audit:
     get:
       tags:
@@ -1621,8 +1985,7 @@ paths:
         in: path
         required: true
         schema:
-          type: string
-          format: uuid
+          default: "##default"
       responses:
         "200":
           description: Found
@@ -1630,6 +1993,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ItemCostAuditDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/catalogs/name/{name}:
     get:
       tags:
@@ -1643,7 +2015,7 @@ paths:
         description: Name of the catalogs to be obtained
         required: true
         schema:
-          type: string
+          default: "##default"
       responses:
         "200":
           description: Successfully retrieved catalogs
@@ -1651,10 +2023,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
 components:
   schemas:
     ProductUpdateRequestDto:
       type: object
+      default: "##default"
       description: Update product request
       properties:
         name:
@@ -1677,6 +2059,7 @@ components:
           type: string
         attributes:
           type: string
+          default: "##default"
           description: JSON object represented as string
       required:
       - description
@@ -1685,28 +2068,34 @@ components:
       - unitOfMeasure
     CategoryDto:
       type: object
+      default: "##default"
       description: Product category
       properties:
         id:
           type: string
           format: uuid
+          default: "##default"
           description: Category identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: "##default"
           description: Category name
           example: Tools
     DimensionDto:
       type: object
+      default: "##default"
       description: Product dimension detail
       properties:
         id:
           type: string
           format: uuid
+          default: "##default"
           description: Dimension identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         dimensionType:
           type: string
+          default: "##default"
           description: Dimension type
           enum:
           - LENGTH
@@ -1733,121 +2122,154 @@ components:
           - RESISTANCE
         description:
           type: string
+          default: "##default"
           description: Dimension description
           example: Length
         unitOfMeasure:
           type: string
+          default: "##default"
           description: Unit of measure
           example: in
         dimensionValue:
           type: number
           format: double
+          default: "##default"
           description: Dimension value
           example: 12.5
     ProductDto:
       type: object
+      default: "##default"
       description: Catalog product
       properties:
         id:
           type: string
           format: uuid
+          default: "##default"
           description: Product identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: "##default"
           description: Product name
           example: Heavy Duty Wrench
         shortDescription:
           type: string
+          default: "##default"
           description: Short product description
         longDescription:
           type: string
+          default: "##default"
           description: Long product description
         description:
           type: string
+          default: "##default"
           description: Product description
         images:
           type: array
+          default: "##default"
           description: Product image URLs
           items:
             type: string
         manufacturerPartNumber:
           type: string
+          default: "##default"
           description: Manufacturer part number
         manufacturerId:
           type: string
           format: uuid
+          default: "##default"
           description: Manufacturer identifier
         manufacturerName:
           type: string
+          default: "##default"
           description: Manufacturer name
         manufacturerWarranty:
           type: string
+          default: "##default"
           description: Manufacturer warranty
         manufacturerBrand:
           type: string
+          default: "##default"
           description: Manufacturer brand
         countryOfOrigin:
           type: string
+          default: "##default"
           description: Country of origin
         sku:
           type: string
+          default: "##default"
           description: SKU
         mpn:
           type: string
+          default: "##default"
           description: Manufacturer part number
         upc:
           type: string
+          default: "##default"
           description: UPC
         attributes:
           type: string
+          default: "##default"
           description: Attributes JSON
         unitOfMeasure:
           type: string
+          default: "##default"
           description: Unit of measure
         status:
           type: string
+          default: "##default"
           description: Operational status
           enum:
           - ACTIVE
           - INACTIVE
         productCode:
           type: string
+          default: "##default"
           description: Product code
         productCodeType:
           type: string
+          default: "##default"
           description: Product code type
           enum:
           - UPC
           - EAN
         category:
           $ref: "#/components/schemas/CategoryDto"
+          default: "##default"
           description: Category detail
         subcategory:
           $ref: "#/components/schemas/SubcategoryDto"
+          default: "##default"
           description: Subcategory detail
         type:
           type: string
+          default: "##default"
           description: Product type
         dimensions:
           type: array
+          default: "##default"
           description: Product dimensions
           items:
             $ref: "#/components/schemas/DimensionDto"
         material:
           type: string
+          default: "##default"
           description: Material
         color:
           type: string
+          default: "##default"
           description: Color
         warranty:
           type: string
+          default: "##default"
           description: Warranty
         specifications:
           type: string
+          default: "##default"
           description: Detailed specifications JSON
         lifecycleState:
           type: string
+          default: "##default"
           description: Lifecycle state
           enum:
           - ACTIVE
@@ -1856,37 +2278,46 @@ components:
         lifecycleStateEffectiveAt:
           type: string
           format: date-time
+          default: "##default"
           description: Lifecycle state effective instant
         lastStateChangedBy:
           type: string
           format: uuid
+          default: "##default"
           description: User that last changed lifecycle state
         lastStateChangedAt:
           type: string
           format: date-time
+          default: "##default"
           description: Last lifecycle state change instant
         lifecycleOverrideReason:
           type: string
+          default: "##default"
           description: Lifecycle override reason
         createdAt:
           type: string
           format: date-time
+          default: "##default"
           description: Created timestamp
         updatedAt:
           type: string
           format: date-time
+          default: "##default"
           description: Updated timestamp
     SubcategoryDto:
       type: object
+      default: "##default"
       description: Product subcategory
       properties:
         id:
           type: string
           format: uuid
+          default: "##default"
           description: Subcategory identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: "##default"
           description: Subcategory name
           example: Hand Tools
     UpdateMsrpRequestDto:
@@ -1946,10 +2377,12 @@ components:
           format: int64
     ProductLifecycleUpdateRequest:
       type: object
+      default: "##default"
       description: Product lifecycle update request
       properties:
         lifecycleState:
           type: string
+          default: "##default"
           description: Target lifecycle state
           enum:
           - ACTIVE
@@ -1958,29 +2391,36 @@ components:
         effectiveAt:
           type: string
           format: date-time
+          default: "##default"
           description: Effective instant for lifecycle change
         effectiveDate:
           type: string
           format: date
+          default: "##default"
           description: Effective date for lifecycle change (date-only)
         changedBy:
           type: string
+          default: "##default"
           description: Username performing the lifecycle change
           example: jane.doe
         overrideReason:
           type: string
+          default: "##default"
           description: Reason for lifecycle override
     ProductLifecycleResponse:
       type: object
+      default: "##default"
       description: Product lifecycle details and replacement options
       properties:
         productId:
           type: string
           format: uuid
+          default: "##default"
           description: Product identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         lifecycleState:
           type: string
+          default: "##default"
           description: Current lifecycle state
           enum:
           - ACTIVE
@@ -1989,49 +2429,60 @@ components:
         lifecycleStateEffectiveAt:
           type: string
           format: date-time
+          default: "##default"
           description: Lifecycle state effective instant
         lastStateChangedBy:
           type: string
           format: uuid
+          default: "##default"
           description: User that last changed lifecycle state
           example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
         lastStateChangedAt:
           type: string
           format: date-time
+          default: "##default"
           description: Last lifecycle state change instant
         lifecycleOverrideReason:
           type: string
+          default: "##default"
           description: Lifecycle override reason
         replacementOptions:
           type: array
+          default: "##default"
           description: Replacement options for this product lifecycle state
           items:
             $ref: "#/components/schemas/ReplacementOption"
     ReplacementOption:
       type: object
+      default: "##default"
       description: Replacement option details
       properties:
         replacementId:
           type: string
           format: uuid
+          default: "##default"
           description: Replacement option identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         replacementProductId:
           type: string
           format: uuid
+          default: "##default"
           description: Replacement product identifier
           example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         priorityOrder:
           type: integer
           format: int32
+          default: "##default"
           description: Display priority order
           example: 1
         notes:
           type: string
+          default: "##default"
           description: Replacement notes
         effectiveAt:
           type: string
           format: date-time
+          default: "##default"
           description: Replacement option effective instant
     UomConversionUpdateRequestDto:
       type: object
@@ -2064,21 +2515,25 @@ components:
           type: string
     CostTierDto:
       type: object
+      default: "##default"
       description: Supplier item cost tier
       properties:
         minQuantity:
           type: integer
           format: int32
+          default: "##default"
           description: Inclusive minimum quantity
           example: 1
           minimum: 1
         maxQuantity:
           type: integer
           format: int32
+          default: "##default"
           description: Inclusive maximum quantity; null means and above
           example: 10
         unitCost:
           type: number
+          default: "##default"
           description: Per-unit cost for this quantity range
           example: 5.0
       required:
@@ -2086,26 +2541,32 @@ components:
       - unitCost
     SupplierItemCostUpdateRequestDto:
       type: object
+      default: "##default"
       description: Request payload for updating supplier-item cost tiers
       properties:
         supplierId:
           type: string
           format: uuid
+          default: "##default"
           description: Supplier identifier
         itemId:
           type: string
           format: uuid
+          default: "##default"
           description: Inventory item identifier
         currencyCode:
           type: string
+          default: "##default"
           description: ISO 4217 currency code
           example: USD
         baseCost:
           type: number
+          default: "##default"
           description: Optional fallback base cost when no tiers apply
           example: 6.25
         tiers:
           type: array
+          default: "##default"
           description: Ordered quantity-based cost tiers
           items:
             $ref: "#/components/schemas/CostTierDto"
@@ -2115,37 +2576,46 @@ components:
       - supplierId
     SupplierItemCostDto:
       type: object
+      default: "##default"
       description: Supplier-item cost structure with optional quantity-based tiers
       properties:
         id:
           type: string
           format: uuid
+          default: "##default"
           description: Supplier-item cost identifier
         supplierId:
           type: string
           format: uuid
+          default: "##default"
           description: Supplier identifier
         itemId:
           type: string
           format: uuid
+          default: "##default"
           description: Inventory item identifier
         currencyCode:
           type: string
+          default: "##default"
           description: ISO 4217 currency code
           example: USD
         baseCost:
           type: number
+          default: "##default"
           description: Optional fallback base cost
         createdAt:
           type: string
           format: date-time
+          default: "##default"
           description: Entity created timestamp
         updatedAt:
           type: string
           format: date-time
+          default: "##default"
           description: Entity updated timestamp
         tiers:
           type: array
+          default: "##default"
           description: Ordered quantity-based cost tiers
           items:
             $ref: "#/components/schemas/CostTierDto"
@@ -2305,19 +2775,23 @@ components:
           format: int64
     UpdateStandardCostRequestDto:
       type: object
+      default: "##default"
       description: Request payload to update standard cost
       properties:
         newCost:
           type: number
+          default: "##default"
           description: New standard cost
         reasonCode:
           type: string
+          default: "##default"
           description: Reason code for manual change
       required:
       - newCost
       - reasonCode
     ItemCostsDto:
       type: object
+      default: "##default"
       description: Current item costs
       properties:
         itemId:
@@ -2331,120 +2805,152 @@ components:
           type: number
     CatalogDto:
       type: object
+      default: "##default"
       description: Catalog container
       properties:
         id:
           type: string
           format: uuid
+          default: "##default"
           description: Catalog identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: "##default"
           description: Catalog name
           example: Winter Catalog
         description:
           type: string
+          default: "##default"
           description: Catalog description
         productIds:
           type: array
+          default: "##default"
           description: Product IDs included in the catalog
           items:
             type: string
             format: uuid
         serviceIds:
           type: array
+          default: "##default"
           description: Service IDs included in the catalog
           items:
             type: string
             format: uuid
         nonInventoryProductIds:
           type: array
+          default: "##default"
           description: Non-inventory product IDs included in the catalog
           items:
             type: string
             format: uuid
     CatalogItemRequestDto:
       type: object
+      default: "##default"
       description: Catalog item upsert request. Fields are type-dependent.
       properties:
         name:
           type: string
+          default: "##default"
           description: Item name
           example: Heavy Duty Wrench
         shortDescription:
           type: string
+          default: "##default"
           description: Short description
         longDescription:
           type: string
+          default: "##default"
           description: Long description
         images:
           type: array
+          default: "##default"
           description: Product image URLs for product type
           items:
             type: string
         manufacturerPartNumber:
           type: string
+          default: "##default"
           description: Manufacturer part number for product type
         manufacturerId:
           type: string
+          default: "##default"
           description: Manufacturer identifier for product type
         manufacturerName:
           type: string
+          default: "##default"
           description: Manufacturer name for product type
         manufacturerWarranty:
           type: string
+          default: "##default"
           description: Manufacturer warranty for product type
         manufacturerBrand:
           type: string
+          default: "##default"
           description: Manufacturer brand for product type
         countryOfOrigin:
           type: string
+          default: "##default"
           description: Country of origin for product type
         sku:
           type: string
+          default: "##default"
           description: SKU for product type
         productCode:
           type: string
+          default: "##default"
           description: Product code for product type
         type:
           type: string
+          default: "##default"
           description: Product type
           example: PHYSICAL
         material:
           type: string
+          default: "##default"
           description: Material for product type
         color:
           type: string
+          default: "##default"
           description: Color for product type
         warranty:
           type: string
+          default: "##default"
           description: Warranty for product type
         specifications:
           type: string
+          default: "##default"
           description: Detailed specifications JSON for product type
     CatalogItemResponseDto:
       type: object
+      default: "##default"
       description: Catalog item response
       properties:
         id:
           type: string
           format: uuid
+          default: "##default"
           description: Item identifier
         itemType:
           type: string
+          default: "##default"
           description: Item type
           example: product
         name:
           type: string
+          default: "##default"
           description: Item name
         shortDescription:
           type: string
+          default: "##default"
           description: Short description
         longDescription:
           type: string
+          default: "##default"
           description: Long description
     ProductCreateRequestDto:
       type: object
+      default: "##default"
       description: Create product request
       properties:
         name:
@@ -2467,6 +2973,7 @@ components:
           type: string
         attributes:
           type: string
+          default: "##default"
           description: JSON object represented as string
       required:
       - description
@@ -2476,24 +2983,29 @@ components:
       - unitOfMeasure
     ProductReplacementRequest:
       type: object
+      default: "##default"
       description: Product replacement option request
       properties:
         replacementProductId:
           type: string
           format: uuid
+          default: "##default"
           description: Replacement product identifier
           example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         priorityOrder:
           type: integer
           format: int32
+          default: "##default"
           description: Display priority order
           example: 1
         notes:
           type: string
+          default: "##default"
           description: Replacement notes
         effectiveAt:
           type: string
           format: date-time
+          default: "##default"
           description: Replacement effective instant
     CreateMsrpRequestDto:
       type: object
@@ -2533,26 +3045,32 @@ components:
       - toUomCode
     SupplierItemCostCreateRequestDto:
       type: object
+      default: "##default"
       description: Request payload for creating supplier-item cost tiers
       properties:
         supplierId:
           type: string
           format: uuid
+          default: "##default"
           description: Supplier identifier
         itemId:
           type: string
           format: uuid
+          default: "##default"
           description: Inventory item identifier
         currencyCode:
           type: string
+          default: "##default"
           description: ISO 4217 currency code
           example: USD
         baseCost:
           type: number
+          default: "##default"
           description: Optional fallback base cost when no tiers apply
           example: 6.25
         tiers:
           type: array
+          default: "##default"
           description: Ordered quantity-based cost tiers
           items:
             $ref: "#/components/schemas/CostTierDto"
@@ -2726,23 +3244,28 @@ components:
           type: string
     AvailabilityInfo:
       type: object
+      default: "##default"
       description: Availability information with status indicator
       properties:
         onHandQuantity:
           type: integer
           format: int32
+          default: "##default"
           description: On-hand quantity at location
           example: 15
         availableToPromiseQuantity:
           type: integer
           format: int32
+          default: "##default"
           description: Available to promise quantity
           example: 12
         leadTime:
           $ref: "#/components/schemas/LeadTimeInfo"
+          default: "##default"
           description: Lead time information
         status:
           type: string
+          default: "##default"
           description: Availability data status
           enum:
           - OK
@@ -2753,9 +3276,11 @@ components:
         asOf:
           type: string
           format: date-time
+          default: "##default"
           description: Timestamp of availability data
         confidence:
           type: string
+          default: "##default"
           description: Confidence level in availability data
           enum:
           - LOW
@@ -2764,10 +3289,12 @@ components:
           example: MEDIUM
     LeadTimeInfo:
       type: object
+      default: "##default"
       description: Lead time information with source indicator
       properties:
         source:
           type: string
+          default: "##default"
           description: Source of lead time data
           enum:
           - CATALOG
@@ -2777,23 +3304,28 @@ components:
         minDays:
           type: integer
           format: int32
+          default: "##default"
           description: Minimum days for delivery
           example: 2
         maxDays:
           type: integer
           format: int32
+          default: "##default"
           description: Maximum days for delivery
           example: 5
         displayText:
           type: string
+          default: "##default"
           description: Human-readable lead time hint
           example: 3-5 business days
         asOf:
           type: string
           format: date-time
+          default: "##default"
           description: Timestamp of lead time data
         confidence:
           type: string
+          default: "##default"
           description: Confidence in lead time estimate
           enum:
           - LOW
@@ -2802,24 +3334,29 @@ components:
           example: LOW
     PricingInfo:
       type: object
+      default: "##default"
       description: Pricing information with availability status
       properties:
         msrp:
           type: number
           format: double
+          default: "##default"
           description: Manufacturer's suggested retail price
           example: 99.99
         storePrice:
           type: number
           format: double
+          default: "##default"
           description: Store-specific price
           example: 89.99
         currency:
           type: string
+          default: "##default"
           description: Currency code
           example: USD
         status:
           type: string
+          default: "##default"
           description: Pricing data status
           enum:
           - OK
@@ -2830,9 +3367,11 @@ components:
         asOf:
           type: string
           format: date-time
+          default: "##default"
           description: Timestamp of pricing data
         confidence:
           type: string
+          default: "##default"
           description: Confidence level in pricing data
           enum:
           - LOW
@@ -2841,38 +3380,47 @@ components:
           example: HIGH
     ProductDetailView:
       type: object
+      default: "##default"
       description: Consolidated product detail view with pricing and availability
       properties:
         productId:
           type: string
+          default: "##default"
           description: Unique product identifier
           example: 550e8400-e29b-41d4-a716-446655440000
         description:
           type: string
+          default: "##default"
           description: Product description
           example: Heavy Duty Wrench
         specifications:
           type: array
+          default: "##default"
           description: Product specifications
           items:
             $ref: "#/components/schemas/ProductSpecification"
         pricing:
           $ref: "#/components/schemas/PricingInfo"
+          default: "##default"
           description: Pricing information with status indicator
         availability:
           $ref: "#/components/schemas/AvailabilityInfo"
+          default: "##default"
           description: Availability information with status indicator
         substitutions:
           type: array
+          default: "##default"
           description: Substitution product suggestions
           items:
             $ref: "#/components/schemas/SubstitutionHint"
         generatedAt:
           type: string
           format: date-time
+          default: "##default"
           description: Timestamp when this response was generated
         confidence:
           type: string
+          default: "##default"
           description: Overall confidence in the data completeness
           enum:
           - LOW
@@ -2881,89 +3429,111 @@ components:
           example: HIGH
     ProductSpecification:
       type: object
+      default: "##default"
       description: Product specification entry
       properties:
         name:
           type: string
+          default: "##default"
           description: Specification name
           example: Material
         value:
           type: string
+          default: "##default"
           description: Specification value
           example: Steel
     SubstitutionHint:
       type: object
+      default: "##default"
       description: Product substitution suggestion
       properties:
         productId:
           type: string
+          default: "##default"
           description: Substitute product ID
           example: 650e8400-e29b-41d4-a716-446655440001
         reason:
           type: string
+          default: "##default"
           description: Reason for substitution
           example: Newer Model
     ServiceDto:
       type: object
+      default: "##default"
       description: Catalog service item
       properties:
         id:
           type: string
           format: uuid
+          default: "##default"
           description: Service identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: "##default"
           description: Service name
           example: Standard installation
         longDescription:
           type: string
+          default: "##default"
           description: Long service description
         shortDescription:
           type: string
+          default: "##default"
           description: Short service description
     CatalogSearchResultDto:
       type: object
+      default: "##default"
       description: Cursor-based catalog search result
       properties:
         data:
           type: array
+          default: "##default"
           description: Page of matching product summaries
           items:
             $ref: "#/components/schemas/ProductSummary"
         nextCursor:
           type: string
+          default: "##default"
           description: Opaque cursor for the next page; null if no more results
         limit:
           type: integer
           format: int32
+          default: "##default"
           description: Number of items requested (limit)
           example: 20
     ProductSummary:
       type: object
+      default: "##default"
       description: Lightweight product summary for search results
       properties:
         productId:
           type: string
           format: uuid
+          default: "##default"
           description: Unique product identifier
         name:
           type: string
+          default: "##default"
           description: Product name
           example: Heavy Duty Wrench
         sku:
           type: string
+          default: "##default"
           description: Stock Keeping Unit
           example: SKU-12345
         category:
           type: string
+          default: "##default"
           description: Category name
           example: Hand Tools
         thumbnailUrl:
           type: string
+          default: "##default"
           description: URL of the primary product thumbnail image
         manufacturerBrand:
           type: string
+          default: "##default"
           description: Manufacturer brand name
           example: AcmePro
     EffectiveLocationPriceResponseDto:
@@ -2988,24 +3558,30 @@ components:
           - INACTIVE
     NonInventoryProductDto:
       type: object
+      default: "##default"
       description: Non-inventory product
       properties:
         id:
           type: string
           format: uuid
+          default: "##default"
           description: Non-inventory identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          default: "##default"
           description: Name
         longDescription:
           type: string
+          default: "##default"
           description: Long description
         shortDescription:
           type: string
+          default: "##default"
           description: Short description
     ItemCostAuditDto:
       type: object
+      default: "##default"
       description: Item cost audit event
       properties:
         auditId:

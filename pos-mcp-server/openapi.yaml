@@ -167,6 +167,11 @@ paths:
           application/json: {}
         required: true
       responses:
+        "500":
+          description: Tool execution failed
+          content:
+            text/plain:
+              example: "Failed to execute MCP tool: Tool not found"
         "400":
           description: Invalid request - missing or empty toolName
           content:
@@ -183,11 +188,6 @@ paths:
                 - type: text
                   text: Pong from positivity-ping
                 isError: false
-        "500":
-          description: Tool execution failed
-          content:
-            text/plain:
-              example: "Failed to execute MCP tool: Tool not found"
   /v1/llm-apis:
     get:
       tags:
