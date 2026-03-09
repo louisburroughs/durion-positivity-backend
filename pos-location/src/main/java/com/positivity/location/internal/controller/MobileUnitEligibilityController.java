@@ -27,7 +27,7 @@ public class MobileUnitEligibilityController {
 
     @Operation(summary = "Find eligible mobile units", description = "Return eligible active units for a service request.")
     @ApiResponse(responseCode = "200", description = "Eligible mobile units returned.")
-    @PreAuthorize("hasAuthority('location.mobile-unit.read')")
+    @PreAuthorize("hasAuthority('location:mobile-unit:read')")
     @GetMapping("/v1/mobile-units:eligible")
     public ResponseEntity<List<EligibleMobileUnitResponse>> findEligibleMobileUnits(
             @RequestParam String postalCode,
