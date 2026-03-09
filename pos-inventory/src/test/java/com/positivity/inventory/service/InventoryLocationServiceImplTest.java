@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.InventoryLocationServiceImpl;
+import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
@@ -63,8 +64,9 @@ class InventoryLocationServiceImplTest {
 
     @Test
     void deactivateLocation_withStock_transfersAndReturnsTransferDetails() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("inventory-test-user", "n/a", List.of()));
+        var authentication = new UsernamePasswordAuthenticationToken("inventory-test-user", "n/a", List.of());
+        authentication.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "inventory-test-user"));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
         try {
             UUID sourceLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000002");

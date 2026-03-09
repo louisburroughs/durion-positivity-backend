@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,6 +55,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.internal.service.ReceivingServiceImpl;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 @ExtendWith(MockitoExtension.class)
 class ReceivingServiceImplTest {
@@ -988,6 +990,7 @@ class ReceivingServiceImplTest {
 
                 CrossDockRequest request = new CrossDockRequest("WO-001", workorderLineId.toString(),
                                 new BigDecimal("2"), null);
+                authenticateAs("receiver-user");
 
                 PartMatchPermissionException exception = assertThrows(
                                 PartMatchPermissionException.class,
@@ -1166,6 +1169,7 @@ class ReceivingServiceImplTest {
                                 username,
                                 "N/A",
                                 Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList());
+                authentication.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, username));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 }

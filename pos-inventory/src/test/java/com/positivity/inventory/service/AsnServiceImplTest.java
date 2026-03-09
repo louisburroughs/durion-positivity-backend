@@ -25,12 +25,15 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.positivity.inventory.internal.dto.asn.AsnResponse;
 import com.positivity.inventory.internal.dto.asn.CreateAsnLineRequest;
@@ -54,6 +57,7 @@ import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.internal.service.AsnServiceImpl;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AsnServiceImpl Unit Tests")
@@ -91,6 +95,18 @@ class AsnServiceImplTest {
                 purchaseOrderRepository,
                 inventoryLedgerEntryRepository,
                 applicationEventPublisher);
+        authenticateAs("asn-test-user");
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void authenticateAs(String username) {
+        var authentication = new UsernamePasswordAuthenticationToken(username, "N/A", List.of());
+        authentication.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, username));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     @Test
