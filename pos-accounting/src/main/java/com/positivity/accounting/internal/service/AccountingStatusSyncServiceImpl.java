@@ -65,6 +65,7 @@ public class AccountingStatusSyncServiceImpl implements AccountingStatusSyncServ
                         INVOICE_STATUS_NOT_FOUND + event.getInvoiceId()));
 
         if (statusView.getAccountingStatusUpdatedAt() != null
+                && event.getTimestamp() != null
                 && event.getTimestamp().isBefore(statusView.getAccountingStatusUpdatedAt())) {
             log.warn("Out-of-order accounting status event ignored: event timestamp {} is before current updatedAt {} for invoice {}",
                     event.getTimestamp(), statusView.getAccountingStatusUpdatedAt(), event.getInvoiceId());
