@@ -446,6 +446,25 @@ public final class WorkorderEventTypes {
                         .approval("WORKORDER_TIME_ENTRY_REJECTED", "Reject a submitted time entry")
                         .apiVersion("1").build();
 
+        // ==================== SUBSTITUTE LINK EVENTS (CAP-171 Story #45)
+        // ====================
+
+        public static final EventTypeRegistration WORKORDER_SUBSTITUTE_LINK_CREATE = EventTypeRegistration
+                        .write("WORKORDER_SUBSTITUTE_LINK_CREATE", "Create a substitute link for a product")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_SUBSTITUTE_LINK_UPDATE = EventTypeRegistration
+                        .write("WORKORDER_SUBSTITUTE_LINK_UPDATE", "Update an existing substitute link")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_SUBSTITUTE_LINK_DELETE = EventTypeRegistration
+                        .write("WORKORDER_SUBSTITUTE_LINK_DELETE", "Soft-delete a substitute link")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_SUBSTITUTE_SUGGEST = EventTypeRegistration
+                        .fastRead("WORKORDER_SUBSTITUTE_SUGGEST", "Suggest substitutes for a workorder")
+                        .apiVersion("1").build();
+
         // ==================== DASHBOARD EVENTS (CAP-142) ====================
 
         /**
@@ -542,6 +561,11 @@ public final class WorkorderEventTypes {
                         // Time entry events (Story #66)
                         WORKORDER_TIME_ENTRY_APPROVED,
                         WORKORDER_TIME_ENTRY_REJECTED,
+                        // Substitute link events (CAP-171 Story #45)
+                        WORKORDER_SUBSTITUTE_LINK_CREATE,
+                        WORKORDER_SUBSTITUTE_LINK_UPDATE,
+                        WORKORDER_SUBSTITUTE_LINK_DELETE,
+                        WORKORDER_SUBSTITUTE_SUGGEST,
                         // Dashboard events (CAP-142)
                         WORKEXEC_DASHBOARD_TODAY_GET);
 }

@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
+import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
+import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryStateException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
@@ -87,6 +90,24 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleTimeEntryState(
             TimeEntryStateException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.CONFLICT, "TIME_ENTRY_INVALID_STATE", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(DuplicateSubstituteLinkException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateSubstituteLink(
+            DuplicateSubstituteLinkException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, "DUPLICATE_SUBSTITUTE_LINK", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(SubstituteLinkNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleSubstituteLinkNotFound(
+            SubstituteLinkNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, "SUBSTITUTE_LINK_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(StaleSubstituteLinkVersionException.class)
+    public ResponseEntity<Map<String, Object>> handleStaleSubstituteLinkVersion(
+            StaleSubstituteLinkVersionException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, "STALE_SUBSTITUTE_LINK_VERSION", ex.getMessage(), request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

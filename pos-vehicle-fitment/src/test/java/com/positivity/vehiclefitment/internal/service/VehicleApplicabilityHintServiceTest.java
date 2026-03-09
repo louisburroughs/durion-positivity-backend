@@ -97,7 +97,7 @@ class VehicleApplicabilityHintServiceTest {
     void testUpdateHint_Success() {
         // Given
         UpdateHintRequest updateRequest = new UpdateHintRequest(
-            Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
+                Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
 
         when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.of(mockHint));
         when(hintRepository.save(any(VehicleApplicabilityHint.class)))
@@ -116,7 +116,7 @@ class VehicleApplicabilityHintServiceTest {
     void testUpdateHint_NotFound() {
         // Given
         UpdateHintRequest updateRequest = new UpdateHintRequest(
-            Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
+                Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")));
 
         when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.empty());
 
@@ -305,7 +305,8 @@ class VehicleApplicabilityHintServiceTest {
 
         when(hintRepository.findAll()).thenReturn(List.of(hint));
 
-        // Unknown tag type key → IllegalArgumentException caught → hint still matches (no blocking failure)
+        // Unknown tag type key → IllegalArgumentException caught → hint still matches
+        // (no blocking failure)
         FilterProductsResponse response = service.filterProductsByVehicleAttributes(Map.of("UNKNOWN_TYPE", "value"));
 
         assertThat(response.getCount()).isEqualTo(1);

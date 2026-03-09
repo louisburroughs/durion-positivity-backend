@@ -2,11 +2,14 @@ package com.positivity.workorder.config;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -85,9 +88,12 @@ public class TestSecurityConfig {
             // Issue CAP-142: Story #60 — daily dispatch board dashboard view authority
             new SimpleGrantedAuthority("workorder:dashboard:view"));
 
+    private static final UUID TEST_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary
-    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) throws Exception {
+    @Order(0)
+    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
@@ -109,8 +115,26 @@ public class TestSecurityConfig {
         @Override
         protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                 FilterChain filterChain) throws ServletException, IOException {
+            String username = request.getHeader("X-User");
+            if (username == null || username.isBlank()) {
+                username = "workorder-test-user";
+            }
+
+            UUID userId = TEST_USER_ID;
+            String userIdHeader = request.getHeader("X-User-Id");
+            if (userIdHeader != null && !userIdHeader.isBlank()) {
+                try {
+                    userId = UUID.fromString(userIdHeader);
+                } catch (IllegalArgumentException ignored) {
+                    userId = TEST_USER_ID;
+                }
+            }
+
             var authentication = new UsernamePasswordAuthenticationToken(
-                    "workorder-test-user", null, TEST_AUTHORITIES);
+                    username, null, TEST_AUTHORITIES);
+            authentication.setDetails(Map.of(
+                    "username", username,
+                    "userId", userId));
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
         }
