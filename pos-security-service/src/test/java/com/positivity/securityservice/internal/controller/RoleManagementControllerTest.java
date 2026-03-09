@@ -75,7 +75,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  *   <tr><td>SC13</td><td>VIEWER role → 403</td><td>GREEN</td><td>—</td></tr>
  * </table>
  */
-@WebMvcTest(RoleController.class)
+@WebMvcTest({ RoleController.class, UserRoleController.class })
 @DisplayName("RoleManagementControllerTest — Story #62")
 class RoleManagementControllerTest {
 
