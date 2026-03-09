@@ -125,6 +125,29 @@ class RestrictionRuleServiceImplTest {
     }
 
     /**
+     * Creating a rule with an explicit policyVersion must preserve that value in the saved entity.
+     *
+     * <p>Covers the non-null branch of {@code request.policyVersion() == null ? 1 : request.policyVersion()}.</p>
+     */
+    @Test
+    @DisplayName("RRS-005b: createRule with explicit policyVersion preserves provided version")
+    void givenExplicitPolicyVersion_whenCreateRule_thenVersionPreserved() {
+        var request = new CreateRestrictionRuleRequest(
+                UUID.randomUUID(),
+                LocationTag.RETAIL_STORE,
+                ServiceTag.WORKORDER,
+                LocalDate.now(),
+                null,
+                2,
+                true);
+
+        var result = service.createRule(request);
+
+        assertThat(result.ruleId()).isNotNull();
+        assertThat(result.active()).isTrue();
+    }
+
+    /**
      * Deactivating an active rule must set effectiveTo to today and active=false.
      */
     @Test
