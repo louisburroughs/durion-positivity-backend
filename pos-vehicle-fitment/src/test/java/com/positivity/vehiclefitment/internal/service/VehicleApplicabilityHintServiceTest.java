@@ -31,6 +31,7 @@ import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
 import com.positivity.vehiclefitment.internal.dto.FitmentTagDto;
 import com.positivity.vehiclefitment.internal.dto.HintResponse;
 import com.positivity.vehiclefitment.internal.dto.UpdateHintRequest;
+import com.positivity.vehiclefitment.internal.entity.FitmentTag;
 import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
 import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
@@ -207,5 +208,106 @@ class VehicleApplicabilityHintServiceTest {
         // Then
         assertThat(response).isNotNull();
         assertThat(response.getCount()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void testGetHint_NotFound() {
+        when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getHint(TEST_HINT_ID))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Hint not found");
+    }
+
+    @Test
+    void testFilterProductsByVehicleAttributes_Null() {
+        FilterProductsResponse response = service.filterProductsByVehicleAttributes(null);
+
+        assertThat(response.getProductIds()).isEmpty();
+        assertThat(response.getCount()).isZero();
+    }
+
+    @Test
+    void testFilterProductsByVehicleAttributes_YearRangeWithin() {
+        VehicleApplicabilityHint hint = new VehicleApplicabilityHint();
+        hint.setHintId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
+        hint.setProductId(MATCHING_PRODUCT_ID);
+        FitmentTag tag = new FitmentTag();
+        tag.setTagType(TagType.YEAR_RANGE);
+        tag.setTagValue("2016-2022");
+        hint.getFitmentTags().add(tag);
+
+        when(hintRepository.findAll()).thenReturn(List.of(hint));
+
+        FilterProductsResponse response = service.filterProductsByVehicleAttributes(Map.of("YEAR_RANGE", "2019"));
+
+        assertThat(response.getCount()).isEqualTo(1);
+        assertThat(response.getProductIds()).contains(MATCHING_PRODUCT_ID.toString());
+    }
+
+    @Test
+    void testFilterProductsByVehicleAttributes_YearRangeOutside() {
+        VehicleApplicabilityHint hint = new VehicleApplicabilityHint();
+        hint.setHintId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
+        hint.setProductId(MATCHING_PRODUCT_ID);
+        FitmentTag tag = new FitmentTag();
+        tag.setTagType(TagType.YEAR_RANGE);
+        tag.setTagValue("2016-2022");
+        hint.getFitmentTags().add(tag);
+
+        when(hintRepository.findAll()).thenReturn(List.of(hint));
+
+        FilterProductsResponse response = service.filterProductsByVehicleAttributes(Map.of("YEAR_RANGE", "2025"));
+
+        assertThat(response.getCount()).isZero();
+    }
+
+    @Test
+    void testFilterProductsByVehicleAttributes_SingleYearMatch() {
+        VehicleApplicabilityHint hint = new VehicleApplicabilityHint();
+        hint.setHintId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
+        hint.setProductId(MATCHING_PRODUCT_ID);
+        FitmentTag tag = new FitmentTag();
+        tag.setTagType(TagType.YEAR_RANGE);
+        tag.setTagValue("2020");
+        hint.getFitmentTags().add(tag);
+
+        when(hintRepository.findAll()).thenReturn(List.of(hint));
+
+        FilterProductsResponse response = service.filterProductsByVehicleAttributes(Map.of("YEAR_RANGE", "2020"));
+
+        assertThat(response.getCount()).isEqualTo(1);
+    }
+
+    @Test
+    void testFilterProductsByVehicleAttributes_InvalidYearFormat() {
+        VehicleApplicabilityHint hint = new VehicleApplicabilityHint();
+        hint.setHintId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
+        hint.setProductId(MATCHING_PRODUCT_ID);
+        FitmentTag tag = new FitmentTag();
+        tag.setTagType(TagType.YEAR_RANGE);
+        tag.setTagValue("2016-2022");
+        hint.getFitmentTags().add(tag);
+
+        when(hintRepository.findAll()).thenReturn(List.of(hint));
+
+        // Invalid year value → NumberFormatException → matchesYearRange returns false
+        FilterProductsResponse response = service.filterProductsByVehicleAttributes(Map.of("YEAR_RANGE", "not-a-year"));
+
+        assertThat(response.getCount()).isZero();
+    }
+
+    @Test
+    void testFilterProductsByVehicleAttributes_UnknownTagType() {
+        VehicleApplicabilityHint hint = new VehicleApplicabilityHint();
+        hint.setHintId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
+        hint.setProductId(MATCHING_PRODUCT_ID);
+
+        when(hintRepository.findAll()).thenReturn(List.of(hint));
+
+        // Unknown tag type key → IllegalArgumentException caught → hint still matches (no blocking failure)
+        FilterProductsResponse response = service.filterProductsByVehicleAttributes(Map.of("UNKNOWN_TYPE", "value"));
+
+        assertThat(response.getCount()).isEqualTo(1);
     }
 }
