@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +33,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 /**
  * Unit tests for {@link AllocationReallocationServiceImpl} — Story #24
@@ -104,7 +106,13 @@ class AllocationReallocationServiceImplTest {
                                 allocationAuditRepository,
                                 reservationRepository,
                                 FIXED_CLOCK);
-                SecurityContextHolder.clearContext();
+                authenticateAs("allocation-test-user");
+        }
+
+        private void authenticateAs(String username) {
+                var authentication = new UsernamePasswordAuthenticationToken(username, "N/A", List.of());
+                authentication.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, username));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
         private ReservationEntity buildReservation(UUID workorderId, UUID stockItemId, int priority,
@@ -481,11 +489,7 @@ class AllocationReallocationServiceImplTest {
                 when(reservationRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
                 when(allocationAuditRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
 
-                // Mock security context
-                var authentication = new UsernamePasswordAuthenticationToken("testuser", "password", List.of());
-                var securityContext = SecurityContextHolder.createEmptyContext();
-                securityContext.setAuthentication(authentication);
-                SecurityContextHolder.setContext(securityContext);
+                authenticateAs("testuser");
 
                 ReallocateRequest request = ReallocateRequest.builder()
                                 .stockItemId(stockItemId)

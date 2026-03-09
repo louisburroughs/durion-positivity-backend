@@ -24,7 +24,9 @@ import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.inventory.internal.service.PutawayValidationServiceImpl;
+import com.positivity.security.common.GatewaySecurityConstants;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -78,6 +80,7 @@ class PutawayValidationServiceImplTest {
         PutawayValidationServiceImpl service = new PutawayValidationServiceImpl();
         PutawayExecutionRequest request = baseRequest();
         request.setOverrideLocationCompatibility(true);
+        authenticateAs("putaway-user");
 
         assertThatThrownBy(() -> service.validatePutawayExecution(request))
                 .isInstanceOf(InsufficientPermissionException.class);
@@ -282,6 +285,7 @@ class PutawayValidationServiceImplTest {
                 username,
                 "N/A",
                 Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList());
+        auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, username));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 }
