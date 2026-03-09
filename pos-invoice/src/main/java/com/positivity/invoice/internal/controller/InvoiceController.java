@@ -73,7 +73,7 @@ public class InvoiceController {
     @EmitEvent(id = "INVOICE_FINALIZED", apiVersion = "1")
     @Operation(summary = "Finalize invoice", description = "Transition invoice from DRAFT to FINALIZED; enforces permission matrix and emits InvoiceFinalized event for async GL posting (Story #13)")
     @ApiResponse(responseCode = "200", description = "Invoice finalized")
-    @PreAuthorize("hasAuthority('FINALIZE_INVOICE')")
+    @PreAuthorize("hasAuthority('invoice:finalize')")
     public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(
             @PathVariable @NonNull UUID invoiceId,
             @Valid @RequestBody @NonNull FinalizationRequest request) {
@@ -84,7 +84,7 @@ public class InvoiceController {
     @EmitEvent(id = "INVOICE_DRAFT_REVERT", apiVersion = "1")
     @Operation(summary = "Revert finalized invoice", description = "Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)")
     @ApiResponse(responseCode = "200", description = "Invoice reverted to DRAFT")
-    @PreAuthorize("hasAuthority('FINALIZE_INVOICE')")
+    @PreAuthorize("hasAuthority('invoice:finalize')")
     public ResponseEntity<InvoiceDetailsResponse> revertInvoice(
             @PathVariable @NonNull UUID invoiceId,
             @Valid @RequestBody @NonNull RevertRequest request) {

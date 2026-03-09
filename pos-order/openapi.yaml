@@ -134,6 +134,12 @@ paths:
               $ref: "#/components/schemas/ApplyPriceOverrideRequest"
         required: true
       responses:
+        "403":
+          description: Insufficient permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideResult"
         "201":
           description: Override created
           content:
@@ -149,12 +155,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "403":
-          description: Insufficient permissions
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideResult"
         "400":
           description: Invalid request
           content:
@@ -239,6 +239,18 @@ paths:
               $ref: "#/components/schemas/ApprovePriceOverrideRequest"
         required: true
       responses:
+        "400":
+          description: Invalid request or override not in pending state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideDetail"
+        "404":
+          description: Override not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideDetail"
         "200":
           description: Override approved
           content:
@@ -254,18 +266,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid request or override not in pending state
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideDetail"
-        "404":
-          description: Override not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideDetail"
         "403":
           description: Insufficient approval permissions
           content:
@@ -452,6 +452,12 @@ paths:
           default: "##default"
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
+        "404":
+          description: Override not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideDetail"
         "200":
           description: Override found
           content:
@@ -467,12 +473,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Override not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideDetail"
   /v1/orders/price-overrides/pending:
     get:
       tags:

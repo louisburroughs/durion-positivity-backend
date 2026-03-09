@@ -34,4 +34,7 @@ public class DashboardResponse {
     @JsonFormat(shape = JsonFormat.Shape.STRING)
     @Schema(description = "Timestamp when data was last refreshed")
     Instant lastRefreshed;
+
+    @Schema(description = "True when one or more upstream data sources were unavailable during aggregation; data may be incomplete")
+    Boolean dataQualityWarning;
 }
