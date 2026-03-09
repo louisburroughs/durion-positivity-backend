@@ -75,7 +75,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  *   <tr><td>SC13</td><td>VIEWER role → 403</td><td>GREEN</td><td>—</td></tr>
  * </table>
  */
-@WebMvcTest({ RoleController.class, UserRoleController.class })
+@WebMvcTest(RoleController.class)
 @DisplayName("RoleManagementControllerTest — Story #62")
 class RoleManagementControllerTest {
 
@@ -346,10 +346,11 @@ class RoleManagementControllerTest {
      * ADR-0017 / SC12: All unauthenticated requests return 401 Unauthorized.
      *
      * <p>Story mapping: Alternate Flow — "Unauthorized Management → system must deny access".
-     * Spring Security enforces authentication for all {@code /v1/**} paths.
+     * <p>Status: <strong>GREEN</strong> — Spring Security enforces authentication for all
+     * {@code /v1/**} paths.
      */
     @Test
-    @DisplayName("SC12: unauthenticated POST /v1/roles → 401 Unauthorized")
+    @DisplayName("SC12 (GREEN): unauthenticated POST /v1/roles → 401 Unauthorized")
     void createRole_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/v1/roles")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -363,12 +364,12 @@ class RoleManagementControllerTest {
      * ADR-0017 / SC13: Authenticated caller without ADMIN role returns 403 Forbidden.
      *
      * <p>Story mapping: Alternate Flow — "Unauthorized Management → system must deny access".
-     * {@code @PreAuthorize("hasRole('ADMIN')")} enforces ADMIN-only access on
-     * {@code POST /v1/roles}.
+     * <p>Status: <strong>GREEN</strong> — {@code @PreAuthorize("hasRole('ADMIN')")} enforces
+     * ADMIN-only access on {@code POST /v1/roles}.
      */
     @Test
     @WithMockUser(roles = "VIEWER")
-    @DisplayName("SC13: VIEWER on POST /v1/roles → 403 Forbidden")
+    @DisplayName("SC13 (GREEN): VIEWER on POST /v1/roles → 403 Forbidden")
     void createRole_viewerRole_returns403() throws Exception {
         mockMvc.perform(post("/v1/roles")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -408,13 +409,11 @@ class RoleManagementControllerTest {
         @ExceptionHandler(AccessDeniedException.class)
         @ResponseStatus(HttpStatus.FORBIDDEN)
         void handleAccessDenied() {
-            // Intentionally empty: status code mapping is the behavior under test.
         }
 
         @ExceptionHandler(AuthenticationException.class)
         @ResponseStatus(HttpStatus.UNAUTHORIZED)
         void handleUnauthenticated() {
-            // Intentionally empty: status code mapping is the behavior under test.
         }
 
         /**
@@ -425,7 +424,6 @@ class RoleManagementControllerTest {
         @ExceptionHandler(NoResourceFoundException.class)
         @ResponseStatus(HttpStatus.NOT_FOUND)
         void handleNotFound() {
-            // Intentionally empty: keeps RED scaffold endpoint assertions on 404.
         }
     }
 }

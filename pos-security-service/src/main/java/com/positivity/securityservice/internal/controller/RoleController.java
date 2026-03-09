@@ -20,7 +20,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -39,7 +38,7 @@ import java.util.UUID;
  * user role assignments.
  */
 @RestController
-@RequestMapping({ "/v1/roles", "/v1/users/roles" })
+@RequestMapping({ "/v1/roles", "/v1/users/roles", "/v1/users" })
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Role Management", description = "Manage roles, permissions, and user assignments")
@@ -57,9 +56,6 @@ public class RoleController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Create a new role", description = "Creates a new role with the specified name and description")
-    @ApiResponse(responseCode = "201", description = "Role created")
-    @ApiResponse(responseCode = "400", description = "Invalid role payload", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "409", description = "Role name already exists", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<RoleDto> createRole(@RequestBody Map<String, String> request) {
         String name = request.get("name");
         String description = request.get("description");
@@ -78,14 +74,9 @@ public class RoleController {
     @EmitEvent(id = "SECURITY_ROLE_PERMISSION_GRANT", apiVersion = "1")
     @PutMapping("/{roleId}/permissions/grant")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Grant permission to a role",
-            description = "Grants a single permission to the specified role and returns the updated role")
-    @ApiResponse(responseCode = "200", description = "Permission granted to role")
-    @ApiResponse(responseCode = "400", description = "Invalid grant request", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @Operation(summary = "Grant permission to a role")
     public ResponseEntity<RoleDto> grantPermissionToRole(
-            @NonNull @PathVariable UUID roleId,
+            @PathVariable UUID roleId,
             @RequestBody RolePermissionGrantRequest request) {
         if (request == null || request.getPermission() == null || request.getPermission().isBlank()) {
             throw new IllegalArgumentException("permission is required");
@@ -99,13 +90,9 @@ public class RoleController {
     @EmitEvent(id = "SECURITY_ROLE_PERMISSION_REVOKE", apiVersion = "1")
     @DeleteMapping("/{roleId}/permissions/{permissionKey}")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Revoke permission from a role",
-            description = "Removes the specified permission from the role")
-    @ApiResponse(responseCode = "204", description = "Permission revoked from role")
-    @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @Operation(summary = "Revoke permission from a role")
     public ResponseEntity<Void> revokePermissionFromRole(
-            @NonNull @PathVariable UUID roleId,
+            @PathVariable UUID roleId,
             @PathVariable String permissionKey) {
         roleManagementService.revokePermissionFromRole(roleId, permissionKey);
         return ResponseEntity.noContent().build();
@@ -117,13 +104,9 @@ public class RoleController {
     @EmitEvent(id = "SECURITY_ROLE_PERMISSION_ASSIGN", apiVersion = "1")
     @PutMapping("/{roleId}/permissions/{permissionKey}")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Assign permission to a role by key",
-            description = "Assigns the permission identified by path key to the specified role")
-    @ApiResponse(responseCode = "204", description = "Permission assigned to role")
-    @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @Operation(summary = "Assign permission to a role by key")
     public ResponseEntity<Void> assignPermissionToRole(
-            @NonNull @PathVariable UUID roleId,
+            @PathVariable UUID roleId,
             @PathVariable String permissionKey) {
         roleManagementService.assignPermissionToRole(roleId, permissionKey);
         return ResponseEntity.noContent().build();
@@ -136,7 +119,6 @@ public class RoleController {
     @PutMapping("/permissions")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update role permissions", description = "Assigns a set of permissions to a role")
-    @ApiResponse(responseCode = "200", description = "Role permissions updated")
     @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<RoleDto> updateRolePermissions(@RequestBody RolePermissionsRequest request) {
         RoleDto role = roleManagementService.updateRolePermissions(request);
@@ -150,7 +132,6 @@ public class RoleController {
     @PostMapping("/assignments")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Create role assignment", description = "Assigns a role to a user with optional scope and effective dates")
-    @ApiResponse(responseCode = "201", description = "Role assignment created")
     @ApiResponse(responseCode = "404", description = "User or role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<RoleAssignmentDto> createRoleAssignment(@RequestBody RoleAssignmentRequest request) {
         RoleAssignmentDto assignment = roleManagementService.createRoleAssignment(request);
@@ -178,7 +159,6 @@ public class RoleController {
     @GetMapping("/permissions/user/{userId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Get user permissions (legacy path)", description = "Returns all permissions for a user from their role assignments")
-    @ApiResponse(responseCode = "200", description = "User permissions returned successfully")
     @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Set<PermissionDto>> getUserPermissionsByUserId(@PathVariable UUID userId) {
         Set<PermissionDto> permissions = roleManagementService.getUserPermissions(userId);
@@ -191,7 +171,6 @@ public class RoleController {
     @GetMapping("/check-permission")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Check user permission", description = "Checks if a user has a specific permission for a location")
-    @ApiResponse(responseCode = "200", description = "Permission check completed")
     @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Boolean> checkUserPermission(
             @RequestParam UUID userId,
@@ -227,30 +206,16 @@ public class RoleController {
     @GetMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Get all roles", description = "Returns all roles in the system")
-    @ApiResponse(responseCode = "200", description = "Roles returned successfully")
     public ResponseEntity<List<RoleDto>> getAllRoles() {
         return ResponseEntity.ok(roleManagementService.getAllRoles());
     }
 
     /**
-     * Get role by name (legacy path: /v1/roles/{name})
-     */
-    @GetMapping("/{name:[A-Za-z_][A-Za-z0-9_-]*}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Get role by name", description = "Returns a specific role by its name")
-    @ApiResponse(responseCode = "200", description = "Role returned successfully")
-    @ApiResponse(responseCode = "404", description = "Role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<RoleDto> getRoleByName(@PathVariable String name) {
-        return ResponseEntity.ok(roleManagementService.getRoleByName(name));
-    }
-
-    /**
      * Story #62: Get role by UUID.
      */
-    @GetMapping("/{id:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}}")
+    @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Get role by ID", description = "Returns a specific role by its UUID")
-    @ApiResponse(responseCode = "200", description = "Role returned successfully")
     @ApiResponse(responseCode = "404", description = "Role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<RoleDto> getRoleById(@PathVariable UUID id) {
         return roleManagementService.getRoleById(id)
@@ -264,14 +229,47 @@ public class RoleController {
     @EmitEvent(id = "SECURITY_ROLE_DELETE", apiVersion = "1")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Delete a role",
-            description = "Deletes a role by UUID and removes its associations")
-    @ApiResponse(responseCode = "204", description = "Role deleted")
-    @ApiResponse(responseCode = "404", description = "Role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @Operation(summary = "Delete a role")
     public ResponseEntity<Void> deleteRole(@PathVariable UUID id) {
         roleManagementService.deleteRole(id);
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Story #62: Assign a role to a user. Resolved via /v1/users base.
+     */
+    @EmitEvent(id = "SECURITY_USER_ROLE_ASSIGN", apiVersion = "1")
+    @PutMapping("/{userId}/roles/{roleId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Assign a role to a user")
+    public ResponseEntity<Void> assignRoleToUser(
+            @PathVariable UUID userId,
+            @PathVariable UUID roleId) {
+        roleManagementService.assignRoleToUser(userId, roleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Story #62: Revoke a role from a user. Resolved via /v1/users base.
+     */
+    @EmitEvent(id = "SECURITY_USER_ROLE_REVOKE", apiVersion = "1")
+    @DeleteMapping("/{userId}/roles/{roleId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Revoke a role from a user")
+    public ResponseEntity<Void> revokeRoleFromUser(
+            @PathVariable UUID userId,
+            @PathVariable UUID roleId) {
+        roleManagementService.revokeRoleFromUser(userId, roleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Story #62: Get all effective permissions for a user. Resolved via /v1/users base.
+     */
+    @GetMapping("/{userId}/permissions")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @Operation(summary = "Get user permissions", description = "Returns all effective permissions for a user")
+    public ResponseEntity<Set<PermissionDto>> getUserPermissions(@PathVariable UUID userId) {
+        return ResponseEntity.ok(roleManagementService.getUserPermissions(userId));
+    }
 }
