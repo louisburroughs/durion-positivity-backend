@@ -42,7 +42,7 @@ public class MobileUnitController {
     @Operation(summary = "Create mobile unit", description = "Create a new mobile unit.")
     @ApiResponse(responseCode = "201", description = "Mobile unit created successfully.")
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_CREATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location.mobile-unit.manage')")
+    @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
     @PostMapping
     public ResponseEntity<MobileUnitResponse> createMobileUnit(
             @Parameter(description = "Mobile unit creation request body") @RequestBody MobileUnitRequest request) {
@@ -52,7 +52,7 @@ public class MobileUnitController {
 
     @Operation(summary = "List mobile units", description = "List mobile units with pagination.")
     @ApiResponse(responseCode = "200", description = "Mobile units retrieved successfully.")
-    @PreAuthorize("hasAuthority('location.mobile-unit.read')")
+    @PreAuthorize("hasAuthority('location:mobile-unit:read')")
     @GetMapping
     public ResponseEntity<Page<MobileUnitResponse>> listMobileUnits(
             @RequestParam(defaultValue = "0") int page,
@@ -63,7 +63,7 @@ public class MobileUnitController {
     @Operation(summary = "Get mobile unit", description = "Get a mobile unit by ID.")
     @ApiResponse(responseCode = "200", description = "Mobile unit returned.")
     @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
-    @PreAuthorize("hasAuthority('location.mobile-unit.read')")
+    @PreAuthorize("hasAuthority('location:mobile-unit:read')")
     @GetMapping("/{id}")
     public ResponseEntity<MobileUnitResponse> getMobileUnitById(
             @Parameter(description = "Mobile unit ID") @PathVariable UUID id) {
@@ -75,7 +75,7 @@ public class MobileUnitController {
     @Operation(summary = "Patch mobile unit", description = "Partially update a mobile unit.")
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_UPDATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location.mobile-unit.manage')")
+    @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
     @PatchMapping("/{id}")
     public ResponseEntity<MobileUnitResponse> patchMobileUnit(
             @PathVariable UUID id,
@@ -87,7 +87,7 @@ public class MobileUnitController {
     @ApiResponse(responseCode = "200", description = "Coverage rules replaced successfully.")
     @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
     @EmitEvent(id = "LOCATION_COVERAGE_RULES_REPLACE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location.mobile-unit.manage')")
+    @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
     @PutMapping("/{id}/coverage-rules")
     public ResponseEntity<List<CoverageRuleResponse>> replaceCoverageRules(
             @PathVariable UUID id,
@@ -99,7 +99,7 @@ public class MobileUnitController {
 
     @Operation(summary = "Get coverage rules", description = "Get coverage rules for a mobile unit.")
     @ApiResponse(responseCode = "200", description = "Coverage rules returned.")
-    @PreAuthorize("hasAuthority('location.mobile-unit.read')")
+    @PreAuthorize("hasAuthority('location:mobile-unit:read')")
     @GetMapping("/{id}/coverage-rules")
     public ResponseEntity<List<CoverageRuleResponse>> getCoverageRules(@PathVariable UUID id) {
         return ResponseEntity.ok(mobileUnitService.getCoverageRules(id));

@@ -40,11 +40,6 @@ paths:
               $ref: "#/components/schemas/CreatePromotionOfferRequest"
         required: true
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "409":
           description: Promotion code already exists.
           content:
@@ -87,11 +82,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Eligibility rules returned.
           content:
@@ -139,11 +129,6 @@ paths:
               $ref: "#/components/schemas/AddEligibilityRuleRequest"
         required: true
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Eligibility rule created.
           content:
@@ -192,11 +177,6 @@ paths:
               $ref: "#/components/schemas/EligibilityContext"
         required: true
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "400":
           description: Invalid evaluation request.
           content:
@@ -238,11 +218,6 @@ paths:
               $ref: "#/components/schemas/ApplyPromotionRequest"
         required: true
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "400":
           description: Invalid promotion application request.
           content:
@@ -284,11 +259,6 @@ paths:
               $ref: "#/components/schemas/RestrictionOverrideRequest"
         required: true
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Override issued. Returns overrideId and expiresAt.
           content:
@@ -328,11 +298,6 @@ paths:
               $ref: "#/components/schemas/RestrictionEvaluationRequest"
         required: true
       responses:
-        "503":
-          description: Restriction evaluation service unavailable (commit path only).
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Evaluation results per product.
           content:
@@ -341,6 +306,12 @@ paths:
                 $ref: "#/components/schemas/RestrictionEvaluationResponse"
         "401":
           description: Authentication required.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RestrictionEvaluationResponse"
+        "503":
+          description: Restriction evaluation service unavailable (commit path only).
           content:
             '*/*':
               schema:
@@ -358,11 +329,6 @@ paths:
       summary: List all active restriction rules
       operationId: listRules
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: List of restriction rules.
           content:
@@ -391,11 +357,6 @@ paths:
               $ref: "#/components/schemas/CreateRestrictionRuleRequest"
         required: true
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Restriction rule created.
           content:
@@ -435,11 +396,6 @@ paths:
               $ref: "#/components/schemas/PriceQuoteRequest"
         required: true
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "403":
           description: Forbidden.
           content:
@@ -470,11 +426,6 @@ paths:
           application/json:
             schema: {}
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "400":
           description: Invalid request body.
           content:
@@ -505,11 +456,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "403":
           description: Forbidden.
           content:
@@ -545,11 +491,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Promotion offer activated.
           content:
@@ -591,11 +532,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Promotion offer returned.
           content:
@@ -630,11 +566,6 @@ paths:
         schema:
           type: string
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Promotion offer returned.
           content:
@@ -670,11 +601,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Pricing snapshot returned.
           content:
@@ -707,11 +633,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Restriction rule found.
           content:
@@ -743,11 +664,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Restriction rule deactivated.
           content:
@@ -793,11 +709,6 @@ paths:
           type: string
           format: uuid
       responses:
-        "503":
-          description: Service Unavailable
-          content:
-            '*/*':
-              schema: {}
         "403":
           description: Forbidden.
         "204":

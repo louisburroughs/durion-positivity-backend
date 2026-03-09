@@ -43,6 +43,12 @@ paths:
         schema:
           default: "##default"
       responses:
+        "404":
+          description: Product not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
         "200":
           description: Successfully retrieved product
           content:
@@ -58,12 +64,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
     put:
       tags:
       - Products API
@@ -90,18 +90,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
-        "409":
-          description: Business conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "200":
           description: Product updated
           content:
@@ -117,6 +105,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Business conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+        "404":
+          description: Product not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
   /v1/products/{productId}/msrp/{msrpId}:
     put:
       tags:
@@ -142,18 +142,6 @@ paths:
               $ref: "#/components/schemas/UpdateMsrpRequestDto"
         required: true
       responses:
-        "400":
-          description: Invalid payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
-        "404":
-          description: MSRP record not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "200":
           description: MSRP updated
           content:
@@ -169,6 +157,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: Invalid payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "404":
+          description: MSRP record not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
         "403":
           description: Forbidden
           content:
@@ -256,12 +256,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
-        "409":
-          description: Lifecycle business rule conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
         "200":
           description: Lifecycle state updated successfully
           content:
@@ -277,6 +271,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Lifecycle business rule conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
   /v1/products/uom-conversions/{id}:
     get:
       tags:
@@ -292,6 +292,12 @@ paths:
         schema:
           default: "##default"
       responses:
+        "404":
+          description: Conversion not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UomConversionDto"
         "200":
           description: Conversion found
           content:
@@ -307,12 +313,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Conversion not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UomConversionDto"
     put:
       tags:
       - UOM Conversion API
@@ -334,12 +334,6 @@ paths:
               $ref: "#/components/schemas/UomConversionUpdateRequestDto"
         required: true
       responses:
-        "404":
-          description: Conversion not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UomConversionDto"
         "200":
           description: Conversion updated
           content:
@@ -355,6 +349,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Conversion not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UomConversionDto"
         "400":
           description: Invalid request
           content:
@@ -630,6 +630,12 @@ paths:
               $ref: "#/components/schemas/UpdateStandardCostRequestDto"
         required: true
       responses:
+        "400":
+          description: Invalid payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ItemCostsDto"
         "200":
           description: Updated
           content:
@@ -645,12 +651,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ItemCostsDto"
   /v1/catalogs/{catalogId}:
     get:
       tags:
@@ -717,6 +717,12 @@ paths:
                 default: "##default"
         required: true
       responses:
+        "400":
+          description: Invalid request body
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogDto"
         "200":
           description: Catalog updated successfully
           content:
@@ -732,12 +738,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid request body
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogDto"
         "404":
           description: Catalog not found
           content:
@@ -790,18 +790,6 @@ paths:
               $ref: "#/components/schemas/CatalogItemRequestDto"
         required: true
       responses:
-        "400":
-          description: Invalid item type or request body
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
-        "404":
-          description: Catalog item not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogItemResponseDto"
         "200":
           description: Catalog item updated successfully
           content:
@@ -817,6 +805,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: Invalid item type or request body
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
+        "404":
+          description: Catalog item not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogItemResponseDto"
     delete:
       tags:
       - Catalog Items API
@@ -1193,12 +1193,6 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "404":
-          description: Override or approval request not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "200":
           description: Override rejected
           content:
@@ -1214,6 +1208,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Override or approval request not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "400":
           description: Invalid rejection request
           content:
@@ -1646,6 +1646,18 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
+        "404":
+          description: Product not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDetailView"
+        "500":
+          description: Unexpected server error while retrieving product details
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDetailView"
         "200":
           description: Successfully retrieved product details (may be partial if some
             services unavailable)
@@ -1662,18 +1674,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDetailView"
-        "500":
-          description: Unexpected server error while retrieving product details
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDetailView"
   /v1/products/services/{serviceId}:
     get:
       tags:
