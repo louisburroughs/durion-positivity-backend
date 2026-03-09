@@ -65,12 +65,10 @@ import java.time.LocalDateTime;
  * <li>List all roles: returns list — <strong>GREEN</strong></li>
  * <li>Delete role: cascade-removes associations — <strong>RED</strong> (UOE
  * stub)</li>
- * <li>Assign permission to role: succeeds — <strong>RED</strong> (UOE
- * stub)</li>
+ * <li>Assign permission to role: succeeds — <strong>GREEN</strong></li>
  * <li>Assign permission to role: non-existent permission throws
  * {@link PermissionNotFoundException} — <strong>RED</strong></li>
- * <li>Revoke permission from role: succeeds — <strong>RED</strong> (UOE
- * stub)</li>
+ * <li>Revoke permission from role: succeeds — <strong>GREEN</strong></li>
  * <li>Assign role to user: succeeds — <strong>RED</strong> (UOE stub)</li>
  * <li>Revoke role from user: succeeds — <strong>RED</strong> (UOE stub)</li>
  * <li>Effective permissions = union of all role permissions —
@@ -292,14 +290,16 @@ class RoleManagementServiceTest {
         /**
          * Story mapping: Functional Behavior 2 — "assign one or more predefined
          * Permissions to a Role".
-         *
-         * <p>
-         * <strong>RED</strong>: {@code assignPermissionToRole} is a stub throwing UOE.
          */
         @Test
         @DisplayName("existing role and permission — completes without exception")
         void assignPermissionToRole_succeeds() {
             String permissionKey = "security:roles:create";
+            SecurityContextHolder.getContext().setAuthentication(
+                    new UsernamePasswordAuthenticationToken(
+                            "rbac-admin", "n/a",
+                            List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
             Role role = new Role();
             role.setId(ROLE_ID);
             role.setPermissions(new HashSet<>());
@@ -307,9 +307,16 @@ class RoleManagementServiceTest {
             perm.setName(permissionKey);
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
             when(permissionRepository.findByName(permissionKey)).thenReturn(Optional.of(perm));
+            when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            // GREEN impl returns normally; stub throws UOE
             sut.assignPermissionToRole(ROLE_ID, permissionKey);
+
+            assertThat(role.getPermissions())
+                    .extracting(Permission::getName)
+                    .contains(permissionKey);
+            assertThat(role.getLastModifiedBy()).isEqualTo("rbac-admin");
+            assertThat(role.getLastModifiedAt()).isEqualTo(Instant.now(TEST_CLOCK));
+            verify(roleRepository).save(role);
         }
 
         /**
@@ -342,14 +349,16 @@ class RoleManagementServiceTest {
     /**
      * Story mapping: Functional Behavior 2 — "remove one or more Permissions from a
      * Role".
-     *
-     * <p>
-     * <strong>RED</strong>: {@code revokePermissionFromRole} is a Story #62 stub.
      */
     @Test
     @DisplayName("revokePermissionFromRole() completes without exception")
     void revokePermissionFromRole_succeeds() {
         String permissionKey = "security:roles:create";
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        "rbac-admin", "n/a",
+                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
         Role role = new Role();
         role.setId(ROLE_ID);
         Permission perm = new Permission();
@@ -357,8 +366,14 @@ class RoleManagementServiceTest {
         role.setPermissions(new HashSet<>(Set.of(perm)));
         when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
 
-        // GREEN impl removes the permission from the role; stub throws UOE
         sut.revokePermissionFromRole(ROLE_ID, permissionKey);
+
+        assertThat(role.getPermissions())
+                .extracting(Permission::getName)
+                .doesNotContain(permissionKey);
+        assertThat(role.getLastModifiedBy()).isEqualTo("rbac-admin");
+        assertThat(role.getLastModifiedAt()).isEqualTo(Instant.now(TEST_CLOCK));
+        verify(roleRepository).save(role);
     }
 
     // ── AC: Assign / revoke role on user ──────────────────────────────────────
@@ -493,9 +508,9 @@ class RoleManagementServiceTest {
         void updateRolePermissions_roleNotFound_throwsRoleNotFoundException() {
             UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000099");
             when(roleRepository.findById(unknownId)).thenReturn(Optional.empty());
+            RolePermissionsRequest request = new RolePermissionsRequest(unknownId, Set.of("perm:x"));
 
-            assertThatThrownBy(
-                    () -> sut.updateRolePermissions(new RolePermissionsRequest(unknownId, Set.of("perm:x"))))
+            assertThatThrownBy(() -> sut.updateRolePermissions(request))
                     .isInstanceOf(RoleNotFoundException.class);
         }
 
@@ -507,9 +522,9 @@ class RoleManagementServiceTest {
             role.setPermissions(new HashSet<>());
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
             when(permissionRepository.findByName("unknown:perm")).thenReturn(Optional.empty());
+            RolePermissionsRequest request = new RolePermissionsRequest(ROLE_ID, Set.of("unknown:perm"));
 
-            assertThatThrownBy(
-                    () -> sut.updateRolePermissions(new RolePermissionsRequest(ROLE_ID, Set.of("unknown:perm"))))
+            assertThatThrownBy(() -> sut.updateRolePermissions(request))
                     .isInstanceOf(PermissionNotFoundException.class);
         }
     }
@@ -575,9 +590,9 @@ class RoleManagementServiceTest {
         void revokeRoleAssignment_notFound_throwsException() {
             UUID unknownAssignmentId = UUID.fromString("00000000-0000-0000-0000-000000000099");
             when(roleAssignmentRepository.findById(unknownAssignmentId)).thenReturn(Optional.empty());
+            LocalDateTime endDate = LocalDateTime.now(TEST_CLOCK);
 
-            assertThatThrownBy(() -> sut.revokeRoleAssignment(
-                    unknownAssignmentId, LocalDateTime.now(TEST_CLOCK)))
+            assertThatThrownBy(() -> sut.revokeRoleAssignment(unknownAssignmentId, endDate))
                     .isInstanceOf(RoleAssignmentNotFoundException.class);
         }
     }
