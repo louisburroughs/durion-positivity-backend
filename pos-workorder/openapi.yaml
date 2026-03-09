@@ -831,6 +831,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts returned successfully
           content:
@@ -846,12 +852,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/parts/returnUnused:
     post:
       tags:
@@ -1043,12 +1043,6 @@ paths:
                   notes: Corrected after inventory count
         required: true
       responses:
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Part quantity corrected successfully
           content:
@@ -1064,6 +1058,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "400":
           description: Invalid request
           content:
@@ -2566,13 +2566,8 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "400":
-          description: Missing or invalid authenticated user id
-          content:
-            '*/*':
-              schema: {}
-        "201":
-          description: Timer started successfully
+        "200":
+          description: Idempotent replay returned existing timer
           content:
             '*/*':
               schema:
@@ -2586,8 +2581,13 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "200":
-          description: Idempotent replay returned existing timer
+        "400":
+          description: Missing or invalid authenticated user id
+          content:
+            '*/*':
+              schema: {}
+        "201":
+          description: Timer started successfully
           content:
             '*/*':
               schema:
@@ -3299,6 +3299,13 @@ paths:
               schema:
                 type: string
                 format: byte
+        "502":
+          description: Document service unavailable
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: byte
         "200":
           description: PDF generated successfully
           content:
@@ -3307,13 +3314,6 @@ paths:
                 additionalProperties:
                   default: "##default"
                 default: "##default"
-        "502":
-          description: Document service unavailable
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: byte
   /v1/workorders/estimates/shop/{locationId}:
     get:
       tags:
@@ -6764,14 +6764,18 @@ components:
     PageWorkorderStatusView:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         pageable:
           $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         size:
           type: integer
           format: int32
@@ -6784,10 +6788,6 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -6983,14 +6983,18 @@ components:
     PageEstimateSummaryResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         pageable:
           $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
         size:
           type: integer
           format: int32
@@ -7003,10 +7007,6 @@ components:
           format: int32
         sort:
           $ref: "#/components/schemas/Sortnull"
-        first:
-          type: boolean
-        last:
-          type: boolean
         numberOfElements:
           type: integer
           format: int32
@@ -7081,6 +7081,11 @@ components:
           format: date-time
           default: "##default"
           description: Timestamp when data was last refreshed
+        dataQualityWarning:
+          type: boolean
+          default: "##default"
+          description: True when one or more upstream data sources were unavailable
+            during aggregation; data may be incomplete
     MechanicStatus:
       type: object
       properties:

@@ -14,19 +14,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
 import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
 import com.positivity.price.internal.exception.ProductNotFoundException;
-import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
-import com.positivity.price.internal.exception.RestrictionServiceUnavailableException;
 import com.positivity.price.internal.exception.PromotionCodeNotFoundException;
 import com.positivity.price.internal.exception.PromotionMultipleNotAllowedException;
 import com.positivity.price.internal.exception.PromotionNotApplicableException;
 import com.positivity.price.internal.exception.PromotionOfferNotFoundException;
 import com.positivity.price.internal.exception.PromotionOfferStateException;
+import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
+import com.positivity.price.internal.exception.RestrictionServiceUnavailableException;
 import com.positivity.price.internal.exception.SnapshotNotFoundException;
 import com.positivity.shared.id.UUIDv7Generator;
 

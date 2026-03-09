@@ -37,14 +37,14 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("location:write"),
             new SimpleGrantedAuthority("location:read"),
             // Mobile unit domain authorities
-            new SimpleGrantedAuthority("location.mobile-unit.manage"),
-            new SimpleGrantedAuthority("location.mobile-unit.read"),
+            new SimpleGrantedAuthority("location:mobile-unit:manage"),
+            new SimpleGrantedAuthority("location:mobile-unit:read"),
             // Service area domain authorities (same as mobile unit)
-            new SimpleGrantedAuthority("location.service-area.manage"),
-            new SimpleGrantedAuthority("location.service-area.read"),
+            new SimpleGrantedAuthority("location:service-area:manage"),
+            new SimpleGrantedAuthority("location:service-area:read"),
             // Travel buffer policy authorities
-            new SimpleGrantedAuthority("location.travel-buffer-policy.manage"),
-            new SimpleGrantedAuthority("location.travel-buffer-policy.read"),
+            new SimpleGrantedAuthority("location:travel-buffer-policy:manage"),
+            new SimpleGrantedAuthority("location:travel-buffer-policy:read"),
             // Bay domain authorities
             new SimpleGrantedAuthority("location:bay:manage"),
             new SimpleGrantedAuthority("location:bay:read"));

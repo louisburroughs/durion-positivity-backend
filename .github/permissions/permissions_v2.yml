@@ -1,0 +1,696 @@
+# Canonical Permission Registry — v2
+# Source of truth: module-level permissions.yaml files aggregated by scripts/export-permission-registrations-yaml.py
+# This file replaces .github/permissions/permissions_v1.yml
+
+version: v2
+domain: security
+model: module-manifest-aggregated
+notes: Canonical permission registry generated from module permissions.yaml manifests. Do not edit manually; update module
+  manifests and regenerate.
+generated_from:
+  script: scripts/export-permission-registrations-yaml.py
+  aggregate_file: scripts/permissions-aggregate.yaml
+  aggregate_generated_at: '2026-03-09T16:51:40.331333+00:00'
+  generated_at: '2026-03-09T17:03:16.470584+00:00'
+machine_readable_identifiers:
+  format: domain:resource:action (lowercase, colon-delimited)
+  usage:
+  - code
+  - audit_logs
+  - policy_definitions
+  - authorization_checks
+summary:
+  manifestCount: 17
+  permissionCount: 215
+  uniquePermissionCount: 215
+  duplicatePermissionNameCount: 0
+  parseIssueCount: 0
+permissions_by_domain:
+  accounting:
+  - name: accounting:ap:pay
+    description: Process payments
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:ap:view
+    description: View accounts payable
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:coa:create
+    description: Create accounts in chart of accounts
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:coa:edit
+    description: Edit accounts in chart of accounts
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:coa:view
+    description: View chart of accounts
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:events:retry
+    description: Retry failed accounting events
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:events:submit
+    description: Submit accounting events
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:events:view
+    description: View accounting events
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:je:create
+    description: Create journal entries
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:je:post
+    description: Post journal entries
+    source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:je:view
+    description: View journal entries
+    source: pos-accounting/src/main/resources/permissions.yaml
+  appointments:
+  - name: appointments:cancel
+    description: Cancel appointments
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: appointments:create
+    description: Create appointments
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: appointments:reschedule
+    description: Reschedule appointments
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: appointments:view
+    description: View appointments
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  catalog:
+  - name: catalog:category:create
+    description: Create product categories
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:category:delete
+    description: Delete product categories
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:category:edit
+    description: Edit product categories
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:category:view
+    description: View product categories
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:product:create
+    description: Create products in catalog
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:product:delete
+    description: Delete products from catalog
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:product:edit
+    description: Edit products in catalog
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:product:view
+    description: View products in catalog
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:service_type:create
+    description: Create service types
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:service_type:edit
+    description: Edit service types
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:service_type:view
+    description: View service types
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:variant:create
+    description: Create product variants
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:variant:edit
+    description: Edit product variants
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: catalog:variant:view
+    description: View product variants
+    source: pos-catalog/src/main/resources/permissions.yaml
+  crm:
+  - name: crm:contact:create
+    description: Add new contact point (email/phone) to a party
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:contact:delete
+    description: Remove contact point from a party
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:contact:edit
+    description: Edit contact point details
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:contact:view
+    description: View contact points (email, phone) for a party
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:contact_preference:edit
+    description: Update communication channel preferences
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:contact_preference:view
+    description: View communication preferences for a party
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:contact_role:assign
+    description: Assign roles (BILLING, APPROVER, DRIVER) to contacts
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:contact_role:revoke
+    description: Revoke a role assignment from a contact
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:contact_role:view
+    description: View assigned roles for contacts on an account
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:integration:audit
+    description: View audit/attempt history for ingestion records
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:party:create
+    description: Create new commercial account (party)
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:party:deactivate
+    description: Deactivate a party record (soft delete)
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:party:edit
+    description: Edit party master data (name, tax ID, identifiers)
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:party:merge
+    description: Merge two party records into one survivor
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:party:search
+    description: Search parties by name, email, phone, tax ID
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:party:view
+    description: View party (person/organization) records and details
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:processing_log:view
+    description: View ingestion event processing outcomes
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:suspense:view
+    description: View quarantined/unprocessable events
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle:create
+    description: Create new vehicle record with VIN
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle:deactivate
+    description: Deactivate vehicle record (soft delete)
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle:edit
+    description: Edit vehicle details
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle:search
+    description: 'Search vehicles by VIN, unit #, or plate'
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle:view
+    description: 'View vehicle records (VIN, unit #, description, plate)'
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle_party_association:create
+    description: Associate party to vehicle
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle_party_association:edit
+    description: Adjust effective dates for associations
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle_party_association:view
+    description: View party associations for a vehicle
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle_preference:edit
+    description: Update vehicle care preferences
+    source: pos-customer/src/main/resources/permissions.yaml
+  - name: crm:vehicle_preference:view
+    description: View vehicle care preferences
+    source: pos-customer/src/main/resources/permissions.yaml
+  documents:
+  - name: documents:render
+    description: Render document content into supported output formats
+    source: pos-documents/src/main/resources/permissions.yaml
+  inventory:
+  - name: inventory:adjustment:approve
+    description: Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:adjustment:create
+    description: Create an adjustment request (draft/pending), capture reason code, quantity, and supporting notes
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:adjustment:view
+    description: View adjustment history and details
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:allocations:reallocate
+    description: Trigger deterministic reallocation of reserved stock across workorders by priority
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:asn:create
+    description: Create an Advance Shipping Notice (ASN)
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:asn:view
+    description: View ASN details and status
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:cycle_count:complete
+    description: Complete and submit cycle count results
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:cycle_count:initiate
+    description: Initiate a cycle count for inventory reconciliation
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:cycle_count:view
+    description: View cycle count tasks and results
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:goods_receipt:create
+    description: Create a goods receipt and trigger GRNI accrual
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:goods_receipt:override
+    description: Allow over-receipt beyond PO open balance
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:goods_receipt:view
+    description: View goods receipt details
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:issue:parts
+    description: Issue parts directly from a receiving session to a workorder (cross-dock)
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:on_hand:search
+    description: Search inventory across multiple locations
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:on_hand:view
+    description: View on-hand inventory levels at locations
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:override:part-match
+    description: Override workorder part-match validation for cross-dock issuance
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:purchase_order:approve
+    description: Approve or cancel a purchase order
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:purchase_order:create
+    description: Create or revise a purchase order (DRAFT state)
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:purchase_order:receive
+    description: Record receipts against an approved purchase order
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:purchase_order:view
+    description: View purchase orders and their line details
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:putaway:override_location_capacity
+    description: Override location capacity limits when at or near full capacity
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:putaway:override_location_compatibility
+    description: Override location compatibility rules when location is not valid for SKU
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:receiving:complete
+    description: Complete receiving operations including recording quantities
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:receiving:create
+    description: Create a receiving session from a PO or ASN
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:receiving:view
+    description: View receiving sessions and their lines
+    source: pos-inventory/src/main/resources/permissions.yaml
+  - name: inventory:shortages:resolve
+    description: Resolve inventory shortages by requesting substitutes or external purchase options
+    source: pos-inventory/src/main/resources/permissions.yaml
+  invoice:
+  - name: invoice:billing-rules
+    description: Manage invoice billing rules and defaults
+    source: pos-invoice/src/main/resources/permissions.yaml
+  - name: invoice:finalize
+    description: "Finalize a draft invoice; Service Advisor limited to \u2264$500 without manager approval, Shop Manager unlimited\
+      \ (Story #13, AC3)"
+    source: pos-invoice/src/main/resources/permissions.yaml
+  - name: invoice:manage
+    description: Manage invoice lifecycle operations
+    source: pos-invoice/src/main/resources/permissions.yaml
+  location:
+  - name: location:bay:manage
+    description: Create or update bay definitions and assignments
+    source: pos-location/src/main/resources/permissions.yaml
+  - name: location:bay:read
+    description: Read bay definitions and availability
+    source: pos-location/src/main/resources/permissions.yaml
+  - name: location:mobile-unit:manage
+    description: Create or update mobile unit definitions
+    source: pos-location/src/main/resources/permissions.yaml
+  - name: location:mobile-unit:read
+    description: Read mobile unit definitions and eligibility
+    source: pos-location/src/main/resources/permissions.yaml
+  - name: location:read
+    description: Read location records and hierarchy data
+    source: pos-location/src/main/resources/permissions.yaml
+  - name: location:service-area:manage
+    description: Create or update service area definitions
+    source: pos-location/src/main/resources/permissions.yaml
+  - name: location:service-area:read
+    description: Read service area definitions
+    source: pos-location/src/main/resources/permissions.yaml
+  - name: location:travel-buffer-policy:manage
+    description: Create or update travel buffer policy definitions
+    source: pos-location/src/main/resources/permissions.yaml
+  - name: location:travel-buffer-policy:read
+    description: Read travel buffer policy definitions
+    source: pos-location/src/main/resources/permissions.yaml
+  - name: location:write
+    description: Create or update location records and defaults
+    source: pos-location/src/main/resources/permissions.yaml
+  mcp:
+  - name: mcp:llm_api:create
+    description: Create LLM API configuration entries
+    source: pos-mcp-server/src/main/resources/permissions.yaml
+  - name: mcp:llm_api:delete
+    description: Delete LLM API configuration entries
+    source: pos-mcp-server/src/main/resources/permissions.yaml
+  - name: mcp:llm_api:update
+    description: Update existing LLM API configuration entries
+    source: pos-mcp-server/src/main/resources/permissions.yaml
+  - name: mcp:llm_api:view
+    description: View registered LLM API configurations
+    source: pos-mcp-server/src/main/resources/permissions.yaml
+  - name: mcp:system_prompt:create
+    description: Create MCP system prompts
+    source: pos-mcp-server/src/main/resources/permissions.yaml
+  - name: mcp:system_prompt:delete
+    description: Delete MCP system prompts
+    source: pos-mcp-server/src/main/resources/permissions.yaml
+  - name: mcp:system_prompt:update
+    description: Update MCP system prompts
+    source: pos-mcp-server/src/main/resources/permissions.yaml
+  - name: mcp:system_prompt:view
+    description: View configured MCP system prompts
+    source: pos-mcp-server/src/main/resources/permissions.yaml
+  order:
+  - name: order:line:create
+    description: Add order lines
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:line:delete
+    description: Remove order lines
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:line:edit
+    description: Edit order lines
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:line:enter_manual_price
+    description: Allows a POS clerk to manually enter a price for an order line when the pricing service is unavailable
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:line:view
+    description: View order lines
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:order:cancel
+    description: Cancel orders
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:order:create
+    description: Create orders
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:order:edit
+    description: Edit orders
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:order:view
+    description: View orders
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:price_override:apply
+    description: Apply/request a price override
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:price_override:approve
+    description: Approve price overrides
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:price_override:reject
+    description: Cancel/reject price overrides
+    source: pos-order/src/main/resources/permissions.yaml
+  - name: order:price_override:view
+    description: View price override history and reports
+    source: pos-order/src/main/resources/permissions.yaml
+  people:
+  - name: people:employee:create
+    description: Create employee records
+    source: pos-people/src/main/resources/permissions.yaml
+  - name: people:employee:deactivate
+    description: Deactivate employee records
+    source: pos-people/src/main/resources/permissions.yaml
+  - name: people:employee:edit
+    description: Edit employee records
+    source: pos-people/src/main/resources/permissions.yaml
+  - name: people:employee:view
+    description: View employee records
+    source: pos-people/src/main/resources/permissions.yaml
+  - name: people:role:assign
+    description: Assign roles to employees
+    source: pos-people/src/main/resources/permissions.yaml
+  - name: people:role:revoke
+    description: Revoke roles from employees
+    source: pos-people/src/main/resources/permissions.yaml
+  - name: people:role:view
+    description: View role assignments
+    source: pos-people/src/main/resources/permissions.yaml
+  - name: people:skill:assign
+    description: Assign skills to employees
+    source: pos-people/src/main/resources/permissions.yaml
+  - name: people:skill:edit
+    description: Edit skill assignments
+    source: pos-people/src/main/resources/permissions.yaml
+  - name: people:skill:view
+    description: View employee skills
+    source: pos-people/src/main/resources/permissions.yaml
+  pricing:
+  - name: pricing:normalization:edit
+    description: Edit price normalization rules
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:normalization:view
+    description: View price normalization rules
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:price_book:create
+    description: Create price books
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:price_book:delete
+    description: Delete price books
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:price_book:edit
+    description: Edit price books
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:price_book:view
+    description: View price books
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:restrictions:edit
+    description: Edit price restrictions
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:restrictions:view
+    description: View price restrictions
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:rule:create
+    description: Create pricing rules
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:rule:delete
+    description: Delete pricing rules
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:rule:edit
+    description: Edit pricing rules
+    source: pos-price/src/main/resources/permissions.yaml
+  - name: pricing:rule:view
+    description: View pricing rules
+    source: pos-price/src/main/resources/permissions.yaml
+  product:
+  - name: product:lifecycle:override_discontinued
+    description: Override discontinued lifecycle restrictions
+    source: pos-catalog/src/main/resources/permissions.yaml
+  - name: product:lifecycle:update
+    description: Update product lifecycle state
+    source: pos-catalog/src/main/resources/permissions.yaml
+  security:
+  - name: security:permission:register
+    description: Register new permissions
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:permission:view
+    description: View registered permissions
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:role:assign
+    description: Assign roles to users
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:role:create
+    description: Create new roles
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:role:delete
+    description: Delete roles
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:role:edit
+    description: Edit existing roles
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:role:view
+    description: View roles and their permissions
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:user:create
+    description: Create new users
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:user:delete
+    description: Delete users
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:user:edit
+    description: Edit user information
+    source: pos-security-service/src/main/resources/permissions.yaml
+  - name: security:user:view
+    description: View user information
+    source: pos-security-service/src/main/resources/permissions.yaml
+  shop:
+  - name: shop:bay:assign
+    description: Assign work to bays
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: shop:bay:create
+    description: Create service bays
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: shop:bay:edit
+    description: Edit service bays
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: shop:bay:view
+    description: View service bays
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: shop:location:create
+    description: Create shop/location
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: shop:location:deactivate
+    description: Deactivate shop/location
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: shop:location:edit
+    description: Edit shop/location
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: shop:location:view
+    description: View shop/location details
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: shop:schedule:edit
+    description: Edit shop schedules
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  - name: shop:schedule:view
+    description: View shop schedules
+    source: pos-shop-manager/src/main/resources/permissions.yaml
+  tax:
+  - name: tax:calculate
+    description: Calculate tax for line items based on destination and jurisdiction rules
+    source: pos-tax/src/main/resources/permissions.yaml
+  - name: tax:mode:view
+    description: View current tax service mode (test or production)
+    source: pos-tax/src/main/resources/permissions.yaml
+  vehicle-fitment:
+  - name: vehicle-fitment:catalog:view
+    description: View vehicle fitment catalog data
+    source: pos-vehicle-fitment/src/main/resources/permissions.yaml
+  - name: vehicle-fitment:hint:create
+    description: Create vehicle applicability hints
+    source: pos-vehicle-fitment/src/main/resources/permissions.yaml
+  - name: vehicle-fitment:hint:delete
+    description: Delete vehicle applicability hints
+    source: pos-vehicle-fitment/src/main/resources/permissions.yaml
+  - name: vehicle-fitment:hint:update
+    description: Update vehicle applicability hints
+    source: pos-vehicle-fitment/src/main/resources/permissions.yaml
+  - name: vehicle-fitment:hint:view
+    description: View vehicle applicability hints
+    source: pos-vehicle-fitment/src/main/resources/permissions.yaml
+  vehicle-inventory:
+  - name: vehicle-inventory:preferences:manage
+    description: Manage vehicle care preferences
+    source: pos-vehicle-inventory/src/main/resources/permissions.yaml
+  - name: vehicle-inventory:registry:create
+    description: Create vehicle registry records
+    source: pos-vehicle-inventory/src/main/resources/permissions.yaml
+  - name: vehicle-inventory:registry:delete
+    description: Delete vehicle registry records
+    source: pos-vehicle-inventory/src/main/resources/permissions.yaml
+  - name: vehicle-inventory:registry:update
+    description: Update vehicle registry records
+    source: pos-vehicle-inventory/src/main/resources/permissions.yaml
+  - name: vehicle-inventory:registry:view
+    description: View vehicle registry records
+    source: pos-vehicle-inventory/src/main/resources/permissions.yaml
+  - name: vehicle-inventory:search:view
+    description: Search vehicle inventory records
+    source: pos-vehicle-inventory/src/main/resources/permissions.yaml
+  workorder:
+  - name: workorder:approval_config:create
+    description: Create approval configurations
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:approval_config:delete
+    description: Delete approval configurations
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:approval_config:edit
+    description: Edit approval configurations
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:approval_config:view
+    description: View approval configurations
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:change_request:approve
+    description: Approve change requests
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:change_request:create
+    description: Create change requests
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:change_request:decline
+    description: Decline change requests
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:change_request:emergency_override
+    description: Apply emergency override to change requests (Manager only)
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:change_request:view
+    description: View change requests
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate:approve
+    description: Approve estimates
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate:calculate
+    description: Calculate estimate totals and taxes
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate:create
+    description: Create estimates
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate:decline
+    description: Decline estimates
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate:delete
+    description: Delete estimates
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate:edit
+    description: Edit estimates
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate:reopen
+    description: Reopen declined estimates
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate:view
+    description: View estimates
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate_item:add
+    description: Add items to estimates
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate_item:delete
+    description: Remove items from estimates
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate_item:edit
+    description: Edit estimate items
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate_item:view
+    description: View estimate line items
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate_snapshot:create
+    description: Create estimate snapshots
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:estimate_snapshot:view
+    description: View estimate snapshot history
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:invoice:create
+    description: Create workorder invoices
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:invoice:view
+    description: View workorder invoices
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:labor:add
+    description: Add labor entries
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:labor:view
+    description: View labor entries
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:parts:add
+    description: Add parts to workorder
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:parts:view
+    description: View parts on workorder
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:wip:view
+    description: View work-in-progress dashboard for workorders
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:wip:view_all_locations
+    description: View WIP dashboard across all locations (not restricted to assigned location)
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:workorder:approve
+    description: Approve workorders
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:workorder:complete
+    description: Complete workorders
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:workorder:create
+    description: Create workorders
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:workorder:delete
+    description: Delete workorders
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:workorder:edit
+    description: Edit workorders
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:workorder:reopen_completed
+    description: Reopen completed workorders
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:workorder:start
+    description: Start work on workorders
+    source: pos-workorder/src/main/resources/permissions.yaml
+  - name: workorder:workorder:view
+    description: View workorders
+    source: pos-workorder/src/main/resources/permissions.yaml
+status:
+  version: v2
+  stability: active

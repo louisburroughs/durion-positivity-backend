@@ -501,14 +501,14 @@ paths:
               $ref: "#/components/schemas/GoodsReceivedEvent"
         required: true
       responses:
-        "201":
-          description: Vendor bill created
+        "400":
+          description: Invalid request payload
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VendorBillResponse"
-        "400":
-          description: Invalid request payload
+        "201":
+          description: Vendor bill created
           content:
             '*/*':
               schema:
@@ -1833,17 +1833,17 @@ paths:
               $ref: "#/components/schemas/RefundRequest"
         required: true
       responses:
-        "403":
-          description: Authorization denied - separate authorization required
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Refund recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
+        "403":
+          description: Authorization denied - separate authorization required
+          content:
+            '*/*':
+              schema: {}
         "400":
           description: Invalid request parameters
           content:
@@ -1874,12 +1874,6 @@ paths:
               $ref: "#/components/schemas/PriceOverrideRequest"
         required: true
       responses:
-        "201":
-          description: Price override recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "403":
           description: Authorization denied - insufficient privileges for override
             amount
@@ -1896,6 +1890,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Price override recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "422":
           description: Policy validation failed
           content:
@@ -1915,6 +1915,12 @@ paths:
               $ref: "#/components/schemas/CancellationRequest"
         required: true
       responses:
+        "201":
+          description: Cancellation recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid request parameters
           content:
@@ -1930,12 +1936,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Cancellation recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/ap/payments:
     post:
       tags:
@@ -2156,16 +2156,16 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Journal line drilldown successful
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "200":
-          description: Journal line drilldown successful
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
@@ -2230,16 +2230,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AccountDrilldownResponse"
-        "200":
-          description: Account drilldown successful
+        "400":
+          description: Invalid statement line code or date range
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/AccountDrilldownResponse"
-        "400":
-          description: Invalid statement line code or date range
+        "200":
+          description: Account drilldown successful
           content:
             application/json:
               schema:
@@ -2280,14 +2280,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceSheetReport"
-        "400":
-          description: Invalid date
+        "200":
+          description: Balance sheet generated successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceSheetReport"
-        "200":
-          description: Balance sheet generated successfully
+        "400":
+          description: Invalid date
           content:
             application/json:
               schema:
@@ -2812,6 +2812,12 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2828,12 +2834,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/range:
     get:
       tags:
@@ -2867,6 +2867,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2875,12 +2881,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/order/{orderId}:
     get:
       tags:
@@ -2906,6 +2906,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2914,12 +2920,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/invoice/{invoiceId}:
     get:
       tags:
@@ -2937,6 +2937,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Invoice not found
           content:
@@ -2953,12 +2959,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/actor/{actorId}:
     get:
       tags:
@@ -3000,6 +3000,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -3016,12 +3022,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/ap/payments/{paymentId}:
     get:
       tags:
@@ -4000,6 +4000,7 @@ components:
           - PAID_IN_FULL
           - VOIDED
           - CANCELLED
+          - UNKNOWN
     CustomerCreditInfo:
       type: object
       properties:
