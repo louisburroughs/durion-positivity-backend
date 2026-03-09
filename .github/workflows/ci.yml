@@ -19,6 +19,10 @@ on:
       - 'docker-compose.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   JAVA_VERSION: '21'
   JAVA_DISTRIBUTION: 'temurin'
@@ -54,15 +58,8 @@ jobs:
       - name: Enforce no-arg now() policy
         run: ./scripts/check-noarg-now.sh
       
-      - name: Build with Maven
-        run: ./mvnw clean install -DskipTests -B -V
-      
       - name: Run tests (unit + integration)
         run: ./mvnw verify -B
-      
-      - name: Generate test coverage report
-        run: ./mvnw jacoco:report
-        continue-on-error: true
       
       - name: Upload test results
         if: always()
@@ -247,11 +244,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}  # Needed for PR decoration
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Get from sonarcloud.io
         run: |
-          ./mvnw verify sonar:sonar \
+          ./mvnw test-compile sonar:sonar -DskipTests -DskipITs \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+            -Dsonar.coverage.jacoco.xmlReportPaths=**/target/site/jacoco/jacoco.xml
 
   integration-test:
     name: Integration Tests with Docker Compose
