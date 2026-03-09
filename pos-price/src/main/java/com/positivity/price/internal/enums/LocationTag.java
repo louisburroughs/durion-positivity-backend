@@ -1,4 +1,4 @@
-package com.positivity.price.enums;
+package com.positivity.price.internal.enums;
 
 public enum LocationTag {
     ALL_LOCATIONS,

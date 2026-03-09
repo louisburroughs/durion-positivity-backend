@@ -1,11 +1,11 @@
 package com.positivity.price.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.price.dto.RestrictionEvaluationRequest;
-import com.positivity.price.dto.RestrictionEvaluationResult;
+import com.positivity.price.internal.dto.RestrictionEvaluationRequest;
 import com.positivity.price.internal.dto.RestrictionEvaluationResponse;
-import com.positivity.price.dto.RestrictionOverrideRequest;
-import com.positivity.price.dto.RestrictionOverrideResponse;
+import com.positivity.price.internal.dto.RestrictionEvaluationResult;
+import com.positivity.price.internal.dto.RestrictionOverrideRequest;
+import com.positivity.price.internal.dto.RestrictionOverrideResponse;
 import com.positivity.price.service.RestrictionEvaluationService;
 import com.positivity.price.service.RestrictionOverrideService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -54,8 +54,7 @@ public class PriceRestrictionsController {
         return ResponseEntity.ok(new RestrictionEvaluationResponse(results));
     }
 
-    @Operation(summary = "Override price restrictions",
-            description = "Issues an override for price restrictions. Requires pricing:restriction:override authority.")
+    @Operation(summary = "Override price restrictions", description = "Issues an override for price restrictions. Requires pricing:restriction:override authority.")
     @ApiResponse(responseCode = "200", description = "Override issued. Returns overrideId and expiresAt.")
     @ApiResponse(responseCode = "400", description = "Invalid request body.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
@@ -70,5 +69,3 @@ public class PriceRestrictionsController {
         return ResponseEntity.ok(response);
     }
 }
-
-     

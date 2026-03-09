@@ -48,6 +48,7 @@ import tools.jackson.databind.ObjectMapper;
 class WorkorderStateMachineTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final UUID AUTH_USER_ID = UUID.fromString("550e8400-e29b-41d4-a716-446655440045");
 
     @Spy
     Clock clock = TEST_CLOCK;
@@ -85,7 +86,7 @@ class WorkorderStateMachineTest {
                 "password",
                 "ROLE_USER");
         authentication.setDetails(Map.of(
-                GatewaySecurityConstants.DETAIL_USER_ID, "550e8400-e29b-41d4-a716-446655440045",
+                GatewaySecurityConstants.DETAIL_USER_ID, AUTH_USER_ID,
                 GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
         authentication.setAuthenticated(true);
         SecurityContextHolder.getContext().setAuthentication(authentication);

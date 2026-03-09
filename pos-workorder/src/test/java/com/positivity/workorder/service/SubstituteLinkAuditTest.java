@@ -54,6 +54,7 @@ class SubstituteLinkAuditTest {
     private static final UUID PRODUCT_ID = UUID.fromString("00000000-0000-0000-0000-000000000045");
     private static final UUID SUBSTITUTE_PART_ID = UUID.fromString("00000000-0000-0000-0000-000000000046");
     private static final UUID LINK_ID = UUID.fromString("00000000-0000-0000-0000-000000000047");
+    private static final UUID TEST_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000048");
 
     @Mock
     private SubstituteLinkRepository substituteLinkRepository;
@@ -240,7 +241,7 @@ class SubstituteLinkAuditTest {
                 Collections.emptyList());
         authentication.setDetails(Map.of(
                 GatewaySecurityConstants.DETAIL_USERNAME, username,
-                GatewaySecurityConstants.DETAIL_USER_ID, username));
+                GatewaySecurityConstants.DETAIL_USER_ID, TEST_USER_ID));
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 

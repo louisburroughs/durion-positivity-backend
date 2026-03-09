@@ -7,8 +7,8 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.positivity.price.internal.entity.RestrictionRule;
-import com.positivity.price.enums.LocationTag;
-import com.positivity.price.enums.ServiceTag;
+import com.positivity.price.internal.enums.LocationTag;
+import com.positivity.price.internal.enums.ServiceTag;
 
 public interface RestrictionRuleRepository extends JpaRepository<RestrictionRule, UUID> {
 

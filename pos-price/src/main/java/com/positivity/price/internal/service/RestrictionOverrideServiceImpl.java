@@ -1,10 +1,10 @@
 package com.positivity.price.internal.service;
 
-import com.positivity.price.dto.RestrictionOverrideRequest;
-import com.positivity.price.dto.RestrictionOverrideResponse;
+import com.positivity.price.internal.dto.RestrictionOverrideRequest;
+import com.positivity.price.internal.dto.RestrictionOverrideResponse;
 import com.positivity.price.internal.entity.RestrictionOverrideAudit;
 import com.positivity.price.internal.entity.RestrictionRule;
-import com.positivity.price.enums.OverrideStatus;
+import com.positivity.price.internal.enums.OverrideStatus;
 import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
 import com.positivity.price.internal.repository.RestrictionOverrideAuditRepository;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;

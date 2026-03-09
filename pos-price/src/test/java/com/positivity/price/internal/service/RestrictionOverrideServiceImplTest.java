@@ -5,12 +5,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.price.dto.RestrictionOverrideRequest;
-import com.positivity.price.enums.EvaluationContext;
-import com.positivity.price.enums.LocationTag;
-import com.positivity.price.enums.ServiceTag;
+import com.positivity.price.internal.dto.RestrictionOverrideRequest;
 import com.positivity.price.internal.entity.RestrictionOverrideAudit;
 import com.positivity.price.internal.entity.RestrictionRule;
+import com.positivity.price.internal.enums.EvaluationContext;
+import com.positivity.price.internal.enums.LocationTag;
+import com.positivity.price.internal.enums.ServiceTag;
 import com.positivity.price.internal.repository.RestrictionOverrideAuditRepository;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -32,12 +32,17 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
- * Unit tests for {@link RestrictionOverrideServiceImpl} override issuance behavior.
+ * Unit tests for {@link RestrictionOverrideServiceImpl} override issuance
+ * behavior.
  *
- * <p>Verifies that the service returns a populated {@code RestrictionOverrideResponse}
- * (non-null {@code overrideId} and {@code expiresAt}), that actor identity is sourced
+ * <p>
+ * Verifies that the service returns a populated
+ * {@code RestrictionOverrideResponse}
+ * (non-null {@code overrideId} and {@code expiresAt}), that actor identity is
+ * sourced
  * from {@link SecurityContextHolder} per ADR-0018, and that an audit record is
- * persisted on every successful override.</p>
+ * persisted on every successful override.
+ * </p>
  *
  * Issue: #43
  */
@@ -57,8 +62,10 @@ class RestrictionOverrideServiceImplTest {
      * Prepares a real authenticated security context with {@code "test-actor"} as
      * principal and the {@code pricing:restriction:override} authority.
      *
-     * <p>Per ADR-0018 the service layer must read actor from
-     * {@link SecurityContextHolder}, not from any request payload field.</p>
+     * <p>
+     * Per ADR-0018 the service layer must read actor from
+     * {@link SecurityContextHolder}, not from any request payload field.
+     * </p>
      */
     @BeforeEach
     void setUp() {
@@ -94,13 +101,13 @@ class RestrictionOverrideServiceImplTest {
     void givenAuthenticatedUser_whenCreateOverride_thenReturnsOverrideIdAndExpiry() {
         UUID ruleId = UUID.randomUUID();
         var request = new RestrictionOverrideRequest(
-            ruleId,
-            UUID.randomUUID(),
-            UUID.randomUUID(),
-            EvaluationContext.CHECKOUT,
-            "APPROVED_VENDOR",
-            null,
-            null);
+                ruleId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                EvaluationContext.CHECKOUT,
+                "APPROVED_VENDOR",
+                null,
+                null);
         when(ruleRepository.findById(ruleId)).thenReturn(Optional.of(someRule()));
 
         var response = service.createOverride(request);
@@ -118,13 +125,13 @@ class RestrictionOverrideServiceImplTest {
     void givenValidRequest_whenCreateOverride_thenOverrideIdIsUUID() {
         UUID ruleId = UUID.randomUUID();
         var request = new RestrictionOverrideRequest(
-            ruleId,
-            UUID.randomUUID(),
-            UUID.randomUUID(),
-            EvaluationContext.QUOTE,
-            "SEASONAL_EXCEPTION",
-            null,
-            null);
+                ruleId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                EvaluationContext.QUOTE,
+                "SEASONAL_EXCEPTION",
+                null,
+                null);
         when(ruleRepository.findById(ruleId)).thenReturn(Optional.of(someRule()));
 
         var response = service.createOverride(request);
@@ -136,29 +143,33 @@ class RestrictionOverrideServiceImplTest {
      * The service must resolve actor identity from the security context
      * (ADR-0018), not from anything in the request body.
      *
-     * <p>The {@code RestrictionOverrideRequest} carries no actor field; any attempt
+     * <p>
+     * The {@code RestrictionOverrideRequest} carries no actor field; any attempt
      * to introduce one would violate ADR-0018. This test confirms the operation
-     * completes successfully with the context-provided actor ({@code "test-actor"}).
+     * completes successfully with the context-provided actor
+     * ({@code "test-actor"}).
      * GREEN validation verifies that {@code "test-actor"} appears in the persisted
-     * audit record.</p>
+     * audit record.
+     * </p>
      */
     @Test
     @DisplayName("ROS-003: actor from SecurityContext, not request body (ADR-0018)")
     void givenActorFromContextNotRequestBody_whenCreateOverride_thenActorEqualsAuthenticatedUser() {
         UUID ruleId = UUID.randomUUID();
         var request = new RestrictionOverrideRequest(
-            ruleId,
-            UUID.randomUUID(),
-            UUID.randomUUID(),
-            EvaluationContext.CHECKOUT,
-            "APPROVED_VENDOR",
-            null,
-            null);
+                ruleId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                EvaluationContext.CHECKOUT,
+                "APPROVED_VENDOR",
+                null,
+                null);
         when(ruleRepository.findById(ruleId)).thenReturn(Optional.of(someRule()));
 
         var response = service.createOverride(request);
 
-        // Response doesn't carry actor; GREEN phase verifies audit persistence carries "test-actor"
+        // Response doesn't carry actor; GREEN phase verifies audit persistence carries
+        // "test-actor"
         assertThat(response).isNotNull();
         assertThat(response.overrideId()).isNotNull();
         ArgumentCaptor<RestrictionOverrideAudit> captor = ArgumentCaptor.forClass(RestrictionOverrideAudit.class);
@@ -169,8 +180,10 @@ class RestrictionOverrideServiceImplTest {
     /**
      * An audit record must be written for every successful override creation.
      *
-        * <p>Verifies that the audit repository {@code save()} is called on successful
-        * override creation.</p>
+     * <p>
+     * Verifies that the audit repository {@code save()} is called on successful
+     * override creation.
+     * </p>
      */
     @Test
     @DisplayName("ROS-004: audit record written on every successful override")

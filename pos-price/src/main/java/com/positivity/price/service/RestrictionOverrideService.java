@@ -1,8 +1,9 @@
 package com.positivity.price.service;
 
-import com.positivity.price.dto.RestrictionOverrideRequest;
-import com.positivity.price.dto.RestrictionOverrideResponse;
 import org.jspecify.annotations.NonNull;
+
+import com.positivity.price.internal.dto.RestrictionOverrideRequest;
+import com.positivity.price.internal.dto.RestrictionOverrideResponse;
 
 /**
  * Issues and audits restriction overrides.
@@ -11,5 +12,6 @@ import org.jspecify.annotations.NonNull;
  */
 public interface RestrictionOverrideService {
 
-    @NonNull RestrictionOverrideResponse createOverride(@NonNull RestrictionOverrideRequest request);
+    @NonNull
+    RestrictionOverrideResponse createOverride(@NonNull RestrictionOverrideRequest request);
 }

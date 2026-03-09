@@ -1,7 +1,7 @@
 package com.positivity.price.internal.service;
 
-import com.positivity.price.dto.CreateRestrictionRuleRequest;
-import com.positivity.price.dto.RestrictionRuleResponse;
+import com.positivity.price.internal.dto.CreateRestrictionRuleRequest;
+import com.positivity.price.internal.dto.RestrictionRuleResponse;
 import com.positivity.price.internal.entity.RestrictionRule;
 import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;

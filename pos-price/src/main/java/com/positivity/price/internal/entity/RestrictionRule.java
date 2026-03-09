@@ -8,8 +8,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.positivity.price.enums.LocationTag;
-import com.positivity.price.enums.ServiceTag;
+import com.positivity.price.internal.enums.LocationTag;
+import com.positivity.price.internal.enums.ServiceTag;
 import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
