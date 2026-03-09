@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
@@ -29,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -414,5 +416,86 @@ class ShopAuditServiceTest {
         var result = service.findById(unknownId);
 
         assertThat(result).isEmpty();
+    }
+
+    // ─── ADR-0018: resolveActorId corner cases ────────────────────────────────
+
+    /**
+     * ADR-0018: When no authentication is present in the security context, the
+     * actor must default to "system" rather than throwing.
+     */
+    @Test
+    void resolveActorId_withNullAuthentication_defaultsToSystem() {
+        // arrange — security context is empty; no auth set
+        SecurityContextHolder.clearContext();
+
+        // act — any record method exercises resolveActorId()
+        ShopAuditEntryResponse result = service.recordScheduleChange(
+                ShopAuditEventType.SCHEDULE_CREATED,
+                "AP-SYS-001", null, null,
+                "System-initiated schedule creation", null, null, null);
+
+        // assert
+        assertThat(result.getActorUserId())
+                .as("actorUserId must default to 'system' when authentication is null (ADR-0018)")
+                .isEqualTo("system");
+    }
+
+    /**
+     * ADR-0018: When authentication is present but its name is null, the actor
+     * must still default to "system".
+     */
+    @Test
+    void resolveActorId_withNullAuthenticationName_defaultsToSystem() {
+        // arrange — mock authentication whose getName() returns null
+        Authentication mockAuth = mock(Authentication.class);
+        when(mockAuth.getName()).thenReturn(null);
+        SecurityContextHolder.getContext().setAuthentication(mockAuth);
+
+        // act
+        ShopAuditEntryResponse result = service.recordAssignmentChange(
+                ShopAuditEventType.ASSIGNMENT_CREATED,
+                "WO-SYS-001", "M-SYS-001", null,
+                "System-initiated assignment", null, null, null);
+
+        // assert
+        assertThat(result.getActorUserId())
+                .as("actorUserId must default to 'system' when authentication name is null (ADR-0018)")
+                .isEqualTo("system");
+    }
+
+    // ─── AC: Explicit date range is respected ─────────────────────────────────
+
+    /**
+     * AC (RQ5): When explicit {@code fromDateTime} and {@code toDateTime} are
+     * provided in the filter, the service passes them through to the repository
+     * without applying the 90-day default.
+     */
+    @Test
+    void search_withExplicitFromAndToDateTime_passesSuppliedDatesToRepository() {
+        Instant from = FIXED_NOW.minus(30, ChronoUnit.DAYS);
+        Instant to = FIXED_NOW.minus(1, ChronoUnit.DAYS);
+
+        ShopAuditFilter filter = ShopAuditFilter.builder()
+                .workorderId("WO-RANGE-001")
+                .fromDateTime(from)
+                .toDateTime(to)
+                .build();
+
+        ShopAuditEntry entry = ShopAuditEntry.builder()
+                .id(UUID.randomUUID())
+                .workorderId("WO-RANGE-001")
+                .eventType(ShopAuditEventType.SCHEDULE_UPDATED)
+                .actorUserId("tech@shop.com")
+                .build();
+        when(shopAuditRepository.findByFilter(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(List.of(entry));
+
+        List<ShopAuditEntryResponse> results = service.search(filter);
+
+        assertThat(results)
+                .as("search with explicit date range must return results")
+                .hasSize(1);
+        assertThat(results.get(0).getWorkorderId()).isEqualTo("WO-RANGE-001");
     }
 }
