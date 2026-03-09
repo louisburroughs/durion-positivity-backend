@@ -336,6 +336,45 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AssignmentResponse"
+  /v1/shop/audit:
+    get:
+      tags:
+      - shop-audit-controller
+      operationId: searchAudit
+      parameters:
+      - name: filter
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/ShopAuditFilter"
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShopAuditEntryResponse"
+  /v1/shop/audit/{id}:
+    get:
+      tags:
+      - shop-audit-controller
+      operationId: getAuditById
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ShopAuditEntryResponse"
   /v1/shop-manager/{locationId}/workorders/{workorderId}/operationalContext:
     get:
       tags:
@@ -932,6 +971,69 @@ components:
           type: string
           format: date-time
         lastUpdatedAt:
+          type: string
+          format: date-time
+    ShopAuditFilter:
+      type: object
+      properties:
+        workorderId:
+          type: string
+        appointmentId:
+          type: string
+        mechanicId:
+          type: string
+        actorUserId:
+          type: string
+        eventType:
+          type: string
+          enum:
+          - SCHEDULE_CREATED
+          - SCHEDULE_UPDATED
+          - SCHEDULE_CANCELLED
+          - ASSIGNMENT_CREATED
+          - ASSIGNMENT_REMOVED
+        locationId:
+          type: string
+        fromDateTime:
+          type: string
+          format: date-time
+        toDateTime:
+          type: string
+          format: date-time
+    ShopAuditEntryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum:
+          - SCHEDULE_CREATED
+          - SCHEDULE_UPDATED
+          - SCHEDULE_CANCELLED
+          - ASSIGNMENT_CREATED
+          - ASSIGNMENT_REMOVED
+        workorderId:
+          type: string
+        appointmentId:
+          type: string
+        mechanicId:
+          type: string
+        locationId:
+          type: string
+        actorUserId:
+          type: string
+        changeSummaryText:
+          type: string
+        changePatch:
+          type: string
+        reasonCode:
+          type: string
+        retentionYears:
+          type: integer
+          format: int32
+        recordedAt:
           type: string
           format: date-time
     PersonDTO:

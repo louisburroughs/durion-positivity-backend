@@ -3,22 +3,17 @@ package com.positivity.shopmanager.internal.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
-import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
-import com.positivity.shopmanager.service.ShopAuditService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -33,6 +28,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
+
+import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
+import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
+import com.positivity.shopmanager.service.ShopAuditService;
 
 /**
  * Controller slice tests for Story #61 — Audit Trail for Schedule and
@@ -69,7 +68,7 @@ class ShopAuditControllerTest {
     /**
      * AC: Authorized caller with {@code shopmgmt.audit.view} receives HTTP 200 and
      * a JSON array containing matching audit entries.
-     *     */
+     */
     @Test
     @WithMockUser(authorities = "shopmgmt.audit.view")
     void searchAudit_withViewAuthorityAndFilter_returns200WithEntryList() throws Exception {
@@ -99,7 +98,7 @@ class ShopAuditControllerTest {
      * AC (RQ5): Requesting the audit trail without any filter criterion must return
      * HTTP 400
      * to prevent unbounded full-table scans.
-     *     */
+     */
     @Test
     @WithMockUser(authorities = "shopmgmt.audit.view")
     void searchAudit_withNoFilterParams_returns400() throws Exception {
@@ -116,7 +115,7 @@ class ShopAuditControllerTest {
     /**
      * AC: An authorized caller retrieving a known audit entry ID receives HTTP 200
      * and the entry in the response body.
-     *     */
+     */
     @Test
     @WithMockUser(authorities = "shopmgmt.audit.view")
     void getAuditById_withExistingId_returns200WithEntry() throws Exception {
@@ -143,7 +142,7 @@ class ShopAuditControllerTest {
 
     /**
      * AC: Requesting an audit entry that does not exist returns HTTP 404.
-     *     */
+     */
     @Test
     @WithMockUser(authorities = "shopmgmt.audit.view")
     void getAuditById_withNonExistentId_returns404() throws Exception {
