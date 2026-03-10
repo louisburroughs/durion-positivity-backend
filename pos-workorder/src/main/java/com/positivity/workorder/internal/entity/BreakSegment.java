@@ -32,7 +32,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "break_segment", indexes = {
-        @Index(name = "idx_break_segment_work_session_id", columnList = "workSessionId")
+    @Index(name = "idx_break_segment_work_session_id", columnList = "work_session_id")
 })
 @Data
 @NoArgsConstructor
@@ -51,10 +51,6 @@ public class BreakSegment {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "work_session_id", nullable = false, updatable = false)
     private WorkSession workSession;
-
-    @NonNull
-    @Column(name = "work_session_id", nullable = false, updatable = false, insertable = false, columnDefinition = "UUID")
-    private UUID workSessionId;
 
     @NonNull
     @Column(nullable = false)

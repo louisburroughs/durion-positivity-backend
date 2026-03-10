@@ -144,7 +144,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Verify pending change request exists
                 List<ChangeRequest> pendingChangeRequests = changeRequestRepository
-                                .findByWorkorderIdAndStatus(workorderId,
+                                .findByWorkorder_IdAndStatus(workorderId,
                                                 ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
                 assertThat(pendingChangeRequests).isNotEmpty();
 
@@ -352,10 +352,11 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
          */
         private UUID seedApprovedWorkorderWithPendingChangeRequest() {
                 UUID workorderId = seedApprovedWorkorder();
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
                 // Create a pending change request
                 ChangeRequest changeRequest = ChangeRequest.builder()
-                                .workorderId(workorderId)
+                                .workorder(workorder)
                                 .requestedByUserId(SYSTEM_USER_ID)
                                 .requestedAt(LocalDateTime.now(TEST_CLOCK))
                                 .updatedAt(LocalDateTime.now(TEST_CLOCK))

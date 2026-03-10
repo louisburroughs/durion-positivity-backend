@@ -206,7 +206,7 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
                                 .body("[0].localDate", equalTo(date))
                                 .body("[0].totalJobMinutes", equalTo(120));
 
-                assertThat(laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorder.getId())).hasSize(2);
+                assertThat(laborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorder.getId())).hasSize(2);
         }
 
         private Workorder seedWorkorder(WorkorderStatus status, UUID shopId) {
@@ -228,7 +228,6 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
                 long seconds = hoursWorked.multiply(BigDecimal.valueOf(3600)).longValue();
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorder.getId())
                                 .workorderServiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .technicianId(technicianId)
                                 .startTime(endTimeUtc.minusSeconds(seconds))

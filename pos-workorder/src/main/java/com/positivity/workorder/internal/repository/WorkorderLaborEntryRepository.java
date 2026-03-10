@@ -31,7 +31,7 @@ public interface WorkorderLaborEntryRepository extends JpaRepository<WorkorderLa
          * @return list of labor entries
          */
         @NonNull
-        List<WorkorderLaborEntry> findByWorkorderIdOrderByStartTimeDesc(@NonNull UUID workorderId);
+        List<WorkorderLaborEntry> findByWorkorder_IdOrderByStartTimeDesc(@NonNull UUID workorderId);
 
         /**
          * Find all labor entries for a specific service, ordered by start time

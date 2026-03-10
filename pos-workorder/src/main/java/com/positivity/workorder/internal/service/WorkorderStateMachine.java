@@ -121,7 +121,7 @@ public class WorkorderStateMachine {
                 .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
         List<ChangeRequest> unresolvedApprovalGated = changeRequestRepository
-                .findByWorkorderIdAndStatus(workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
+                .findByWorkorder_IdAndStatus(workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
                 .stream()
                 .filter(changeRequest -> Boolean.TRUE.equals(changeRequest.getIsApprovalGated()))
                 .toList();
@@ -208,7 +208,7 @@ public class WorkorderStateMachine {
                             workorderId, workorder.getStatus(), WorkorderStatus.getStartEligibleStatuses()));
         }
 
-        List<ChangeRequest> pendingApprovalRequests = changeRequestRepository.findByWorkorderIdAndStatus(
+        List<ChangeRequest> pendingApprovalRequests = changeRequestRepository.findByWorkorder_IdAndStatus(
                 workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
 
         if (!pendingApprovalRequests.isEmpty()) {

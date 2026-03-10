@@ -134,7 +134,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Then: Verify labor entry was created
                 List<WorkorderLaborEntry> entries = laborEntryRepository
-                                .findByWorkorderIdOrderByStartTimeDesc(workorderId);
+                                .findByWorkorder_IdOrderByStartTimeDesc(workorderId);
                 assertThat(entries).hasSize(1);
 
                 WorkorderLaborEntry entry = entries.get(0);
@@ -185,7 +185,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Verify only one entry exists
                 List<WorkorderLaborEntry> entries = laborEntryRepository
-                                .findByWorkorderIdOrderByStartTimeDesc(workorderId);
+                                .findByWorkorder_IdOrderByStartTimeDesc(workorderId);
                 assertThat(entries).hasSize(1);
         }
 
@@ -214,7 +214,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Verify no labor entry was created
                 List<WorkorderLaborEntry> entries = laborEntryRepository
-                                .findByWorkorderIdOrderByStartTimeDesc(workorderId);
+                                .findByWorkorder_IdOrderByStartTimeDesc(workorderId);
                 assertThat(entries).isEmpty();
         }
 
@@ -223,7 +223,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         void testStopLaborSession_HappyPath() {
                 // Given: A workorder with an active labor session
                 UUID workorderId = seedWorkorderWithActiveLaborSession();
-                UUID entryId = laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorderId).get(0).getId();
+                UUID entryId = laborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorderId).get(0).getId();
 
                 // When: Stop the labor session
                 givenWithGatewayAuth()
@@ -250,7 +250,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         void testStopLaborSession_Idempotency() {
                 // Given: A workorder with an active labor session
                 UUID workorderId = seedWorkorderWithActiveLaborSession();
-                UUID entryId = laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorderId).get(0).getId();
+                UUID entryId = laborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorderId).get(0).getId();
                 String idempotencyKey = "test-stop-labor-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // When: First request stops the session
@@ -288,7 +288,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         void testAdjustLaborHours_ManualOverride() {
                 // Given: A stopped labor session
                 UUID workorderId = seedWorkorderWithStoppedLaborSession();
-                UUID entryId = laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorderId).get(0).getId();
+                UUID entryId = laborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorderId).get(0).getId();
 
                 // When: Manually adjust the hours
                 Map<String, Object> adjustRequest = Map.of(
@@ -339,7 +339,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 assertThat(first).isAfter(second);
 
                 List<WorkorderLaborEntry> entries = laborEntryRepository
-                                .findByWorkorderIdOrderByStartTimeDesc(workorderId);
+                                .findByWorkorder_IdOrderByStartTimeDesc(workorderId);
                 assertThat(entries).hasSizeGreaterThanOrEqualTo(2);
         }
 
@@ -422,7 +422,6 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Create active labor entry (started 1 hour ago)
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(1))
@@ -449,7 +448,6 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Create stopped labor entry (2 hours duration)
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(3))
@@ -477,7 +475,6 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Create first entry (older)
                 WorkorderLaborEntry entry1 = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusDays(2))
@@ -492,7 +489,6 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Create second entry (newer)
                 WorkorderLaborEntry entry2 = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorderId)
                                 .workorderServiceId(serviceId)
                                 .technicianId(testTechnicianId)
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusDays(1))

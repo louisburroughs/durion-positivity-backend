@@ -21,7 +21,7 @@ public interface BreakSegmentRepository extends JpaRepository<BreakSegment, UUID
      * @param workSessionId parent session UUID
      * @return list of break segments
      */
-    List<BreakSegment> findByWorkSessionId(UUID workSessionId);
+    List<BreakSegment> findByWorkSession_WorkSessionId(UUID workSessionId);
 
     /**
      * Find all open (not yet stopped) break segments for a work session.
@@ -29,7 +29,7 @@ public interface BreakSegmentRepository extends JpaRepository<BreakSegment, UUID
      * @param workSessionId parent session UUID
      * @return list of open break segments
      */
-    List<BreakSegment> findByWorkSessionIdAndBreakEndAtIsNull(UUID workSessionId);
+    List<BreakSegment> findByWorkSession_WorkSessionIdAndBreakEndAtIsNull(UUID workSessionId);
 
     /**
      * Find the first open (not yet stopped) break segment for a work session.
@@ -37,5 +37,5 @@ public interface BreakSegmentRepository extends JpaRepository<BreakSegment, UUID
      * @param workSessionId parent session UUID
      * @return Optional containing the open break segment, or empty if none
      */
-    Optional<BreakSegment> findFirstByWorkSessionIdAndBreakEndAtIsNull(UUID workSessionId);
+    Optional<BreakSegment> findFirstByWorkSession_WorkSessionIdAndBreakEndAtIsNull(UUID workSessionId);
 }

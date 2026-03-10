@@ -114,7 +114,6 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
         // Create new labor entry
         WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                 .workorder(workorder)
-                .workorderId(workorderId)
                 .workorderServiceId(serviceId)
                 .technicianId(technicianId)
                 .startTime(LocalDateTime.now(clock))
@@ -190,7 +189,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
     @Transactional(readOnly = true)
     @NonNull
     public List<WorkorderLaborEntry> getLaborHistory(@NonNull UUID workorderId) {
-        return laborRepository.findByWorkorderIdOrderByStartTimeDesc(workorderId);
+        return laborRepository.findByWorkorder_IdOrderByStartTimeDesc(workorderId);
     }
 
     /**

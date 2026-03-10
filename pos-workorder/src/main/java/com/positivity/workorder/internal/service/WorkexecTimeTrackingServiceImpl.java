@@ -177,7 +177,6 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
 
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorder.getId())
                                 .workorderServiceId(workorderItemId)
                                 .technicianId(request.getTechnicianId())
                                 .startTime(startTime)
@@ -253,7 +252,6 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
 
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorder.getId())
                                 .workorderServiceId(workorderItemId)
                                 .technicianId(mechanicId)
                                 .startTime(LocalDateTime.now(ZoneOffset.UTC))
@@ -299,7 +297,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                 "performedAt timestamp must be present");
                 return WorkexecLaborPerformedResponse.builder()
                                 .laborPerformedId(entry.getId())
-                                .workorderId(entry.getWorkorderId())
+                                .workorderId(entry.getWorkorder().getId())
                                 .technicianId(entry.getTechnicianId())
                                 .performedAt(performedAt.toInstant(ZoneOffset.UTC))
                                 .quantity(entry.getHoursWorked())
@@ -324,7 +322,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                 return WorkexecTimerEntryResponse.builder()
                                 .timeEntryId(entry.getId())
                                 .mechanicId(entry.getTechnicianId())
-                                .workorderId(entry.getWorkorderId())
+                                .workorderId(entry.getWorkorder().getId())
                                 .workorderItemId(workorderItemId)
                                 .laborCode(entry.getNotes())
                                 .startTime(entry.getStartTime())

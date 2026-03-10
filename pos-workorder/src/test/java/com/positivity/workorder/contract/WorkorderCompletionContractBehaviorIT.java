@@ -337,8 +337,9 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         }
 
         private void seedPendingApprovalGatedChangeRequest(UUID workorderId) {
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
                 ChangeRequest changeRequest = ChangeRequest.builder()
-                                .workorderId(workorderId)
+                                .workorder(workorder)
                                 .requestedByUserId(SYSTEM_USER_ID)
                                 .requestedAt(LocalDateTime.now(TEST_CLOCK))
                                 .updatedAt(LocalDateTime.now(TEST_CLOCK))

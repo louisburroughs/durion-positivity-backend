@@ -132,7 +132,6 @@ class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBe
                         BigDecimal hoursWorked) {
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorder.getId())
                                 .workorderServiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .technicianId(technicianId)
                                 .startTime(startTimeUtc)
