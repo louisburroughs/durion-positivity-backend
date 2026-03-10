@@ -16,6 +16,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -38,8 +40,9 @@ public class Assignment {
     @Column(name = "assignment_id", columnDefinition = "UUID")
     private UUID assignmentId;
 
-    @Column(name = "appointment_id", nullable = false, columnDefinition = "UUID")
-    private UUID appointmentId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "appointment_id", nullable = false)
+    private Appointment appointment;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

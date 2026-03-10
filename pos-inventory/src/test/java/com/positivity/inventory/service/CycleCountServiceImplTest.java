@@ -235,7 +235,7 @@ class CycleCountServiceImplTest {
                 UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 CountEntry entry1 = previousEntry(taskId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 0);
                 CountEntry entry2 = previousEntry(taskId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 1);
-                when(countEntryRepository.findByCycleCountTaskIdOrderByRecountSequenceNumberAsc(taskId))
+                when(countEntryRepository.findByCycleCountTask_TaskIdOrderByRecountSequenceNumberAsc(taskId))
                                 .thenReturn(List.of(entry1, entry2));
 
                 List<CountEntryResponse> history = service.getCountHistory(taskId);
@@ -306,9 +306,12 @@ class CycleCountServiceImplTest {
         }
 
         private CountEntry previousEntry(UUID taskId, UUID countEntryId, int recountSequence) {
+                CycleCountTask task = CycleCountTask.builder()
+                                .taskId(taskId)
+                                .build();
                 return CountEntry.builder()
                                 .countEntryId(countEntryId)
-                                .cycleCountTaskId(taskId)
+                                .cycleCountTask(task)
                                 .auditorId("auditor-1")
                                 .actualQuantity(10)
                                 .expectedQuantity(10)

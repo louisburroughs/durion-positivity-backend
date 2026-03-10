@@ -1,13 +1,16 @@
 package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryMethod;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
 import com.positivity.invoice.internal.enums.ReceiptStatus;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.internal.exception.ReceiptNotFoundException;
 import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.ReceiptRepository;
 import com.positivity.invoice.service.Receipt;
 import com.positivity.invoice.service.ReceiptService;
@@ -34,14 +37,17 @@ public class ReceiptServiceImpl implements ReceiptService {
 
     private final ReceiptRepository receiptRepository;
     private final InvoiceRepository invoiceRepository;
+    private final PaymentIntentRepository paymentIntentRepository;
     private final Clock clock;
 
     public ReceiptServiceImpl(
             @NonNull ReceiptRepository receiptRepository,
             @NonNull InvoiceRepository invoiceRepository,
+            @NonNull PaymentIntentRepository paymentIntentRepository,
             @NonNull Clock clock) {
         this.receiptRepository = receiptRepository;
         this.invoiceRepository = invoiceRepository;
+        this.paymentIntentRepository = paymentIntentRepository;
         this.clock = clock;
     }
 
@@ -57,10 +63,16 @@ public class ReceiptServiceImpl implements ReceiptService {
 
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+        PaymentIntent paymentIntent = paymentIntentRepository.findById(paymentIntentId)
+            .orElseThrow(() -> new PaymentIntentNotFoundException("Payment intent not found: " + paymentIntentId));
+        if (paymentIntent.getInvoice() == null || !invoiceId.equals(paymentIntent.getInvoice().getId())) {
+            throw new PaymentIntentNotFoundException(
+                "Payment intent " + paymentIntentId + " not found under invoice " + invoiceId);
+        }
 
         String cashierId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         int nextReferenceSequence = Math.toIntExact(
-                receiptRepository.countByInvoiceId(invoiceId) + INITIAL_REFERENCE_SEQUENCE);
+            receiptRepository.countByInvoice_Id(invoiceId) + INITIAL_REFERENCE_SEQUENCE);
         String referenceSuffix = String.format("%03d", nextReferenceSequence);
 
         String reference = "RCP-" + invoice.getInvoiceNumber() + "-"
@@ -70,8 +82,8 @@ public class ReceiptServiceImpl implements ReceiptService {
                 + "-" + referenceSuffix;
 
         com.positivity.invoice.internal.entity.Receipt receiptEntity = new com.positivity.invoice.internal.entity.Receipt();
-        receiptEntity.setInvoiceId(invoiceId);
-        receiptEntity.setPaymentIntentId(paymentIntentId);
+        receiptEntity.setInvoice(invoice);
+        receiptEntity.setPaymentIntent(paymentIntent);
         receiptEntity.setCashierId(cashierId);
         receiptEntity.setTerminalId(terminalId);
         receiptEntity.setTemplateId(templateId);
@@ -124,8 +136,8 @@ public class ReceiptServiceImpl implements ReceiptService {
     private static Receipt toServiceReceipt(com.positivity.invoice.internal.entity.Receipt entity) {
         Receipt receipt = new Receipt();
         receipt.setId(entity.getId());
-        receipt.setInvoiceId(entity.getInvoiceId());
-        receipt.setPaymentIntentId(entity.getPaymentIntentId());
+        receipt.setInvoiceId(entity.getInvoice() == null ? null : entity.getInvoice().getId());
+        receipt.setPaymentIntentId(entity.getPaymentIntent() == null ? null : entity.getPaymentIntent().getId());
         receipt.setCashierId(entity.getCashierId());
         receipt.setReference(entity.getReference());
         receipt.setStatus(entity.getStatus());

@@ -39,8 +39,10 @@ import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.payment.GatewayCaptureRequest;
 import com.positivity.invoice.internal.payment.GatewayPaymentResult;
+import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.payment.GatewayVoidRequest;
 import com.positivity.invoice.internal.payment.PaymentGatewayPort;
+import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 
 /**
@@ -87,6 +89,8 @@ class PaymentServiceImplTest {
     private PaymentGatewayPort gatewayPort;
 
     @Mock
+    private InvoiceRepository invoiceRepository;
+    @Mock
     private PaymentIntentRepository paymentIntentRepository;
 
     @InjectMocks
@@ -121,6 +125,7 @@ class PaymentServiceImplTest {
     void initiatePayment_saleCapture_capturesImmediately() {
         withAuthorities("PROCESS_PAYMENT");
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
         when(gatewayPort.saleCapture(any())).thenReturn(capturedResult(AMOUNT_BELOW_LIMIT));
         when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -147,6 +152,7 @@ class PaymentServiceImplTest {
     void initiatePayment_authOnly_createsHold() {
         withAuthorities("PROCESS_PAYMENT", "SELECT_PAYMENT_FLOW");
         var request = buildRequest(PaymentFlow.AUTH_ONLY, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
         when(gatewayPort.authorize(any())).thenReturn(authorizedResult(AMOUNT_BELOW_LIMIT));
         when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -186,7 +192,7 @@ class PaymentServiceImplTest {
         withAuthorities("PROCESS_PAYMENT");
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var existing = capturedPaymentIntent();
-        existing.setInvoiceId(OTHER_INVOICE_ID);
+        existing.setInvoice(invoice(OTHER_INVOICE_ID));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
                 .thenReturn(Optional.of(existing));
 
@@ -213,6 +219,7 @@ class PaymentServiceImplTest {
         withAuthorities("PROCESS_PAYMENT");
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var unknownResult = unknownOutcomeResult();
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
         when(gatewayPort.saleCapture(any())).thenReturn(unknownResult);
         when(gatewayPort.inquireStatus(any())).thenReturn(capturedResult(AMOUNT_BELOW_LIMIT));
@@ -230,6 +237,7 @@ class PaymentServiceImplTest {
         var request = buildRequest(PaymentFlow.AUTH_ONLY, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var unknownResult = unknownOutcomeResult();
         var successResult = authorizedResult(AMOUNT_BELOW_LIMIT);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
         when(gatewayPort.authorize(any())).thenReturn(unknownResult);
         when(gatewayPort.inquireStatus(unknownResult.getGatewayReference())).thenReturn(successResult);
@@ -246,6 +254,7 @@ class PaymentServiceImplTest {
     void initiatePayment_saleCapture_setsCaptureFailedWhenDeclined() {
         withAuthorities("PROCESS_PAYMENT");
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
         when(gatewayPort.saleCapture(any())).thenReturn(declinedResult());
         when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -404,7 +413,7 @@ class PaymentServiceImplTest {
         var captureAmount = BigDecimal.valueOf(200, 2);
         var paymentIntent = new PaymentIntent();
         paymentIntent.setId(PAYMENT_INTENT_ID);
-        paymentIntent.setInvoiceId(INVOICE_ID);
+        paymentIntent.setInvoice(invoice(INVOICE_ID));
         paymentIntent.setStatus(PaymentIntentStatus.CAPTURED);
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(paymentIntent));
 
@@ -442,6 +451,7 @@ class PaymentServiceImplTest {
         withAuthorities("PROCESS_PAYMENT");
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var result = capturedResult(AMOUNT_BELOW_LIMIT);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
         when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
         when(gatewayPort.saleCapture(any())).thenReturn(result);
         when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -477,7 +487,7 @@ class PaymentServiceImplTest {
     private PaymentIntent capturedPaymentIntent() {
         var intent = new PaymentIntent();
         intent.setId(PAYMENT_INTENT_ID);
-        intent.setInvoiceId(INVOICE_ID);
+        intent.setInvoice(invoice(INVOICE_ID));
         intent.setIdempotencyKey(IDEMPOTENCY_KEY);
         intent.setStatus(PaymentIntentStatus.CAPTURED);
         intent.setAuthorizedAmount(AMOUNT_BELOW_LIMIT);
@@ -491,7 +501,7 @@ class PaymentServiceImplTest {
     private PaymentIntent authorizedPaymentIntent(BigDecimal authorizedAmount) {
         var intent = new PaymentIntent();
         intent.setId(PAYMENT_INTENT_ID);
-        intent.setInvoiceId(INVOICE_ID);
+        intent.setInvoice(invoice(INVOICE_ID));
         intent.setStatus(PaymentIntentStatus.AUTHORIZED);
         intent.setAuthorizedAmount(authorizedAmount);
         intent.setGatewayProvider("stripe");
@@ -564,5 +574,11 @@ class PaymentServiceImplTest {
                 return rawResponse;
             }
         };
+    }
+
+    private Invoice invoice(UUID id) {
+        Invoice invoice = new Invoice();
+        invoice.setId(id);
+        return invoice;
     }
 }

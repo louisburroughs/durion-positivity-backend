@@ -6,6 +6,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
@@ -31,8 +33,9 @@ public class ProductMsrpEntity {
     @Column(columnDefinition = "UUID")
     private UUID msrpId;
 
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID productId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "product_id", nullable = false)
+    private ProductEntity product;
 
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;

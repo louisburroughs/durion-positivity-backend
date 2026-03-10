@@ -9,5 +9,5 @@ import java.util.UUID;
 
 public interface RefundRecordRepository extends JpaRepository<RefundRecord, UUID> {
 
-    List<RefundRecord> findByPaymentIntentId(@NonNull UUID paymentIntentId);
+    List<RefundRecord> findByPaymentIntent_Id(@NonNull UUID paymentIntentId);
 }

@@ -32,9 +32,6 @@ public class InvoiceItem {
     @JoinColumn(name = "invoice_id", nullable = false)
     private Invoice invoice;
 
-    @Column(name = "invoice_id", columnDefinition = "UUID", nullable = false, insertable = false, updatable = false)
-    private UUID invoiceId;
-
     @Column(name = "description", nullable = false, length = 512)
     private String description;
 

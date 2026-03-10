@@ -9,8 +9,8 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
-    List<Assignment> findByAppointmentId(@NonNull UUID appointmentId);
+    List<Assignment> findByAppointment_AppointmentId(@NonNull UUID appointmentId);
 
-    Optional<Assignment> findByAppointmentIdAndStatusIn(
+    Optional<Assignment> findByAppointment_AppointmentIdAndStatusIn(
             @NonNull UUID appointmentId, @NonNull List<AssignmentStatusEnum> statuses);
 }

@@ -13,7 +13,7 @@ public interface ProductMsrpRepository extends JpaRepository<ProductMsrpEntity, 
 
     @Query("""
             select m from ProductMsrpEntity m
-            where m.productId = :productId
+                                                where m.product.id = :productId
               and (m.effectiveEndDate is null or m.effectiveEndDate >= :startDate)
               and (:endDate is null or m.effectiveStartDate <= :endDate)
               and (:excludeMsrpId is null or m.msrpId <> :excludeMsrpId)
@@ -26,7 +26,7 @@ public interface ProductMsrpRepository extends JpaRepository<ProductMsrpEntity, 
 
     @Query("""
             select m from ProductMsrpEntity m
-            where m.productId = :productId
+                                                where m.product.id = :productId
               and m.effectiveStartDate <= :asOf
               and (m.effectiveEndDate is null or m.effectiveEndDate >= :asOf)
             order by m.effectiveStartDate desc, m.msrpId asc
@@ -37,7 +37,7 @@ public interface ProductMsrpRepository extends JpaRepository<ProductMsrpEntity, 
         return findActiveCandidates(productId, asOf).stream().findFirst();
     }
 
-    List<ProductMsrpEntity> findByProductIdOrderByEffectiveStartDateDesc(UUID productId);
+        List<ProductMsrpEntity> findByProduct_IdOrderByEffectiveStartDateDesc(UUID productId);
 
-    long countByProductIdAndEffectiveEndDateIsNull(UUID productId);
+        long countByProduct_IdAndEffectiveEndDateIsNull(UUID productId);
 }

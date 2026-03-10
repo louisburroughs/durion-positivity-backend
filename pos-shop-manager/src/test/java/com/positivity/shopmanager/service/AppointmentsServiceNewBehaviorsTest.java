@@ -113,7 +113,7 @@ class AppointmentsServiceNewBehaviorsTest {
         appointment.setEndAt(Instant.now(TEST_CLOCK).plus(25, ChronoUnit.HOURS));
         lenient().when(crmCustomerClient.getCustomerById(any(UUID.class))).thenReturn(Map.of());
         lenient().when(crmVehicleClient.getVehicleById(any(UUID.class))).thenReturn(Map.of());
-        lenient().when(appointmentServiceRequestRepository.findByAppointmentId(any(UUID.class))).thenReturn(List.of());
+        lenient().when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(any(UUID.class))).thenReturn(List.of());
     }
 
     @Test

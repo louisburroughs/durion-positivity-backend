@@ -30,6 +30,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.Receipt;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryMethod;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
@@ -37,6 +38,7 @@ import com.positivity.invoice.internal.enums.ReceiptStatus;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.ReceiptRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
 
@@ -82,6 +84,9 @@ class ReceiptServiceImplTest {
     @Mock
     private InvoiceRepository invoiceRepository;
 
+    @Mock
+    private PaymentIntentRepository paymentIntentRepository;
+
     @InjectMocks
     private ReceiptServiceImpl receiptServiceImpl;
 
@@ -92,7 +97,11 @@ class ReceiptServiceImplTest {
         var invoice = new Invoice();
         invoice.setId(INVOICE_ID);
         invoice.setInvoiceNumber(INVOICE_NUMBER);
+        var paymentIntent = new PaymentIntent();
+        paymentIntent.setId(PAYMENT_INTENT_ID);
+        paymentIntent.setInvoice(invoice);
         lenient().when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+        lenient().when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(paymentIntent));
         lenient().when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -151,13 +160,14 @@ class ReceiptServiceImplTest {
 
         verify(receiptRepository).save(captor.capture());
         String reference = captor.getValue().getReference();
-        assertThat(reference).startsWith("RCP-INV-12345-");
-        assertThat(reference).matches("RCP-INV-12345-\\d{8}T\\d{6}Z-\\d{3}");
+        assertThat(reference)
+            .startsWith("RCP-INV-12345-")
+            .matches("RCP-INV-12345-\\d{8}T\\d{6}Z-\\d{3}");
     }
 
     @Test
     void generateReceipt_secondReceiptForInvoice_usesIncrementedReferenceSuffix() {
-        when(receiptRepository.countByInvoiceId(INVOICE_ID)).thenReturn(1L);
+        when(receiptRepository.countByInvoice_Id(INVOICE_ID)).thenReturn(1L);
 
         com.positivity.invoice.service.Receipt saved = receiptServiceImpl.generateReceipt(
                 INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
@@ -413,8 +423,13 @@ class ReceiptServiceImplTest {
     private Receipt buildExistingReceipt(int reprintCount) {
         var receipt = new Receipt();
         receipt.setId(RECEIPT_ID);
-        receipt.setInvoiceId(INVOICE_ID);
-        receipt.setPaymentIntentId(PAYMENT_INTENT_ID);
+        var invoice = new Invoice();
+        invoice.setId(INVOICE_ID);
+        receipt.setInvoice(invoice);
+        var paymentIntent = new PaymentIntent();
+        paymentIntent.setId(PAYMENT_INTENT_ID);
+        paymentIntent.setInvoice(invoice);
+        receipt.setPaymentIntent(paymentIntent);
         receipt.setStatus(ReceiptStatus.GENERATED);
         receipt.setReference("RCP-INV-12345-20260115T143022Z-001");
         receipt.setReprintCount(reprintCount);

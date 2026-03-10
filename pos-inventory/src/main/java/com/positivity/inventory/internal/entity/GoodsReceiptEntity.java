@@ -8,6 +8,8 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -43,10 +45,13 @@ public class GoodsReceiptEntity {
     @Column(nullable = false)
     private String receiptNumber;
 
-    @Column(nullable = false)
-    private UUID poId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "po_id", nullable = false)
+    private PurchaseOrderEntity purchaseOrder;
 
-    private UUID asnId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "asn_id")
+    private AdvanceShippingNoticeEntity asn;
 
     @Column(nullable = false)
     private UUID locationId;

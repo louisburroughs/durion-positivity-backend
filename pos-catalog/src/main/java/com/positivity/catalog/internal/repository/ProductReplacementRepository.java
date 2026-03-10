@@ -6,6 +6,6 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProductReplacementRepository extends JpaRepository<ProductReplacementEntity, UUID> {
-    List<ProductReplacementEntity> findByOriginalProductIdAndDeletedAtIsNullOrderByPriorityOrderAsc(
+    List<ProductReplacementEntity> findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(
             UUID originalProductId);
 }

@@ -14,6 +14,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -35,8 +37,9 @@ public class AppointmentServiceRequest {
     @Column(name = "service_request_id", nullable = false, columnDefinition = "UUID")
     private UUID serviceRequestId;
 
-    @Column(name = "appointment_id", nullable = false, columnDefinition = "UUID")
-    private UUID appointmentId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "appointment_id", nullable = false)
+    private Appointment appointment;
 
     @Column(name = "service_entity_id", nullable = false, columnDefinition = "UUID")
     private UUID serviceEntityId;
