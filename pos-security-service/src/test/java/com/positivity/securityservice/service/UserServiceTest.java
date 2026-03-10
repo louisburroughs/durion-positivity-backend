@@ -9,9 +9,13 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
+import com.positivity.securityservice.internal.dto.UserAuthContext;
+import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -93,5 +97,153 @@ class UserServiceTest {
         userService.deleteUser(userId);
 
         verify(userRepository).deleteById(userId);
+    }
+
+    @Test
+    void createUser_roleNotFound_throws() {
+        when(userRepository.existsByUsername("bob")).thenReturn(false);
+        when(roleRepository.findByName("UNKNOWN")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.createUser("bob", "pass", Set.of("UNKNOWN")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Role not found");
+    }
+
+    @Test
+    void getUserByUsername_found_returnsAuthContext() {
+        User user = new User();
+        user.setUsername("alice");
+        user.setPassword("hashed");
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
+
+        Optional<UserAuthContext> result = userService.getUserByUsername("alice");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getUsername()).isEqualTo("alice");
+    }
+
+    @Test
+    void getUserByUsername_notFound_returnsEmpty() {
+        when(userRepository.findByUsername("nobody")).thenReturn(Optional.empty());
+
+        assertThat(userService.getUserByUsername("nobody")).isEmpty();
+    }
+
+    @Test
+    void getUserById_found_returnsDto() {
+        User user = new User();
+        user.setUsername("alice");
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+
+        assertThat(userService.getUserById(id)).isPresent();
+    }
+
+    @Test
+    void getUserById_notFound_returnsEmpty() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        when(userRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThat(userService.getUserById(id)).isEmpty();
+    }
+
+    @Test
+    void getAllUsers_returnsMappedList() {
+        User u1 = new User();
+        u1.setUsername("alice");
+        User u2 = new User();
+        u2.setUsername("bob");
+        when(userRepository.findAll()).thenReturn(List.of(u1, u2));
+
+        List<UserDto> result = userService.getAllUsers();
+
+        assertThat(result).hasSize(2);
+    }
+
+    @Test
+    void updateUser_updatesAllFields() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Role role = new Role();
+        role.setName("MANAGER");
+        User existing = new User();
+        existing.setUsername("old");
+        existing.setPassword("oldpass");
+
+        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(roleRepository.findByName("MANAGER")).thenReturn(Optional.of(role));
+        when(passwordEncoder.encode("newpass")).thenReturn("newEncoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserUpdateRequest req = new UserUpdateRequest();
+        req.setUsername("newname");
+        req.setPassword("newpass");
+        req.setRoles(Set.of("MANAGER"));
+
+        UserDto result = userService.updateUser(id, req);
+
+        assertThat(result.getUsername()).isEqualTo("newname");
+        assertThat(result.getRoles()).contains("MANAGER");
+    }
+
+    @Test
+    void updateUser_noFieldsProvided_returnsUnchanged() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        User existing = new User();
+        existing.setUsername("alice");
+        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserUpdateRequest req = new UserUpdateRequest();
+        UserDto result = userService.updateUser(id, req);
+
+        assertThat(result.getUsername()).isEqualTo("alice");
+    }
+
+    @Test
+    void updateUser_userNotFound_throws() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        when(userRepository.findById(id)).thenReturn(Optional.empty());
+
+        UserUpdateRequest req = new UserUpdateRequest();
+        assertThatThrownBy(() -> userService.updateUser(id, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("User not found");
+    }
+
+    @Test
+    void updateUser_roleNotFound_throws() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        User existing = new User();
+        existing.setUsername("alice");
+        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(roleRepository.findByName("GHOST")).thenReturn(Optional.empty());
+
+        UserUpdateRequest req = new UserUpdateRequest();
+        req.setRoles(Set.of("GHOST"));
+
+        assertThatThrownBy(() -> userService.updateUser(id, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Role not found");
+    }
+
+    @Test
+    void assignRoles_userNotFound_throws() {
+        when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.assignRoles("ghost", Set.of("ADMIN")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("User not found");
+    }
+
+    @Test
+    void assignRoles_roleNotFound_throws() {
+        User user = new User();
+        user.setUsername("alice");
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
+        when(roleRepository.findByName("GHOST")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.assignRoles("alice", Set.of("GHOST")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Role not found");
     }
 }
