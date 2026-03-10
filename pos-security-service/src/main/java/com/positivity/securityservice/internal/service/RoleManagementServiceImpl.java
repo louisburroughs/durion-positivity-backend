@@ -26,6 +26,7 @@ import com.positivity.securityservice.service.RoleManagementService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -63,7 +64,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      */
     @Override
     @Transactional
-    public RoleDto createRole(String name, String description) {
+    public RoleDto createRole(@NonNull String name, @Nullable String description) {
         if (roleRepository.existsByNameIgnoreCase(name)) {
             throw new DuplicateRoleNameException("Role with name " + name + " already exists");
         }
