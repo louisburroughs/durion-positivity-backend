@@ -17,7 +17,6 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -322,20 +321,10 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
      * Unauthorized.
      *
      * <p>
-     * Note: In the {@code test} profile the {@code TestAutoAuthFilter}
-     * auto-authenticates all
-     * requests, so this scenario cannot be driven to 401 from within the test
-     * profile. This test
-     * documents the expected production contract (ADR-0011, ADR-0014). It is
-     * expected to fail
-     * RED in the test profile because the auto-auth filter causes the request to be
-     * treated as
-     * authenticated, returning 500 from UnsupportedOperationException instead of
-     * 401.
-     * The 401 contract is enforced at the gateway layer in production.
+     * This test executes without gateway auth headers and asserts the gateway
+     * security contract directly in test profile (ADR-0011, ADR-0014).
      */
     @Test
-    @Disabled("Gateway-contract test: cannot enforce 401 in test profile; TestAutoAuthFilter authenticates all requests – ADR-0011/ADR-0014")
     @DisplayName("SC-007: Request without auth headers returns 401 Unauthorized (gateway contract)")
     void createCart_whenUnauthenticated_thenReturns401() throws Exception {
         String body = """
@@ -345,12 +334,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 }
                 """;
 
-        // Issue #21: withGatewayAuth is intentionally NOT used here to simulate an
-        // unauthenticated
-        // call. In test profile, TestAutoAuthFilter overrides this and authenticates
-        // the request,
-        // so this test currently fails RED in test profile instead of returning 401.
-        // Gateway enforces 401 in production (ADR-0011, ADR-0014).
+        // withGatewayAuth is intentionally not used here to simulate an
+        // unauthenticated call.
         mockMvc.perform(post("/v1/orders/carts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
