@@ -45,7 +45,7 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
 
         private MockHttpServletRequestBuilder withSystemAdminAuth(MockHttpServletRequestBuilder builder) {
                 return withAuth(builder,
-                                "ROLE_ADMIN,security:permissions:register,security:permissions:view,security:roles:create,security:roles:update,security:roles:view");
+                                "ROLE_ADMIN,security:permission:register,security:permission:view,security:roles:create,security:roles:update,security:roles:view");
         }
 
         // Issue #42: AC1 validates domain:resource:action permission naming on

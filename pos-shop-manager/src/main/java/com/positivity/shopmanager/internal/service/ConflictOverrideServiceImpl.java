@@ -17,8 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Implements conflict override logic: flags the appointment, persists the
  * override audit
- * record, and returns a response. Caller must hold
- * {@code shopmgr.appointment.override}
+ * record, and returns a response. Caller must hold canonical schedule-editing
  * authority — enforced by {@code @PreAuthorize} on the service interface
  * (AC-2).
  */
