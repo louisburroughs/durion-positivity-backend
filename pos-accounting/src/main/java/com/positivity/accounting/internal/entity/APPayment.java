@@ -17,10 +17,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.GeneratedValue;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -73,8 +77,9 @@ public class APPayment {
     @Column(name = "payment_ref", length = 100, unique = true, nullable = false)
     private String paymentRef;
 
-    @Column(name = "vendor_bill_id")
-    private UUID vendorBillId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vendor_bill_id")
+    private VendorBill vendorBill;
 
     @Column(name = "vendor_id", nullable = false)
     private UUID vendorId;
@@ -152,6 +157,15 @@ public class APPayment {
         if (currency == null) {
             currency = "USD";
         }
+    }
+
+    @Transient
+    public UUID getVendorBillId() {
+        return vendorBill != null ? vendorBill.getVendorBillId() : null;
+    }
+
+    public void setVendorBillId(UUID vendorBillId) {
+        this.vendorBill = vendorBillId == null ? null : new VendorBill(vendorBillId);
     }
 
 }

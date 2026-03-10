@@ -143,4 +143,8 @@ public class VendorBill {
 
     @Column(name = "paid_by", length = 50)
     private String paidBy;
+
+    public VendorBill(UUID vendorBillId) {
+        this.vendorBillId = vendorBillId;
+    }
 }

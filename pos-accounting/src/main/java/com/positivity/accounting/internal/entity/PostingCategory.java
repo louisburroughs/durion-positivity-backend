@@ -64,4 +64,8 @@ public class PostingCategory {
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
+
+    public PostingCategory(UUID postingCategoryId) {
+        this.postingCategoryId = postingCategoryId;
+    }
 }

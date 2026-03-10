@@ -12,10 +12,14 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -71,8 +75,9 @@ public class VendorBillMatchCandidate {
     private UUID invoiceEventId;
 
     /** The candidate vendor bill. */
-    @Column(name = "vendor_bill_id", nullable = false)
-    private UUID vendorBillId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "vendor_bill_id", nullable = false)
+    private VendorBill vendorBill;
 
     /** Vendor ID (denormalized for efficient listing). */
     @Column(name = "vendor_id", nullable = false)
@@ -117,4 +122,13 @@ public class VendorBillMatchCandidate {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Transient
+    public UUID getVendorBillId() {
+        return vendorBill != null ? vendorBill.getVendorBillId() : null;
+    }
+
+    public void setVendorBillId(UUID vendorBillId) {
+        this.vendorBill = vendorBillId == null ? null : new VendorBill(vendorBillId);
+    }
 }

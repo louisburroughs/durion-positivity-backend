@@ -144,7 +144,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                         payment = paymentRepository.save(payment);
 
                         List<APPaymentAllocation> savedAllocations = allocationRepository
-                                        .findByPaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+                                        .findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
 
                         APPaymentGLPostingEvent glPostingEvent = APPaymentGLPostingEvent.builder()
                                         .eventId(UUIDv7Generator.generate())
@@ -286,12 +286,12 @@ public class APPaymentServiceImpl implements APPaymentService {
                 int sequence = 1;
 
                 for (ExecuteAPPaymentRequest.AllocationLineRequest allocationLine : request.getAllocations()) {
-                        validateBillForAllocation(allocationLine.getVendorBillId(), payment.getVendorId());
+                        VendorBill bill = validateBillForAllocation(allocationLine.getVendorBillId(), payment.getVendorId());
 
-                        APPaymentAllocation allocation = new APPaymentAllocation(
-                                        payment.getPaymentId(),
-                                        allocationLine.getVendorBillId(),
-                                        allocationLine.getAppliedAmount());
+                        APPaymentAllocation allocation = new APPaymentAllocation();
+                        allocation.setPayment(payment);
+                        allocation.setVendorBill(bill);
+                        allocation.setAppliedAmount(allocationLine.getAppliedAmount());
                         allocation.setAllocationSequence(sequence++);
                         allocations.add(allocation);
                 }
@@ -316,10 +316,10 @@ public class APPaymentServiceImpl implements APPaymentService {
                         if (billOpen.compareTo(BigDecimal.ZERO) > 0) {
                                 BigDecimal toApply = remaining.min(billOpen);
 
-                                APPaymentAllocation allocation = new APPaymentAllocation(
-                                                payment.getPaymentId(),
-                                                bill.getVendorBillId(),
-                                                toApply);
+                                APPaymentAllocation allocation = new APPaymentAllocation();
+                                allocation.setPayment(payment);
+                                allocation.setVendorBill(bill);
+                                allocation.setAppliedAmount(toApply);
                                 allocation.setAllocationSequence(sequence++);
                                 allocations.add(allocation);
 
@@ -330,7 +330,8 @@ public class APPaymentServiceImpl implements APPaymentService {
                 return allocations;
         }
 
-        private void validateBillForAllocation(@NonNull UUID vendorBillId, @NonNull UUID expectedVendorId) {
+        private @NonNull VendorBill validateBillForAllocation(@NonNull UUID vendorBillId,
+                        @NonNull UUID expectedVendorId) {
                 VendorBill bill = billRepository.findById(vendorBillId)
                                 .orElseThrow(() -> new IllegalArgumentException("Bill not found: " + vendorBillId));
 
@@ -342,6 +343,8 @@ public class APPaymentServiceImpl implements APPaymentService {
                         throw new IllegalArgumentException(
                                         "Bill " + vendorBillId + " does not belong to vendor " + expectedVendorId);
                 }
+
+                return bill;
         }
 
         private @NonNull List<VendorBill> getEligibleBillsSortedByDueDate(@NonNull UUID vendorId) {
@@ -416,7 +419,7 @@ public class APPaymentServiceImpl implements APPaymentService {
 
         private @NonNull APPaymentResponse toResponse(@NonNull APPayment payment) {
                 List<APPaymentAllocation> allocations = allocationRepository
-                                .findByPaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+                                .findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
 
                 return APPaymentResponse.builder()
                                 .paymentId(payment.getPaymentId())
