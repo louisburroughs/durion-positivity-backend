@@ -339,7 +339,7 @@ class WorkorderCompletionTest {
         when(billableService.getStatus()).thenReturn(WorkorderItemStatus.COMPLETED);
         when(billableService.getLineTotal()).thenReturn(BigDecimal.TEN);
 
-        when(changeRequestRepository.findByWorkorderIdAndStatus(testWorkorderId,
+        when(changeRequestRepository.findByWorkorder_IdAndStatus(testWorkorderId,
                 ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)).thenReturn(List.of());
         when(workorderServiceRepository.findByWorkOrder_Id(testWorkorderId)).thenReturn(List.of(billableService));
         when(workorderPartRepository.findByWorkorderId(testWorkorderId)).thenReturn(List.of());

@@ -59,10 +59,6 @@ public class WorkorderLaborEntry {
     private Workorder workorder;
 
     @NonNull
-    @Column(name = "workorder_id", nullable = false, updatable = false, insertable = false, columnDefinition = "UUID")
-    private UUID workorderId;
-
-    @NonNull
     @Column(nullable = false, updatable = false, columnDefinition = "UUID")
     private UUID workorderServiceId;
 

@@ -49,7 +49,7 @@ class WorkexecLaborPerformedContractBehaviorIT extends AbstractWorkexecContractB
                                 .andExpect(jsonPath("$.sourceSystem").value("people"))
                                 .andExpect(jsonPath("$.sourceReferenceId").value(timeEntryId));
 
-                assertThat(laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorder.getId())).hasSize(1)
+                assertThat(laborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorder.getId())).hasSize(1)
                                 .extracting(WorkorderLaborEntry::getNotes)
                                 .singleElement()
                                 .asString()
@@ -89,7 +89,7 @@ class WorkexecLaborPerformedContractBehaviorIT extends AbstractWorkexecContractB
                                 .andExpect(jsonPath("$.sourceSystem").value("people"))
                                 .andExpect(jsonPath("$.sourceReferenceId").value(timeEntryId));
 
-                assertThat(laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorder.getId())).hasSize(1);
+                assertThat(laborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorder.getId())).hasSize(1);
         }
 
         @Test
@@ -106,7 +106,7 @@ class WorkexecLaborPerformedContractBehaviorIT extends AbstractWorkexecContractB
                                 .content(objectMapper.writeValueAsString(payload)))
                                 .andExpect(status().isBadRequest());
 
-                assertThat(laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorder.getId())).isEmpty();
+                assertThat(laborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorder.getId())).isEmpty();
         }
 
         private Map<String, Object> buildLaborPerformedPayload(UUID workorderId, UUID technicianId,

@@ -90,7 +90,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         String requestorUserId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         // Create change request
         ChangeRequest changeRequest = ChangeRequest.builder()
-                .workorderId(dto.getWorkorderId())
+            .workorder(workOrder)
                 .requestedByUserId(requestorUserId)
                 .description(dto.getDescription())
                 .isEmergencyException(Boolean.TRUE.equals(dto.getIsEmergencyException()))
@@ -236,7 +236,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         // Create immutable ApprovalRecord for audit trail
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
                 .changeRequestId(changeRequestId)
-                .workorderId(changeRequest.getWorkorderId())
+            .workorderId(changeRequest.getWorkorder().getId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED)
                 .resolvedAt(LocalDateTime.now(clock))
                 .resolvedBy(resolvedActorId)
@@ -281,7 +281,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         // Create immutable ApprovalRecord for audit trail
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
                 .changeRequestId(changeRequestId)
-                .workorderId(changeRequest.getWorkorderId())
+            .workorderId(changeRequest.getWorkorder().getId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.REJECTED)
                 .resolvedAt(LocalDateTime.now(clock))
                 .resolvedBy(resolvedActorId)
@@ -329,7 +329,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         // Create immutable ApprovalRecord for audit trail with exception flag
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
                 .changeRequestId(changeRequestId)
-                .workorderId(changeRequest.getWorkorderId())
+            .workorderId(changeRequest.getWorkorder().getId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED_WITH_EXCEPTION)
                 .resolvedAt(LocalDateTime.now(clock))
                 .resolvedBy(managerActorId)
@@ -388,7 +388,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     public boolean canCloseWorkorder(UUID workorderId) {
-        List<ChangeRequest> emergencyRequests = changeRequestRepository.findByWorkorderIdAndStatus(
+        List<ChangeRequest> emergencyRequests = changeRequestRepository.findByWorkorder_IdAndStatus(
                 workorderId, ChangeRequestStatus.DECLINED);
 
         for (ChangeRequest request : emergencyRequests) {
@@ -422,7 +422,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     public boolean hasPendingApprovalGatedRequests(UUID workorderId) {
-        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkorderIdAndStatus(
+        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkorder_IdAndStatus(
                 workorderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
 
         // Filter for approval-gated requests (all are by default, but check field)
@@ -435,7 +435,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     public List<ChangeRequest> getPendingApprovalGatedRequests(UUID workorderId) {
-        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkorderIdAndStatus(
+        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkorder_IdAndStatus(
                 workorderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
 
         // Filter for approval-gated requests
@@ -446,7 +446,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
     @Override
     public List<ChangeRequest> getChangeRequestsByWorkorder(UUID workorderId) {
-        return changeRequestRepository.findByWorkorderId(workorderId);
+        return changeRequestRepository.findByWorkorder_Id(workorderId);
     }
 
     @Override
@@ -580,7 +580,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("documentType", "SUPPLEMENTAL_ESTIMATE");
             payload.put("changeRequestId", String.valueOf(changeRequest.getId()));
-            payload.put("workorderId", String.valueOf(changeRequest.getWorkorderId()));
+            payload.put("workorderId", String.valueOf(changeRequest.getWorkorder().getId()));
             payload.put("requestedByUserId", String.valueOf(changeRequest.getRequestedByUserId()));
             payload.put("requestedAt", String.valueOf(changeRequest.getRequestedAt()));
             payload.put("status", String.valueOf(changeRequest.getStatus()));

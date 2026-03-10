@@ -84,7 +84,7 @@ public class WorkorderLaborEntryResponse {
     public static WorkorderLaborEntryResponse fromEntity(@NonNull WorkorderLaborEntry entry) {
         return WorkorderLaborEntryResponse.builder()
                 .id(entry.getId())
-                .workorderId(entry.getWorkorderId())
+            .workorderId(entry.getWorkorder() == null ? null : entry.getWorkorder().getId())
                 .workorderServiceId(entry.getWorkorderServiceId())
                 .technicianId(entry.getTechnicianId())
                 .startTime(entry.getStartTime())

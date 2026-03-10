@@ -69,7 +69,7 @@ public class ChangeRequestResponse {
 
         return ChangeRequestResponse.builder()
                 .id(entity.getId())
-                .workorderId(entity.getWorkorderId())
+            .workorderId(entity.getWorkorder() != null ? entity.getWorkorder().getId() : null)
                 .requestedByUserId(entity.getRequestedByUserId())
                 .requestedAt(entity.getRequestedAt())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)

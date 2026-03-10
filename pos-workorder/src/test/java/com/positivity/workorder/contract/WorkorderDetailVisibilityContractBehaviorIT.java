@@ -432,7 +432,6 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                 // Create labor entry
                 WorkorderLaborEntry laborEntry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorder.getId())
                                 .workorderServiceId(service.getId())
                                 .technicianId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(2))
