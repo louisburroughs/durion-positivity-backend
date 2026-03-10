@@ -205,19 +205,19 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(jsonPath("$.code").value("INSUFFICIENT_ATP"));
         }
 
-        // ─── contract_missingGatewayAuth_returns403 ─────────────────────────────────
+        // ─── contract_missingRequiredAuthority_returns403 ────────────────────────────
 
         /**
-         * Verifies that POST /v1/inventory/reservations/ without the required gateway
-         * X-Authorities header returns 403 Forbidden per ADR-0011 and ADR-0014.
+         * Verifies that POST /v1/inventory/reservations/ with an authenticated user but
+         * without required reservation authority returns 403 Forbidden per ADR-0011 and
+         * ADR-0014.
          *
          * Issue: #29
          */
         @Test
-        @DisplayName("POST /v1/inventory/reservations/ without X-Authorities → 403 Forbidden")
-        void contract_missingGatewayAuth_returns403() throws Exception {
-                // Issue #29: ADR-0011/ADR-0014 — missing X-Authorities header must yield 403
-                // Forbidden
+        @DisplayName("POST /v1/inventory/reservations/ without required authority → 403 Forbidden")
+        void contract_missingRequiredAuthority_returns403() throws Exception {
+                // Issue #29: authenticated user + unrelated authority must yield 403
                 UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String requestBody = objectMapper.writeValueAsString(
@@ -225,7 +225,7 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
 
                 mockMvc.perform(post("/v1/inventory/reservations")
                                 .header("X-User", "test-user")
-                                // Deliberately omit X-Authorities to trigger 403
+                                .header("X-Authorities", "unrelated:authority")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                                 .andExpect(status().isForbidden());

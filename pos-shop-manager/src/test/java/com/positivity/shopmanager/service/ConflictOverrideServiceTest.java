@@ -56,15 +56,16 @@ class ConflictOverrideServiceTest {
 
         /**
          * AC2: The ConflictOverrideService.execute() method MUST declare
-         * @PreAuthorize("hasAuthority('shopmgr.appointment.override')") so that
+         * canonical schedule-editing authorities in @PreAuthorize(...) so that
          * Spring Security rejects unauthorized callers with HTTP 403.
          */
         @Test
-        void ac2_serviceInterface_declaresShopmgrOverridePreAuthorize() throws Exception {
+        void ac2_serviceInterface_declaresCanonicalOverridePreAuthorize() throws Exception {
                 var method = ConflictOverrideService.class.getMethod("execute", ConflictOverrideRequest.class);
                 assertThat(method.isAnnotationPresent(PreAuthorize.class)).isTrue();
                 assertThat(method.getAnnotation(PreAuthorize.class).value())
-                                .contains("shopmgr.appointment.override");
+                                .contains("shop:schedule:edit")
+                                .contains("appointments:reschedule");
         }
 
         // -------------------------------------------------------------------------

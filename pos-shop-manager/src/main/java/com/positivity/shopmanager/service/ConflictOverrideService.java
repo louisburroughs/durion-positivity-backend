@@ -8,8 +8,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public interface ConflictOverrideService {
     /**
      * Executes a conflict override: flags the appointment and records the override audit trail.
-     * Requires the caller to hold the {@code shopmgr.appointment.override} authority (AC-2).
+     * Requires canonical schedule-editing authority (AC-2).
      */
-    @PreAuthorize("hasAuthority('shopmgr.appointment.override')")
+    @PreAuthorize("hasAnyAuthority('shop:schedule:edit', 'appointments:reschedule')")
     @NonNull ConflictOverrideResponse execute(@NonNull ConflictOverrideRequest request);
 }

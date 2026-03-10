@@ -15,6 +15,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.context.request.WebRequest;
 
 import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
@@ -178,7 +179,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(IllegalArgumentException.class)
         @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
+        public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
                         IllegalArgumentException ex,
                         WebRequest request) {
 
@@ -246,6 +247,32 @@ public class GlobalExceptionHandler {
                                 .body(errorResponse(
                                                 "CONCURRENCY_CONFLICT",
                                                 "Token was modified concurrently. Please retry with exponential backoff.",
+                                                correlationId));
+        }
+
+        /**
+         * Handles DuplicateRoleNameException (case-insensitive role name uniqueness
+         * violation).
+         *
+         * <p>
+         * Story #62: role names must be unique regardless of case.
+         *
+         * **HTTP Status:** 409 Conflict
+         */
+        @ExceptionHandler(DuplicateRoleNameException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ResponseEntity<ErrorResponse> handleDuplicateRoleNameException(
+                        DuplicateRoleNameException ex,
+                        WebRequest request) {
+
+                String correlationId = extractCorrelationId(request);
+                log.warn("Duplicate role name (correlationId={}): {}", correlationId, ex.getMessage());
+
+                return ResponseEntity
+                                .status(HttpStatus.CONFLICT)
+                                .body(errorResponse(
+                                                "DUPLICATE_ROLE_NAME",
+                                                ex.getMessage(),
                                                 correlationId));
         }
 

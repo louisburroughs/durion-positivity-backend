@@ -1,7 +1,5 @@
 package com.positivity.securityservice.internal.entity;
 
-import java.time.Clock;
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -51,12 +49,13 @@ public class Role {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    /**
+     * Time when this role was last modified (for audit purposes).
+     * Differs slightly from database-managed updatedAt to allow tracking changes
+     * that don't trigger an update (e.g. permission changes).
+     */
     private Instant lastModifiedAt;
 
     @Column(length = 255)
     private String lastModifiedBy;
-    @PreUpdate
-    protected void onUpdate() {
-        lastModifiedAt = Instant.now(Clock.systemUTC());
-    }
 }

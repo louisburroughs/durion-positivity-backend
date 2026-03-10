@@ -108,25 +108,26 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(jsonPath("$.status").value("DRAFT"));
         }
 
-        // ─── CH2: POST /v1/inventory/pick-lists — 403 without gateway auth ──────────
+        // ─── CH2: POST /v1/inventory/pick-lists — 403 with missing authority ─────────
 
         /**
-         * CH2: Verifies that POST /v1/inventory/pick-lists without the required
-         * X-Authorities header returns 403 Forbidden per ADR-0011 and ADR-0014.
+         * CH2: Verifies that POST /v1/inventory/pick-lists with an authenticated user
+         * but without the required inventory authority returns 403 Forbidden per
+         * ADR-0011 and ADR-0014.
          *
          * Issue: #28
          */
         @Test
-        @DisplayName("POST /v1/inventory/pick-lists without gateway auth → 403 Forbidden")
-        void CH2_createPickList_missingGatewayAuth_returns403() throws Exception {
-                // Issue #28: ADR-0011/ADR-0014 — missing X-Authorities header must yield 403
+        @DisplayName("POST /v1/inventory/pick-lists without required authority → 403 Forbidden")
+        void CH2_createPickList_missingRequiredAuthority_returns403() throws Exception {
+                // Issue #28: authenticated user + unrelated authority must yield 403
                 UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 String requestBody = objectMapper.writeValueAsString(
                                 new CreatePickListRequest(workorderId, null, 0, null));
 
                 mockMvc.perform(post("/v1/inventory/pick-lists")
                                 .header("X-User", "test-user")
-                                // Deliberately omit X-Authorities to trigger 403
+                                .header("X-Authorities", "unrelated:authority")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                                 .andExpect(status().isForbidden());
