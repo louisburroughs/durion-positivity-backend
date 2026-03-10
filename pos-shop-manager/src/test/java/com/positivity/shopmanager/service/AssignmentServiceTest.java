@@ -278,7 +278,7 @@ class AssignmentServiceTest {
 
                 var overrideAuth = new UsernamePasswordAuthenticationToken(
                                 "manager", null,
-                                List.of(new SimpleGrantedAuthority("workexec.assignment.override")));
+                                List.of(new SimpleGrantedAuthority("shop:schedule:edit")));
                 SecurityContextHolder.getContext().setAuthentication(overrideAuth);
 
                 AssignmentResponse response = service.create(request);
@@ -464,7 +464,7 @@ class AssignmentServiceTest {
         void ac10_overrideWithPermissionAndBlankReason_throwsIllegalArgument() {
                 var auth = new UsernamePasswordAuthenticationToken(
                                 "manager", null,
-                                List.of(new SimpleGrantedAuthority("workexec.assignment.override")));
+                                List.of(new SimpleGrantedAuthority("shop:schedule:edit")));
                 SecurityContextHolder.getContext().setAuthentication(auth);
 
                 var request = CreateAssignmentRequest.builder()

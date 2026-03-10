@@ -4,16 +4,22 @@ import com.positivity.shopmanager.internal.entity.ShopAuditEntry;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for {@link ShopAuditEntry} records.
- * Story #61 — immutable audit trail; no delete methods are defined here.
+ * Story #61 — immutable audit trail; only read/write methods required by the
+ * service are exposed.
  */
-public interface ShopAuditRepository extends JpaRepository<ShopAuditEntry, UUID> {
+public interface ShopAuditRepository extends Repository<ShopAuditEntry, UUID> {
+
+    <S extends ShopAuditEntry> S save(S entity);
+
+    Optional<ShopAuditEntry> findById(UUID id);
 
     List<ShopAuditEntry> findByWorkorderId(String workorderId);
 
