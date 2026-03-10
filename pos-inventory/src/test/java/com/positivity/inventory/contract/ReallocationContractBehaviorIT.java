@@ -239,14 +239,14 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
          * Forbidden per ADR-0011 and ADR-0014.
          *
          * <p>
-         * The request includes a valid X-User header but omits X-Authorities, so the
-         * security context has no authorities and {@code @PreAuthorize} on the
-         * controller denies access.
+         * The request includes valid gateway auth headers, but the authority is
+         * unrelated to reallocation, so {@code @PreAuthorize} on the controller
+         * denies access.
          *
          * Issue: #24
          */
         @Test
-        @DisplayName("POST /v1/inventory/allocations/reallocate without X-Authorities → 403 Forbidden")
+        @DisplayName("POST /v1/inventory/allocations/reallocate without required authority → 403 Forbidden")
         void contract_reallocate_withoutAuthority_returns403() throws Exception {
                 // Issue #24: AC5 — missing inventory:allocations:reallocate authority must
                 // return 403
@@ -259,7 +259,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
 
                 mockMvc.perform(post("/v1/inventory/allocations/reallocate")
                                 .header("X-User", "test-user")
-                                // Deliberately omit X-Authorities — triggers 403 via @PreAuthorize
+                                .header("X-Authorities", "unrelated:authority")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isForbidden());
