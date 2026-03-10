@@ -25,7 +25,9 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.audit.entity.AuditTrailEntry;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
+import com.positivity.accounting.internal.audit.entity.RefundPolicyConfig;
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
+import com.positivity.accounting.internal.audit.repository.RefundPolicyConfigRepository;
 
 /**
  * Contract Behavioral Integration Tests for Audit Trail operations.
@@ -51,6 +53,9 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private AuditTrailEntryRepository auditTrailRepository;
 
+    @Autowired
+    private RefundPolicyConfigRepository refundPolicyRepository;
+
     private static final String API_V1_AUDIT = "/v1/accounting/audit";
 
     // Test data
@@ -61,15 +66,28 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
     void setUp() {
         // Clean up any existing test data
         auditTrailRepository.deleteAll();
+        refundPolicyRepository.deleteAll();
 
         // Setup test IDs
         testOrderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        // Seed active refund policy so refund/cancellation endpoints can authorize.
+        // Required because AuditTrailContractIT.@AfterEach deletes all policies;
+        // each behavioral test must be self-contained.
+        refundPolicyRepository.save(RefundPolicyConfig.builder()
+                .requiresSeparateAuthorization(false)
+                .settledPaymentHandling("CREDIT_MEMO")
+                .unsettledPaymentHandling("REVERSAL")
+                .version("v-behavior-test")
+                .active(true)
+                .build());
     }
 
     @AfterEach
     void tearDown() {
         auditTrailRepository.deleteAll();
+        refundPolicyRepository.deleteAll();
     }
 
     // ===============================================
