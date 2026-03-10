@@ -109,12 +109,13 @@ public class ShopAuditServiceImpl implements ShopAuditService {
             throw new IllegalArgumentException(
                     "At least one filter criterion is required for audit search");
         }
+        Instant now = Instant.now(clock);
         Instant from = filter.getFromDateTime() != null
                 ? filter.getFromDateTime()
-                : Instant.now(clock).minus(90, ChronoUnit.DAYS);
+                : now.minus(90, ChronoUnit.DAYS);
         Instant to = filter.getToDateTime() != null
                 ? filter.getToDateTime()
-                : Instant.now(clock);
+                : now;
         return shopAuditRepository
                 .findByFilter(
                         filter.getWorkorderId(),

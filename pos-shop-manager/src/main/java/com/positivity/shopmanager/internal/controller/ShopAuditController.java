@@ -38,7 +38,7 @@ public class ShopAuditController {
      * Returns 200 with matching entries in reverse-chronological order.
      */
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('shopmgmt.audit.view', 'shopmgmt.audit.admin')")
+    @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
     @EmitEvent(id = "SHOPMGR_AUDIT_SEARCH", apiVersion = "1")
     public @NonNull List<ShopAuditEntryResponse> searchAudit(
             @ModelAttribute ShopAuditFilter filter) {
@@ -52,7 +52,7 @@ public class ShopAuditController {
      * Returns 200 with the entry, or 404 if it does not exist.
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('shopmgmt.audit.view', 'shopmgmt.audit.admin')")
+    @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
     @EmitEvent(id = "SHOPMGR_AUDIT_GET_BY_ID", apiVersion = "1")
     public @NonNull ResponseEntity<ShopAuditEntryResponse> getAuditById(
             @PathVariable UUID id) {
