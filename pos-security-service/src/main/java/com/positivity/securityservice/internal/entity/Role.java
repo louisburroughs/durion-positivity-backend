@@ -49,6 +49,11 @@ public class Role {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    /**
+     * Time when this role was last modified (for audit purposes).
+     * Differs slightly from database-managed updatedAt to allow tracking changes
+     * that don't trigger an update (e.g. permission changes).
+     */
     private Instant lastModifiedAt;
 
     @Column(length = 255)
