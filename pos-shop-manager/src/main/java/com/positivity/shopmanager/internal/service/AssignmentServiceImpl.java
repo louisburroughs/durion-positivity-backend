@@ -33,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AssignmentServiceImpl implements AssignmentService {
 
+        private static final String ASSIGNMENT_OVERRIDE_AUTHORITY = "shop:schedule:edit";
+
         private final AppointmentRepository appointmentRepository;
         private final MechanicRepository mechanicRepository;
         private final AssignmentRepository assignmentRepository;
@@ -51,10 +53,11 @@ public class AssignmentServiceImpl implements AssignmentService {
                 if (request.isOverride()) {
                         var auth = SecurityContextHolder.getContext().getAuthentication();
                         boolean canOverride = auth != null && auth.getAuthorities().stream()
-                                        .anyMatch(a -> a.getAuthority().equals("workexec.assignment.override"));
+                                        .anyMatch(a -> a.getAuthority().equals(ASSIGNMENT_OVERRIDE_AUTHORITY));
                         if (!canOverride) {
                                 throw new AccessDeniedException(
-                                                "Overriding assignment constraints requires authority 'workexec.assignment.override'");
+                                                "Overriding assignment constraints requires authority '"
+                                                                + ASSIGNMENT_OVERRIDE_AUTHORITY + "'");
                         }
                         if (request.getOverrideReason() == null || request.getOverrideReason().isBlank()) {
                                 throw new IllegalArgumentException(
