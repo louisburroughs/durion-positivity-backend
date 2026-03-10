@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,7 +23,7 @@ public interface RoleManagementService {
     /**
      * Create a new role
      */
-    RoleDto createRole(@NonNull String name, @NonNull String description);
+    RoleDto createRole(@NonNull String name, @Nullable String description);
 
     /**
      * Update permissions for a role
