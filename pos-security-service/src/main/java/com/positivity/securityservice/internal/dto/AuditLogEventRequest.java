@@ -17,6 +17,7 @@ import lombok.NoArgsConstructor;
 public class AuditLogEventRequest {
 
     private String eventType;
+    // Ignored — actorId is always resolved from SecurityContextHolder per ADR-0018. This field is accepted for structural compatibility only.
     private String actorId;
     private String entityId;
     private String entityType;
