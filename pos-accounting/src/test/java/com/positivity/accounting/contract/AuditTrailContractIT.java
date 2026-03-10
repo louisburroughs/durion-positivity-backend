@@ -497,8 +497,8 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC6b: POST /audit/refund without authority header → 403 Forbidden")
-    void ac6b_refundWithoutAuthority_returnsForbidden() throws Exception {
+    @DisplayName("AC6b: POST /audit/refund without authority header → 401 Unauthorized")
+    void ac6b_refundWithoutAuthority_returnsUnauthorized() throws Exception {
         String payload = """
                 {
                     "invoiceId": "%s",
@@ -511,12 +511,14 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
                 }
                 """.formatted(INVOICE_ID, PAYMENT_ID, ROLE_MANAGER);
 
-        // Issue #1 AC6b: X-User present but no X-Authorities → 403 (ADR-0017)
+        // Issue #1 AC6b: X-User present but no X-Authorities → 401.
+        // GatewayAuthoritiesFilter clears the security context when the
+        // X-Authorities header is absent, leaving an unauthenticated request.
         mockMvc.perform(post(AUDIT_BASE + "/refund")
                         .header("X-User", TEST_USER)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     // -----------------------------------------------------------------------
@@ -527,8 +529,8 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC8b: POST /audit/cancellation without authority header → 403 Forbidden")
-    void ac8b_cancellationWithoutAuthority_returnsForbidden() throws Exception {
+    @DisplayName("AC8b: POST /audit/cancellation without authority header → 401 Unauthorized")
+    void ac8b_cancellationWithoutAuthority_returnsUnauthorized() throws Exception {
         String payload = """
                 {
                     "orderId": "%s",
@@ -541,11 +543,13 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
                 }
                 """.formatted(ORDER_ID, ROLE_MANAGER);
 
-        // Issue #1 AC8b: X-User present but no X-Authorities → 403 (ADR-0017)
+        // Issue #1 AC8b: X-User present but no X-Authorities → 401.
+        // GatewayAuthoritiesFilter clears the security context when the
+        // X-Authorities header is absent, leaving an unauthenticated request.
         mockMvc.perform(post(AUDIT_BASE + "/cancellation")
                         .header("X-User", TEST_USER)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }
