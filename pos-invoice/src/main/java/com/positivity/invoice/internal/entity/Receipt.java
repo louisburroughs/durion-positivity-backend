@@ -11,6 +11,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
@@ -32,11 +34,13 @@ public class Receipt {
     @Column(name = "id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "invoice_id", columnDefinition = "UUID", nullable = false)
-    private UUID invoiceId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "invoice_id", nullable = false)
+    private Invoice invoice;
 
-    @Column(name = "payment_intent_id", columnDefinition = "UUID", nullable = false)
-    private UUID paymentIntentId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "payment_intent_id", nullable = false)
+    private PaymentIntent paymentIntent;
 
     @Column(name = "reference", nullable = false, unique = true, length = 64)
     private String reference;

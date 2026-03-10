@@ -40,8 +40,9 @@ public class ApprovalRecord {
     /**
      * Reference to the price override being approved/rejected.
      */
-    @Column(nullable = false)
-    private UUID priceOverrideId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "price_override_id", nullable = false)
+    private PriceOverride priceOverride;
 
     /**
      * User ID of the approver/rejecter.
@@ -91,5 +92,5 @@ public class ApprovalRecord {
         if (actionTimestamp == null) {
             actionTimestamp = Instant.now(Clock.systemUTC());
         }
-}
+    }
 }

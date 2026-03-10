@@ -4,15 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayLineItemRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
+import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.entity.PutawayTask;
 import com.positivity.inventory.internal.enums.PutawayTaskStatus;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.internal.service.PutawayGenerationServiceImpl;
@@ -38,11 +41,19 @@ class PutawayGenerationServiceImplTest {
         @Mock
         private PutawayTaskRepository putawayTaskRepository;
 
+        @Mock
+        private GoodsReceiptRepository goodsReceiptRepository;
+
         private PutawayGenerationServiceImpl service;
 
         @BeforeEach
         void setUp() {
-                service = new PutawayGenerationServiceImpl(putawayRuleRepository, putawayTaskRepository);
+                service = new PutawayGenerationServiceImpl(
+                                putawayRuleRepository,
+                                putawayTaskRepository,
+                                goodsReceiptRepository);
+                lenient().when(goodsReceiptRepository.findById(any(UUID.class)))
+                                .thenAnswer(inv -> Optional.of(receipt(inv.getArgument(0))));
         }
 
         @Test
@@ -182,9 +193,9 @@ class PutawayGenerationServiceImplTest {
                 UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PutawayTask task = new PutawayTask();
                 task.setTaskId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                task.setSourceReceiptId(receiptId);
+                task.setSourceReceipt(receipt(receiptId));
 
-                when(putawayTaskRepository.findBySourceReceiptId(receiptId)).thenReturn(List.of(task));
+                when(putawayTaskRepository.findBySourceReceipt_ReceiptId(receiptId)).thenReturn(List.of(task));
 
                 List<PutawayTaskResponse> responses = service.getTasksByReceiptId(receiptId.toString());
 
@@ -230,5 +241,11 @@ class PutawayGenerationServiceImplTest {
                 assertThatThrownBy(() -> service.generateTasksForReceipt(request))
                                 .isInstanceOf(IllegalArgumentException.class)
                                 .hasMessage("Either lineItems or productId/quantity is required");
+        }
+
+        private GoodsReceiptEntity receipt(UUID receiptId) {
+                GoodsReceiptEntity receipt = new GoodsReceiptEntity();
+                receipt.setReceiptId(receiptId);
+                return receipt;
         }
 }

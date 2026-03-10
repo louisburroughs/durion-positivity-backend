@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PutawayTaskRepository extends JpaRepository<PutawayTask, UUID> {
 
-    List<PutawayTask> findBySourceReceiptId(UUID sourceReceiptId);
+    List<PutawayTask> findBySourceReceipt_ReceiptId(UUID sourceReceiptId);
 
     List<PutawayTask> findByStatusIn(List<PutawayTaskStatus> statuses);
 

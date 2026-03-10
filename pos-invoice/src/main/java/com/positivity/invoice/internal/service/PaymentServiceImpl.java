@@ -2,8 +2,10 @@ package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
+import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.internal.enums.PaymentFlow;
@@ -13,6 +15,7 @@ import com.positivity.invoice.internal.payment.GatewayPaymentResult;
 import com.positivity.invoice.internal.payment.GatewayVoidRequest;
 import com.positivity.invoice.internal.payment.PaymentGatewayPort;
 import com.positivity.invoice.internal.payment.PaymentGatewayRequest;
+import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.service.PaymentService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -36,12 +39,15 @@ public class PaymentServiceImpl implements PaymentService {
     private static final String MANUAL_CAPTURE = "MANUAL_CAPTURE";
 
     private final PaymentGatewayPort gatewayPort;
+    private final InvoiceRepository invoiceRepository;
     private final PaymentIntentRepository paymentIntentRepository;
 
     public PaymentServiceImpl(
             @NonNull PaymentGatewayPort gatewayPort,
+            @NonNull InvoiceRepository invoiceRepository,
             @NonNull PaymentIntentRepository paymentIntentRepository) {
         this.gatewayPort = gatewayPort;
+        this.invoiceRepository = invoiceRepository;
         this.paymentIntentRepository = paymentIntentRepository;
     }
 
@@ -62,7 +68,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         return paymentIntentRepository.findByIdempotencyKey(request.getIdempotencyKey())
                 .map(paymentIntent -> {
-                    if (!invoiceId.equals(paymentIntent.getInvoiceId())) {
+                    if (paymentIntent.getInvoice() == null || !invoiceId.equals(paymentIntent.getInvoice().getId())) {
                         throw new PaymentIntentNotFoundException(
                                 "Idempotency key " + request.getIdempotencyKey()
                                         + " not found under invoice " + invoiceId);
@@ -84,7 +90,7 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentIntent paymentIntent = paymentIntentRepository.findById(paymentIntentId)
                 .orElseThrow(() -> new PaymentIntentNotFoundException("Payment intent not found: " + paymentIntentId));
 
-        if (!paymentIntent.getInvoiceId().equals(invoiceId)) {
+        if (paymentIntent.getInvoice() == null || !paymentIntent.getInvoice().getId().equals(invoiceId)) {
             throw new PaymentIntentNotFoundException(
                     "Payment intent " + paymentIntentId + " not found under invoice " + invoiceId);
         }
@@ -137,8 +143,11 @@ public class PaymentServiceImpl implements PaymentService {
     private InitiatePaymentResponse createAndProcessPaymentIntent(
             @NonNull UUID invoiceId,
             @NonNull InitiatePaymentRequest request) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+            .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+
         PaymentIntent paymentIntent = new PaymentIntent();
-        paymentIntent.setInvoiceId(invoiceId);
+        paymentIntent.setInvoice(invoice);
         paymentIntent.setIdempotencyKey(request.getIdempotencyKey());
         paymentIntent.setStatus(PaymentIntentStatus.PENDING);
         paymentIntent.setPaymentFlow(request.getPaymentFlow());

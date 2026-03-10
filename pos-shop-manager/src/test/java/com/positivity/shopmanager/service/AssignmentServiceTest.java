@@ -163,7 +163,7 @@ class AssignmentServiceTest {
                 var request = buildSingleLeadRequest(appointmentId, "P-001");
 
                 when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-                when(assignmentRepository.findByAppointmentIdAndStatusIn(
+                when(assignmentRepository.findByAppointment_AppointmentIdAndStatusIn(
                                 appointmentId,
                                 List.of(AssignmentStatusEnum.CONFIRMED, AssignmentStatusEnum.IN_PROGRESS)))
                                 .thenReturn(Optional.of(existingAssignment));
@@ -203,7 +203,7 @@ class AssignmentServiceTest {
                 var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
                 var savedAssignment = Assignment.builder()
                                 .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .appointmentId(appointmentId)
+                                .appointment(appointment)
                                 .status(AssignmentStatusEnum.CONFIRMED)
                                 .version(1)
                                 .createdAt(FIXED_NOW)
@@ -211,7 +211,7 @@ class AssignmentServiceTest {
                                 .build();
                 var savedMechLink = AssignmentMechanic.builder()
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .assignmentId(savedAssignment.getAssignmentId())
+                                .assignment(savedAssignment)
                                 .mechanicId(mechanicId)
                                 .role(MechanicRoleEnum.LEAD)
                                 .build();
@@ -222,7 +222,7 @@ class AssignmentServiceTest {
                 when(mechanicRepository.findByPersonId("P-001")).thenReturn(Optional.of(mechanic));
                 when(assignmentRepository.save(any())).thenReturn(savedAssignment);
                 when(assignmentMechanicRepository.save(any())).thenReturn(savedMechLink);
-                when(assignmentMechanicRepository.findByAssignmentId(savedAssignment.getAssignmentId()))
+                when(assignmentMechanicRepository.findByAssignment_AssignmentId(savedAssignment.getAssignmentId()))
                                 .thenReturn(List.of(savedMechLink));
 
                 AssignmentResponse response = service.create(request);
@@ -245,7 +245,7 @@ class AssignmentServiceTest {
                 var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
                 var savedAssignment = Assignment.builder()
                                 .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .appointmentId(appointmentId)
+                                .appointment(appointment)
                                 .status(AssignmentStatusEnum.CONFIRMED)
                                 .isOverride(true)
                                 .overrideReason("manager approved")
@@ -255,7 +255,7 @@ class AssignmentServiceTest {
                                 .build();
                 var savedMechLink = AssignmentMechanic.builder()
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .assignmentId(savedAssignment.getAssignmentId())
+                                .assignment(savedAssignment)
                                 .mechanicId(mechanicId)
                                 .role(MechanicRoleEnum.LEAD)
                                 .build();
@@ -273,7 +273,7 @@ class AssignmentServiceTest {
                 when(mechanicRepository.findByPersonId("P-001")).thenReturn(Optional.of(mechanic));
                 when(assignmentRepository.save(any())).thenReturn(savedAssignment);
                 when(assignmentMechanicRepository.save(any())).thenReturn(savedMechLink);
-                when(assignmentMechanicRepository.findByAssignmentId(savedAssignment.getAssignmentId()))
+                when(assignmentMechanicRepository.findByAssignment_AssignmentId(savedAssignment.getAssignmentId()))
                                 .thenReturn(List.of(savedMechLink));
 
                 var overrideAuth = new UsernamePasswordAuthenticationToken(
@@ -295,7 +295,7 @@ class AssignmentServiceTest {
                 UUID mechanicId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 var assignment = Assignment.builder()
                                 .assignmentId(assignmentId)
-                                .appointmentId(appointmentId)
+                                .appointment(buildAppointment(appointmentId, AppointmentStatus.SCHEDULED))
                                 .status(AssignmentStatusEnum.CONFIRMED)
                                 .version(1)
                                 .createdAt(FIXED_NOW)
@@ -303,13 +303,13 @@ class AssignmentServiceTest {
                                 .build();
                 var mechLink = AssignmentMechanic.builder()
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .assignmentId(assignmentId)
+                                .assignment(assignment)
                                 .mechanicId(mechanicId)
                                 .role(MechanicRoleEnum.LEAD)
                                 .build();
 
-                when(assignmentRepository.findByAppointmentId(appointmentId)).thenReturn(List.of(assignment));
-                when(assignmentMechanicRepository.findByAssignmentId(assignmentId)).thenReturn(List.of(mechLink));
+                when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
+                when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of(mechLink));
 
                 List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -356,7 +356,7 @@ class AssignmentServiceTest {
         private static Assignment buildSavedAssignment(UUID appointmentId) {
                 return Assignment.builder()
                                 .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .appointmentId(appointmentId)
+                                .appointment(buildAppointment(appointmentId, AppointmentStatus.SCHEDULED))
                                 .status(AssignmentStatusEnum.CONFIRMED)
                                 .version(1)
                                 .createdAt(FIXED_NOW)
@@ -366,9 +366,19 @@ class AssignmentServiceTest {
 
         private static AssignmentMechanic buildMechLink(UUID assignmentId, UUID mechanicId,
                         MechanicRoleEnum role) {
+                Assignment assignment = Assignment.builder()
+                                .assignmentId(assignmentId)
+                                .appointment(buildAppointment(
+                                                UUID.fromString("00000000-0000-0000-0000-000000000010"),
+                                                AppointmentStatus.SCHEDULED))
+                                .status(AssignmentStatusEnum.CONFIRMED)
+                                .version(1)
+                                .createdAt(FIXED_NOW)
+                                .updatedAt(FIXED_NOW)
+                                .build();
                 return AssignmentMechanic.builder()
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .assignmentId(assignmentId)
+                                .assignment(assignment)
                                 .mechanicId(mechanicId)
                                 .role(role)
                                 .build();
@@ -397,7 +407,7 @@ class AssignmentServiceTest {
                 when(mechanicRepository.findByPersonId("P-001")).thenReturn(Optional.of(mechanic));
                 when(assignmentRepository.save(any())).thenReturn(savedAssignment);
                 when(assignmentMechanicRepository.save(any())).thenReturn(savedLink);
-                when(assignmentMechanicRepository.findByAssignmentId(savedAssignment.getAssignmentId()))
+                when(assignmentMechanicRepository.findByAssignment_AssignmentId(savedAssignment.getAssignmentId()))
                                 .thenReturn(List.of(savedLink));
 
                 var response = service.create(request);

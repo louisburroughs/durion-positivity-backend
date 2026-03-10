@@ -9,6 +9,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -16,7 +18,9 @@ import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -34,11 +38,17 @@ public class InventoryVariance {
     @UUIDv7Id
     private UUID varianceId;
 
-    @Column(name = "session_id", nullable = false)
-    private UUID sessionId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "session_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private ReceivingSession session;
 
-    @Column(name = "line_id", nullable = false)
-    private UUID lineId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "line_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private ReceivingLine line;
 
     @Column(nullable = false, length = 255)
     private String productId;

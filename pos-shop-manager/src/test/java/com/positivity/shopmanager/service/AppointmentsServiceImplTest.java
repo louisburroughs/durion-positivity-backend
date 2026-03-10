@@ -133,7 +133,7 @@ class AppointmentsServiceImplTest {
                 when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
                 when(appointmentRepository.save(any(Appointment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
-                when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
+                when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
                                 .thenReturn(List.<AppointmentServiceRequest>of());
 
                 AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
@@ -204,7 +204,7 @@ class AppointmentsServiceImplTest {
                 when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
                 when(appointmentRepository.save(any(Appointment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
-                when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
+                when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
                                 .thenReturn(List.<AppointmentServiceRequest>of());
 
                 AppointmentResponse response = appointmentsService.cancelAppointment(appointmentId, request);
@@ -380,8 +380,9 @@ class AppointmentsServiceImplTest {
                         saved.setAppointmentId(appointmentId);
                         return saved;
                 });
-                when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
-                                .thenReturn(List.of(AppointmentServiceRequest.builder().appointmentId(appointmentId)
+                when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
+                                .thenReturn(List.of(AppointmentServiceRequest.builder()
+                                                .appointment(appointmentRef(appointmentId))
                                                 .serviceEntityId(serviceRequestId).build()));
 
                 AppointmentResponse response = appointmentsService.createAppointment(request, null, null);
@@ -460,8 +461,9 @@ class AppointmentsServiceImplTest {
                 existing.setIdempotencyKey(idempotencyKey);
 
                 when(appointmentRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.of(existing));
-                when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
-                                .thenReturn(List.of(AppointmentServiceRequest.builder().appointmentId(appointmentId)
+                when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
+                                .thenReturn(List.of(AppointmentServiceRequest.builder()
+                                                .appointment(appointmentRef(appointmentId))
                                                 .serviceEntityId(serviceRequestId).build()));
 
                 AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, null);
@@ -500,8 +502,9 @@ class AppointmentsServiceImplTest {
                 existing.setIdempotencyKey(idempotencyKey);
 
                 when(appointmentRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.of(existing));
-                when(appointmentServiceRequestRepository.findByAppointmentId(appointmentId))
-                                .thenReturn(List.of(AppointmentServiceRequest.builder().appointmentId(appointmentId)
+                when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
+                                .thenReturn(List.of(AppointmentServiceRequest.builder()
+                                                .appointment(appointmentRef(appointmentId))
                                                 .serviceEntityId(existingServiceRequestId).build()));
 
                 assertThrows(AppointmentValidationException.class,
@@ -574,6 +577,12 @@ class AppointmentsServiceImplTest {
                 appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
                 appointment.setStartAt(startAt);
                 appointment.setEndAt(endAt);
+                return appointment;
+        }
+
+        private Appointment appointmentRef(UUID appointmentId) {
+                Appointment appointment = new Appointment();
+                appointment.setAppointmentId(appointmentId);
                 return appointment;
         }
 }

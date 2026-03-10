@@ -64,7 +64,7 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
     public ProductLifecycleResponse getLifecycle(UUID productId) {
         ProductEntity product = findProduct(productId);
         List<ProductReplacementEntity> replacements = productReplacementRepository
-                .findByOriginalProductIdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId);
+            .findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId);
         return toResponse(product, replacements);
     }
 
@@ -119,11 +119,13 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
     public List<ProductLifecycleResponse.ReplacementOption> getReplacementProducts(@NonNull UUID productId) {
         findProduct(productId);
         return productReplacementRepository
-                .findByOriginalProductIdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId)
+            .findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId)
                 .stream()
                 .map(replacement -> ProductLifecycleResponse.ReplacementOption.builder()
                         .replacementId(replacement.getReplacementId())
-                        .replacementProductId(replacement.getReplacementProductId())
+                .replacementProductId(replacement.getReplacementProduct() == null
+                    ? null
+                    : replacement.getReplacementProduct().getId())
                         .priorityOrder(replacement.getPriorityOrder())
                         .notes(replacement.getNotes())
                         .effectiveAt(replacement.getEffectiveAt())
@@ -200,7 +202,7 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
                 overridePermissionUsed);
 
         List<ProductReplacementEntity> replacements = productReplacementRepository
-                .findByOriginalProductIdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId);
+            .findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId);
         return toResponse(saved, replacements);
     }
 
@@ -225,8 +227,8 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
         findProduct(request.getReplacementProductId());
 
         ProductReplacementEntity replacement = new ProductReplacementEntity();
-        replacement.setOriginalProductId(productId);
-        replacement.setReplacementProductId(request.getReplacementProductId());
+        replacement.setOriginalProduct(originalProduct);
+        replacement.setReplacementProduct(findProduct(request.getReplacementProductId()));
         replacement.setPriorityOrder(request.getPriorityOrder());
         replacement.setNotes(request.getNotes());
         replacement.setEffectiveAt(request.getEffectiveAt() != null ? request.getEffectiveAt() : currentInstant());
@@ -236,7 +238,7 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
 
         return ProductLifecycleResponse.ReplacementOption.builder()
                 .replacementId(saved.getReplacementId())
-                .replacementProductId(saved.getReplacementProductId())
+            .replacementProductId(saved.getReplacementProduct() == null ? null : saved.getReplacementProduct().getId())
                 .priorityOrder(saved.getPriorityOrder())
                 .notes(saved.getNotes())
                 .effectiveAt(saved.getEffectiveAt())
@@ -293,7 +295,9 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
         List<ProductLifecycleResponse.ReplacementOption> options = replacements.stream()
                 .map(replacement -> ProductLifecycleResponse.ReplacementOption.builder()
                         .replacementId(replacement.getReplacementId())
-                        .replacementProductId(replacement.getReplacementProductId())
+                        .replacementProductId(replacement.getReplacementProduct() == null
+                            ? null
+                            : replacement.getReplacementProduct().getId())
                         .priorityOrder(replacement.getPriorityOrder())
                         .notes(replacement.getNotes())
                         .effectiveAt(replacement.getEffectiveAt())

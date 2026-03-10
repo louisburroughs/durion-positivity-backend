@@ -3,10 +3,13 @@ package com.positivity.inventory.internal.service;
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayLineItemRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
+import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.entity.PutawayTask;
 import com.positivity.inventory.internal.enums.PutawayTaskStatus;
+import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.service.PutawayGenerationService;
@@ -30,11 +33,14 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
 
     private final PutawayRuleRepository putawayRuleRepository;
     private final PutawayTaskRepository putawayTaskRepository;
+    private final GoodsReceiptRepository goodsReceiptRepository;
 
     @Override
     @Transactional
     public @NonNull List<PutawayTaskResponse> generateTasksForReceipt(@NonNull GeneratePutawayTasksRequest request) {
         UUID sourceReceiptId = parseRequiredUuid(request.getSourceReceiptId(), "sourceReceiptId");
+        GoodsReceiptEntity sourceReceipt = goodsReceiptRepository.findById(sourceReceiptId)
+            .orElseThrow(() -> new ResourceNotFoundException("GoodsReceipt", sourceReceiptId.toString()));
 
         List<PutawayRule> enabledRules = putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc();
         UUID suggestedDestination = enabledRules.isEmpty()
@@ -45,7 +51,7 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
 
         List<PutawayTask> tasks = lineItems.stream()
                 .map(lineItem -> PutawayTask.builder()
-                        .sourceReceiptId(sourceReceiptId)
+                    .sourceReceipt(sourceReceipt)
                         .productId(lineItem.productId())
                         .quantity(lineItem.quantity())
                         .sourceLocationId(STAGING_LOCATION)
@@ -63,7 +69,7 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     @Transactional(readOnly = true)
     public @NonNull List<PutawayTaskResponse> getTasksByReceiptId(@NonNull String receiptId) {
         UUID sourceReceiptId = parseRequiredUuid(receiptId, "receiptId");
-        return putawayTaskRepository.findBySourceReceiptId(sourceReceiptId).stream()
+        return putawayTaskRepository.findBySourceReceipt_ReceiptId(sourceReceiptId).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -155,7 +161,9 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     private PutawayTaskResponse toResponse(PutawayTask task) {
         return PutawayTaskResponse.builder()
                 .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
-                .sourceReceiptId(task.getSourceReceiptId() != null ? task.getSourceReceiptId().toString() : null)
+            .sourceReceiptId(task.getSourceReceipt() != null && task.getSourceReceipt().getReceiptId() != null
+                ? task.getSourceReceipt().getReceiptId().toString()
+                : null)
                 .productId(task.getProductId() != null ? task.getProductId().toString() : null)
                 .quantity(task.getQuantity())
                 .sourceLocationId(task.getSourceLocationId())

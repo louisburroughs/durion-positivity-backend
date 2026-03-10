@@ -109,7 +109,6 @@ public class PriceBookServiceImpl implements PriceBookService {
 
         PriceBookRuleEntity entity = new PriceBookRuleEntity();
         entity.setPriceBook(priceBook);
-        entity.setPriceBookId(priceBook.getPriceBookId());
         entity.setTargetType(request.getTargetType());
         entity.setTargetId(request.getTargetId());
         entity.setPricingLogic(request.getPricingLogic());
@@ -492,7 +491,7 @@ public class PriceBookServiceImpl implements PriceBookService {
     private PriceBookRuleEntity requireRule(UUID priceBookId, UUID ruleId) {
         PriceBookRuleEntity entity = priceBookRuleRepository.findById(ruleId)
                 .orElseThrow(() -> new CatalogNotFoundException("PriceBook rule not found: " + ruleId));
-        if (!entity.getPriceBookId().equals(priceBookId)) {
+        if (entity.getPriceBook() == null || !entity.getPriceBook().getPriceBookId().equals(priceBookId)) {
             throw new CatalogNotFoundException("PriceBook rule not found for priceBookId=" + priceBookId);
         }
         return entity;
@@ -515,7 +514,7 @@ public class PriceBookServiceImpl implements PriceBookService {
     private PriceBookRuleDto toPriceBookRuleDto(PriceBookRuleEntity entity) {
         PriceBookRuleDto dto = new PriceBookRuleDto();
         dto.setRuleId(entity.getRuleId());
-        dto.setPriceBookId(entity.getPriceBookId());
+        dto.setPriceBookId(entity.getPriceBook() == null ? null : entity.getPriceBook().getPriceBookId());
         dto.setTargetType(entity.getTargetType());
         dto.setTargetId(entity.getTargetId());
         dto.setPricingLogic(entity.getPricingLogic());

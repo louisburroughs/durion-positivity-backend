@@ -11,5 +11,5 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID> {
 
     Optional<Receipt> findByReference(@NonNull String reference);
 
-    long countByInvoiceId(@NonNull UUID invoiceId);
+    long countByInvoice_Id(@NonNull UUID invoiceId);
 }
