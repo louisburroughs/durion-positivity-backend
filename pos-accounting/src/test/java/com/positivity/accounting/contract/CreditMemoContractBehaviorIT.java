@@ -438,7 +438,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         // ===============================================
 
         @Test
-        @DisplayName("AUTH-CM-001: Missing authorities - 401 Unauthorized")
+        @DisplayName("AUTH-CM-001: Missing authorities - 403 Forbidden")
         void testCreateCreditMemo_NoAuthorities() throws Exception {
                 // Arrange: Request without authorities
                 UUID testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -447,14 +447,14 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                 request.setCreditAmount(new BigDecimal("50.00"));
                 request.setReasonCode("RETURNED_GOODS");
 
-                // Act & Assert: Expect 401 Unauthorized.
-                // GatewayAuthoritiesFilter clears security context when X-Authorities
-                // is missing, so request is unauthenticated rather than forbidden.
+                // Act & Assert: Expect 403 Forbidden per ADR-0017.
+                // X-User header carries identity; X-Authorities missing means
+                // the user is authenticated but has no granted authorities → 403.
                 mockMvc.perform(post(API_V1_CREDIT_MEMOS)
                                 .header("X-User", TEST_USER) // User present but no authorities
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
-                                .andExpect(status().isUnauthorized());
+                                .andExpect(status().isForbidden());
         }
 }

@@ -54,10 +54,13 @@ public class PriceOverrideAuthorizationServiceImpl implements PriceOverrideAutho
                 // Check for forbidden category
                 if (categoryCode != null && FORBIDDEN_CATEGORIES.contains(categoryCode)) {
                         log.warn("Price override rejected - forbidden category: {}", categoryCode);
+                        String forbiddenMessage = "BELOW_COST".equals(categoryCode)
+                                        ? "Pricing below cost not permitted"
+                                        : "Override category not permitted: " + categoryCode;
                         return AuthorizationResult.builder()
                                         .result(PolicyValidationResult.REJECTED_FORBIDDEN)
                                         .forbiddenCategoryCode(categoryCode)
-                                        .message("Override category not permitted: " + categoryCode)
+                                        .message(forbiddenMessage)
                                         .build();
                 }
 
@@ -85,7 +88,7 @@ public class PriceOverrideAuthorizationServiceImpl implements PriceOverrideAutho
                                         discountAmount, policy.getMaxAbsoluteAmount());
                         return AuthorizationResult.builder()
                                         .result(PolicyValidationResult.REJECTED_THRESHOLD_EXCEEDED)
-                                        .message("Discount amount exceeds authorized threshold")
+                                        .message("Authorization threshold exceeded")
                                         .policyVersion(policy.getVersion())
                                         .build();
                 }
@@ -97,7 +100,7 @@ public class PriceOverrideAuthorizationServiceImpl implements PriceOverrideAutho
                                         discountPercent, policy.getMaxPercentOff());
                         return AuthorizationResult.builder()
                                         .result(PolicyValidationResult.REJECTED_THRESHOLD_EXCEEDED)
-                                        .message("Discount percentage exceeds authorized threshold")
+                                        .message("Authorization threshold exceeded")
                                         .policyVersion(policy.getVersion())
                                         .build();
                 }
