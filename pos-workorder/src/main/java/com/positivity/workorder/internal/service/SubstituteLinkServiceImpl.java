@@ -18,6 +18,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -31,14 +32,17 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
     private final SubstituteLinkRepository substituteLinkRepository;
     private final SubstituteAuditRepository substituteAuditRepository;
     private final ObjectMapper objectMapper;
+    private final Clock clock;
 
     public SubstituteLinkServiceImpl(
             SubstituteLinkRepository substituteLinkRepository,
             SubstituteAuditRepository substituteAuditRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            Clock clock) {
         this.substituteLinkRepository = substituteLinkRepository;
         this.substituteAuditRepository = substituteAuditRepository;
         this.objectMapper = Objects.requireNonNullElseGet(objectMapper, ObjectMapper::new);
+        this.clock = Objects.requireNonNullElseGet(clock, Clock::systemUTC);
     }
 
     @Override
@@ -71,7 +75,7 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
                 .payloadBefore(null)
                 .payloadAfter(toJson(saved))
                 .actorId(actor)
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(clock))
                 .build());
 
         return toResponse(saved);
@@ -116,7 +120,7 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
                 .payloadBefore(before)
                 .payloadAfter(toJson(saved))
                 .actorId(actor)
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(clock))
                 .build());
 
         return toResponse(saved);
@@ -143,7 +147,7 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
                 .payloadBefore(before)
                 .payloadAfter(toJson(saved))
                 .actorId(actor)
-                .timestamp(Instant.now())
+                .timestamp(Instant.now(clock))
                 .build());
 
         return toResponse(saved);
