@@ -2,12 +2,19 @@ package com.positivity.securityservice.internal.config;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Map;
 
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -15,11 +22,13 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.context.request.WebRequest;
 
 import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
+import com.positivity.securityservice.service.AuditEventService;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
@@ -39,6 +48,7 @@ import lombok.extern.slf4j.Slf4j;
  * {
  * "code": "error_code",
  * "message": "Human-readable description",
+ * "status": 400,
  * "timestamp": "2024-01-15T10:30:00Z",
  * "correlationId": "550e8400-e29b-41d4-a716-446655440000"
  * }
@@ -46,6 +56,10 @@ import lombok.extern.slf4j.Slf4j;
  * 
  * **Mapped Exceptions:**
  * - IllegalArgumentException → 400 Bad Request
+ * - AuthorizationDeniedException → 403 Forbidden
+ * - DuplicateRoleNameException → 409 Conflict
+ * - IllegalStateException → 409 Conflict (overlapping assignment) or 400 Bad Request
+ * - Request-binding exceptions (MethodArgumentNotValidException, etc.) → 400 Bad Request
  * - RoleNotFoundException, UserNotFoundException,
  * RoleAssignmentNotFoundException, PermissionNotFoundException → 404 Not Found
  * - ObjectOptimisticLockingFailureException → 409 Conflict (retry needed)
@@ -58,6 +72,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class GlobalExceptionHandler {
         private final Clock clock;
+        private final ObjectProvider<AuditEventService> auditEventServiceProvider;
 
         /**
          * Handles RoleNotFoundException (role not found by ID or name).
@@ -82,6 +97,7 @@ public class GlobalExceptionHandler {
                                 .body(errorResponse(
                                                 "ROLE_NOT_FOUND",
                                                 ex.getMessage(),
+                                                HttpStatus.NOT_FOUND,
                                                 correlationId));
         }
 
@@ -108,6 +124,7 @@ public class GlobalExceptionHandler {
                                 .body(errorResponse(
                                                 "USER_NOT_FOUND",
                                                 ex.getMessage(),
+                                                HttpStatus.NOT_FOUND,
                                                 correlationId));
         }
 
@@ -134,6 +151,7 @@ public class GlobalExceptionHandler {
                                 .body(errorResponse(
                                                 "ROLE_ASSIGNMENT_NOT_FOUND",
                                                 ex.getMessage(),
+                                                HttpStatus.NOT_FOUND,
                                                 correlationId));
         }
 
@@ -160,6 +178,7 @@ public class GlobalExceptionHandler {
                                 .body(errorResponse(
                                                 "PERMISSION_NOT_FOUND",
                                                 ex.getMessage(),
+                                                HttpStatus.NOT_FOUND,
                                                 correlationId));
         }
 
@@ -192,13 +211,15 @@ public class GlobalExceptionHandler {
                                                 "INVALID_REQUEST",
                                                 ex.getMessage() != null ? ex.getMessage()
                                                                 : "Invalid request parameters",
+                                                HttpStatus.BAD_REQUEST,
                                                 correlationId));
         }
 
         @ExceptionHandler({
                         MethodArgumentTypeMismatchException.class,
                         MethodArgumentNotValidException.class,
-                        HttpMessageNotReadableException.class
+                        HttpMessageNotReadableException.class,
+                        MissingServletRequestParameterException.class
         })
         @ResponseStatus(HttpStatus.BAD_REQUEST)
         public ResponseEntity<ErrorResponse> handleBadRequestExceptions(
@@ -212,6 +233,82 @@ public class GlobalExceptionHandler {
                                 .body(errorResponse(
                                                 "INVALID_REQUEST",
                                                 "Invalid request parameters",
+                                                HttpStatus.BAD_REQUEST,
+                                                correlationId));
+        }
+
+        @ExceptionHandler(AuthorizationDeniedException.class)
+        @ResponseStatus(HttpStatus.FORBIDDEN)
+        public ResponseEntity<ErrorResponse> handleAuthorizationDeniedException(
+                        AuthorizationDeniedException ex,
+                        WebRequest request,
+                        HttpServletRequest httpServletRequest) {
+                String correlationId = extractCorrelationId(request);
+                log.warn("Authorization denied (correlationId={}): {}", correlationId, ex.getMessage());
+
+                String actorId = getCurrentUsername();
+                String resourceUri = httpServletRequest != null ? httpServletRequest.getRequestURI() : "unknown";
+                String deniedPermissions = ex.getMessage() != null ? ex.getMessage() : "unknown";
+                try {
+                        AuditEventService auditEventService = auditEventServiceProvider != null
+                                        ? auditEventServiceProvider.getIfAvailable()
+                                        : null;
+                        if (auditEventService != null) {
+                                auditEventService.createEvent(new AuditLogEventRequest(
+                                        "PermissionDenied",
+                                        actorId,
+                                        resourceUri,
+                                        "Authorization",
+                                        "",
+                                        "",
+                                        Map.of(
+                                                        "message",
+                                                        deniedPermissions,
+                                                        "requestUri",
+                                                        resourceUri,
+                                                        "deniedPermissions",
+                                                        deniedPermissions)));
+                        }
+                } catch (Exception auditException) {
+                        log.warn("Failed to persist PermissionDenied audit event (correlationId={}): {}",
+                                        correlationId,
+                                        auditException.getMessage());
+                }
+
+                return ResponseEntity
+                                .status(HttpStatus.FORBIDDEN)
+                                .body(errorResponse(
+                                                "FORBIDDEN",
+                                                "Access denied",
+                                                HttpStatus.FORBIDDEN,
+                                                correlationId));
+        }
+
+        @ExceptionHandler(IllegalStateException.class)
+        public ResponseEntity<ErrorResponse> handleIllegalStateException(
+                        IllegalStateException ex,
+                        WebRequest request) {
+                String correlationId = extractCorrelationId(request);
+                String message = ex.getMessage() != null ? ex.getMessage() : "Invalid state";
+
+                if (message.contains("Overlapping role assignment")) {
+                        log.warn("Role assignment overlap conflict (correlationId={}): {}", correlationId, message);
+                        return ResponseEntity
+                                        .status(HttpStatus.CONFLICT)
+                                        .body(errorResponse(
+                                                        "ROLE_ASSIGNMENT_CONFLICT",
+                                                        message,
+                                                        HttpStatus.CONFLICT,
+                                                        correlationId));
+                }
+
+                log.warn("Illegal state (correlationId={}): {}", correlationId, message);
+                return ResponseEntity
+                                .status(HttpStatus.BAD_REQUEST)
+                                .body(errorResponse(
+                                                "INVALID_STATE",
+                                                message,
+                                                HttpStatus.BAD_REQUEST,
                                                 correlationId));
         }
 
@@ -247,6 +344,7 @@ public class GlobalExceptionHandler {
                                 .body(errorResponse(
                                                 "CONCURRENCY_CONFLICT",
                                                 "Token was modified concurrently. Please retry with exponential backoff.",
+                                                HttpStatus.CONFLICT,
                                                 correlationId));
         }
 
@@ -273,6 +371,7 @@ public class GlobalExceptionHandler {
                                 .body(errorResponse(
                                                 "DUPLICATE_ROLE_NAME",
                                                 ex.getMessage(),
+                                                HttpStatus.CONFLICT,
                                                 correlationId));
         }
 
@@ -300,6 +399,7 @@ public class GlobalExceptionHandler {
                                                 "INTERNAL_SERVER_ERROR",
                                                 "An unexpected error occurred. Please contact support with correlation ID: "
                                                                 + correlationId,
+                                                HttpStatus.INTERNAL_SERVER_ERROR,
                                                 correlationId));
         }
 
@@ -308,11 +408,12 @@ public class GlobalExceptionHandler {
          * 
          * @param code          error code for client processing
          * @param message       human-readable error message
+         * @param status        HTTP status for the response
          * @param correlationId request correlation ID for tracking
          * @return error response record
          */
-        private ErrorResponse errorResponse(String code, String message, String correlationId) {
-                return new ErrorResponse(code, message, Instant.now(clock).toString(), correlationId);
+        private ErrorResponse errorResponse(String code, String message, HttpStatus status, String correlationId) {
+                return new ErrorResponse(code, message, status.value(), Instant.now(clock).toString(), correlationId);
         }
 
         /**
@@ -331,5 +432,13 @@ public class GlobalExceptionHandler {
                         correlationId = UUIDv7Generator.generate().toString();
                 }
                 return correlationId;
+        }
+
+        private String getCurrentUsername() {
+                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                if (authentication != null && authentication.isAuthenticated()) {
+                        return authentication.getName();
+                }
+                return "system";
         }
 }

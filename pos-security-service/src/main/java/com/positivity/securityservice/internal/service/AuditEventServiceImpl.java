@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +36,7 @@ public class AuditEventServiceImpl implements AuditEventService {
 
         AuditLogEvent event = new AuditLogEvent();
         event.setEventType(request.getEventType());
-        event.setActorId(request.getActorId());
+        event.setActorId(resolveActorId());
         event.setEntityId(request.getEntityId());
         event.setEntityType(request.getEntityType());
         event.setOldValue(writeJson(request.getOldValue()));
@@ -74,12 +76,22 @@ public class AuditEventServiceImpl implements AuditEventService {
         return events.stream().map(this::toDto).toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<AuditLogEventDto> searchByEventType(@NonNull String eventType) {
+        if (isBlank(eventType)) {
+            throw new IllegalArgumentException("eventType is required");
+        }
+
+        return auditLogEventRepository.findByEventTypeOrderByTimestampDesc(eventType)
+                .stream()
+                .map(this::toDto)
+                .toList();
+    }
+
     private void validateCreateRequest(@NonNull AuditLogEventRequest request) {
         if (isBlank(request.getEventType())) {
             throw new IllegalArgumentException("eventType is required");
-        }
-        if (isBlank(request.getActorId())) {
-            throw new IllegalArgumentException("actorId is required");
         }
         if (isBlank(request.getEntityId())) {
             throw new IllegalArgumentException("entityId is required");
@@ -122,5 +134,13 @@ public class AuditEventServiceImpl implements AuditEventService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String resolveActorId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() && !isBlank(authentication.getName())) {
+            return authentication.getName();
+        }
+        return "system";
     }
 }

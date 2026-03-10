@@ -19,4 +19,6 @@ public interface AuditEventService {
     AuditLogEventDto getEvent(@NonNull UUID eventId);
 
     List<AuditLogEventDto> searchEvents(String entityId, String entityType, Instant from, Instant to);
+
+    List<AuditLogEventDto> searchByEventType(@NonNull String eventType);
 }

@@ -68,9 +68,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  *   <tr><td>SC6</td><td>DELETE /v1/roles/{id} → 204</td><td><b>RED</b></td><td>no endpoint → 404</td></tr>
  *   <tr><td>SC7</td><td>PUT /v1/roles/{id}/permissions/{p} → 204</td><td><b>RED</b></td><td>only /grant endpoint → 404</td></tr>
  *   <tr><td>SC8</td><td>DELETE /v1/roles/{id}/permissions/{p} → 204</td><td><b>RED</b></td><td>existing endpoint returns 200</td></tr>
- *   <tr><td>SC9</td><td>PUT /v1/users/{u}/roles/{r} → 204</td><td><b>RED</b></td><td>no endpoint → 404</td></tr>
- *   <tr><td>SC10</td><td>DELETE /v1/users/{u}/roles/{r} → 204</td><td><b>RED</b></td><td>no endpoint → 404</td></tr>
- *   <tr><td>SC11</td><td>GET /v1/users/{u}/permissions → 200</td><td><b>RED</b></td><td>path mismatch → 404</td></tr>
+ *   <tr><td>SC9</td><td>PUT /v1/users/{u}/roles/{r} → 201</td><td>GREEN</td><td>—</td></tr>
+ *   <tr><td>SC10</td><td>DELETE /v1/users/{u}/roles/{r} → 204</td><td>GREEN</td><td>—</td></tr>
+ *   <tr><td>SC11</td><td>GET /v1/users/{u}/permissions → 200</td><td>GREEN</td><td>—</td></tr>
  *   <tr><td>SC12</td><td>Unauthenticated → 401</td><td>GREEN</td><td>—</td></tr>
  *   <tr><td>SC13</td><td>VIEWER role → 403</td><td>GREEN</td><td>—</td></tr>
  * </table>
@@ -286,19 +286,17 @@ class RoleManagementControllerTest {
     // ── SC9: PUT /v1/users/{userId}/roles/{roleId} → 204 ─────────────────────
 
     /**
-     * SC9: PUT /v1/users/{userId}/roles/{roleId} assigns a role to a user; returns 204.
+     * SC9: PUT /v1/users/{userId}/roles/{roleId} assigns a role to a user; returns 201 Created.
      *
-     * <p><strong>RED</strong>: No endpoint matches this path in {@link RoleController}
-     * (mapped to {@code /v1/roles} and {@code /v1/users/roles} base only).
-     *
-     * <p>Expected failure: {@code expected 204 but was 404}.
+     * <p>ADR-0017: resource creation via PUT returns 201 Created.
+     * <p>Status: <strong>GREEN</strong> — {@link UserRoleController#assignRoleToUser} returns 201.
      */
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("PUT /v1/users/{userId}/roles/{roleId} → 204 No Content")
-    void assignRoleToUser_returns204() throws Exception {
+    @DisplayName("SC9 (GREEN): PUT /v1/users/{userId}/roles/{roleId} → 201 Created")
+    void assignRoleToUser_returns201() throws Exception {
         mockMvc.perform(put("/v1/users/{userId}/roles/{roleId}", USER_ID, ROLE_ID))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isCreated());
     }
 
     // ── SC10: DELETE /v1/users/{userId}/roles/{roleId} → 204 ─────────────────
@@ -306,9 +304,8 @@ class RoleManagementControllerTest {
     /**
      * SC10: DELETE /v1/users/{userId}/roles/{roleId} revokes a role from a user; returns 204.
      *
-     * <p><strong>RED</strong>: No endpoint exists.
-     *
-     * <p>Expected failure: {@code expected 204 but was 404}.
+     * <p>ADR-0017: resource deletion returns 204 No Content.
+     * <p>Status: <strong>GREEN</strong> — {@link UserRoleController#revokeRoleFromUser} returns 204.
      */
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -323,11 +320,9 @@ class RoleManagementControllerTest {
     /**
      * SC11: GET /v1/users/{userId}/permissions returns 200 with the effective permissions.
      *
-     * <p><strong>RED</strong>: The existing effective-permissions endpoint is at
-     * {@code GET /v1/roles/permissions/user/{userId}}, not at the Story #62 path.
-     * No handler matches {@code /v1/users/{userId}/permissions} in the loaded {@link RoleController}.
-     *
-     * <p>Expected failure: {@code expected 200 but was 404}.
+     * <p>ADR-0017: successful read returns 200 OK.
+     * <p>Status: <strong>GREEN</strong> — {@link UserRoleController#getEffectivePermissions} returns 200
+     * with the user's effective permission set.
      */
     @Test
     @WithMockUser(roles = "ADMIN")

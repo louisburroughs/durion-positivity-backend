@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import java.time.Clock;
 
 import com.positivity.securityservice.internal.dto.PermissionDto;
+import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
@@ -21,6 +22,7 @@ import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.service.AuditEventService;
 import com.positivity.securityservice.service.RoleManagementService;
 
 import lombok.RequiredArgsConstructor;
@@ -58,6 +60,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     private final PermissionRepository permissionRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final UserRepository userRepository;
+    private final AuditEventService auditEventService;
 
     /**
      * Create a new role.
@@ -353,6 +356,15 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         assignment.setCreatedAt(Instant.now(clock));
 
         roleAssignmentRepository.save(assignment);
+
+        emitAuditEvent(new AuditLogEventRequest(
+            "RoleAssignedToUser",
+            getCurrentUsername(),
+            userId.toString(),
+            "User",
+            "",
+            role.getName(),
+            null));
     }
 
     @Override
@@ -375,6 +387,23 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         assignment.setLastModifiedAt(Instant.now(clock));
 
         roleAssignmentRepository.save(assignment);
+
+        emitAuditEvent(new AuditLogEventRequest(
+                "RoleRevokedFromUser",
+                getCurrentUsername(),
+                userId.toString(),
+                "User",
+                role.getName(),
+                "",
+                null));
+    }
+
+    private void emitAuditEvent(AuditLogEventRequest request) {
+        try {
+            auditEventService.createEvent(request);
+        } catch (Exception exception) {
+            log.warn("Audit event emission failed: {}", exception.getMessage());
+        }
     }
 
     private String getCurrentUsername() {

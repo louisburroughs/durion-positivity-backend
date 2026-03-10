@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record ErrorResponse(
                 @Schema(description = "Error code for client processing") String code,
                 @Schema(description = "Human-readable error message") String message,
+                @Schema(description = "HTTP status code") int status,
                 @Schema(description = "ISO 8601 timestamp") String timestamp,
                 @Schema(description = "Unique request correlation ID for tracking") String correlationId) {
 }

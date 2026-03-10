@@ -15,6 +15,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface AuditLogEventRepository extends JpaRepository<AuditLogEvent, UUID> {
 
+    List<AuditLogEvent> findByEventTypeOrderByTimestampDesc(String eventType);
+
     List<AuditLogEvent> findByEntityIdAndEntityTypeOrderByTimestampDesc(String entityId, String entityType);
 
     List<AuditLogEvent> findByEntityIdAndEntityTypeAndTimestampBetweenOrderByTimestampDesc(

@@ -6,9 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -31,11 +28,6 @@ import com.positivity.securityservice.internal.service.AuditEventServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
 class AuditEventServiceImplTest {
-
-        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
-        @Spy
-        Clock clock = TEST_CLOCK;
 
         @Mock
         private AuditLogEventRepository auditLogEventRepository;
@@ -77,7 +69,7 @@ class AuditEventServiceImplTest {
                 assertThat(result.getEventId()).isEqualTo(eventId);
                 assertThat(result.getTimestamp()).isEqualTo(timestamp);
                 assertThat(result.getEventType()).isEqualTo("PRICING_OVERRIDE");
-                assertThat(result.getActorId()).isEqualTo("user-1");
+                assertThat(result.getActorId()).isEqualTo("system");
                 assertThat(result.getEntityId()).isEqualTo("quote-1");
                 assertThat(result.getEntityType()).isEqualTo("QUOTE");
                 assertThat(result.getOldValue()).isEqualTo("{\"price\":100}");

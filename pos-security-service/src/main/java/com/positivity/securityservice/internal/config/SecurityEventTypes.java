@@ -17,7 +17,7 @@ public final class SecurityEventTypes {
 
         /**
          * All event type registrations for the security module.
-         * Total: 14 event types.
+         * Total: 21 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -44,6 +44,24 @@ public final class SecurityEventTypes {
                                                 "Create a role assignment for a user").build(),
                                 EventTypeRegistration.write("SECURITY_ROLE_ASSIGNMENT_REVOKE",
                                                 "Revoke a role assignment by setting its end date").build(),
+                                EventTypeRegistration.write("SECURITY_ROLE_ASSIGNED",
+                                                "Persist audit record when a role is assigned to a user").build(),
+                                EventTypeRegistration.write("SECURITY_ROLE_REVOKED",
+                                                "Persist audit record when a role is revoked from a user").build(),
+                                EventTypeRegistration.write("SECURITY_PERMISSION_DENIED",
+                                                "Persist audit record when authorization is denied").build(),
+
+                                // UserRoleController - 2 events
+                                EventTypeRegistration.write("SECURITY_USER_ROLE_ASSIGN",
+                                                "Assign a role to a user").build(),
+                                EventTypeRegistration.write("SECURITY_USER_ROLE_REVOKE",
+                                                "Revoke a role from a user").build(),
+
+                                // AuditController - 2 events
+                                EventTypeRegistration.write("SECURITY_AUDIT_EVENT_CREATE",
+                                                "Create an immutable audit event").build(),
+                                EventTypeRegistration.write("SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE",
+                                                "Create a pricing snapshot for audit purposes").build(),
 
                                 // UserController - 5 events
                                 EventTypeRegistration.write("SECURITY_USER_CREATE",
