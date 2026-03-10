@@ -7,7 +7,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.kafka.common.errors.AuthorizationException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,7 +58,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
          * 
          * @param request the price override request
          * @return audit trail response
-         * @throws AuthorizationException if not authorized
+         * @throws AuditTrailAuthorizationException if the override is not authorized per policy
          */
         @Transactional
         public AuditTrailResponse recordPriceOverride(PriceOverrideRequest request) {
@@ -72,7 +71,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
                                 request.getActorRole(),
                                 request.getOriginalPrice(),
                                 request.getAdjustedPrice(),
-                                null // categoryCode not provided in basic request
+                                request.getCategoryCode()
                 );
 
                 if (!authResult.isApproved()) {
@@ -151,7 +150,7 @@ public class AuditTrailServiceImpl implements AuditTrailService {
          * 
          * @param request the refund request
          * @return audit trail response
-         * @throws AuthorizationException if not authorized
+         * @throws AuditTrailAuthorizationException if the refund is not authorized per policy
          */
         @Transactional
         public AuditTrailResponse recordRefund(RefundRequest request) {

@@ -127,7 +127,7 @@ class PriceOverrideAuthorizationServiceTest {
         // Assert
         assertThat(result.isApproved()).isFalse();
         assertThat(result.getResult()).isEqualTo(PolicyValidationResult.REJECTED_THRESHOLD_EXCEEDED);
-        assertThat(result.getMessage()).contains("Discount amount exceeds authorized threshold");
+        assertThat(result.getMessage()).contains("Authorization threshold exceeded");
         assertThat(result.getPolicyVersion()).isEqualTo("v1.0");
     }
 
@@ -145,7 +145,7 @@ class PriceOverrideAuthorizationServiceTest {
         // Assert
         assertThat(result.isApproved()).isFalse();
         assertThat(result.getResult()).isEqualTo(PolicyValidationResult.REJECTED_THRESHOLD_EXCEEDED);
-        assertThat(result.getMessage()).contains("Discount percentage exceeds authorized threshold");
+        assertThat(result.getMessage()).contains("Authorization threshold exceeded");
     }
 
     @Test
@@ -180,7 +180,7 @@ class PriceOverrideAuthorizationServiceTest {
         assertThat(result.isApproved()).isFalse();
         assertThat(result.getResult()).isEqualTo(PolicyValidationResult.REJECTED_FORBIDDEN);
         assertThat(result.getForbiddenCategoryCode()).isEqualTo(forbiddenCategory);
-        assertThat(result.getMessage()).contains("Override category not permitted");
+        assertThat(result.getMessage()).contains("Pricing below cost not permitted");
     }
 
     @Test
@@ -250,7 +250,7 @@ class PriceOverrideAuthorizationServiceTest {
 
     @Test
     @DisplayName("validate - handles null absolute amount threshold")
-    void validate_nullAbsoluteThreshold_approved() {
+    void validate_nullAbsoluteThreshold_rejectedByPercentageCheck() {
         // Arrange
         testPolicy.setMaxAbsoluteAmount(null); // No absolute limit
         BigDecimal adjustedPrice = new BigDecimal("10.00"); // 90% off, but within percentage
@@ -266,7 +266,7 @@ class PriceOverrideAuthorizationServiceTest {
 
     @Test
     @DisplayName("validate - handles null percentage threshold")
-    void validate_nullPercentageThreshold_approved() {
+    void validate_nullPercentageThreshold_rejectedByAbsoluteCheck() {
         // Arrange
         testPolicy.setMaxPercentOff(null); // No percentage limit
         BigDecimal adjustedPrice = new BigDecimal("45.00"); // Within absolute limit
