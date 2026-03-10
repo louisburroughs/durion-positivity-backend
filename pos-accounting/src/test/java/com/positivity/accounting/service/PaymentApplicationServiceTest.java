@@ -631,7 +631,7 @@ class PaymentApplicationServiceTest {
 
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
                 when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of(application));
-                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(false);
                 when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
                 when(paymentApplicationReversalRepository.save(any(PaymentApplicationReversal.class)))
@@ -699,7 +699,7 @@ class PaymentApplicationServiceTest {
 
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
                 when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of(application));
-                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(true);
 
                 // Act
@@ -732,7 +732,7 @@ class PaymentApplicationServiceTest {
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00")); // Already had some applied
 
-                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(false); // Not yet reversed
                 when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
@@ -790,7 +790,7 @@ class PaymentApplicationServiceTest {
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
-                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(false);
                 when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
@@ -872,7 +872,7 @@ class PaymentApplicationServiceTest {
                 application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
                 // Note: No isReversed field - check via repository
 
-                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(true); // Already reversed
 
                 // Act & Assert
@@ -900,7 +900,7 @@ class PaymentApplicationServiceTest {
                 application.setApplicationRequestId(testApplicationRequestId);
                 application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
 
-                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(true); // Already reversed
 
                 // Act & Assert
@@ -932,7 +932,7 @@ class PaymentApplicationServiceTest {
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
-                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(false);
                 when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
@@ -982,7 +982,7 @@ class PaymentApplicationServiceTest {
 
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
-                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(false);
                 when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));

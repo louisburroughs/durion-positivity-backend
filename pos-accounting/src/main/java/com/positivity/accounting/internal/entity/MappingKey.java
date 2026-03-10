@@ -12,10 +12,14 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -50,8 +54,10 @@ public class MappingKey {
     @UUIDv7Id
     @Column(name = "mapping_key_id", nullable = false, columnDefinition = "UUID")
     private UUID mappingKeyId;
-    @Column(name = "posting_category_id", nullable = false)
-    private UUID postingCategoryId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "posting_category_id", nullable = false)
+    private PostingCategory postingCategory;
 
     @Column(name = "key_name", length = 100, nullable = false)
     private String keyName;
@@ -76,4 +82,13 @@ public class MappingKey {
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
+
+    @Transient
+    public UUID getPostingCategoryId() {
+        return postingCategory != null ? postingCategory.getPostingCategoryId() : null;
+    }
+
+    public void setPostingCategoryId(UUID postingCategoryId) {
+        this.postingCategory = postingCategoryId == null ? null : new PostingCategory(postingCategoryId);
+    }
 }

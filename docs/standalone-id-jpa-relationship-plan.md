@@ -39,9 +39,9 @@ Use small module-scoped batches to reduce risk and keep PRs reviewable.
 ### Batch 1: Low-Risk Local Aggregates
 
 - [x] Convert child-to-parent relationships where parent entity already exists in same module and table has stable FK column.
-- [ ] Add repository query updates to navigate relationships.
-- [ ] Update DTO mapping logic to avoid lazy-loading pitfalls.
-- [ ] Add/adjust integration tests for persistence and retrieval.
+- [x] Add repository query updates to navigate relationships.
+- [x] Update DTO mapping logic to avoid lazy-loading pitfalls.
+- [x] Add/adjust integration tests for persistence and retrieval.
 
 ### Execution Log
 
@@ -87,8 +87,11 @@ Use small module-scoped batches to reduce risk and keep PRs reviewable.
 - [x] 2026-03-09: pos-workorder change-request lineage pass: converted `ChangeRequest.workorderId` to `@ManyToOne Workorder`; updated `ChangeRequestRepository` derivations, `ChangeRequestServiceImpl`, `ChangeRequestResponse`, and `WorkorderStateMachine` to relation-backed query and mapping paths while preserving API DTO scalar IDs.
 - [x] 2026-03-09: Updated work-session and change-request focused tests for relationship-backed fixtures and repository derivation changes (`WorkSessionServiceImplTest`, `WorkSessionContractBehaviorIT`, `WorkorderStateMachineTest`, `WorkorderStartContractBehaviorIT`, `WorkorderCompletionContractBehaviorIT`, `WorkorderCompletionTest`).
 - [x] 2026-03-09: Validation completed for incremental pos-workorder passes with focused tests `./mvnw -pl pos-workorder -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=WorkSessionServiceImplTest,WorkSessionContractBehaviorIT,WorkorderStateMachineTest,WorkorderStartContractBehaviorIT,WorkorderCompletionContractBehaviorIT,WorkorderCompletionTest test` and full module run `./mvnw -pl pos-workorder -am -Dsurefire.failIfNoSpecifiedTests=false test`.
+- [x] 2026-03-09: pos-accounting safe same-module pass: converted standalone FK scalars to relationships for `APPaymentAllocation.paymentId`/`vendorBillId`, `APPayment.vendorBillId`, `VendorBillLine.vendorBillId`, `VendorBillMatchCandidate.vendorBillId`, `PaymentApplicationReversal.originalPaymentApplicationId`, and `MappingKey.postingCategoryId`; updated impacted repositories/services/tests to relationship navigation paths while preserving API scalar-ID compatibility accessors.
+- [x] 2026-03-09: Stabilized accounting regressions from relationship migration by fixing managed-parent assignment in `VendorBillServiceImpl` line creation and FK-safe integration cleanup ordering in `PaymentApplicationControllerIntegrationTest`.
+- [x] 2026-03-09: Validation completed for pos-accounting pass with focused integration run `./mvnw -pl pos-accounting -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=AccountingServiceIntegrationTest,PaymentApplicationControllerIntegrationTest test` and full module run `./mvnw -pl pos-accounting -am -Dsurefire.failIfNoSpecifiedTests=false test`.
 - [ ] Deferred: `CycleCountTask.latestCountEntryId` relationship conversion due cyclic persistence/teardown risk in current contract setup; revisit as dedicated follow-up with explicit lifecycle strategy.
-- [ ] Next: Move to the next module-scoped same-module FK candidate batch after pos-workorder validation (inventory deferred item remains unchanged).
+- [ ] Next: Continue remaining module-scoped same-module FK candidates (including any unresolved `pos-accounting` candidates not covered in this pass), while keeping the inventory deferred item unchanged.
 
 ### Batch 2: Medium-Risk Shared Domain Objects
 

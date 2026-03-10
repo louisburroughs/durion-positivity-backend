@@ -37,6 +37,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 
 /**
@@ -61,6 +62,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         @Autowired
         private PaymentApplicationRepository paymentApplicationRepository;
 
+        @Autowired
+        private PaymentApplicationReversalRepository paymentApplicationReversalRepository;
+
         @MockitoBean
         private InvoiceServiceClient invoiceServiceClient;
 
@@ -77,6 +81,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 // BaseIntegrationTest.setUpMockMvc()
 
                 // Clean up test data
+                paymentApplicationReversalRepository.deleteAll();
                 paymentApplicationRepository.deleteAll();
                 receivablePaymentRepository.deleteAll();
 

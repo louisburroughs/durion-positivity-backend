@@ -75,7 +75,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
 
                 // Validate uniqueness within category
                 String trimmedName = request.getKeyName().trim();
-                if (mappingKeyRepository.existsByPostingCategoryIdAndKeyName(
+                if (mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(
                                 request.getPostingCategoryId(), trimmedName)) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Mapping key with name '" + trimmedName +
@@ -150,7 +150,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 // Validate uniqueness if name is changing
                 String trimmedName = request.getKeyName().trim();
                 if (!mappingKey.getKeyName().equals(trimmedName) &&
-                                mappingKeyRepository.existsByPostingCategoryIdAndKeyName(
+                                mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(
                                                 mappingKey.getPostingCategoryId(), trimmedName)) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Mapping key with name '" + trimmedName +

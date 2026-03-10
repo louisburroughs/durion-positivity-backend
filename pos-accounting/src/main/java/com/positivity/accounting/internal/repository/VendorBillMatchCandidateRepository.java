@@ -38,5 +38,5 @@ public interface VendorBillMatchCandidateRepository extends JpaRepository<Vendor
      * @param vendorBillId the vendor bill ID
      * @return candidates for the specified bill
      */
-    List<VendorBillMatchCandidate> findByVendorBillIdAndResolvedFalse(UUID vendorBillId);
+    List<VendorBillMatchCandidate> findByVendorBill_VendorBillIdAndResolvedFalse(UUID vendorBillId);
 }

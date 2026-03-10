@@ -158,7 +158,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 assertThat(savedPayment.getUnappliedAmount()).isEqualByComparingTo(BigDecimal.ZERO);
 
                 List<APPaymentAllocation> allocations = allocationRepository
-                                .findByPaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId());
+                                .findByPayment_PaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId());
                 assertThat(allocations).hasSize(2);
 
                 // Verify bill1 (oldest due) gets allocated first: $500
@@ -209,7 +209,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 APPayment savedPayment = apPaymentRepository.findByPaymentRef(paymentRef).orElseThrow();
                 assertThat(savedPayment.getUnappliedAmount()).isEqualByComparingTo(new BigDecimal("100.00"));
                 assertThat(allocationRepository
-                                .findByPaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId()))
+                                .findByPayment_PaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId()))
                                 .hasSize(1);
         }
 

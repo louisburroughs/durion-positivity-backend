@@ -93,7 +93,7 @@ class MappingKeyServiceTest {
         request.setCreatedBy("test-user");
 
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategoryIdAndKeyName(testCategoryId, "NEW_KEY")).thenReturn(false);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "NEW_KEY")).thenReturn(false);
         when(mappingKeyRepository.save(any(MappingKey.class))).thenAnswer(inv -> {
             MappingKey key = inv.getArgument(0);
             key.setMappingKeyId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -121,14 +121,14 @@ class MappingKeyServiceTest {
         request.setCreatedBy("test-user");
 
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategoryIdAndKeyName(testCategoryId, "SPACED_KEY")).thenReturn(false);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "SPACED_KEY")).thenReturn(false);
         when(mappingKeyRepository.save(any(MappingKey.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
         service.createMappingKey(request);
 
         // Assert
-        verify(mappingKeyRepository).existsByPostingCategoryIdAndKeyName(testCategoryId, "SPACED_KEY");
+        verify(mappingKeyRepository).existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "SPACED_KEY");
     }
 
     @Test
@@ -157,7 +157,7 @@ class MappingKeyServiceTest {
         request.setKeyName("EXISTING_KEY");
 
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategoryIdAndKeyName(testCategoryId, "EXISTING_KEY")).thenReturn(true);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "EXISTING_KEY")).thenReturn(true);
 
         // Act & Assert
         assertThatThrownBy(() -> service.createMappingKey(request))
@@ -210,7 +210,7 @@ class MappingKeyServiceTest {
 
         when(mappingKeyRepository.findById(testMappingKeyId)).thenReturn(Optional.of(testMappingKey));
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategoryIdAndKeyName(testCategoryId, "UPDATED_KEY")).thenReturn(false);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "UPDATED_KEY")).thenReturn(false);
         when(mappingKeyRepository.save(any(MappingKey.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
@@ -252,7 +252,7 @@ class MappingKeyServiceTest {
 
         when(mappingKeyRepository.findById(testMappingKeyId)).thenReturn(Optional.of(testMappingKey));
         when(postingCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-        when(mappingKeyRepository.existsByPostingCategoryIdAndKeyName(testCategoryId, "OTHER_KEY")).thenReturn(true);
+        when(mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(testCategoryId, "OTHER_KEY")).thenReturn(true);
 
         // Act & Assert
         assertThatThrownBy(() -> service.updateMappingKey(testMappingKeyId, request))

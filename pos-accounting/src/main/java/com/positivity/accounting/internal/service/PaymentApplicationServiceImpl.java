@@ -314,7 +314,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                 int reversedCount = 0;
                 for (PaymentApplication application : applications) {
                         UUID applicationId = application.getPaymentApplicationId();
-                        if (reversalRepository.existsByOriginalPaymentApplicationId(applicationId)) {
+                        if (reversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId)) {
                                 continue;
                         }
 
@@ -354,7 +354,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                 String reversedBy = getCurrentUser();
 
                 // 1. Check if already reversed
-                if (reversalRepository.existsByOriginalPaymentApplicationId(paymentApplicationId)) {
+                if (reversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(paymentApplicationId)) {
                         throw new ResponseStatusException(HttpStatus.CONFLICT,
                                         "Payment application " + paymentApplicationId + " has already been reversed");
                 }

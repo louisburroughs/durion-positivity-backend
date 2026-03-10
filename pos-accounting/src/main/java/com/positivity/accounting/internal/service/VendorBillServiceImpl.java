@@ -122,7 +122,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 int lineNumber = 1;
                 for (GoodsReceivedEvent.ReceivedLineItem eventLine : event.getLineItems()) {
                         VendorBillLine billLine = new VendorBillLine();
-                        billLine.setVendorBillId(savedBill.getVendorBillId());
+                        billLine.setVendorBill(savedBill);
                         billLine.setLineNumber(lineNumber++);
                         billLine.setProductId(eventLine.getProductId());
                         billLine.setDescription(eventLine.getDescription());
@@ -339,7 +339,7 @@ public class VendorBillServiceImpl implements VendorBillService {
         private boolean validateMatchConsistency(@NonNull VendorBill bill, @NonNull VendorInvoiceReceivedEvent event) {
                 // Load persisted bill line items from goods receipt
                 List<VendorBillLine> persistedBillLines = billLineRepository
-                                .findByVendorBillIdOrderByLineNumber(bill.getVendorBillId());
+                                .findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
                 var invoiceLineItems = event.getLineItems();
 
                 // Check line count match
@@ -498,7 +498,7 @@ public class VendorBillServiceImpl implements VendorBillService {
 
                 // 2. Line item overlap using Jaccard similarity (30 points)
                 List<VendorBillLine> billLines = billLineRepository
-                                .findByVendorBillIdOrderByLineNumber(bill.getVendorBillId());
+                                .findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
                 if (!billLines.isEmpty()) {
                         double similarity = calculateLineItemSimilarity(billLines, event.getLineItems());
                         int lineItemScore = (int) Math.round(30 * similarity);

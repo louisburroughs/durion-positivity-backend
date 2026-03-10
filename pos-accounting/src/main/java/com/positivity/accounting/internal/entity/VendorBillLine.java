@@ -40,8 +40,10 @@ public class VendorBillLine {
     @UUIDv7Id
     @Column(name = "line_id", nullable = false, columnDefinition = "UUID")
     private UUID lineId;
-    @Column(name = "vendor_bill_id", nullable = false)
-    private UUID vendorBillId;
+
+        @ManyToOne(fetch = FetchType.LAZY, optional = false)
+        @JoinColumn(name = "vendor_bill_id", nullable = false)
+        private VendorBill vendorBill;
 
     @Column(name = "line_number", nullable = false)
     private Integer lineNumber;
@@ -66,4 +68,13 @@ public class VendorBillLine {
 
     @Column(name = "is_inventory_item", nullable = false)
     private boolean isInventoryItem = true;
+
+        @Transient
+        public UUID getVendorBillId() {
+                return vendorBill != null ? vendorBill.getVendorBillId() : null;
+        }
+
+        public void setVendorBillId(UUID vendorBillId) {
+                this.vendorBill = vendorBillId == null ? null : new VendorBill(vendorBillId);
+        }
 }

@@ -123,4 +123,8 @@ public class PaymentApplication {
         throw new UnsupportedOperationException(
                 "PaymentApplication records are immutable. Use PaymentApplicationReversal for corrections.");
     }
+
+    public PaymentApplication(UUID paymentApplicationId) {
+        this.paymentApplicationId = paymentApplicationId;
+    }
 }
