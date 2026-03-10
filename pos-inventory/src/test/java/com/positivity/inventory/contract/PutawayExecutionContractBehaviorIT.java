@@ -225,7 +225,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(jsonPath("$.code").value("NO_ON_HAND_AT_SOURCE_LOCATION"));
         }
 
-        // ─── AC5: Missing X-Authorities header returns 403 ───────────────────────
+        // ─── AC5: Missing required authority returns 403 ──────────────────────────
 
         /**
          * Verifies that a request without the required inventory authority in the
@@ -235,10 +235,10 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
          * Issue: #31
          */
         @Test
-        @DisplayName("AC5: missing X-Authorities header returns 403 Forbidden")
+        @DisplayName("AC5: missing required authority returns 403 Forbidden")
         void executePutaway_missingAuthority_returns403() throws Exception {
                 // Issue #31: ADR-0011/ADR-0014 require authority enforcement;
-                // absent X-Authorities header must yield 403 Forbidden
+                // authenticated user with unrelated authority must yield 403 Forbidden
                 String taskId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
                 String requestBody = buildExecutionRequestBody(
                                 UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
@@ -248,7 +248,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
 
                 mockMvc.perform(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId)
                                 .header("X-User", "unauthorized-user")
-                                // Deliberately omit X-Authorities to trigger 403
+                                .header("X-Authorities", "unrelated:authority")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                                 .andExpect(status().isForbidden());
