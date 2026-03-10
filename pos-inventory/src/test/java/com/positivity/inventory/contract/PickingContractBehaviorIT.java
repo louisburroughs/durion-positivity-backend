@@ -110,21 +110,21 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
         // ─── CH2: POST /v1/inventory/pick-lists/{id}/release — 403 without auth ─────
 
         /**
-         * CH2: Verifies that POST /v1/inventory/pick-lists/{id}/release without the
-         * required X-Authorities header returns 403 Forbidden per ADR-0011 and
-         * ADR-0014.
+         * CH2: Verifies that POST /v1/inventory/pick-lists/{id}/release with an
+         * authenticated user but without the required authority returns 403 Forbidden
+         * per ADR-0011 and ADR-0014.
          *
          * Issue: #179
          */
         @Test
-        @DisplayName("POST /v1/inventory/pick-lists/{id}/release without gateway auth → 403")
-        void CH2_releasePickList_missingGatewayAuth_returns403() throws Exception {
-                // Issue #179: ADR-0011/ADR-0014 — missing X-Authorities must yield 403
+        @DisplayName("POST /v1/inventory/pick-lists/{id}/release without required authority → 403")
+        void CH2_releasePickList_missingRequiredAuthority_returns403() throws Exception {
+                // Issue #179: authenticated user + unrelated authority must yield 403
                 UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 mockMvc.perform(post("/v1/inventory/pick-lists/{id}/release", pickListId)
                                 .header("X-User", "test-user")
-                                // Deliberately omit X-Authorities to trigger 403
+                                .header("X-Authorities", "unrelated:authority")
                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isForbidden());
         }
