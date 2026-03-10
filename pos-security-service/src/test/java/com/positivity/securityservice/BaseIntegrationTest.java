@@ -72,8 +72,8 @@ public abstract class BaseIntegrationTest {
             "security:roles:view",
             "security:roles:update",
             "security:roles:delete",
-            "security:permissions:register",
-            "security:permissions:view");
+            "security:permission:register",
+            "security:permission:view");
 
     /**
      * Initialize MockMvc with Spring Security integration before each test.

@@ -182,11 +182,11 @@ components:
           type: string
         countryCode:
           type: string
+        postalCode:
+          type: string
         stateCode:
           type: string
         city:
-          type: string
-        postalCode:
           type: string
       required:
       - destinationAddress

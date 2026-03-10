@@ -130,11 +130,12 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(jsonPath("$.totalItemsReturned").value(1));
         }
 
-        // ─── RC2: POST /v1/inventory/returns — 403 without gateway auth ──────────────
+        // ─── RC2: POST /v1/inventory/returns — 403 with missing authority ─────────────
 
         /**
-         * RC2: Verifies POST /v1/inventory/returns without the required
-         * {@code X-Authorities} header returns 403 Forbidden per ADR-0011 and ADR-0014.
+         * RC2: Verifies POST /v1/inventory/returns with an authenticated user but
+         * without required return authority returns 403 Forbidden per ADR-0011 and
+         * ADR-0014.
          *
          * <p>
          * GREEN in RED phase: {@code ReturnController} already carries
@@ -143,9 +144,9 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
          * Issue: #177
          */
         @Test
-        @DisplayName("POST /v1/inventory/returns without gateway auth → 403 Forbidden")
-        void RC2_returnItemsToStock_missingGatewayAuth_returns403() throws Exception {
-                // Issue #177: ADR-0011/ADR-0014 — omitting X-Authorities must yield 403
+        @DisplayName("POST /v1/inventory/returns without required authority → 403 Forbidden")
+        void RC2_returnItemsToStock_missingRequiredAuthority_returns403() throws Exception {
+                // Issue #177: authenticated user + unrelated authority must yield 403
                 ReturnItemsRequest requestBody = new ReturnItemsRequest(
                                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                 "Surplus parts",
@@ -154,7 +155,7 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
 
                 mockMvc.perform(post("/v1/inventory/returns")
                                 .header("X-User", "test-user")
-                                // Deliberately omit X-Authorities to trigger 403
+                                .header("X-Authorities", "unrelated:authority")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(requestBody)))
                                 .andExpect(status().isForbidden());

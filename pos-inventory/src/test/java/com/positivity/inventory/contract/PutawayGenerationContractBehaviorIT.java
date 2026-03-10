@@ -323,7 +323,8 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("AC7: missing inventory authority in X-Authorities header returns 403")
         void generatePutawayTasks_missingAuthority_returns403() throws Exception {
-                // Issue #32: ADR-0011/ADR-0014 require authority check; absent header → 403
+                // Issue #32: ADR-0011/ADR-0014 require authority check; unrelated
+                // authority on authenticated user → 403
                 String requestBody = objectMapper.writeValueAsString(
                                 objectMapper.createObjectNode()
                                                 .put("sourceReceiptId",
@@ -336,7 +337,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
 
                 mockMvc.perform(post("/v1/inventory/putaway/tasks/generate")
                                 .header("X-User", "unauthorized-user")
-                                // Deliberately omit X-Authorities to trigger 403
+                                .header("X-Authorities", "unrelated:authority")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                                 .andExpect(status().isForbidden());

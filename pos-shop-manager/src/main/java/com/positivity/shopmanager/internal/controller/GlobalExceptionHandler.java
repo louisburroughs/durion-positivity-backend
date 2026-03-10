@@ -173,6 +173,15 @@ public class GlobalExceptionHandler {
                                 .body(error("NOT_IMPLEMENTED", exception.getMessage(), correlationId));
         }
 
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<ErrorResponse> handleIllegalArgument(
+                        IllegalArgumentException exception,
+                        HttpServletRequest request) {
+                UUID correlationId = resolveCorrelationId(request);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                                .body(error("INVALID_REQUEST", exception.getMessage(), correlationId));
+        }
+
         private ErrorResponse error(String code, String message, UUID correlationId) {
                 ErrorResponse response = new ErrorResponse();
                 response.setCode(code);

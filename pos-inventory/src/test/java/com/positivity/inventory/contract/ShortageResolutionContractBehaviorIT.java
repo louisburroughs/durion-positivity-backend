@@ -177,25 +177,24 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .andExpect(status().isBadRequest());
         }
 
-        // ─── 4. No auth headers → 401 Unauthorized ───────────────────────────────────
+        // ─── 4. Missing required authority → 403 Forbidden ───────────────────────────
 
         /**
-         * Verifies that a request with no X-User or X-Authorities headers returns
+         * Verifies that an authenticated request with unrelated authority returns
          * 403 Forbidden.
          *
          * <p>
          * This module uses the shared
          * {@link com.positivity.security.common.GatewaySecurityConfig}
-         * which returns 403 for requests without gateway auth headers (consistent with
+         * which returns 403 for authenticated requests without required authority (consistent with
          * {@code ReallocationContractBehaviorIT#contract_reallocate_withoutAuthority_returns403}).
          *
          * Issue: #25
          */
         @Test
-        @DisplayName("POST /v1/inventory/allocations/shortages/resolve without auth headers → 403 Forbidden")
-        void resolveShortage_noAuth_returns403() throws Exception {
-                // Issue #25: no X-User/X-Authorities — gateway security returns 403 for
-                // unauthenticated requests
+        @DisplayName("POST /v1/inventory/allocations/shortages/resolve without required authority → 403 Forbidden")
+        void resolveShortage_missingRequiredAuthority_returns403() throws Exception {
+                // Issue #25: authenticated user + unrelated authority must yield 403
                 ShortageResolutionRequest request = ShortageResolutionRequest.builder()
                                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .sku("PART-001")
@@ -203,6 +202,8 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build();
 
                 mockMvc.perform(post("/v1/inventory/allocations/shortages/resolve")
+                                .header("X-User", "test-user")
+                                .header("X-Authorities", "unrelated:authority")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isForbidden());

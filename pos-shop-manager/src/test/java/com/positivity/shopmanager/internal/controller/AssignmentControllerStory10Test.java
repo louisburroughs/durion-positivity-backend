@@ -1,4 +1,4 @@
-package com.positivity.shopmanager.controller;
+package com.positivity.shopmanager.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -33,7 +33,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 /**
  * Controller slice tests for CAP-249 Story #10: Appointment Assignment Show —
  * verifies that {@link AssignmentController#listAssignments} enforces the
- * {@code shopmgmt.assignment.view} authority (AC4, ADR-0011) and returns HTTP
+ * canonical read authorities ({@code appointments:view} or
+ * {@code shop:schedule:view}) (AC4, ADR-0011) and returns HTTP
  * 200 for
  * authorized callers; HTTP 403 for unauthorized callers (ADR-0017).
  *
@@ -61,14 +62,14 @@ class AssignmentControllerStory10Test {
     @MockitoBean
     private AssignmentService assignmentService;
 
-    // Issue #10: AC4 — shopmgmt.assignment.view authority grants access
+    // Issue #10: AC4 — appointments:view authority grants access
 
     /**
-     * Verifies AC4 happy path: a caller with the {@code shopmgmt.assignment.view}
+     * Verifies AC4 happy path: a caller with the {@code appointments:view}
      * authority receives HTTP 200 and a JSON array body.
      */
     @Test
-    @WithMockUser(authorities = "shopmgmt.assignment.view")
+    @WithMockUser(authorities = "appointments:view")
     void listAssignments_withViewAssignmentsAuthority_returns200() throws Exception {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -89,15 +90,15 @@ class AssignmentControllerStory10Test {
                 .andExpect(jsonPath("$[0].assignmentId").value(assignmentId.toString()));
     }
 
-    // Issue #10: AC4 — workexec.assignment.read is a valid read authority
+    // Issue #10: AC4 — shop:schedule:view is also a valid read authority
 
     /**
-     * Verifies that a caller with the legacy {@code workexec.assignment.read}
+     * Verifies that a caller with {@code shop:schedule:view}
      * authority also receives HTTP 200 (ADR-0017 compliant).
      */
     @Test
-    @WithMockUser(authorities = "workexec.assignment.read")
-    void listAssignments_withWorkexecReadAuthority_returns200() throws Exception {
+    @WithMockUser(authorities = "shop:schedule:view")
+    void listAssignments_withScheduleViewAuthority_returns200() throws Exception {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(assignmentService.getByAppointmentId(any(UUID.class))).thenReturn(List.of());
 
@@ -109,8 +110,8 @@ class AssignmentControllerStory10Test {
     // Issue #10: AC4 — missing read authority is denied
 
     /**
-     * Verifies AC4 denial: a caller without {@code shopmgmt.assignment.view} or
-     * {@code workexec.assignment.read} receives HTTP 403 (ADR-0017).
+     * Verifies AC4 denial: a caller without {@code appointments:view} or
+     * {@code shop:schedule:view} receives HTTP 403 (ADR-0017).
      */
     @Test
     @WithMockUser(authorities = "some.unrelated.authority")
@@ -121,15 +122,14 @@ class AssignmentControllerStory10Test {
                 .andExpect(status().isForbidden());
     }
 
-    // Issue #10: AC4 — workexec.assignment.create alone does NOT grant read access
+    // Issue #10: AC4 — appointments:create alone does NOT grant read access
 
     /**
-     * Verifies Finding 2 remediation: holding only
-     * {@code workexec.assignment.create}
+     * Verifies that holding only {@code appointments:create}
      * (a write-verb authority) does not grant access to the GET list endpoint.
      */
     @Test
-    @WithMockUser(authorities = "workexec.assignment.create")
+    @WithMockUser(authorities = "appointments:create")
     void listAssignments_withCreateOnlyAuthority_returns403() throws Exception {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 

@@ -21,9 +21,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * REST endpoint for conflict override operations.
- * Access is restricted to users with {@code shopmgr.appointment.override}
- * authority
- * via {@code @PreAuthorize} on {@link ConflictOverrideService}.
+ * Access is restricted to users with canonical schedule-editing authorities via
+ * {@code @PreAuthorize} on {@link ConflictOverrideService}.
  */
 @RestController
 @RequestMapping("/v1/appointments/{appointmentId}/conflict-override")
@@ -38,12 +37,11 @@ public class ConflictOverrideController {
 
     /**
      * Executes a conflict override for the given appointment.
-     * Returns 403 when the caller lacks {@code shopmgr.appointment.override}
-     * (AC-2).
+     * Returns 403 when the caller lacks the required canonical authority (AC-2).
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('shopmgr.appointment.override')")
+    @PreAuthorize("hasAnyAuthority('shop:schedule:edit', 'appointments:reschedule')")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE", apiVersion = "1")
     @Operation(
             summary = "Execute appointment conflict override",

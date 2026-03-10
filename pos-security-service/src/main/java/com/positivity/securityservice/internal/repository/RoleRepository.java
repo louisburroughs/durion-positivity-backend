@@ -12,4 +12,7 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
     Optional<Role> findByName(String name);
 
     boolean existsByName(String name);
+
+    /** Story #62: case-insensitive duplicate check for role name uniqueness. */
+    boolean existsByNameIgnoreCase(String name);
 }

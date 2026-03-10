@@ -56,7 +56,9 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
     @Transactional
     public PostingCategoryResponse createPostingCategory(@NonNull PostingCategoryCreateRequest request) {
         String normalizedCategoryName = request.getCategoryName().trim();
-        log.info("Creating posting category: {}", normalizedCategoryName);
+        if (log.isInfoEnabled()) {
+            log.info("Creating posting category: {}", maskText(normalizedCategoryName));
+        }
 
         // Validate uniqueness
         if (postingCategoryRepository.existsByCategoryName(normalizedCategoryName)) {
@@ -222,5 +224,26 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
                 category.getCreatedBy(),
                 category.getUpdatedAt(),
                 category.getModifiedBy());
+    }
+
+    /**
+     * Masks free-text values for safe logging.
+     * Preserves only short prefix/suffix for correlation.
+     *
+     * @param value text to mask
+     * @return masked text, or "null" if input is null
+     */
+    private String maskText(String value) {
+        if (value == null) {
+            return "null";
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return "***";
+        }
+        if (trimmed.length() <= 4) {
+            return "****";
+        }
+        return trimmed.substring(0, 2) + "****" + trimmed.substring(trimmed.length() - 2);
     }
 }
