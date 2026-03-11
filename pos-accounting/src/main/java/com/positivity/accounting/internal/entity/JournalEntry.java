@@ -27,6 +27,8 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.PrePersist;
@@ -54,7 +56,8 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = "lines")
+@ToString(exclude = { "lines", "postingRuleSet", "postingRuleVersion", "reversalJournalEntry",
+        "reversedByJournalEntry" })
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "journal_entry", indexes = {
@@ -74,6 +77,10 @@ public class JournalEntry {
     @UUIDv7Id
     @Column(name = "journal_entry_id", nullable = false, columnDefinition = "UUID")
     private UUID journalEntryId;
+
+    public JournalEntry(UUID journalEntryId) {
+        this.journalEntryId = journalEntryId;
+    }
 
     @PrePersist
     public void onPrePersist() {
@@ -98,8 +105,8 @@ public class JournalEntry {
             int lineNumber = 1;
             for (JournalEntryLine line : lines) {
                 // Set parent reference if not already set
-                if (line.getJournalEntryId() == null) {
-                    line.setJournalEntryId(this.journalEntryId);
+                if (line.getJournalEntry() == null) {
+                    line.setJournalEntry(this);
                 }
                 // Set line number if not already set
                 if (line.getLineNumber() == null) {
@@ -129,11 +136,13 @@ public class JournalEntry {
     @Column(name = "source_event_type", length = 100)
     private String sourceEventType;
 
-    @Column(name = "posting_rule_set_id")
-    private UUID postingRuleSetId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "posting_rule_set_id")
+    private PostingRuleSet postingRuleSet;
 
-    @Column(name = "posting_rule_version_id")
-    private UUID postingRuleVersionId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "posting_rule_version_id")
+    private PostingRuleVersion postingRuleVersion;
 
     // Manual JE fields (required when entryType = MANUAL)
     @Enumerated(EnumType.STRING)
@@ -143,13 +152,15 @@ public class JournalEntry {
     @Column(name = "justification", length = 1000)
     private String justification;
 
-    @Column(name = "reversal_journal_entry_id")
-    private UUID reversalJournalEntryId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reversal_journal_entry_id")
+    private JournalEntry reversalJournalEntry;
 
-    @Column(name = "reversed_by_journal_entry_id")
-    private UUID reversedByJournalEntryId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reversed_by_journal_entry_id")
+    private JournalEntry reversedByJournalEntry;
 
-    @OneToMany(mappedBy = "journalEntryId", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @OrderBy("lineNumber ASC")
     private List<JournalEntryLine> lines = new ArrayList<>();
 
@@ -237,5 +248,46 @@ public class JournalEntry {
             this.lines = new ArrayList<>();
         }
         this.lines.add(line);
+    }
+
+    // Scalar compatibility accessors for postingRuleSetId
+    @Transient
+    public UUID getPostingRuleSetId() {
+        return postingRuleSet != null ? postingRuleSet.getPostingRuleSetId() : null;
+    }
+
+    public void setPostingRuleSetId(UUID postingRuleSetId) {
+        this.postingRuleSet = postingRuleSetId != null ? new PostingRuleSet(postingRuleSetId) : null;
+    }
+
+    // Scalar compatibility accessors for postingRuleVersionId
+    @Transient
+    public UUID getPostingRuleVersionId() {
+        return postingRuleVersion != null ? postingRuleVersion.getVersionId() : null;
+    }
+
+    public void setPostingRuleVersionId(UUID postingRuleVersionId) {
+        this.postingRuleVersion = postingRuleVersionId != null ? new PostingRuleVersion(postingRuleVersionId) : null;
+    }
+
+    // Scalar compatibility accessors for reversalJournalEntryId
+    @Transient
+    public UUID getReversalJournalEntryId() {
+        return reversalJournalEntry != null ? reversalJournalEntry.getJournalEntryId() : null;
+    }
+
+    public void setReversalJournalEntryId(UUID reversalJournalEntryId) {
+        this.reversalJournalEntry = reversalJournalEntryId != null ? new JournalEntry(reversalJournalEntryId) : null;
+    }
+
+    // Scalar compatibility accessors for reversedByJournalEntryId
+    @Transient
+    public UUID getReversedByJournalEntryId() {
+        return reversedByJournalEntry != null ? reversedByJournalEntry.getJournalEntryId() : null;
+    }
+
+    public void setReversedByJournalEntryId(UUID reversedByJournalEntryId) {
+        this.reversedByJournalEntry = reversedByJournalEntryId != null ? new JournalEntry(reversedByJournalEntryId)
+                : null;
     }
 }

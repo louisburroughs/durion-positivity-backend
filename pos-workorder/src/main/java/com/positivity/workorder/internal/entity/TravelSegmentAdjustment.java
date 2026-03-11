@@ -4,14 +4,18 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
@@ -26,7 +30,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "travel_segment_adjustment", indexes = {
-        @Index(name = "idx_tsa_travel_segment_id", columnList = "travelSegmentId")
+        @Index(name = "idx_tsa_travel_segment_id", columnList = "travel_segment_id")
 })
 @Data
 @NoArgsConstructor
@@ -42,8 +46,10 @@ public class TravelSegmentAdjustment {
     private UUID adjustmentId;
 
     @NonNull
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID travelSegmentId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "travel_segment_id", nullable = false)
+    @ToString.Exclude
+    private TravelSegment travelSegment;
 
     @Nullable
     @Column
@@ -77,4 +83,14 @@ public class TravelSegmentAdjustment {
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    @jakarta.persistence.Transient
+    public UUID getTravelSegmentId() {
+        return travelSegment != null ? travelSegment.getTravelSegmentId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setTravelSegmentId(UUID travelSegmentId) {
+        this.travelSegment = travelSegmentId != null ? new TravelSegment(travelSegmentId) : null;
+    }
 }

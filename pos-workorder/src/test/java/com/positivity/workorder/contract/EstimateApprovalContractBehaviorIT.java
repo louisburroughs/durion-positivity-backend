@@ -143,7 +143,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 UUID estimateId = seedPendingApprovalEstimateWithMultipleItems();
 
                 // Retrieve actual item IDs from the database
-                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
                 UUID approvedItemId = items.get(0).getId();
                 UUID declinedItemId = items.get(1).getId();
 
@@ -407,7 +407,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
         private EstimateItem buildItem(UUID estimateId, EstimateItemType type, String description,
                         BigDecimal quantity, BigDecimal unitPrice) {
                 return EstimateItem.builder()
-                                .estimateId(estimateId)
+                                .estimate(estimateRepository.getReferenceById(estimateId))
                                 .itemType(type)
                                 .description(description)
                                 .quantity(quantity)

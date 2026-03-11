@@ -124,7 +124,7 @@ class EstimateSearchServiceTest {
 
                 when(estimateRepository.findByCustomerId(CUSTOMER_A, pageable))
                                 .thenReturn(new PageImpl<>(List.of(estimate)));
-                when(estimateItemRepository.findByEstimateIdAndDeletedFalse(any()))
+                when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(any()))
                                 .thenReturn(List.of());
 
                 Page<EstimateSummaryResponse> result = estimateService.searchEstimates(CUSTOMER_A, null, pageable);
@@ -151,7 +151,7 @@ class EstimateSearchServiceTest {
 
                 when(estimateRepository.findByVehicleId(VEHICLE_B, pageable))
                                 .thenReturn(new PageImpl<>(List.of(estimate)));
-                when(estimateItemRepository.findByEstimateIdAndDeletedFalse(any()))
+                when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(any()))
                                 .thenReturn(List.of());
 
                 Page<EstimateSummaryResponse> result = estimateService.searchEstimates(null, VEHICLE_B, pageable);
@@ -178,7 +178,7 @@ class EstimateSearchServiceTest {
 
                 when(estimateRepository.findByCustomerIdAndVehicleId(CUSTOMER_A, VEHICLE_B, pageable))
                                 .thenReturn(new PageImpl<>(List.of(estimate)));
-                when(estimateItemRepository.findByEstimateIdAndDeletedFalse(any()))
+                when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(any()))
                                 .thenReturn(List.of());
 
                 Page<EstimateSummaryResponse> result = estimateService.searchEstimates(CUSTOMER_A, VEHICLE_B, pageable);
@@ -203,7 +203,7 @@ class EstimateSearchServiceTest {
 
                 when(estimateRepository.findByCustomerId(CUSTOMER_A, pageable))
                                 .thenReturn(new PageImpl<>(List.of(estimate)));
-                when(estimateItemRepository.findByEstimateIdAndDeletedFalse(any()))
+                when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(any()))
                                 .thenReturn(List.of());
 
                 Page<EstimateSummaryResponse> result = estimateService.searchEstimates(CUSTOMER_A, null, pageable);
@@ -239,7 +239,7 @@ class EstimateSearchServiceTest {
 
                 when(estimateRepository.findByCustomerId(CUSTOMER_A, pageable))
                                 .thenReturn(new PageImpl<>(List.of(cancelled)));
-                when(estimateItemRepository.findByEstimateIdAndDeletedFalse(any()))
+                when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(any()))
                                 .thenReturn(List.of());
 
                 Page<EstimateSummaryResponse> result = estimateService.searchEstimates(CUSTOMER_A, null, pageable);
@@ -270,7 +270,7 @@ class EstimateSearchServiceTest {
 
                 when(estimateRepository.findAll(pageable))
                                 .thenReturn(new PageImpl<>(all, pageable, all.size()));
-                when(estimateItemRepository.findByEstimateIdAndDeletedFalse(any()))
+                when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(any()))
                                 .thenReturn(List.of());
 
                 Page<EstimateSummaryResponse> result = estimateService.searchEstimates(null, null, pageable);
@@ -306,7 +306,7 @@ class EstimateSearchServiceTest {
 
                 when(estimateRepository.findByCustomerId(CUSTOMER_A, pageable))
                                 .thenReturn(new PageImpl<>(fiveEstimates, pageable, 12L));
-                when(estimateItemRepository.findByEstimateIdAndDeletedFalse(any()))
+                when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(any()))
                                 .thenReturn(List.of());
 
                 Page<EstimateSummaryResponse> result = estimateService.searchEstimates(CUSTOMER_A, null, pageable);
@@ -331,7 +331,7 @@ class EstimateSearchServiceTest {
 
                 when(estimateRepository.findByCustomerId(unknownCustomer, pageable))
                                 .thenReturn(new PageImpl<>(List.of()));
-                when(estimateItemRepository.findByEstimateIdAndDeletedFalse(any()))
+                when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(any()))
                                 .thenReturn(List.of());
 
                 Page<EstimateSummaryResponse> result = estimateService.searchEstimates(unknownCustomer, null, pageable);

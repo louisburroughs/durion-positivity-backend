@@ -52,7 +52,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     /**
      * Find journal entries reversed by another entry.
      */
-    @Query("SELECT je FROM JournalEntry je WHERE je.reversalJournalEntryId = :reversalId")
+    @Query("SELECT je FROM JournalEntry je WHERE je.reversalJournalEntry.journalEntryId = :reversalId")
     Optional<JournalEntry> findByReversalReference(UUID reversalId);
 
     /**
@@ -80,7 +80,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 FROM JournalEntry je
                 JOIN je.lines jel
                 WHERE je.status = 'POSTED'
-                  AND jel.glAccountId = :glAccountId
+                  AND jel.glAccount.glAccountId = :glAccountId
                   AND je.transactionDate >= :startDate
                   AND je.transactionDate <= :endDate
             """)
@@ -103,7 +103,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 FROM JournalEntry je
                 JOIN je.lines jel
                 WHERE je.status = 'POSTED'
-                  AND jel.glAccountId = :glAccountId
+                  AND jel.glAccount.glAccountId = :glAccountId
                   AND je.transactionDate <= :asOfDate
             """)
     java.math.BigDecimal sumPostedBalanceAsOf(UUID glAccountId, LocalDateTime asOfDate);
@@ -122,7 +122,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 FROM JournalEntry je
                 JOIN FETCH je.lines jel
                 WHERE je.status = 'POSTED'
-                  AND jel.glAccountId = :glAccountId
+                  AND jel.glAccount.glAccountId = :glAccountId
                   AND je.transactionDate >= :startDate
                   AND je.transactionDate <= :endDate
                 ORDER BY je.transactionDate DESC

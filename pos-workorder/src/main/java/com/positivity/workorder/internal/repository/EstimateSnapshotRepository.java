@@ -15,5 +15,5 @@ public interface EstimateSnapshotRepository extends JpaRepository<EstimateSnapsh
      * Find all snapshots for a given estimate, ordered by capture time descending.
      */
     @NonNull
-    List<EstimateSnapshot> findByEstimateIdOrderByCapturedAtDesc(@NonNull UUID estimateId);
+    List<EstimateSnapshot> findByEstimate_IdOrderByCapturedAtDesc(@NonNull UUID estimateId);
 }

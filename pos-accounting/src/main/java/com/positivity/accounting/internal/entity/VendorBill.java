@@ -17,10 +17,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -43,7 +47,7 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString
+@ToString(exclude = { "journalEntry" })
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "vendor_bill", indexes = {
@@ -98,8 +102,9 @@ public class VendorBill {
     @Column(name = "origin_event_type", length = 100)
     private String originEventType;
 
-    @Column(name = "journal_entry_id")
-    private UUID journalEntryId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "journal_entry_id")
+    private JournalEntry journalEntry;
 
     @Column(name = "payment_transaction_id")
     private UUID paymentTransactionId;
@@ -146,5 +151,15 @@ public class VendorBill {
 
     public VendorBill(UUID vendorBillId) {
         this.vendorBillId = vendorBillId;
+    }
+
+    // Scalar compatibility accessors for journalEntryId
+    @Transient
+    public UUID getJournalEntryId() {
+        return journalEntry != null ? journalEntry.getJournalEntryId() : null;
+    }
+
+    public void setJournalEntryId(UUID journalEntryId) {
+        this.journalEntry = journalEntryId != null ? new JournalEntry(journalEntryId) : null;
     }
 }

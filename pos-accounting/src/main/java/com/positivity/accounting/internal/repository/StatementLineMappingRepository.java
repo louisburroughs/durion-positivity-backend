@@ -40,5 +40,5 @@ public interface StatementLineMappingRepository extends JpaRepository<StatementL
      * @return list of mappings for that account
      */
     @NonNull
-    List<StatementLineMapping> findByGlAccountId(@NonNull UUID glAccountId);
+    List<StatementLineMapping> findByGlAccount_GlAccountId(@NonNull UUID glAccountId);
 }

@@ -4,6 +4,7 @@ import java.time.Clock;
 
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -46,7 +47,6 @@ import java.util.UUID;
 @Slf4j
 public class WorkorderLaborServiceImpl implements WorkorderLaborService {
     private final Clock clock;
-
 
     private final WorkorderLaborEntryRepository laborRepository;
     private final WorkorderRepository workorderRepository;
@@ -105,7 +105,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
 
         // Check for existing active session on this service
         Optional<WorkorderLaborEntry> activeSession = laborRepository
-                .findByWorkorderServiceIdAndEndTimeIsNull(serviceId);
+                .findByWorkorderService_IdAndEndTimeIsNull(serviceId);
         if (activeSession.isPresent()) {
             throw new IllegalStateException(
                     "Active labor session already exists for service " + serviceId);
@@ -114,7 +114,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
         // Create new labor entry
         WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                 .workorder(workorder)
-                .workorderServiceId(serviceId)
+                .workorderService(new WorkorderService(serviceId))
                 .technicianId(technicianId)
                 .startTime(LocalDateTime.now(clock))
                 .hoursWorked(BigDecimal.ZERO)

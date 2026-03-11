@@ -23,7 +23,7 @@ public interface TechnicianAssignmentRepository extends JpaRepository<Technician
      * @return optional containing the current assignment if one exists
      */
     @NonNull
-    Optional<TechnicianAssignment> findByWorkorderIdAndCurrentTrue(@NonNull UUID workorderId);
+    Optional<TechnicianAssignment> findByWorkorder_IdAndCurrentTrue(@NonNull UUID workorderId);
 
     /**
      * Find all assignments for a workorder ordered by most recent first.
@@ -32,8 +32,8 @@ public interface TechnicianAssignmentRepository extends JpaRepository<Technician
      * @return list of assignments ordered by assignedAt descending
      */
     @NonNull
-    List<TechnicianAssignment> findByWorkorderIdOrderByAssignedAtDesc(@NonNull UUID workorderId);
+    List<TechnicianAssignment> findByWorkorder_IdOrderByAssignedAtDesc(@NonNull UUID workorderId);
 
     @NonNull
-    List<TechnicianAssignment> findByWorkorderIdInAndCurrentTrue(@NonNull Set<UUID> workorderIds);
+    List<TechnicianAssignment> findByWorkorder_IdInAndCurrentTrue(@NonNull Set<UUID> workorderIds);
 }

@@ -322,7 +322,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         // Create debit line
         JournalEntryLine debitLine = new JournalEntryLine();
         debitLine.setLineId(UUIDv7Generator.generate());
-        debitLine.setJournalEntryId(entry.getJournalEntryId());
+        debitLine.setJournalEntry(entry);
         debitLine.setGlAccountId(defaultMapping.getDebitAccountId());
         debitLine.setDebitAmount(amount);
         debitLine.setCreditAmount(BigDecimal.ZERO);
@@ -333,7 +333,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         // Create credit line
         JournalEntryLine creditLine = new JournalEntryLine();
         creditLine.setLineId(UUIDv7Generator.generate());
-        creditLine.setJournalEntryId(entry.getJournalEntryId());
+        creditLine.setJournalEntry(entry);
         creditLine.setGlAccountId(defaultMapping.getCreditAccountId());
         creditLine.setDebitAmount(BigDecimal.ZERO);
         creditLine.setCreditAmount(amount);
@@ -626,7 +626,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             for (MappingEvaluation.ResolvedLine resolved : mappingEval.getResolvedLines()) {
                 JournalEntryLine line = new JournalEntryLine();
                 line.setLineId(UUIDv7Generator.generate());
-                line.setJournalEntryId(entry.getJournalEntryId());
+                line.setJournalEntry(entry);
                 line.setGlAccountId(resolved.getGlAccountId());
                 line.setDebitAmount(resolved.getDebitAmount());
                 line.setCreditAmount(resolved.getCreditAmount());

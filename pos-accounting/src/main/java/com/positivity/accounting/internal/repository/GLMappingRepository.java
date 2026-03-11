@@ -46,8 +46,8 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
          * Supports effective-dated lookups for GL account resolution by category/key.
          */
         @Query("SELECT glm FROM GLMapping glm " +
-                        "WHERE glm.postingCategoryId = :postingCategoryId " +
-                        "AND glm.mappingKeyId = :mappingKeyId " +
+                        "WHERE glm.postingCategory.postingCategoryId = :postingCategoryId " +
+                        "AND glm.mappingKey.mappingKeyId = :mappingKeyId " +
                         "AND glm.effectiveStartDate <= :transactionDate " +
                         "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > :transactionDate)")
         Optional<GLMapping> findEffectiveMapping(UUID postingCategoryId, UUID mappingKeyId,
@@ -60,8 +60,8 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
          * dimensional matching.
          */
         @Query("SELECT glm FROM GLMapping glm " +
-                        "WHERE glm.postingCategoryId = :postingCategoryId " +
-                        "AND glm.mappingKeyId = :mappingKeyId " +
+                        "WHERE glm.postingCategory.postingCategoryId = :postingCategoryId " +
+                        "AND glm.mappingKey.mappingKeyId = :mappingKeyId " +
                         "AND glm.effectiveStartDate <= :transactionDate " +
                         "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > :transactionDate)")
         List<GLMapping> findAllEffectiveMappings(UUID postingCategoryId, UUID mappingKeyId,
@@ -89,16 +89,16 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
         /**
          * Find all mappings for a GL account.
          */
-        List<GLMapping> findByGlAccountId(UUID glAccountId);
+        List<GLMapping> findByGlAccount_GlAccountId(UUID glAccountId);
 
-        List<GLMapping> findByPostingCategoryId(UUID postingCategoryId);
+        List<GLMapping> findByPostingCategory_PostingCategoryId(UUID postingCategoryId);
 
         /**
          * Count active mappings for a posting category.
          * Active mappings are those with no end date or end date in the future.
          */
         @Query("SELECT COUNT(glm) FROM GLMapping glm " +
-                        "WHERE glm.postingCategoryId = :postingCategoryId " +
+                        "WHERE glm.postingCategory.postingCategoryId = :postingCategoryId " +
                         "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > CURRENT_TIMESTAMP)")
         long countByPostingCategoryIdAndDeactivatedAtIsNull(UUID postingCategoryId);
 
@@ -107,7 +107,7 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
          * Active mappings are those with no end date or end date in the future.
          */
         @Query("SELECT COUNT(glm) FROM GLMapping glm " +
-                        "WHERE glm.mappingKeyId = :mappingKeyId " +
+                        "WHERE glm.mappingKey.mappingKeyId = :mappingKeyId " +
                         "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > CURRENT_TIMESTAMP)")
         long countByMappingKeyIdAndDeactivatedAtIsNull(UUID mappingKeyId);
 

@@ -106,4 +106,11 @@ public class PostingRuleVersion {
     public boolean isImmutable() {
         return state == PostingRuleSetState.PUBLISHED || state == PostingRuleSetState.ARCHIVED;
     }
+
+    /**
+     * Convenience constructor for reference assignment.
+     */
+    public PostingRuleVersion(UUID versionId) {
+        this.versionId = versionId;
+    }
 }

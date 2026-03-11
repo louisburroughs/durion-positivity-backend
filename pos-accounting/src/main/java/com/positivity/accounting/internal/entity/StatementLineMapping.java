@@ -14,10 +14,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -62,11 +66,11 @@ public class StatementLineMapping {
     private UUID mappingId;
 
     /**
-     * GL Account ID (references gl_account.gl_account_id).
+     * GL Account reference.
      */
-    @NonNull
-    @Column(name = "gl_account_id", nullable = false)
-    private UUID glAccountId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "gl_account_id", nullable = false)
+    private GLAccount glAccount;
 
     /**
      * GL Account Name (denormalized for reporting performance).
@@ -115,4 +119,13 @@ public class StatementLineMapping {
     @Enumerated(EnumType.STRING)
     @Column(name = "operation", length = 50, nullable = false)
     private OperationType operation;
+
+    @Transient
+    public UUID getGlAccountId() {
+        return glAccount != null ? glAccount.getGlAccountId() : null;
+    }
+
+    public void setGlAccountId(UUID glAccountId) {
+        this.glAccount = glAccountId == null ? null : new GLAccount(glAccountId);
+    }
 }

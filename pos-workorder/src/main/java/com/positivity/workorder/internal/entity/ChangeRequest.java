@@ -121,5 +121,9 @@ public class ChangeRequest {
         if (status == null) {
             status = ChangeRequestStatus.AWAITING_ADVISOR_REVIEW;
         }
-}
+    }
+
+    public ChangeRequest(UUID id) {
+        this.id = id;
+    }
 }

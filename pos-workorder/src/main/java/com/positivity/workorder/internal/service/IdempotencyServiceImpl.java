@@ -2,7 +2,10 @@ package com.positivity.workorder.internal.service;
 
 import java.time.Clock;
 
+import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.internal.entity.IdempotencyKey;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
 import com.positivity.workorder.service.IdempotencyService;
 
@@ -50,7 +53,6 @@ import java.util.UUID;
 @Service
 public class IdempotencyServiceImpl implements IdempotencyService {
     private final Clock clock;
-
 
     private static final Logger log = LoggerFactory.getLogger(IdempotencyServiceImpl.class);
     private static final Duration KEY_EXPIRATION = Duration.ofHours(24);
@@ -145,7 +147,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Transactional
     public void registerKey(@NonNull String keyValue, @NonNull UUID workorderId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
-        IdempotencyKey key = new IdempotencyKey(keyValue, workorderId, expiresAt);
+        IdempotencyKey key = new IdempotencyKey(keyValue, new Workorder(workorderId), expiresAt);
         repository.save(key);
         log.info("Registered idempotency key {} for workorder {}", keyValue, workorderId);
     }
@@ -160,7 +162,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Transactional
     public void markKeyProcessedForChangeRequest(@NonNull String keyValue, @NonNull UUID changeRequestId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
-        IdempotencyKey key = new IdempotencyKey(keyValue, null, changeRequestId, expiresAt);
+        IdempotencyKey key = new IdempotencyKey(keyValue, null, new ChangeRequest(changeRequestId), expiresAt);
         repository.save(key);
         log.info("Registered idempotency key {} for change request {}", keyValue, changeRequestId);
     }
@@ -177,7 +179,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         IdempotencyKey key = new IdempotencyKey();
         key.setKeyValue(keyValue);
-        key.setLaborEntryId(laborEntryId);
+        key.setLaborEntry(new WorkorderLaborEntry(laborEntryId));
         key.setCreatedAt(Instant.now(clock));
         key.setExpiresAt(expiresAt);
         repository.save(key);

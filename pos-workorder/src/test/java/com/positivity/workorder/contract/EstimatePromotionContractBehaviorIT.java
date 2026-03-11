@@ -254,7 +254,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Add approved items
                 EstimateItem laborItem = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil change labor")
                                 .quantity(new BigDecimal("1.0"))
@@ -266,7 +266,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                 estimateItemRepository.save(laborItem);
 
                 EstimateItem partItem = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.PART)
                                 .description("Engine oil filter")
                                 .quantity(new BigDecimal("1.0"))
@@ -300,7 +300,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                 estimate = estimateRepository.save(estimate);
 
                 EstimateItem item = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil change labor")
                                 .quantity(new BigDecimal("1.0"))
@@ -338,7 +338,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Add approved item
                 EstimateItem item = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil change labor")
                                 .quantity(new BigDecimal("1.0"))
@@ -376,7 +376,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Add items but all declined (not approved)
                 EstimateItem item = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil change labor")
                                 .quantity(new BigDecimal("1.0"))

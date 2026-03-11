@@ -2,7 +2,7 @@ package com.positivity.poseventreceiver.internal.config;
 
 import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
-import com.positivity.poseventreceiver.internal.dao.EventDao;
+import com.positivity.poseventreceiver.dao.EventDao;
 import com.positivity.poseventreceiver.internal.entity.EventType;
 
 import org.slf4j.Logger;

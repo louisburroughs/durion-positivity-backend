@@ -55,7 +55,7 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString
+@ToString(exclude = { "vendorBill", "glJournalEntry" })
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ap_payment", indexes = {
@@ -125,8 +125,9 @@ public class APPayment {
     @Column(name = "gateway_timestamp")
     private Instant gatewayTimestamp;
 
-    @Column(name = "gl_journal_entry_id")
-    private UUID glJournalEntryId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "gl_journal_entry_id")
+    private JournalEntry glJournalEntry;
 
     @Column(name = "gl_posted_at")
     private Instant glPostedAt;
@@ -166,6 +167,16 @@ public class APPayment {
 
     public void setVendorBillId(UUID vendorBillId) {
         this.vendorBill = vendorBillId == null ? null : new VendorBill(vendorBillId);
+    }
+
+    // Scalar compatibility accessors for glJournalEntryId
+    @Transient
+    public UUID getGlJournalEntryId() {
+        return glJournalEntry != null ? glJournalEntry.getJournalEntryId() : null;
+    }
+
+    public void setGlJournalEntryId(UUID glJournalEntryId) {
+        this.glJournalEntry = glJournalEntryId != null ? new JournalEntry(glJournalEntryId) : null;
     }
 
 }

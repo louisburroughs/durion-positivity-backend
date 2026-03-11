@@ -90,7 +90,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         String requestorUserId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         // Create change request
         ChangeRequest changeRequest = ChangeRequest.builder()
-            .workorder(workOrder)
+                .workorder(workOrder)
                 .requestedByUserId(requestorUserId)
                 .description(dto.getDescription())
                 .isEmergencyException(Boolean.TRUE.equals(dto.getIsEmergencyException()))
@@ -235,8 +235,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Create immutable ApprovalRecord for audit trail
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
-                .changeRequestId(changeRequestId)
-            .workorderId(changeRequest.getWorkorder().getId())
+                .changeRequest(new ChangeRequest(changeRequestId))
+                .workorder(changeRequest.getWorkorder())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED)
                 .resolvedAt(LocalDateTime.now(clock))
                 .resolvedBy(resolvedActorId)
@@ -280,8 +280,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Create immutable ApprovalRecord for audit trail
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
-                .changeRequestId(changeRequestId)
-            .workorderId(changeRequest.getWorkorder().getId())
+                .changeRequest(new ChangeRequest(changeRequestId))
+                .workorder(changeRequest.getWorkorder())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.REJECTED)
                 .resolvedAt(LocalDateTime.now(clock))
                 .resolvedBy(resolvedActorId)
@@ -328,8 +328,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Create immutable ApprovalRecord for audit trail with exception flag
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
-                .changeRequestId(changeRequestId)
-            .workorderId(changeRequest.getWorkorder().getId())
+                .changeRequest(new ChangeRequest(changeRequestId))
+                .workorder(changeRequest.getWorkorder())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED_WITH_EXCEPTION)
                 .resolvedAt(LocalDateTime.now(clock))
                 .resolvedBy(managerActorId)
@@ -363,7 +363,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Mark all emergency items as acknowledged
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workOrderServiceRepository
-                .findByChangeRequestId(changeRequestId);
+                .findByChangeRequest_Id(changeRequestId);
         for (com.positivity.workorder.internal.entity.WorkorderService service : services) {
             if (Boolean.TRUE.equals(service.getIsEmergencySafety())) {
                 service.setCustomerDenialAcknowledged(true);
@@ -371,7 +371,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             }
         }
 
-        List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequestId(changeRequestId);
+        List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequest_Id(changeRequestId);
         for (WorkorderPart part : parts) {
             if (Boolean.TRUE.equals(part.getIsEmergencySafety())) {
                 part.setCustomerDenialAcknowledged(true);
@@ -395,7 +395,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             if (Boolean.TRUE.equals(request.getIsEmergencyException())) {
                 // Check if all emergency items are acknowledged
                 List<com.positivity.workorder.internal.entity.WorkorderService> services = workOrderServiceRepository
-                        .findByChangeRequestId(request.getId());
+                        .findByChangeRequest_Id(request.getId());
                 for (com.positivity.workorder.internal.entity.WorkorderService service : services) {
                     if (Boolean.TRUE.equals(service.getIsEmergencySafety())
                             && !Boolean.TRUE.equals(service.getCustomerDenialAcknowledged())) {
@@ -403,7 +403,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                     }
                 }
 
-                List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequestId(request.getId());
+                List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequest_Id(request.getId());
                 for (WorkorderPart part : parts) {
                     if (Boolean.TRUE.equals(part.getIsEmergencySafety())
                             && !Boolean.TRUE.equals(part.getCustomerDenialAcknowledged())) {
@@ -506,7 +506,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 .workOrder(workOrder)
                 .serviceEntityId(dto.getServiceEntityId())
                 .status(WorkorderItemStatus.PENDING_APPROVAL)
-                .changeRequestId(changeRequest.getId())
+                .changeRequest(changeRequest)
                 .isEmergencySafety(Boolean.TRUE.equals(dto.getIsEmergencySafety()))
                 .photoEvidenceUrl(dto.getPhotoEvidenceUrl())
                 .emergencyNotes(dto.getEmergencyNotes())
@@ -523,7 +523,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 // Convert Integer quantity to BigDecimal for WorkorderPart entity
                 .quantity(dto.getQuantity() != null ? java.math.BigDecimal.valueOf(dto.getQuantity()) : null)
                 .status(WorkorderItemStatus.PENDING_APPROVAL)
-                .changeRequestId(changeRequest.getId())
+                .changeRequest(changeRequest)
                 .isEmergencySafety(Boolean.TRUE.equals(dto.getIsEmergencySafety()))
                 .photoEvidenceUrl(dto.getPhotoEvidenceUrl())
                 .emergencyNotes(dto.getEmergencyNotes())
@@ -534,14 +534,14 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     private void updateItemsStatus(UUID changeRequestId, WorkorderItemStatus newStatus) {
         // Update services
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workOrderServiceRepository
-                .findByChangeRequestId(changeRequestId);
+                .findByChangeRequest_Id(changeRequestId);
         for (com.positivity.workorder.internal.entity.WorkorderService service : services) {
             service.setStatus(newStatus);
             workOrderServiceRepository.save(service);
         }
 
         // Update parts
-        List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequestId(changeRequestId);
+        List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequest_Id(changeRequestId);
         for (WorkorderPart part : parts) {
             part.setStatus(newStatus);
             workOrderPartRepository.save(part);

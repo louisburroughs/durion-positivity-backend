@@ -10,14 +10,19 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -31,6 +36,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString(exclude = { "workorder" })
 @Table(name = "work_order_state_transitions")
 @EntityListeners(AuditingEntityListener.class)
 public class WorkorderStateTransition {
@@ -40,8 +46,9 @@ public class WorkorderStateTransition {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @Column(nullable = false)
-    private UUID workorderId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "workorder_id", nullable = false)
+    private Workorder workorder;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -71,10 +78,19 @@ public class WorkorderStateTransition {
     @Column(columnDefinition = "TEXT")
     private String metadata;
 
+    @Transient
+    public UUID getWorkorderId() {
+        return workorder != null ? workorder.getId() : null;
+    }
+
+    public void setWorkorderId(UUID workorderId) {
+        this.workorder = workorderId != null ? new Workorder(workorderId) : null;
+    }
+
     @PrePersist
     protected void prePersist() {
         if (transitionedAt == null) {
             transitionedAt = Instant.now(Clock.systemUTC());
         }
-}
+    }
 }

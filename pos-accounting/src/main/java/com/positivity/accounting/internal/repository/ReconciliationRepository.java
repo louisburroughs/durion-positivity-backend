@@ -23,7 +23,7 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
         /**
          * Find all reconciliations for a GL account.
          */
-        List<Reconciliation> findByGlAccountId(UUID glAccountId);
+        List<Reconciliation> findByGlAccount_GlAccountId(UUID glAccountId);
 
         /**
          * Find reconciliations by status.
@@ -33,7 +33,7 @@ public interface ReconciliationRepository extends JpaRepository<Reconciliation, 
         /**
          * Find reconciliation for a GL account and period.
          */
-        @Query("SELECT r FROM Reconciliation r WHERE r.glAccountId = :glAccountId " +
+        @Query("SELECT r FROM Reconciliation r WHERE r.glAccount.glAccountId = :glAccountId " +
                         "AND r.periodStartDate = :periodStartDate AND r.periodEndDate = :periodEndDate")
         Optional<Reconciliation> findByAccountAndPeriod(
                         @Param("glAccountId") UUID glAccountId,

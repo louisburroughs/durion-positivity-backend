@@ -2,6 +2,7 @@ package com.positivity.workorder.contract;
 
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
@@ -228,7 +229,8 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
                 long seconds = hoursWorked.multiply(BigDecimal.valueOf(3600)).longValue();
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderServiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .workorderService(new WorkorderService(
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .technicianId(technicianId)
                                 .startTime(endTimeUtc.minusSeconds(seconds))
                                 .endTime(endTimeUtc)

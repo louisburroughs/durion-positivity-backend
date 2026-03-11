@@ -18,18 +18,18 @@ public interface EstimateItemRepository extends JpaRepository<EstimateItem, UUID
          * Find all items for a given estimate (excluding soft-deleted items).
          */
         @NonNull
-        List<EstimateItem> findByEstimateIdAndDeletedFalse(@NonNull UUID estimateId);
+        List<EstimateItem> findByEstimate_IdAndDeletedFalse(@NonNull UUID estimateId);
 
         /**
          * Find a specific item for an estimate (excluding soft-deleted items).
          */
         @NonNull
-        Optional<EstimateItem> findByIdAndEstimateIdAndDeletedFalse(@NonNull UUID id, @NonNull UUID estimateId);
+        Optional<EstimateItem> findByIdAndEstimate_IdAndDeletedFalse(@NonNull UUID id, @NonNull UUID estimateId);
 
         /**
          * Count non-deleted items for an estimate.
          */
-        long countByEstimateIdAndDeletedFalse(@NonNull UUID estimateId);
+        long countByEstimate_IdAndDeletedFalse(@NonNull UUID estimateId);
 
         /**
          * Find all items for a given estimate with a specific approval status,
@@ -41,7 +41,7 @@ public interface EstimateItemRepository extends JpaRepository<EstimateItem, UUID
          * @return list of non-deleted items matching the criteria
          */
         @NonNull
-        List<EstimateItem> findByEstimateIdAndApprovalStatusAndDeletedFalse(
+        List<EstimateItem> findByEstimate_IdAndApprovalStatusAndDeletedFalse(
                         @NonNull UUID estimateId,
                         @NonNull ApprovalStatus approvalStatus);
 

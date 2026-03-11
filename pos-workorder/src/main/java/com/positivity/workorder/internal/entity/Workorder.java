@@ -1,6 +1,5 @@
 package com.positivity.workorder.internal.entity;
 
-
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 
@@ -11,14 +10,19 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.Transient;
 import java.util.ArrayList;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -54,7 +58,21 @@ public class Workorder {
     private UUID vehicleId; // Reference to Vehicle
     private UUID customerId; // Reference to Customer
     private UUID approvalId; // Reference to CustomerApproval (from pos-customer-approval)
-    private UUID estimateId; // Reference to Estimate - work order created from approved estimate
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "estimate_id")
+    @ToString.Exclude
+    private Estimate estimate; // Reference to Estimate - work order created from approved estimate
+
+    @Transient
+    public UUID getEstimateId() {
+        return estimate != null ? estimate.getId() : null;
+    }
+
+    @Transient
+    public void setEstimateId(UUID estimateId) {
+        this.estimate = estimateId != null ? new Estimate(estimateId) : null;
+    }
 
     @Column(name = "invoice_id", columnDefinition = "UUID")
     private UUID invoiceId; // Reference to generated invoice for reverse lookup traceability
@@ -130,5 +148,9 @@ public class Workorder {
     public boolean isLocked() {
         return status == WorkorderStatus.CANCELLED
                 || (status == WorkorderStatus.COMPLETED && !Boolean.TRUE.equals(isReopened));
+    }
+
+    public Workorder(UUID id) {
+        this.id = id;
     }
 }

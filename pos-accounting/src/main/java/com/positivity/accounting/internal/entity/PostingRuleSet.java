@@ -72,4 +72,11 @@ public class PostingRuleSet {
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
+
+    /**
+     * Convenience constructor for reference assignment.
+     */
+    public PostingRuleSet(UUID postingRuleSetId) {
+        this.postingRuleSetId = postingRuleSetId;
+    }
 }

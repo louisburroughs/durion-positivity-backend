@@ -79,4 +79,8 @@ public class SubstituteLink {
     @Version
     @Column(nullable = false)
     private int version;
+
+    public SubstituteLink(UUID id) {
+        this.id = id;
+    }
 }

@@ -226,7 +226,7 @@ public class EstimateServiceImpl implements EstimateService {
                                 .subtotal(request.getSubtotal())
                                 .taxAmount(request.getTaxAmount())
                                 .total(request.getTotal())
-                                .approvalConfigurationId(config.getId())
+                                .approvalConfiguration(config)
                                 .crmPartyId(request.getCrmPartyId())
                                 .crmVehicleId(request.getCrmVehicleId())
                                 .crmContactIds(request.getCrmContactIds() != null
@@ -444,7 +444,7 @@ public class EstimateServiceImpl implements EstimateService {
          */
         private void processLineItemApprovals(UUID estimateId,
                         @Nullable List<com.positivity.workorder.internal.dto.LineItemApprovalDto> lineItemApprovals) {
-                List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> allItems = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
 
                 if (lineItemApprovals == null || lineItemApprovals.isEmpty()) {
                         // No explicit line item approvals provided - approve all items
@@ -611,7 +611,7 @@ public class EstimateServiceImpl implements EstimateService {
                 }
 
                 // Must have at least one line item
-                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimate.getId());
+                List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimate.getId());
                 if (items == null || items.isEmpty()) {
                         throw new IllegalStateException("Cannot submit estimate - no line items added");
                 }
@@ -736,7 +736,7 @@ public class EstimateServiceImpl implements EstimateService {
          */
         private void publishEstimateRevisedEvents(Estimate estimate, BigDecimal oldTotal,
                         BigDecimal newTotal, String username) {
-                List<Workorder> workOrders = workOrderRepository.findAllByEstimateId(estimate.getId());
+                List<Workorder> workOrders = workOrderRepository.findAllByEstimate_Id(estimate.getId());
 
                 log.info("Publishing EstimateRevisedEvent for {} Workorders linked to estimate {}",
                                 workOrders.size(), estimate.getId());
@@ -788,7 +788,7 @@ public class EstimateServiceImpl implements EstimateService {
 
                 // Build and validate item
                 EstimateItem item = EstimateItem.builder()
-                                .estimateId(estimateId)
+                                .estimate(estimate)
                                 .itemType(request.getItemType())
                                 .description(request.getDescription())
                                 .quantity(request.getQuantity())
@@ -832,7 +832,7 @@ public class EstimateServiceImpl implements EstimateService {
                                                         + ". Estimate must be in DRAFT status.");
                 }
 
-                EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
+                EstimateItem item = estimateItemRepository.findByIdAndEstimate_IdAndDeletedFalse(itemId, estimateId)
                                 .orElseThrow(() -> new EntityNotFoundException(
                                                 "Item not found: " + itemId + " for estimate: " + estimateId));
 
@@ -880,7 +880,7 @@ public class EstimateServiceImpl implements EstimateService {
                                                         + ". Estimate must be in DRAFT status.");
                 }
 
-                EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
+                EstimateItem item = estimateItemRepository.findByIdAndEstimate_IdAndDeletedFalse(itemId, estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(
                                                 "Item not found: " + itemId + " for estimate: " + estimateId));
 
@@ -897,7 +897,7 @@ public class EstimateServiceImpl implements EstimateService {
         @Override
         @NonNull
         public List<EstimateItemResponse> getEstimateItems(@NonNull UUID estimateId) {
-                return estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId)
+                return estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId)
                                 .stream()
                                 .map(EstimateItemResponse::fromEntity)
                                 .toList();
@@ -930,7 +930,7 @@ public class EstimateServiceImpl implements EstimateService {
                 }
 
                 // Get all line items
-                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
 
                 if (items.isEmpty()) {
                         log.warn("No line items found for estimate {}, setting totals to zero", estimateId);
@@ -1087,7 +1087,7 @@ public class EstimateServiceImpl implements EstimateService {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
-                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
 
                 log.info("Retrieved summary for estimate {}: {} items", estimateId, items.size());
 
@@ -1109,7 +1109,7 @@ public class EstimateServiceImpl implements EstimateService {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
-                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
 
                 String markdown = buildEstimateMarkdown(estimate, items);
 
@@ -1234,7 +1234,7 @@ public class EstimateServiceImpl implements EstimateService {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
-                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
 
                 // Serialize estimate + items to JSON (capturedAt stored in entity field only)
                 Map<String, Object> snapshotData = new HashMap<>();
@@ -1251,7 +1251,7 @@ public class EstimateServiceImpl implements EstimateService {
 
                 // Create snapshot entity
                 EstimateSnapshot snapshot = EstimateSnapshot.builder()
-                                .estimateId(estimateId)
+                                .estimate(new Estimate(estimateId))
                                 .status(estimate.getStatus())
                                 .snapshotData(snapshotJson)
                                 .capturedById(username)

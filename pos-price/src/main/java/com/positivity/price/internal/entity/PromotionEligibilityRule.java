@@ -17,15 +17,22 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /** Promotion eligibility rule entity. Issue: #96 */
 @Data
 @NoArgsConstructor
+@EqualsAndHashCode(exclude = "promotion")
+@ToString(exclude = "promotion")
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "promotion_eligibility_rule")
@@ -37,8 +44,9 @@ public class PromotionEligibilityRule {
     @Column(columnDefinition = "UUID")
     private UUID ruleId;
 
-    @Column(name = "promotion_id", nullable = false, columnDefinition = "UUID")
-    private UUID promotionId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "promotion_id", nullable = false)
+    private PromotionOffer promotion;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "condition_type", nullable = false, columnDefinition = "VARCHAR(50)")
@@ -66,5 +74,9 @@ public class PromotionEligibilityRule {
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    public UUID getPromotionId() {
+        return promotion == null ? null : promotion.getPromotionOfferId();
+    }
 
 }
