@@ -155,8 +155,4 @@ public class WorkorderLaborEntry {
         return BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), 2, java.math.RoundingMode.HALF_UP);
     }
 
-    @SuppressWarnings("null")
-    public WorkorderLaborEntry(UUID id) {
-        this.id = id;
-    }
 }

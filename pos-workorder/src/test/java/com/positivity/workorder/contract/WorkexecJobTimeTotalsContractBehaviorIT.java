@@ -19,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
@@ -73,7 +74,7 @@ class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBe
                                 .containsExactlyInAnyOrder(locationA.toString(), locationB.toString());
                 assertThat(json.findValuesAsText("localDate"))
                                 .containsOnly("2026-02-14");
-                assertThat(json.findValues("totalJobMinutes").stream().map(node -> node.asInt()).toList())
+                assertThat(json.findValues("totalJobMinutes").stream().map(JsonNode::asInt).toList())
                                 .containsExactlyInAnyOrder(90, 60);
         }
 

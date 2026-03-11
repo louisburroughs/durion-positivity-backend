@@ -1,9 +1,5 @@
 package com.positivity.workorder.contract;
 
-import java.time.ZoneOffset;
-import java.time.Instant;
-import java.time.Clock;
-
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasSize;
@@ -11,7 +7,10 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,9 +29,6 @@ import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.CustomerRepository;
-import com.positivity.workorder.internal.repository.EstimateItemRepository;
-import com.positivity.workorder.internal.repository.EstimateRepository;
-import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.VehicleRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -64,12 +60,6 @@ import io.restassured.specification.RequestSpecification;
 class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegrationTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-        // @Autowired
-        // private EstimateRepository estimateRepository;
-
-        // @Autowired
-        // private EstimateItemRepository estimateItemRepository;
-
         @Autowired
         private WorkorderRepository workorderRepository;
 
@@ -81,9 +71,6 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
 
         @Autowired
         private WorkorderLaborEntryRepository laborEntryRepository;
-
-        // @Autowired
-        // private TechnicianAssignmentRepository technicianAssignmentRepository;
 
         @Autowired
         private CustomerRepository customerRepository;

@@ -1,21 +1,16 @@
 package com.positivity.workorder.contract;
 
-import java.time.ZoneOffset;
-import java.time.Clock;
-
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
-
-import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.entity.WorkSession;
-import com.positivity.workorder.internal.enums.WorkSessionStatus;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,7 +18,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
-import com.positivity.workorder.internal.repository.BreakSegmentRepository;
+import com.positivity.workorder.internal.entity.WorkSession;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.WorkSessionStatus;
 import com.positivity.workorder.internal.repository.WorkSessionRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
@@ -61,9 +58,6 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private WorkSessionRepository workSessionRepository;
-
-        // @Autowired
-        // private BreakSegmentRepository breakSegmentRepository;
 
         @Autowired
         private WorkorderRepository workorderRepository;

@@ -21,8 +21,6 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
-import com.positivity.workorder.internal.repository.EstimateItemRepository;
-import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartUsageEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -52,12 +50,6 @@ import io.restassured.http.ContentType;
 @DisplayName("Parts Usage Tracking Contract Behavior Tests (CAP:005 Story #158)")
 @Import(ContractTestConfiguration.class)
 class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest {
-
-        // @Autowired
-        // private EstimateRepository estimateRepository;
-
-        // @Autowired
-        // private EstimateItemRepository estimateItemRepository;
 
         @Autowired
         private WorkorderRepository workorderRepository;
