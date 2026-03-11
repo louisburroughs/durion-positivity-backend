@@ -53,33 +53,33 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
 		if (request.isPrimary()) {
 			repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
-				.ifPresent(existing -> {
-					if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),
-							request.getEffectiveFrom(), request.getEffectiveTo())) {
-						return;
-					}
+					.ifPresent(existing -> {
+						if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),
+								request.getEffectiveFrom(), request.getEffectiveTo())) {
+							return;
+						}
 
-					LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
-					if (demotionDate.isBefore(existing.getEffectiveFrom())) {
-						demotionDate = existing.getEffectiveFrom();
-					}
+						LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
+						if (demotionDate.isBefore(existing.getEffectiveFrom())) {
+							demotionDate = existing.getEffectiveFrom();
+						}
 
-					existing.setEffectiveTo(demotionDate);
-					existing.setStatus(AssignmentStatus.ENDED);
-					repository.save(existing);
-				});
+						existing.setEffectiveTo(demotionDate);
+						existing.setStatus(AssignmentStatus.ENDED);
+						repository.save(existing);
+					});
 		}
 
 		PersonLocationAssignment assignment = PersonLocationAssignment.builder()
-			.personId(request.getPersonId())
-			.locationId(request.getLocationId())
-			.role(request.getRole())
-			.isPrimary(request.isPrimary())
-			.effectiveFrom(request.getEffectiveFrom())
-			.effectiveTo(request.getEffectiveTo())
-			.status(AssignmentStatus.ACTIVE)
-			.createdBy(actor)
-			.build();
+				.person(personRepository.getReferenceById(request.getPersonId()))
+				.locationId(request.getLocationId())
+				.role(request.getRole())
+				.isPrimary(request.isPrimary())
+				.effectiveFrom(request.getEffectiveFrom())
+				.effectiveTo(request.getEffectiveTo())
+				.status(AssignmentStatus.ACTIVE)
+				.createdBy(actor)
+				.build();
 
 		PersonLocationAssignment saved = repository.save(assignment);
 		log.info("Created staffing assignment {} for person {} at location {}", saved.getId(), request.getPersonId(),
@@ -118,25 +118,25 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
 		if (request.isPrimary()) {
 			repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
-				.filter(existing -> !existing.getId().equals(assignmentId))
-				.ifPresent(existing -> {
-					if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),
-							request.getEffectiveFrom(), request.getEffectiveTo())) {
-						return;
-					}
+					.filter(existing -> !existing.getId().equals(assignmentId))
+					.ifPresent(existing -> {
+						if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),
+								request.getEffectiveFrom(), request.getEffectiveTo())) {
+							return;
+						}
 
-					LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
-					if (demotionDate.isBefore(existing.getEffectiveFrom())) {
-						demotionDate = existing.getEffectiveFrom();
-					}
+						LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
+						if (demotionDate.isBefore(existing.getEffectiveFrom())) {
+							demotionDate = existing.getEffectiveFrom();
+						}
 
-					existing.setEffectiveTo(demotionDate);
-					existing.setStatus(AssignmentStatus.ENDED);
-					repository.save(existing);
-				});
+						existing.setEffectiveTo(demotionDate);
+						existing.setStatus(AssignmentStatus.ENDED);
+						repository.save(existing);
+					});
 		}
 
-		assignment.setPersonId(request.getPersonId());
+		assignment.setPerson(personRepository.getReferenceById(request.getPersonId()));
 		assignment.setLocationId(request.getLocationId());
 		assignment.setRole(request.getRole());
 		assignment.setPrimary(request.isPrimary());
@@ -152,8 +152,9 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 	@Transactional
 	public void end(@NonNull UUID assignmentId) {
 		PersonLocationAssignment assignment = repository.findById(assignmentId)
-			.orElseThrow(
-					() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found: " + assignmentId));
+				.orElseThrow(
+						() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+								"Assignment not found: " + assignmentId));
 		assignment.setStatus(AssignmentStatus.ENDED);
 		if (assignment.getEffectiveTo() == null) {
 			assignment.setEffectiveTo(LocalDate.now(clock));
@@ -177,7 +178,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
 	private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
 		var person = personRepository.findById(personId)
-			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
 
 		if (person.getStatus() != EmployeeStatus.ACTIVE) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);

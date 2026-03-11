@@ -114,12 +114,13 @@ public class AssignmentServiceImpl implements AssignmentService {
                         MechanicAssignmentItem item = mechanics.get(i);
                         assignmentMechanicRepository.save(AssignmentMechanic.builder()
                                         .assignment(assignment)
-                                        .mechanicId(resolvedMechanics.get(i).getMechanicId())
+                                        .mechanic(resolvedMechanics.get(i))
                                         .role(MechanicRoleEnum.valueOf(item.getRole().name()))
                                         .build());
                 }
 
-                var mechLinks = assignmentMechanicRepository.findByAssignment_AssignmentId(assignment.getAssignmentId());
+                var mechLinks = assignmentMechanicRepository
+                                .findByAssignment_AssignmentId(assignment.getAssignmentId());
                 return mapToResponse(assignment, mechLinks);
         }
 
@@ -129,7 +130,8 @@ public class AssignmentServiceImpl implements AssignmentService {
                 var assignments = assignmentRepository.findByAppointment_AppointmentId(appointmentId);
                 List<AssignmentResponse> results = new ArrayList<>();
                 for (var assignment : assignments) {
-                        var mechLinks = assignmentMechanicRepository.findByAssignment_AssignmentId(assignment.getAssignmentId());
+                        var mechLinks = assignmentMechanicRepository
+                                        .findByAssignment_AssignmentId(assignment.getAssignmentId());
                         results.add(mapToResponse(assignment, mechLinks));
                 }
                 return results;

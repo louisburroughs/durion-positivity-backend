@@ -51,7 +51,7 @@ public class ConflictOverrideServiceImpl implements ConflictOverrideService {
         // AC1: Persist the override audit record with timestamp from clock
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         OverrideRecord record = OverrideRecord.builder()
-                .appointmentId(request.getAppointmentId())
+                .appointment(appointment)
                 .overriddenByUserId(actorId)
                 .overrideTimestamp(Instant.now(clock))
                 .overrideReason(request.getOverrideReason())

@@ -31,6 +31,7 @@ import com.positivity.location.internal.client.LocationInventoryInquiryClient;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
@@ -91,7 +92,7 @@ class StorageLocationServiceTest {
                 UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationRequest request = validRequest("Bin-A1", "BAR-001", StorageLocationType.BIN, null);
 
-                when(locationRepository.existsById(siteId)).thenReturn(true);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.of(Location.builder().id(siteId).build()));
                 when(storageLocationRepository.existsByNameIgnoreCaseAndSiteId("Bin-A1", siteId)).thenReturn(false);
                 when(storageLocationRepository.existsByBarcodeAndSiteId("BAR-001", siteId)).thenReturn(false);
                 when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
@@ -118,7 +119,7 @@ class StorageLocationServiceTest {
                 request.setCapacity(Map.of("unitCount", 50, "weightKg", 100));
                 request.setTemperature(Map.of("minCelsius", 2, "maxCelsius", 8));
 
-                when(locationRepository.existsById(siteId)).thenReturn(true);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.of(Location.builder().id(siteId).build()));
                 when(storageLocationRepository.existsByNameIgnoreCaseAndSiteId("Bin-A2", siteId)).thenReturn(false);
                 when(storageLocationRepository.existsByBarcodeAndSiteId("BAR-010", siteId)).thenReturn(false);
                 when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
@@ -143,7 +144,7 @@ class StorageLocationServiceTest {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 StorageLocationRequest request = validRequest("Shelf-A", "BAR-002", StorageLocationType.SHELF, null);
 
-                when(locationRepository.existsById(siteId)).thenReturn(true);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.of(Location.builder().id(siteId).build()));
                 when(storageLocationRepository.existsByNameIgnoreCaseAndSiteId("Shelf-A", siteId)).thenReturn(true);
 
                 assertThatThrownBy(() -> storageLocationService.createStorageLocation(siteId, request))
@@ -164,7 +165,7 @@ class StorageLocationServiceTest {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 StorageLocationRequest request = validRequest("Floor-B", "BAR-DUP", StorageLocationType.FLOOR, null);
 
-                when(locationRepository.existsById(siteId)).thenReturn(true);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.of(Location.builder().id(siteId).build()));
                 when(storageLocationRepository.existsByNameIgnoreCaseAndSiteId(any(), eq(siteId))).thenReturn(false);
                 when(storageLocationRepository.existsByBarcodeAndSiteId("BAR-DUP", siteId)).thenReturn(true);
 
@@ -192,10 +193,10 @@ class StorageLocationServiceTest {
 
                 StorageLocationEntity parent = StorageLocationEntity.builder()
                                 .id(parentId)
-                                .siteId(differentSiteId)
+                                .site(Location.builder().id(differentSiteId).build())
                                 .build();
 
-                when(locationRepository.existsById(siteId)).thenReturn(true);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.of(Location.builder().id(siteId).build()));
                 when(storageLocationRepository.existsByNameIgnoreCaseAndSiteId(any(), eq(siteId))).thenReturn(false);
                 when(storageLocationRepository.existsByBarcodeAndSiteId(any(), eq(siteId))).thenReturn(false);
                 when(storageLocationRepository.findById(parentId)).thenReturn(Optional.of(parent));
@@ -230,7 +231,7 @@ class StorageLocationServiceTest {
                 // so setting parentId as existingId's parent would form a cycle.
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(existingId)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .name("Floor-C")
                                 .type(StorageLocationType.FLOOR)
                                 .status(StorageLocationStatus.ACTIVE)
@@ -238,8 +239,13 @@ class StorageLocationServiceTest {
 
                 StorageLocationEntity parent = StorageLocationEntity.builder()
                                 .id(parentId)
-                                .siteId(siteId)
-                                .parentStorageLocationId(existingId) // parent's ancestor is existing → cycle
+                                .site(Location.builder().id(siteId).build())
+                                .parentStorageLocation(StorageLocationEntity.builder().id(existingId).build()) // parent's
+                                                                                                               // ancestor
+                                                                                                               // is
+                                                                                                               // existing
+                                                                                                               // →
+                                                                                                               // cycle
                                 .build();
 
                 StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -289,7 +295,7 @@ class StorageLocationServiceTest {
                 UUID storageId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationEntity entity = StorageLocationEntity.builder()
                                 .id(storageId)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .capacity("{\"unitCount\":42}")
                                 .build();
@@ -321,7 +327,7 @@ class StorageLocationServiceTest {
                                 .name("BIN-1")
                                 .type(StorageLocationType.BIN)
                                 .barcode("BIN-BC-001")
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
@@ -345,7 +351,7 @@ class StorageLocationServiceTest {
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000009"))
                                 .name("NO-TYPE-1")
                                 .type(StorageLocationType.SHELF)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
@@ -378,7 +384,7 @@ class StorageLocationServiceTest {
                                 .name("Shelf-B2")
                                 .type(StorageLocationType.SHELF)
                                 .barcode("SHF-BC-002")
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
@@ -410,7 +416,7 @@ class StorageLocationServiceTest {
                                 .name("Floor-C3")
                                 .type(StorageLocationType.FLOOR)
                                 .barcode("FLR-BC-003")
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
@@ -436,14 +442,14 @@ class StorageLocationServiceTest {
                                 .id(sourceId)
                                 .name("Floor-C3")
                                 .type(StorageLocationType.FLOOR)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
                 StorageLocationEntity destination = StorageLocationEntity.builder()
                                 .id(destinationId)
                                 .name("Shelf-Z9")
                                 .type(StorageLocationType.SHELF)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
@@ -471,7 +477,7 @@ class StorageLocationServiceTest {
                                 .id(sourceId)
                                 .name("Floor-C3")
                                 .type(StorageLocationType.FLOOR)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
@@ -499,14 +505,14 @@ class StorageLocationServiceTest {
                                 .id(sourceId)
                                 .name("Floor-C3")
                                 .type(StorageLocationType.FLOOR)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
                 StorageLocationEntity destination = StorageLocationEntity.builder()
                                 .id(destinationId)
                                 .name("Shelf-Z9")
                                 .type(StorageLocationType.SHELF)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.INACTIVE)
                                 .build();
 
@@ -534,7 +540,7 @@ class StorageLocationServiceTest {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationRequest request = validRequest("Bin-X1", "BAR-X1", StorageLocationType.BIN, null);
 
-                when(locationRepository.existsById(siteId)).thenReturn(false);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.empty());
 
                 assertThatThrownBy(() -> storageLocationService.createStorageLocation(siteId, request))
                                 .isInstanceOf(ResponseStatusException.class)
@@ -551,7 +557,7 @@ class StorageLocationServiceTest {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 StorageLocationRequest request = validRequest("   ", "BAR-X2", StorageLocationType.BIN, null);
 
-                when(locationRepository.existsById(siteId)).thenReturn(true);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.of(Location.builder().id(siteId).build()));
 
                 assertThatThrownBy(() -> storageLocationService.createStorageLocation(siteId, request))
                                 .isInstanceOf(ResponseStatusException.class)
@@ -568,7 +574,7 @@ class StorageLocationServiceTest {
                 UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 StorageLocationRequest request = validRequest("Bin-X3", "BAR-X3", null, null);
 
-                when(locationRepository.existsById(siteId)).thenReturn(true);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.of(Location.builder().id(siteId).build()));
 
                 assertThatThrownBy(() -> storageLocationService.createStorageLocation(siteId, request))
                                 .isInstanceOf(ResponseStatusException.class)
@@ -586,7 +592,7 @@ class StorageLocationServiceTest {
                 UUID parentId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationRequest request = validRequest("Bin-X4", "BAR-X4", StorageLocationType.BIN, parentId);
 
-                when(locationRepository.existsById(siteId)).thenReturn(true);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.of(Location.builder().id(siteId).build()));
                 when(storageLocationRepository.existsByNameIgnoreCaseAndSiteId("Bin-X4", siteId)).thenReturn(false);
                 when(storageLocationRepository.existsByBarcodeAndSiteId("BAR-X4", siteId)).thenReturn(false);
                 when(storageLocationRepository.findById(parentId)).thenReturn(Optional.empty());
@@ -612,13 +618,13 @@ class StorageLocationServiceTest {
                                 .name("Bin-Old")
                                 .barcode("BAR-OLD")
                                 .type(StorageLocationType.BIN)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
                 StorageLocationEntity parent = StorageLocationEntity.builder()
                                 .id(parentId)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .build();
 
                 StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -661,7 +667,7 @@ class StorageLocationServiceTest {
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
                                 .name("Bin-Old")
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
@@ -694,7 +700,7 @@ class StorageLocationServiceTest {
                                 .id(storageLocationId)
                                 .name("Bin-Old")
                                 .barcode("BAR-OLD")
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
@@ -725,7 +731,7 @@ class StorageLocationServiceTest {
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
                                 .name("Bin-Old")
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
@@ -776,7 +782,7 @@ class StorageLocationServiceTest {
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .name("Bin-A")
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
@@ -808,14 +814,14 @@ class StorageLocationServiceTest {
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .name("Bin-A")
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
                 StorageLocationEntity parent = StorageLocationEntity.builder()
                                 .id(parentId)
-                                .siteId(otherSiteId)
+                                .site(Location.builder().id(otherSiteId).build())
                                 .build();
 
                 StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -845,21 +851,21 @@ class StorageLocationServiceTest {
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .name("Bin-A")
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 
                 StorageLocationEntity parent = StorageLocationEntity.builder()
                                 .id(parentId)
-                                .siteId(siteId)
-                                .parentStorageLocationId(ancestorId)
+                                .site(Location.builder().id(siteId).build())
+                                .parentStorageLocation(StorageLocationEntity.builder().id(ancestorId).build())
                                 .build();
 
                 StorageLocationEntity ancestor = StorageLocationEntity.builder()
                                 .id(ancestorId)
-                                .siteId(siteId)
-                                .parentStorageLocationId(storageLocationId)
+                                .site(Location.builder().id(siteId).build())
+                                .parentStorageLocation(StorageLocationEntity.builder().id(storageLocationId).build())
                                 .build();
 
                 StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -889,7 +895,7 @@ class StorageLocationServiceTest {
 
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .name("Bin-A")
                                 .barcode("HAS-BAR")
                                 .status(StorageLocationStatus.ACTIVE)
@@ -918,7 +924,7 @@ class StorageLocationServiceTest {
                 UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000009");
                 StorageLocationRequest request = validRequest("Bin-X5", "   ", StorageLocationType.BIN, null);
 
-                when(locationRepository.existsById(siteId)).thenReturn(true);
+                when(locationRepository.findById(siteId)).thenReturn(Optional.of(Location.builder().id(siteId).build()));
                 when(storageLocationRepository.existsByNameIgnoreCaseAndSiteId("Bin-X5", siteId)).thenReturn(false);
                 when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
                                 .thenAnswer(inv -> {
@@ -942,7 +948,7 @@ class StorageLocationServiceTest {
                 StorageLocationEntity existing = StorageLocationEntity.builder()
                                 .id(storageLocationId)
                                 .name("Bin-Old")
-                                .siteId(siteId)
+                                .site(Location.builder().id(siteId).build())
                                 .status(StorageLocationStatus.ACTIVE)
                                 .build();
 

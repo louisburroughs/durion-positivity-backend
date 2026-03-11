@@ -164,7 +164,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .expectedQuantity(75)
                                 .variance(-3)
                                 .recountSequenceNumber(1)
-                                .recountOfCountEntryId(first.getCountEntryId())
+                                .recountOfCountEntry(first)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 
@@ -214,7 +214,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .expectedQuantity(200)
                                 .variance(-3)
                                 .recountSequenceNumber(1)
-                                .recountOfCountEntryId(first.getCountEntryId())
+                                .recountOfCountEntry(first)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 
@@ -266,7 +266,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .expectedQuantity(30)
                                 .variance(-1)
                                 .recountSequenceNumber(1)
-                                .recountOfCountEntryId(first.getCountEntryId())
+                                .recountOfCountEntry(first)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 
@@ -277,7 +277,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .expectedQuantity(30)
                                 .variance(0)
                                 .recountSequenceNumber(2)
-                                .recountOfCountEntryId(second.getCountEntryId())
+                                .recountOfCountEntry(second)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 
@@ -403,7 +403,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .expectedQuantity(40)
                                 .variance(-1)
                                 .recountSequenceNumber(1)
-                                .recountOfCountEntryId(entry1.getCountEntryId())
+                                .recountOfCountEntry(entry1)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 

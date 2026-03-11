@@ -153,8 +153,6 @@ class SiteDefaultsServiceTest {
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
         when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId))
                 .thenReturn(Optional.empty());
-        when(storageLocationRepository.findByIdAndSiteId(quarantineId, siteId))
-                .thenReturn(Optional.of(storageLocation(quarantineId, siteId)));
 
         SiteDefaultsRequest request = new SiteDefaultsRequest(stagingId, quarantineId);
 
@@ -206,8 +204,10 @@ class SiteDefaultsServiceTest {
         UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         Location location = site(siteId);
-        location.setDefaultStagingLocationId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
-        location.setDefaultQuarantineLocationId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
+        location.setDefaultStagingLocation(
+                StorageLocationEntity.builder().id(UUID.fromString("00000000-0000-0000-0000-000000000009")).build());
+        location.setDefaultQuarantineLocation(
+                StorageLocationEntity.builder().id(UUID.fromString("00000000-0000-0000-0000-000000000011")).build());
         when(locationRepository.findById(siteId)).thenReturn(Optional.of(location));
 
         SiteDefaultsResponse response = siteDefaultsService.getDefaults(siteId);
@@ -262,7 +262,7 @@ class SiteDefaultsServiceTest {
                 .id(id)
                 .name("Location-" + id)
                 .type(StorageLocationType.BIN)
-                .siteId(siteId)
+                .site(Location.builder().id(siteId).build())
                 .build();
     }
 

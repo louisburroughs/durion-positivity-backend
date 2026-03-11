@@ -11,7 +11,7 @@ import java.util.UUID;
 @Repository
 public interface VehicleCarePreferenceRepository extends JpaRepository<VehicleCarePreference, UUID> {
 
-    Optional<VehicleCarePreference> findByVehicleId(@NonNull UUID vehicleId);
+    Optional<VehicleCarePreference> findByVehicle_VehicleId(@NonNull UUID vehicleId);
 
-    boolean existsByVehicleId(@NonNull UUID vehicleId);
+    boolean existsByVehicle_VehicleId(@NonNull UUID vehicleId);
 }

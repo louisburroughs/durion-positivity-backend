@@ -15,14 +15,16 @@ import java.util.UUID;
 import com.positivity.shared.id.UUIDv7Id;
 
 /**
- * Entity representing a link between a user and a person. Enforces a unique constraint on
- * userId to ensure one-to-one mapping between users and persons. Allows multiple links
+ * Entity representing a link between a user and a person. Enforces a unique
+ * constraint on
+ * userId to ensure one-to-one mapping between users and persons. Allows
+ * multiple links
  * per person to support scenarios like multiple authentication methods.
  */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "user_person_links", uniqueConstraints = @UniqueConstraint(columnNames = { "user_id" }),
-		indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
+@Table(name = "user_person_links", uniqueConstraints = @UniqueConstraint(columnNames = {
+		"user_id" }), indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
 @Getter
 @Setter
 public class UserPersonLink {
@@ -34,17 +36,25 @@ public class UserPersonLink {
 	private UUID id;
 
 	@Column(name = "user_id", nullable = false, unique = true)
-	@NonNull private UUID userId;
+	@NonNull
+	private UUID userId;
 
-	@Column(name = "person_id", nullable = false)
-	@NonNull private UUID personId;
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "person_id", nullable = false)
+	@NonNull
+	private Person person;
+
+	public UUID getPersonId() {
+		return person != null ? person.getId() : null;
+	}
 
 	@Column(name = "link_type", length = 50)
 	private String linkType = "PRIMARY";
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "status", nullable = false, length = 20)
-	@NonNull private UserLinkStatus status;
+	@NonNull
+	private UserLinkStatus status;
 
 	@CreatedDate
 	@Column(name = "created_at", nullable = false, updatable = false)

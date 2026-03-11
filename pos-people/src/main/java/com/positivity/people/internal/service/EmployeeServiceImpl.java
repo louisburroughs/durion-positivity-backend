@@ -67,7 +67,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 	@Transactional(readOnly = true)
 	public @NonNull EmployeeProfileDto getEmployee(@NonNull UUID employeeId) {
 		Person entity = personRepository.findById(employeeId)
-			.orElseThrow(() -> new PersonNotFoundException(employeeId));
+				.orElseThrow(() -> new PersonNotFoundException(employeeId));
 		return toEmployeeProfile(entity, List.of());
 	}
 
@@ -78,7 +78,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 		validateEmployeeRequest(request.getHireDate(), request.getTerminationDate());
 
 		Person entity = personRepository.findById(employeeId)
-			.orElseThrow(() -> new PersonNotFoundException(employeeId));
+				.orElseThrow(() -> new PersonNotFoundException(employeeId));
 
 		List<String> warnings = evaluateDuplicatePolicy(employeeId, request.getDuplicatePolicy(),
 				request.getEmployeeNumber(), request.getContactInfo(), request.getLegalName());
@@ -102,7 +102,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 	public @NonNull EmployeeProfileDto disableEmployee(@NonNull UUID employeeId,
 			@NonNull DisableEmployeeRequestDto request) {
 		Person entity = personRepository.findById(employeeId)
-			.orElseThrow(() -> new PersonNotFoundException(employeeId));
+				.orElseThrow(() -> new PersonNotFoundException(employeeId));
 
 		EmployeeStatus currentStatus = entity.getStatus();
 		if (currentStatus == EmployeeStatus.DISABLED || currentStatus == EmployeeStatus.TERMINATED) {
@@ -119,8 +119,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 		String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
 		try {
 			applyAssignmentPolicy(saved, request, actorId);
-		}
-		catch (Exception exception) {
+		} catch (Exception exception) {
 			log.warn("Offboarding downstream action failed for employee {}. Queuing retry. Reason: {}", employeeId,
 					exception.getMessage());
 			queueOffboardingRetry(saved.getId(), request, actorId, exception.getMessage());
@@ -183,8 +182,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 			return false;
 		}
 		return personRepository.findByLegalNameIgnoreCase(legalName)
-			.stream()
-			.anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
+				.stream()
+				.anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
 	}
 
 	private void applyEmployeeFields(Person entity, EmployeeFieldSet fields) {
@@ -212,13 +211,12 @@ public class EmployeeServiceImpl implements EmployeeService {
 			entity.setSecondaryEmail(normalize(contactInfo.getSecondaryEmail()));
 
 			List<String> phones = java.util.stream.Stream
-				.of(normalize(contactInfo.getPrimaryPhone()), normalize(contactInfo.getSecondaryPhone()))
-				.filter(value -> value != null && !value.isBlank())
-				.toList();
+					.of(normalize(contactInfo.getPrimaryPhone()), normalize(contactInfo.getSecondaryPhone()))
+					.filter(value -> value != null && !value.isBlank())
+					.toList();
 			entity.setPhoneNumbers(new ArrayList<>(phones));
 			entity.setContactInfoJson(writeContactInfo(contactInfo));
-		}
-		else {
+		} else {
 			entity.setContactInfoJson(null);
 			entity.setPhoneNumbers(new ArrayList<>());
 		}
@@ -237,23 +235,23 @@ public class EmployeeServiceImpl implements EmployeeService {
 			return false;
 		}
 		return personRepository.findByPhoneNumbersContains(phoneValue)
-			.stream()
-			.anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
+				.stream()
+				.anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
 	}
 
 	private EmployeeProfileDto toEmployeeProfile(Person person, List<String> warnings) {
 		return EmployeeProfileDto.builder()
-			.id(person.getId())
-			.legalName(person.getLegalName())
-			.preferredName(person.getPreferredName())
-			.employeeNumber(person.getEmployeeNumber())
-			.status(person.getStatus())
-			.hireDate(person.getHireDate())
-			.terminationDate(person.getTerminationDate())
-			.contactInfo(readContactInfo(person.getContactInfoJson()))
-			.statusEffectiveAt(person.getStatusEffectiveAt())
-			.warnings(warnings)
-			.build();
+				.id(person.getId())
+				.legalName(person.getLegalName())
+				.preferredName(person.getPreferredName())
+				.employeeNumber(person.getEmployeeNumber())
+				.status(person.getStatus())
+				.hireDate(person.getHireDate())
+				.terminationDate(person.getTerminationDate())
+				.contactInfo(readContactInfo(person.getContactInfoJson()))
+				.statusEffectiveAt(person.getStatusEffectiveAt())
+				.warnings(warnings)
+				.build();
 	}
 
 	private EmployeeContactInfoDto readContactInfo(String contactInfoJson) {
@@ -262,8 +260,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 		}
 		try {
 			return objectMapper.readValue(contactInfoJson, EmployeeContactInfoDto.class);
-		}
-		catch (JsonProcessingException exception) {
+		} catch (JsonProcessingException exception) {
 			log.warn("Failed to deserialize contact info JSON. Returning null. reason={}", exception.getMessage());
 			return null;
 		}
@@ -272,8 +269,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 	private String writeContactInfo(EmployeeContactInfoDto contactInfo) {
 		try {
 			return objectMapper.writeValueAsString(contactInfo);
-		}
-		catch (JsonProcessingException exception) {
+		} catch (JsonProcessingException exception) {
 			throw new IllegalStateException("Unable to persist contactInfo", exception);
 		}
 	}
@@ -295,7 +291,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 	private void queueOffboardingRetry(UUID employeeId, DisableEmployeeRequestDto request, String actorId,
 			String failureReason) {
 		EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
-		retry.setEmployeeId(employeeId);
+		retry.setEmployee(personRepository.getReferenceById(employeeId));
 		retry.setAssignmentPolicy(request.getAssignmentPolicy() != null ? request.getAssignmentPolicy()
 				: AssignmentTerminationPolicy.IMMEDIATE);
 		retry.setDisableReason(request.getDisableReason());

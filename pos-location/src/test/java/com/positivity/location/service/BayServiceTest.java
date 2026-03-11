@@ -43,6 +43,7 @@ import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.entity.BayEntity;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.exception.DuplicateResourceException;
@@ -123,7 +124,8 @@ class BayServiceTest {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationRepository.existsById(locationId)).thenReturn(true);
-        BayEntity entity = BayEntity.builder().locationId(locationId).name("Bay1").bayType("GENERAL_SERVICE")
+        BayEntity entity = BayEntity.builder().location(Location.builder().id(locationId).build()).name("Bay1")
+                .bayType("GENERAL_SERVICE")
                 .status("ACTIVE")
                 .maxConcurrentVehicles(2).build();
         when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(entity));
@@ -155,7 +157,8 @@ class BayServiceTest {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationRepository.existsById(locationId)).thenReturn(true);
-        BayEntity entity = BayEntity.builder().locationId(locationId).name("Bay1").bayType("GENERAL_SERVICE")
+        BayEntity entity = BayEntity.builder().location(Location.builder().id(locationId).build()).name("Bay1")
+                .bayType("GENERAL_SERVICE")
                 .status("ACTIVE")
                 .maxConcurrentVehicles(2).build();
         when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(entity));
@@ -272,7 +275,8 @@ class BayServiceTest {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
 
-        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
         when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
         when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.of(BayEntity.builder().build()));
@@ -288,7 +292,8 @@ class BayServiceTest {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
 
-        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
         when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
         when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
@@ -307,7 +312,8 @@ class BayServiceTest {
         BayRequest request = validCreateRequest();
         request.setBayType("BAD_TYPE");
 
-        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
 
         assertThatThrownBy(() -> bayService.createBay(locationId, request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -321,7 +327,8 @@ class BayServiceTest {
         BayRequest request = validCreateRequest();
         request.setCapacity(BayCapacityRequest.builder().maxConcurrentVehicles(0).build());
 
-        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
 
         assertThatThrownBy(() -> bayService.createBay(locationId, request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -336,7 +343,8 @@ class BayServiceTest {
         request.setCapacity(null);
         request.setMaxConcurrentVehicles(null);
 
-        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
 
         assertThatThrownBy(() -> bayService.createBay(locationId, request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -352,7 +360,8 @@ class BayServiceTest {
         request.setSkillRequirementIds(List.of("ASE-A1"));
         request.setStatus("active");
 
-        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
         when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
         when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
@@ -378,7 +387,8 @@ class BayServiceTest {
         BayRequest request = validCreateRequest();
         request.setServiceCapabilityIds(List.of("ALIGN", "UNKNOWN_CAP"));
 
-        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
         when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
         when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
@@ -403,7 +413,8 @@ class BayServiceTest {
         request.setCapacity(null);
         request.setMaxConcurrentVehicles(4);
 
-        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
         when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
         when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
@@ -703,7 +714,7 @@ class BayServiceTest {
     private BayEntity defaultBay(UUID locationId) {
         return BayEntity.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .locationId(locationId)
+                .location(Location.builder().id(locationId).build())
                 .name("Bay-1")
                 .normalizedName("bay-1")
                 .bayType(BayType.GENERAL_SERVICE.name())

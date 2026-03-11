@@ -338,3 +338,46 @@ Migration is complete only when all are true:
   - Integration test strategy: Used managed entity references (saved Estimate variables or `estimateRepository.getReferenceById()`) for `buildItem` helpers.
   - Validation: `./mvnw -pl pos-workorder test` (261 tests, 0 failures), `./mvnw -pl pos-archunit test` (15 tests, 0 failures)
   - Result: PASS. pos-workorder module FK conversion COMPLETE (42 FKs total across batches 1-10).
+- 2026-03-10: Multi-module batch 11 completed (pos-vehicle-fitment, pos-vehicle-reference-nhtsa, pos-vehicle-inventory, pos-inventory).
+  - Converted 4 FK fields to `@ManyToOne` relationships:
+    - `VehicleVariableValue.variableId` → `@ManyToOne VehicleVariable variable` + `@JoinColumn(name = "variable_id")` (pos-vehicle-fitment)
+    - `VehicleVariableValue.variableId` → `@ManyToOne VehicleVariable variable` + `@JoinColumn(name = "variable_id")` (pos-vehicle-reference-nhtsa)
+    - `VehicleCarePreference.vehicleId` → `@ManyToOne(fetch=LAZY, optional=false) VehicleRecord vehicle` + `@JoinColumn(name = "vehicle_id")` (pos-vehicle-inventory)
+    - `CountEntry.recountOfCountEntryId` → `@ManyToOne(fetch=LAZY) CountEntry recountOfCountEntry` (self-reference, nullable) (pos-inventory)
+  - Added scalar compatibility getters for all 4 fields.
+  - Updated repository methods:
+    - `VehicleVariableValueRepository.findByVariable_Id()` (both fitment and NHTSA modules)
+    - `VehicleCarePreferenceRepository.findByVehicle_VehicleId()`, `existsByVehicle_VehicleId()`
+  - Updated service code:
+    - `VehicleFitmentServiceImpl`: `setVariable(vehicleVariableRepository.getReferenceById(...))`, `findByVariable_Id()`
+    - `VehicleReferenceService`: same pattern as fitment
+    - `VehiclePreferencesServiceImpl`: `findByVehicle_VehicleId()` (3 calls), builder `.vehicle(vehicleRepository.getReferenceById(...))`
+    - `CycleCountServiceImpl`: `.recountOfCountEntry(null)`, `.recountOfCountEntry(previousEntry)` using entity reference
+  - Updated tests:
+    - `VehicleFitmentServiceTest`: `setVariable(variable)` with `VehicleVariable` fixture, `findByVariable_Id()`
+    - `CycleCountContractBehaviorIT`: `.recountOfCountEntry(x)` using entity references (5 occurrences)
+  - Also identified `CarApiModel.makeId` as false positive — already had `@ManyToOne CarApiMake make` relationship.
+  - Validation:
+    - pos-vehicle-fitment: 15 tests, 0 failures
+    - pos-vehicle-inventory: 16 tests, 0 failures
+    - pos-inventory: 260 tests, 0 failures
+  - Result: PASS.
+- 2026-03-10: pos-accounting batch 12 completed (PaymentApplication.paymentId).
+  - Converted 1 FK field to `@ManyToOne` relationship:
+    - `PaymentApplication.paymentId` → `@ManyToOne(fetch=LAZY, optional=false) ReceivablePayment payment` + `@JoinColumn(name = "payment_id")`
+  - Added `@ToString.Exclude` for lazy safety and scalar compatibility getter `getPaymentId()`.
+  - Updated repository: `findByPayment_PaymentId()`, JPQL `pa.payment.paymentId` in `sumAppliedAmountByPaymentId`.
+  - Updated service: `buildPaymentApplicationEntity()` uses `setPayment(input.payment())`.
+  - Updated tests:
+    - `PaymentApplicationServiceTest`: 11 occurrences `setPayment(testPayment)`, 5 occurrences `findByPayment_PaymentId()`
+    - `PaymentApplicationControllerIntegrationTest`: 3 occurrences `setPayment(receivablePaymentRepository.getReferenceById(...))`, 4 occurrences `findByPayment_PaymentId()`
+  - Validation: 26 unit tests + 18 integration tests, 0 failures
+  - Result: PASS.
+  - Deferred 5 pos-customer fields (CommunicationPreference.partyId, PartyNote.partyId — AbstractParty TABLE_PER_CLASS inheritance; ContactRoleAssignment.contactId, PartyAlias.sourcePartyId/targetPartyId — composite @Id).
+  - All approved CONVERT_NOW candidates across ALL modules are now complete.
+  - MIGRATION COMPLETE. Done criteria met:
+    1. Every approved same-module Core candidate is DONE or explicitly DEFER with reason. ✓
+    2. No cross-service JPA links were introduced. ✓
+    3. Module tests pass for all changed modules. ✓
+    4. Architecture tests pass (pos-archunit ArchitectureTests, module ArchitectureTests). ✓
+    5. Audit/Event entities remain untouched. ✓

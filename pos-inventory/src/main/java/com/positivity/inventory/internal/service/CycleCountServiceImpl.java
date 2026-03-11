@@ -88,7 +88,7 @@ public class CycleCountServiceImpl implements CycleCountService {
                                 .expectedQuantity(task.getExpectedQuantity())
                                 .variance(variance)
                                 .recountSequenceNumber(0) // Original count
-                                .recountOfCountEntryId(null)
+                                .recountOfCountEntry(null)
                                 .countedAt(Instant.now(clock))
                                 .build();
 
@@ -150,7 +150,7 @@ public class CycleCountServiceImpl implements CycleCountService {
                                 .expectedQuantity(task.getExpectedQuantity())
                                 .variance(variance)
                                 .recountSequenceNumber(newSequenceNumber)
-                                .recountOfCountEntryId(previousEntry.getCountEntryId())
+                                .recountOfCountEntry(previousEntry)
                                 .countedAt(Instant.now(clock))
                                 .build();
 

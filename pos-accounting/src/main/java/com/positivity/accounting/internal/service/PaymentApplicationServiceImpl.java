@@ -266,7 +266,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 PAYMENT_NOT_FOUND + paymentId));
 
-                List<PaymentApplication> existingApplications = paymentApplicationRepository.findByPaymentId(paymentId);
+                List<PaymentApplication> existingApplications = paymentApplicationRepository.findByPayment_PaymentId(paymentId);
                 if (!existingApplications.isEmpty()) {
                         throw new ResponseStatusException(HttpStatus.CONFLICT,
                                         "Payment " + paymentId
@@ -305,7 +305,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 PAYMENT_NOT_FOUND + paymentId));
 
-                List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(paymentId);
+                List<PaymentApplication> applications = paymentApplicationRepository.findByPayment_PaymentId(paymentId);
                 if (applications.isEmpty()) {
                         throw new ResponseStatusException(HttpStatus.CONFLICT,
                                         "Payment " + paymentId + " has no applications to reverse");
@@ -449,7 +449,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
          */
         @Transactional(readOnly = true)
         public List<PaymentApplication> listApplicationsForPayment(@NonNull UUID paymentId) {
-                return paymentApplicationRepository.findByPaymentId(paymentId);
+                return paymentApplicationRepository.findByPayment_PaymentId(paymentId);
         }
 
         /**
@@ -660,7 +660,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         private PaymentApplication buildPaymentApplicationEntity(PaymentApplicationEntityInput input) {
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(input.applicationId());
-                application.setPaymentId(input.paymentId());
+                application.setPayment(input.payment());
                 application.setInvoiceId(input.invoiceId());
                 application.setCustomerId(input.payment().getCustomerId());
                 application.setCurrency(input.payment().getCurrency());

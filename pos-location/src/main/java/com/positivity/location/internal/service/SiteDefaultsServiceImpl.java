@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.positivity.location.internal.dto.SiteDefaultsRequest;
 import com.positivity.location.internal.dto.SiteDefaultsResponse;
 import com.positivity.location.internal.entity.Location;
+import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.service.SiteDefaultsService;
@@ -60,14 +61,11 @@ public class SiteDefaultsServiceImpl implements SiteDefaultsService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, DEFAULT_LOCATION_ROLE_CONFLICT);
         }
 
-        boolean stagingBelongsToSite = storageLocationBelongsToSite(stagingId, siteId);
-        boolean quarantineBelongsToSite = storageLocationBelongsToSite(quarantineId, siteId);
-        if (!stagingBelongsToSite || !quarantineBelongsToSite) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, DEFAULT_LOCATION_NOT_BELONGS_TO_SITE);
-        }
+        StorageLocationEntity stagingLocation = resolveStorageLocationInSite(stagingId, siteId);
+        StorageLocationEntity quarantineLocation = resolveStorageLocationInSite(quarantineId, siteId);
 
-        location.setDefaultStagingLocationId(stagingId);
-        location.setDefaultQuarantineLocationId(quarantineId);
+        location.setDefaultStagingLocation(stagingLocation);
+        location.setDefaultQuarantineLocation(quarantineLocation);
         locationRepository.save(location);
 
         return SiteDefaultsResponse.builder()
@@ -101,7 +99,9 @@ public class SiteDefaultsServiceImpl implements SiteDefaultsService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, SITE_NOT_FOUND));
     }
 
-    private boolean storageLocationBelongsToSite(UUID storageLocationId, UUID siteId) {
-        return storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId).isPresent();
+    private StorageLocationEntity resolveStorageLocationInSite(UUID storageLocationId, UUID siteId) {
+        return storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT,
+                        DEFAULT_LOCATION_NOT_BELONGS_TO_SITE));
     }
 }

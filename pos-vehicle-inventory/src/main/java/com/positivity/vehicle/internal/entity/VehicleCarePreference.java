@@ -15,14 +15,19 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import jakarta.persistence.GeneratedValue;
 import com.positivity.shared.id.UUIDv7Id;
@@ -46,9 +51,16 @@ public class VehicleCarePreference {
     @UUIDv7Id
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
-    @NonNull
-    @Column(name = "vehicle_id", nullable = false, unique = true)
-    private UUID vehicleId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "vehicle_id", nullable = false, unique = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private VehicleRecord vehicle;
+
+    public UUID getVehicleId() {
+        return vehicle != null ? vehicle.getVehicleId() : null;
+    }
 
     @NonNull
     @JdbcTypeCode(SqlTypes.JSON)
