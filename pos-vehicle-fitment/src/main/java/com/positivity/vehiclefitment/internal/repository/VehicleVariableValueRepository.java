@@ -6,6 +6,6 @@ import java.util.List;
 import java.util.UUID;
 
 public interface VehicleVariableValueRepository extends JpaRepository<VehicleVariableValue, UUID> {
-    List<VehicleVariableValue> findByVariableId(UUID variableId);
+    List<VehicleVariableValue> findByVariable_Id(UUID variableId);
 }
 

@@ -76,7 +76,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
 
     @Override
     public List<VehicleVariableValue> getVehicleVariableValues(UUID variableId) {
-        List<VehicleVariableValue> cached = vehicleVariableValueRepository.findByVariableId(variableId);
+        List<VehicleVariableValue> cached = vehicleVariableValueRepository.findByVariable_Id(variableId);
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
@@ -91,7 +91,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
             vehicleVariableValueRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 VehicleVariableValue value = new VehicleVariableValue();
-                value.setVariableId(variableId);
+                value.setVariable(vehicleVariableRepository.getReferenceById(variableId));
                 value.setValue(node.path("Value").asString(""));
                 value.setValueId(node.path("ValueId").asString(""));
                 value.setCacheTimestamp(LocalDateTime.now(clock));
@@ -100,7 +100,7 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
         } catch (Exception e) {
             throw new VehicleFitmentException("Failed to parse vehicle variable values", e);
         }
-        return vehicleVariableValueRepository.findByVariableId(variableId);
+        return vehicleVariableValueRepository.findByVariable_Id(variableId);
     }
 
     @Override

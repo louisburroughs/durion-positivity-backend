@@ -212,7 +212,7 @@ class AssignmentServiceTest {
                 var savedMechLink = AssignmentMechanic.builder()
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .assignment(savedAssignment)
-                                .mechanicId(mechanicId)
+                                .mechanic(Mechanic.builder().mechanicId(mechanicId).build())
                                 .role(MechanicRoleEnum.LEAD)
                                 .build();
 
@@ -256,7 +256,7 @@ class AssignmentServiceTest {
                 var savedMechLink = AssignmentMechanic.builder()
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .assignment(savedAssignment)
-                                .mechanicId(mechanicId)
+                                .mechanic(Mechanic.builder().mechanicId(mechanicId).build())
                                 .role(MechanicRoleEnum.LEAD)
                                 .build();
 
@@ -304,12 +304,14 @@ class AssignmentServiceTest {
                 var mechLink = AssignmentMechanic.builder()
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .assignment(assignment)
-                                .mechanicId(mechanicId)
+                                .mechanic(Mechanic.builder().mechanicId(mechanicId).build())
                                 .role(MechanicRoleEnum.LEAD)
                                 .build();
 
-                when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
-                when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of(mechLink));
+                when(assignmentRepository.findByAppointment_AppointmentId(appointmentId))
+                                .thenReturn(List.of(assignment));
+                when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId))
+                                .thenReturn(List.of(mechLink));
 
                 List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -379,7 +381,7 @@ class AssignmentServiceTest {
                 return AssignmentMechanic.builder()
                                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .assignment(assignment)
-                                .mechanicId(mechanicId)
+                                .mechanic(Mechanic.builder().mechanicId(mechanicId).build())
                                 .role(role)
                                 .build();
         }

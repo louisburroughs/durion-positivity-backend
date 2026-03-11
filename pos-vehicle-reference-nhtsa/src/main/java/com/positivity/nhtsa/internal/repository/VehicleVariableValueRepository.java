@@ -8,5 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.positivity.nhtsa.internal.entity.VehicleVariableValue;
 
 public interface VehicleVariableValueRepository extends JpaRepository<VehicleVariableValue, UUID> {
-    List<VehicleVariableValue> findByVariableId(UUID variableId);
+    List<VehicleVariableValue> findByVariable_Id(UUID variableId);
 }

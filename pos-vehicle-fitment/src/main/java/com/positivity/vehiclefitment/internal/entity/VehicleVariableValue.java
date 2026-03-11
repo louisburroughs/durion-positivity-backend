@@ -12,10 +12,15 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @Data
 @Entity
@@ -29,7 +34,15 @@ public class VehicleVariableValue {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    private UUID variableId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "variable_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private VehicleVariable variable;
+
+    public UUID getVariableId() {
+        return variable != null ? variable.getId() : null;
+    }
 
     @Column(name = "variable_value")
     private String value;

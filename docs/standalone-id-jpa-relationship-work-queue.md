@@ -73,6 +73,40 @@ Last Updated: 2026-03-10
 | `pos-workorder` | `Workorder` | `estimateId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Estimate estimate` on 2026-03-10. |
 | `pos-workorder` | `EstimateItem` | `estimateId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Estimate estimate` on 2026-03-10. High impact: 1 entity, 4 repo methods, 11 service calls, 15+ test file updates. |
 
+| `pos-location` | `BayEntity` | `locationId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Location` on 2026-03-10. |
+| `pos-location` | `StorageLocationEntity` | `siteId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Location site` on 2026-03-10. |
+| `pos-location` | `StorageLocationEntity` | `parentStorageLocationId` | `CONVERT_NOW` | `DONE` | Self-ref: converted to `@ManyToOne StorageLocationEntity parentStorageLocation` on 2026-03-10. |
+| `pos-location` | `Location` | `defaultStagingLocationId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne StorageLocationEntity defaultStagingLocation` on 2026-03-10. |
+| `pos-location` | `Location` | `defaultQuarantineLocationId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne StorageLocationEntity defaultQuarantineLocation` on 2026-03-10. |
+| `pos-location` | `MobileUnitEntity` | `baseLocationId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Location baseLocation` (nullable) on 2026-03-10. |
+| `pos-shop-manager` | `OverrideRecord` | `appointmentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Appointment` on 2026-03-10. |
+| `pos-shop-manager` | `RescheduleHistory` | `appointmentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Appointment` on 2026-03-10. |
+| `pos-shop-manager` | `WorkOrderAppointmentMapping` | `appointmentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Appointment` on 2026-03-10. |
+| `pos-shop-manager` | `AppointmentAudit` | `appointmentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Appointment` on 2026-03-10. |
+| `pos-shop-manager` | `AssignmentMechanic` | `mechanicId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Mechanic` on 2026-03-10. |
+| `pos-shop-manager` | `MechanicSkill` | `mechanicId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Mechanic` on 2026-03-10. |
+| `pos-people` | `TimeEntryAdjustment` | `timeEntryId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne TimeEntry timeEntry` on 2026-03-10. |
+| `pos-people` | `WorkSession` | `personId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Person person` on 2026-03-10. |
+| `pos-people` | `WorkSessionBreak` | `sessionId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne WorkSession session` on 2026-03-10. |
+| `pos-people` | `UserPersonLink` | `personId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Person person` on 2026-03-10. |
+| `pos-people` | `TimekeepingEntry` | `sourceSessionId` | `KEEP_SCALAR` | `DONE` | Not a true FK: correction flow sets to correctionId, used as dedup key per unique constraint (tenant_id, source_system, source_session_id). |
+| `pos-people` | `PersonLocationAssignment` | `personId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Person person` on 2026-03-10. |
+| `pos-people` | `EmployeeOffboardingRetry` | `employeeId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Person employee` on 2026-03-10. |
+| `pos-vehicle-reference-carapi` | `CarApiModel` | `makeId` | `CONVERT_NOW` | `DONE` | Already had `@ManyToOne CarApiMake make` relationship; scanner false positive from compatibility getter. |
+| `pos-vehicle-fitment` | `VehicleVariableValue` | `variableId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne VehicleVariable variable` on 2026-03-10. |
+| `pos-vehicle-reference-nhtsa` | `VehicleVariableValue` | `variableId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne VehicleVariable variable` on 2026-03-10. |
+| `pos-vehicle-inventory` | `VehicleCarePreference` | `vehicleId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne VehicleRecord vehicle` on 2026-03-10. Non-standard PK: `vehicleId`. |
+| `pos-inventory` | `CountEntry` | `recountOfCountEntryId` | `CONVERT_NOW` | `DONE` | Self-ref: converted to `@ManyToOne CountEntry recountOfCountEntry` (nullable) on 2026-03-10. Non-standard PK: `countEntryId`. |
+| `pos-accounting` | `PaymentApplication` | `paymentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne ReceivablePayment payment` on 2026-03-10. Immutable entity. |
+| `pos-customer` | `CommunicationPreference` | `partyId` | `DEFER` | `DEFER` | AbstractParty uses TABLE_PER_CLASS inheritance; no shared AbstractPartyRepository; cross-table proxy resolution fragile. |
+| `pos-customer` | `PartyNote` | `partyId` | `DEFER` | `DEFER` | Same as CommunicationPreference — AbstractParty TABLE_PER_CLASS inheritance complexity. |
+| `pos-customer` | `ContactRoleAssignment` | `contactId` | `DEFER` | `DEFER` | Composite @IdClass (contactId+customerAccountId+roleName); FK-in-composite-key requires @MapsId strategy. |
+| `pos-customer` | `PartyAlias` | `sourcePartyId` | `DEFER` | `DEFER` | @Id field in composite key; requires @MapsId strategy. |
+| `pos-customer` | `PartyAlias` | `targetPartyId` | `DEFER` | `DEFER` | Same entity with composite @Id; requires @MapsId strategy. |
+| `pos-accounting` | `PaymentApplication` | `invoiceId` | `KEEP_SCALAR` | `DONE` | Cross-service: invoice owned by pos-invoice. |
+| `pos-accounting` | `PaymentApplication` | `customerId` | `KEEP_SCALAR` | `DONE` | Cross-service: customer owned by pos-customer. |
+| `pos-accounting` | `ReceivablePayment` | `customerId` | `KEEP_SCALAR` | `DONE` | Cross-service: customer owned by pos-customer. |
+
 ## Next Candidates
 
-- Classify and convert remaining modules (pos-shop-manager, pos-people, pos-location, pos-inventory, pos-invoice, pos-order, pos-catalog, pos-customer).
+All approved CONVERT_NOW candidates are complete. Remaining items are DEFER or KEEP_SCALAR.

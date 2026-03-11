@@ -14,6 +14,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import static jakarta.persistence.FetchType.LAZY;
+
 /**
  * PaymentApplication - immutable record linking a payment to an invoice.
  * 
@@ -61,8 +63,14 @@ public class PaymentApplication {
         }
     }
 
-    @Column(name = "payment_id", nullable = false, columnDefinition = "UUID")
-    private UUID paymentId;
+    @ToString.Exclude
+    @ManyToOne(fetch = LAZY, optional = false)
+    @JoinColumn(name = "payment_id", nullable = false, columnDefinition = "UUID")
+    private ReceivablePayment payment;
+
+    public UUID getPaymentId() {
+        return payment != null ? payment.getPaymentId() : null;
+    }
 
     @Column(name = "invoice_id", nullable = false, columnDefinition = "UUID")
     private UUID invoiceId;

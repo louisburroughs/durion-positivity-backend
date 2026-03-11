@@ -37,7 +37,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
     @Transactional(readOnly = true)
     public Optional<VehicleCarePreference> getPreferences(@NonNull UUID vehicleId) {
         log.debug("Fetching preferences for vehicleId={}", vehicleId);
-        return preferencesRepository.findByVehicleId(vehicleId);
+        return preferencesRepository.findByVehicle_VehicleId(vehicleId);
     }
 
     /**
@@ -58,7 +58,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
             throw new IllegalArgumentException("Preferences map cannot be null (use empty map instead)");
         }
 
-        var existing = preferencesRepository.findByVehicleId(request.getVehicleId());
+        var existing = preferencesRepository.findByVehicle_VehicleId(request.getVehicleId());
 
         VehicleCarePreference preference;
         if (existing.isPresent()) {
@@ -75,7 +75,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
         } else {
             // Create new
             preference = VehicleCarePreference.builder()
-                    .vehicleId(request.getVehicleId())
+                    .vehicle(vehicleRepository.getReferenceById(request.getVehicleId()))
                     .preferences(request.getPreferences())
                     .serviceNotes(request.getServiceNotes())
                     .createdByUserId(request.getCreatedByUserId())
@@ -129,7 +129,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
     public void deletePreferences(@NonNull UUID vehicleId) {
         log.info("Deleting preferences for vehicleId={}", vehicleId);
 
-        preferencesRepository.findByVehicleId(vehicleId)
+        preferencesRepository.findByVehicle_VehicleId(vehicleId)
                 .ifPresent(preference -> {
                     preferencesRepository.delete(preference);
                     log.info("Deleted preferences: id={}", preference.getId());

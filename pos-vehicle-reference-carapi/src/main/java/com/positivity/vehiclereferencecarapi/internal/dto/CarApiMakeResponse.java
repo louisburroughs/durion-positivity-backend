@@ -9,6 +9,6 @@ import lombok.Value;
 @Builder
 public class CarApiMakeResponse {
     UUID id;
-    String makeId;
+    UUID makeId;
     String makeName;
 }

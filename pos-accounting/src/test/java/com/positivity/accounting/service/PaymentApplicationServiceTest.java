@@ -318,7 +318,7 @@ class PaymentApplicationServiceTest {
                 // Arrange
                 PaymentApplication existingApplication = new PaymentApplication();
                 existingApplication.setPaymentApplicationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                existingApplication.setPaymentId(testPaymentId);
+                existingApplication.setPayment(testPayment);
                 existingApplication.setCustomerId(testCustomerId);
                 existingApplication.setInvoiceId(testInvoiceId);
                 existingApplication.setAppliedAmount(new BigDecimal("500.00"));
@@ -450,7 +450,7 @@ class PaymentApplicationServiceTest {
                 // data
                 PaymentApplication existingApplication = new PaymentApplication();
                 existingApplication.setPaymentApplicationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                existingApplication.setPaymentId(testPaymentId);
+                existingApplication.setPayment(testPayment);
                 existingApplication.setCustomerId(testCustomerId);
                 existingApplication.setInvoiceId(testInvoiceId);
                 existingApplication.setAppliedAmount(new BigDecimal("500.00"));
@@ -558,7 +558,7 @@ class PaymentApplicationServiceTest {
         void testVoidPayment_Success() {
                 // Arrange
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
-                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of());
+                when(paymentApplicationRepository.findByPayment_PaymentId(testPaymentId)).thenReturn(List.of());
                 when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -591,12 +591,12 @@ class PaymentApplicationServiceTest {
                 // Arrange
                 PaymentApplication existing = new PaymentApplication();
                 existing.setPaymentApplicationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                existing.setPaymentId(testPaymentId);
+                existing.setPayment(testPayment);
                 existing.setInvoiceId(testInvoiceId);
                 existing.setAppliedAmount(new BigDecimal("100.00"));
 
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
-                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of(existing));
+                when(paymentApplicationRepository.findByPayment_PaymentId(testPaymentId)).thenReturn(List.of(existing));
 
                 // Act & Assert
                 assertThatThrownBy(() -> service.voidPayment(testPaymentId))
@@ -619,7 +619,7 @@ class PaymentApplicationServiceTest {
                 UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
-                application.setPaymentId(testPaymentId);
+                application.setPayment(testPayment);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoiceId);
                 application.setAppliedAmount(new BigDecimal("500.00"));
@@ -630,7 +630,7 @@ class PaymentApplicationServiceTest {
                 testPayment.setUnappliedAmount(new BigDecimal("500.00"));
 
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
-                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of(application));
+                when(paymentApplicationRepository.findByPayment_PaymentId(testPaymentId)).thenReturn(List.of(application));
                 when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(false);
                 when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
@@ -676,7 +676,7 @@ class PaymentApplicationServiceTest {
         void testReversePayment_NoApplications() {
                 // Arrange
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
-                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of());
+                when(paymentApplicationRepository.findByPayment_PaymentId(testPaymentId)).thenReturn(List.of());
 
                 // Act & Assert
                 assertThatThrownBy(() -> service.reversePayment(testPaymentId, "Customer requested reversal"))
@@ -693,12 +693,12 @@ class PaymentApplicationServiceTest {
                 UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
-                application.setPaymentId(testPaymentId);
+                application.setPayment(testPayment);
                 application.setInvoiceId(testInvoiceId);
                 application.setAppliedAmount(new BigDecimal("100.00"));
 
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
-                when(paymentApplicationRepository.findByPaymentId(testPaymentId)).thenReturn(List.of(application));
+                when(paymentApplicationRepository.findByPayment_PaymentId(testPaymentId)).thenReturn(List.of(application));
                 when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(applicationId))
                                 .thenReturn(true);
 
@@ -722,7 +722,7 @@ class PaymentApplicationServiceTest {
                 UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
-                application.setPaymentId(testPaymentId);
+                application.setPayment(testPayment);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoiceId);
                 application.setAppliedAmount(new BigDecimal("500.00"));
@@ -780,7 +780,7 @@ class PaymentApplicationServiceTest {
                 UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
-                application.setPaymentId(testPaymentId);
+                application.setPayment(testPayment);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoiceId);
                 application.setAppliedAmount(new BigDecimal("500.00"));
@@ -863,7 +863,7 @@ class PaymentApplicationServiceTest {
                 UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
-                application.setPaymentId(testPaymentId);
+                application.setPayment(testPayment);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoiceId);
                 application.setAppliedAmount(new BigDecimal("500.00"));
@@ -892,7 +892,7 @@ class PaymentApplicationServiceTest {
                 UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
-                application.setPaymentId(testPaymentId);
+                application.setPayment(testPayment);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoiceId);
                 application.setAppliedAmount(new BigDecimal("500.00"));
@@ -922,7 +922,7 @@ class PaymentApplicationServiceTest {
                 UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
-                application.setPaymentId(testPaymentId);
+                application.setPayment(testPayment);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoiceId);
                 application.setAppliedAmount(new BigDecimal("500.00"));
@@ -972,7 +972,7 @@ class PaymentApplicationServiceTest {
                 UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(applicationId);
-                application.setPaymentId(testPaymentId);
+                application.setPayment(testPayment);
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoiceId);
                 application.setAppliedAmount(new BigDecimal("500.00"));

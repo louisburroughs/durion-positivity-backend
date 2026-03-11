@@ -24,7 +24,7 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
      * @param paymentId payment identifier
      * @return list of applications
      */
-    List<PaymentApplication> findByPaymentId(UUID paymentId);
+    List<PaymentApplication> findByPayment_PaymentId(UUID paymentId);
 
     /**
      * Find all applications for an invoice.
@@ -73,7 +73,7 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
      * @param paymentId payment identifier
      * @return total applied amount
      */
-    @Query("SELECT COALESCE(SUM(pa.appliedAmount), 0) FROM PaymentApplication pa WHERE pa.paymentId = :paymentId")
+    @Query("SELECT COALESCE(SUM(pa.appliedAmount), 0) FROM PaymentApplication pa WHERE pa.payment.paymentId = :paymentId")
     java.math.BigDecimal sumAppliedAmountByPaymentId(UUID paymentId);
 
     /**

@@ -312,7 +312,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         Instant rescheduledAt = Instant.now(clock);
 
         AppointmentAudit audit = AppointmentAudit.builder()
-                .appointmentId(appointmentId)
+                .appointment(appointment)
                 .action(AppointmentAction.RESCHEDULED)
                 .actorId(actorId)
                 .previousStartAt(previousStartAt)
@@ -323,7 +323,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         appointmentAuditRepository.save(audit);
 
         rescheduleHistoryRepository.save(RescheduleHistory.builder()
-                .appointmentId(appointmentId)
+                .appointment(appointment)
                 .previousStartAt(previousStartAt)
                 .previousEndAt(previousEndAt)
                 .newStartAt(request.getNewStartAt())
@@ -387,7 +387,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         AppointmentAudit audit = AppointmentAudit.builder()
-                .appointmentId(appointmentId)
+                .appointment(appointment)
                 .action(AppointmentAction.CANCELLED)
                 .actorId(actorId)
                 .cancellationReason(request.getCancellationReason().name())

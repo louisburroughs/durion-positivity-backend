@@ -12,8 +12,11 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,8 +39,13 @@ public class OverrideRecord {
     @Column(name = "override_id", columnDefinition = "UUID")
     private UUID overrideId;
 
-    @Column(name = "appointment_id", nullable = false, columnDefinition = "UUID")
-    private UUID appointmentId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "appointment_id", nullable = false)
+    private Appointment appointment;
+
+    public UUID getAppointmentId() {
+        return appointment != null ? appointment.getAppointmentId() : null;
+    }
 
     @Column(name = "overridden_by_user_id", nullable = false, length = 255)
     private String overriddenByUserId;
