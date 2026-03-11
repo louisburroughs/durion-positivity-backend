@@ -70,7 +70,7 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
         SubstituteLink saved = substituteLinkRepository.save(newLink);
 
         substituteAuditRepository.save(SubstituteAudit.builder()
-                .linkId(saved.getId())
+                .link(saved)
                 .operation("CREATE")
                 .payloadBefore(null)
                 .payloadAfter(toJson(saved))
@@ -115,7 +115,7 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
         SubstituteLink saved = substituteLinkRepository.save(existing);
 
         substituteAuditRepository.save(SubstituteAudit.builder()
-                .linkId(saved.getId())
+                .link(saved)
                 .operation("UPDATE")
                 .payloadBefore(before)
                 .payloadAfter(toJson(saved))
@@ -142,7 +142,7 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
         SubstituteLink saved = substituteLinkRepository.save(existing);
 
         substituteAuditRepository.save(SubstituteAudit.builder()
-                .linkId(saved.getId())
+                .link(saved)
                 .operation("DELETE")
                 .payloadBefore(before)
                 .payloadAfter(toJson(saved))

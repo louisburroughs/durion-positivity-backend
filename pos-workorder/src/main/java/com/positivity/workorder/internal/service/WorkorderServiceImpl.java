@@ -106,7 +106,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         }
 
         Workorder workorder = Workorder.builder()
-                .estimateId(estimateId)
+                .estimate(estimate)
                 .customerId(customerId)
                 .status(WorkorderStatus.DRAFT)
                 .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
@@ -246,7 +246,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         // CAP:004 Story #29: Fetch only APPROVED and non-deleted items to support
         // partial approval
         List<EstimateItem> estimateItems = estimateItemRepository
-                .findByEstimateIdAndApprovalStatusAndDeletedFalse(estimateId, ApprovalStatus.APPROVED);
+                .findByEstimate_IdAndApprovalStatusAndDeletedFalse(estimateId, ApprovalStatus.APPROVED);
 
         if (estimateItems.isEmpty()) {
             log.warn("No approved estimate items found for estimate {}, no workorder items created", estimateId);
@@ -270,7 +270,7 @@ public class WorkorderServiceImpl implements WorkorderService {
                         .unitPrice(estimateItem.getUnitPrice())
                         .lineTotal(estimateItem.getLineTotal())
                         .taxCode(estimateItem.getTaxCode())
-                        .originEstimateItemId(estimateItem.getId())
+                        .originEstimateItem(estimateItem)
                         .serviceEntityId(estimateItem.getServiceId())
                         .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
                         .declined(false)
@@ -291,7 +291,7 @@ public class WorkorderServiceImpl implements WorkorderService {
                         .unitPrice(estimateItem.getUnitPrice())
                         .lineTotal(estimateItem.getLineTotal())
                         .taxCode(estimateItem.getTaxCode())
-                        .originEstimateItemId(estimateItem.getId())
+                        .originEstimateItem(estimateItem)
                         .productEntityId(estimateItem.getProductId())
                         .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
                         .declined(false)

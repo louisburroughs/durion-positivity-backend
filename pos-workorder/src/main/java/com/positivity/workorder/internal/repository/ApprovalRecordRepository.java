@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @Repository
 public interface ApprovalRecordRepository extends JpaRepository<ApprovalRecord, UUID> {
-    List<ApprovalRecord> findByChangeRequestId(Long changeRequestId);
+    List<ApprovalRecord> findByChangeRequest_Id(UUID changeRequestId);
 
-    List<ApprovalRecord> findByWorkorderId(Long workorderId);
+    List<ApprovalRecord> findByWorkorder_Id(UUID workorderId);
 }

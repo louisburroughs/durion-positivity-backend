@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
 import com.positivity.workorder.internal.entity.TimeEntry;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.TimeEntryStatus;
 import com.positivity.workorder.internal.repository.TimeEntryRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
@@ -237,7 +238,7 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
     private TimeEntry buildSubmittedEntry() {
         return TimeEntry.builder()
                 .personId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .workOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workOrder(new Workorder(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                 .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
                 .endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.SUBMITTED)
@@ -247,7 +248,7 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
     private TimeEntry buildApprovedEntry() {
         return TimeEntry.builder()
                 .personId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .workOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workOrder(new Workorder(UUID.fromString("00000000-0000-0000-0000-000000000001")))
                 .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
                 .endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.APPROVED)

@@ -40,6 +40,7 @@ import com.positivity.workorder.internal.dto.StartWorkSessionRequest;
 import com.positivity.workorder.internal.dto.StopWorkSessionRequest;
 import com.positivity.workorder.internal.dto.WorkSessionResponse;
 import com.positivity.workorder.internal.entity.BreakSegment;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkSession;
 import com.positivity.workorder.internal.enums.BreakType;
 import com.positivity.workorder.internal.enums.WorkSessionStatus;
@@ -130,7 +131,7 @@ class WorkSessionServiceImplTest {
                 return WorkSession.builder()
                                 .workSessionId(SESSION_ID)
                                 .mechanicId(MECHANIC_ID)
-                                .workOrderId(WORK_ORDER_ID)
+                                .workOrder(new Workorder(WORK_ORDER_ID))
                                 .workOrderTaskId(TASK_ID)
                                 .locationId(LOCATION_ID)
                                 .startAt(startAt)
@@ -424,7 +425,8 @@ class WorkSessionServiceImplTest {
                                 .build();
 
                 when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-                when(breakSegmentRepository.findByWorkSession_WorkSessionId(SESSION_ID)).thenReturn(List.of(closedBreak));
+                when(breakSegmentRepository.findByWorkSession_WorkSessionId(SESSION_ID))
+                                .thenReturn(List.of(closedBreak));
                 when(workSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
                 WorkSessionResponse response = workSessionService.stopSession(SESSION_ID, new StopWorkSessionRequest());

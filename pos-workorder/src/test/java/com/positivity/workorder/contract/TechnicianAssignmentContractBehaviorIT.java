@@ -118,7 +118,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Verify assignment was recorded
                 List<TechnicianAssignment> assignments = assignmentRepository
-                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
                 assertThat(assignments).hasSize(1);
 
                 TechnicianAssignment assignment = assignments.get(0);
@@ -139,7 +139,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Verify initial assignment
                 TechnicianAssignment initialAssignment = assignmentRepository
-                                .findByWorkorderIdAndCurrentTrue(workorderId)
+                                .findByWorkorder_IdAndCurrentTrue(workorderId)
                                 .orElseThrow();
                 UUID previousTechId = initialAssignment.getTechnicianId();
                 assertThat(initialAssignment.getCurrent()).isTrue();
@@ -171,14 +171,14 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Then: Verify new assignment is current
                 TechnicianAssignment currentAssignment = assignmentRepository
-                                .findByWorkorderIdAndCurrentTrue(workorderId)
+                                .findByWorkorder_IdAndCurrentTrue(workorderId)
                                 .orElseThrow();
                 assertThat(currentAssignment.getTechnicianId()).isEqualTo(testTechnicianId2);
                 assertThat(currentAssignment.getCurrent()).isTrue();
 
                 // Verify previous assignment is marked as not current
                 List<TechnicianAssignment> allAssignments = assignmentRepository
-                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
                 assertThat(allAssignments).hasSize(2);
 
                 TechnicianAssignment previousAssignment = allAssignments.stream()
@@ -216,7 +216,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Then: Verify history is ordered newest-first
                 List<TechnicianAssignment> history = assignmentRepository
-                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
                 assertThat(history.size()).isGreaterThanOrEqualTo(2);
 
                 // Verify most recent is first
@@ -255,7 +255,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Then: Verify no assignment was created
                 List<TechnicianAssignment> assignments = assignmentRepository
-                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
                 assertThat(assignments).isEmpty();
         }
 
@@ -267,7 +267,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 // Verify no current assignment
-                assertThat(assignmentRepository.findByWorkorderIdAndCurrentTrue(workorderId)).isEmpty();
+                assertThat(assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId)).isEmpty();
 
                 // When: Attempt to reassign
                 Map<String, Object> reassignRequest = Map.of(
@@ -286,7 +286,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Then: Verify no assignment was created
                 List<TechnicianAssignment> assignments = assignmentRepository
-                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
                 assertThat(assignments).isEmpty();
         }
 
@@ -329,7 +329,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Add approved items
                 EstimateItem item = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil change")
                                 .quantity(BigDecimal.ONE)
@@ -341,7 +341,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Create workorder in APPROVED status
                 Workorder workorder = Workorder.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .customerId(testCustomerId)
                                 .vehicleId(testVehicleId)
                                 .status(WorkorderStatus.APPROVED)
@@ -361,7 +361,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 // Create initial assignment
                 LocalDateTime now = LocalDateTime.now(TEST_CLOCK);
                 TechnicianAssignment assignment = TechnicianAssignment.builder()
-                                .workorderId(workorderId)
+                                .workorder(new Workorder(workorderId))
                                 .technicianId(testTechnicianId1)
                                 .assignedBy(SYSTEM_USER_ID.toString())
                                 .assignedAt(now.minusHours(2))
@@ -392,7 +392,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Create first assignment (now inactive)
                 TechnicianAssignment firstAssignment = TechnicianAssignment.builder()
-                                .workorderId(workorderId)
+                                .workorder(new Workorder(workorderId))
                                 .technicianId(testTechnicianId1)
                                 .assignedBy(SYSTEM_USER_ID.toString())
                                 .assignedAt(now.minusDays(2))
@@ -407,7 +407,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
                 // Create second assignment (current)
                 TechnicianAssignment currentAssignment = TechnicianAssignment.builder()
-                                .workorderId(workorderId)
+                                .workorder(new Workorder(workorderId))
                                 .technicianId(testTechnicianId2)
                                 .assignedBy(SYSTEM_USER_ID.toString())
                                 .assignedAt(now.minusDays(1))

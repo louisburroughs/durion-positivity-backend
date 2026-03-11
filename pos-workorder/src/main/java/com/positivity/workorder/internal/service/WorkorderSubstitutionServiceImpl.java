@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventRespons
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.SubstitutionStatus;
 import com.positivity.workorder.internal.entity.WorkOrderPartSubstitution;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.repository.WorkOrderPartSubstitutionRepository;
@@ -138,8 +139,8 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
 
         // Issue #49: persist immutable substitution record with pricing snapshot.
         WorkOrderPartSubstitution substitutionRecord = WorkOrderPartSubstitution.builder()
-                .workorderId(workorderId)
-                .workorderLineItemId(originalPartId)
+                .workorder(new Workorder(workorderId))
+                .workorderLineItem(new WorkorderPart(originalPartId))
                 .originalProductId(originalProductReference)
                 .originalPartNumberSnapshot(originalPart.getDescription())
                 .substituteProductId(substitutePartId)

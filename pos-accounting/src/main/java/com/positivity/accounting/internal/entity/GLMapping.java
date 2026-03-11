@@ -36,7 +36,7 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString
+@ToString(exclude = { "postingCategory", "mappingKey", "glAccount" })
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "gl_mapping", indexes = {
@@ -64,18 +64,21 @@ public class GLMapping {
      * Optional: used for category-based mapping strategy.
      * Null when using source system + external code strategy.
      */
-    @Column(name = "posting_category_id")
-    private UUID postingCategoryId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "posting_category_id")
+    private PostingCategory postingCategory;
 
     /**
      * Optional: used for key-based mapping strategy.
      * Null when using source system + external code strategy.
      */
-    @Column(name = "mapping_key_id")
-    private UUID mappingKeyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "mapping_key_id")
+    private MappingKey mappingKey;
 
-    @Column(name = "gl_account_id", nullable = false)
-    private UUID glAccountId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "gl_account_id", nullable = false)
+    private GLAccount glAccount;
 
     @Column(name = "effective_start_date", nullable = false)
     private LocalDateTime effectiveStartDate;
@@ -117,5 +120,32 @@ public class GLMapping {
         boolean beforeEnd = effectiveEndDate == null || transactionDate.isBefore(effectiveEndDate);
 
         return afterStart && beforeEnd;
+    }
+
+    @Transient
+    public UUID getPostingCategoryId() {
+        return postingCategory != null ? postingCategory.getPostingCategoryId() : null;
+    }
+
+    public void setPostingCategoryId(UUID postingCategoryId) {
+        this.postingCategory = postingCategoryId == null ? null : new PostingCategory(postingCategoryId);
+    }
+
+    @Transient
+    public UUID getMappingKeyId() {
+        return mappingKey != null ? mappingKey.getMappingKeyId() : null;
+    }
+
+    public void setMappingKeyId(UUID mappingKeyId) {
+        this.mappingKey = mappingKeyId == null ? null : new MappingKey(mappingKeyId);
+    }
+
+    @Transient
+    public UUID getGlAccountId() {
+        return glAccount != null ? glAccount.getGlAccountId() : null;
+    }
+
+    public void setGlAccountId(UUID glAccountId) {
+        this.glAccount = glAccountId == null ? null : new GLAccount(glAccountId);
     }
 }

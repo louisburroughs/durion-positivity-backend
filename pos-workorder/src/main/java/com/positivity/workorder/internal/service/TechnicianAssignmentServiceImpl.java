@@ -39,8 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentService {
-    private final Clock clock;
-
+        private final Clock clock;
 
         private final TechnicianAssignmentRepository assignmentRepository;
         private final WorkorderRepository workorderRepository;
@@ -80,7 +79,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
 
                 // Mark any existing assignment as not current
                 Optional<TechnicianAssignment> existingAssignment = assignmentRepository
-                                .findByWorkorderIdAndCurrentTrue(workorderId);
+                                .findByWorkorder_IdAndCurrentTrue(workorderId);
 
                 if (existingAssignment.isPresent()) {
                         log.debug("Found existing assignment for workorder {}, marking as not current", workorderId);
@@ -92,7 +91,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 // Create new assignment
                 LocalDateTime now = LocalDateTime.now(clock);
                 TechnicianAssignment assignment = TechnicianAssignment.builder()
-                                .workorderId(workorderId)
+                                .workorder(new Workorder(workorderId))
                                 .technicianId(technicianId)
                                 .assignedBy(assignedBy)
                                 .assignedAt(now)
@@ -150,7 +149,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
 
                 // Ensure there's a current assignment to reassign from
                 TechnicianAssignment currentAssignment = assignmentRepository
-                                .findByWorkorderIdAndCurrentTrue(workorderId)
+                                .findByWorkorder_IdAndCurrentTrue(workorderId)
                                 .orElseThrow(() -> new IllegalStateException(
                                                 "Cannot reassign: no current technician assignment for workorder "
                                                                 + workorderId));
@@ -166,7 +165,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 // Create new assignment
                 LocalDateTime now = LocalDateTime.now(clock);
                 TechnicianAssignment newAssignment = TechnicianAssignment.builder()
-                                .workorderId(workorderId)
+                                .workorder(new Workorder(workorderId))
                                 .technicianId(newTechnicianId)
                                 .assignedBy(reassignedBy)
                                 .assignedAt(now)
@@ -192,7 +191,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
          */
         @NonNull
         public Optional<TechnicianAssignment> getCurrentAssignment(@NonNull UUID workorderId) {
-                return assignmentRepository.findByWorkorderIdAndCurrentTrue(workorderId);
+                return assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
         }
 
         /**
@@ -203,7 +202,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
          */
         @NonNull
         public List<TechnicianAssignment> getAssignmentHistory(@NonNull UUID workorderId) {
-                return assignmentRepository.findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                return assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
         }
 
         /**

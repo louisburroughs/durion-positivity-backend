@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkSession;
 import com.positivity.workorder.internal.enums.WorkSessionStatus;
 
@@ -246,7 +247,7 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
                 // Seed an APPROVED (locked) session directly via repository.
                 WorkSession lockedSession = WorkSession.builder()
                                 .mechanicId(MECHANIC_ID)
-                                .workOrderId(WORK_ORDER_ID)
+                                .workOrder(new Workorder(WORK_ORDER_ID))
                                 .workOrderTaskId(TASK_ID)
                                 .locationId(LOCATION_ID)
                                 .startAt(Instant.now(TEST_CLOCK).minus(2, ChronoUnit.HOURS))

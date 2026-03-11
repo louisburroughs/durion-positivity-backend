@@ -118,7 +118,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Verify transition was recorded
                 List<WorkorderStateTransition> transitions = transitionRepository
-                                .findByWorkorderIdOrderByTransitionedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);
                 assertThat(transitions).isNotEmpty();
 
                 // Find the transition to WORK_IN_PROGRESS
@@ -301,7 +301,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Add approved item
                 EstimateItem item = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil change labor")
                                 .quantity(new BigDecimal("1.0000"))

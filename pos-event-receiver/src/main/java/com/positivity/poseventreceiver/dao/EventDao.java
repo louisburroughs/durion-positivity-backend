@@ -1,4 +1,4 @@
-package com.positivity.poseventreceiver.internal.dao;
+package com.positivity.poseventreceiver.dao;
 
 import java.util.List;
 import java.util.Optional;

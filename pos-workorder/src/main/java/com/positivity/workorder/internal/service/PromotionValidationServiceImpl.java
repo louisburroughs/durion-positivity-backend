@@ -40,8 +40,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PromotionValidationServiceImpl implements PromotionValidationService {
-    private final Clock clock;
-
+        private final Clock clock;
 
         private final EstimateRepository estimateRepository;
         private final EstimateItemRepository estimateItemRepository;
@@ -75,7 +74,7 @@ public class PromotionValidationServiceImpl implements PromotionValidationServic
                                                 "Estimate not found: " + estimateId));
 
                 // 2. Idempotency Check - has this estimate already been promoted?
-                Optional<Workorder> existingWorkorder = workorderRepository.findFirstByEstimateId(estimateId);
+                Optional<Workorder> existingWorkorder = workorderRepository.findFirstByEstimate_Id(estimateId);
                 if (existingWorkorder.isPresent()) {
                         UUID workorderId = existingWorkorder.get().getId();
                         log.warn("Estimate {} already promoted to workorder {}", estimateId, workorderId);
@@ -105,7 +104,7 @@ public class PromotionValidationServiceImpl implements PromotionValidationServic
 
                 // 5. Approved Scope Check - must have at least one approved item
                 List<EstimateItem> approvedItems = estimateItemRepository
-                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                .findByEstimate_IdAndApprovalStatusAndDeletedFalse(
                                                 estimateId, ApprovalStatus.APPROVED);
 
                 if (approvedItems.isEmpty()) {

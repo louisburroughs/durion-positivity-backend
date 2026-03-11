@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.event.handler;
+package com.positivity.customer.internal.service;
 
 import java.time.Clock;
 import java.time.Instant;

@@ -40,7 +40,6 @@ import lombok.extern.slf4j.Slf4j;
 public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     private final Clock clock;
 
-
     private final DefaultGLMappingRepository repository;
     private final GLAccountRepository glAccountRepository;
     private final GLAccountService glAccountService;
@@ -55,6 +54,8 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
         // Convert and save
         DefaultGLMapping mapping = DefaultGLMappingMapper.toEntity(request);
+        mapping.setDebitAccount(glAccountRepository.getReferenceById(request.getDebitAccountId()));
+        mapping.setCreditAccount(glAccountRepository.getReferenceById(request.getCreditAccountId()));
         DefaultGLMapping saved = repository.save(mapping);
 
         log.info("Created default GL mapping {} for eventType '{}'",
@@ -78,6 +79,8 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
         // Update entity
         DefaultGLMappingMapper.updateEntity(existing, request);
+        existing.setDebitAccount(glAccountRepository.getReferenceById(request.getDebitAccountId()));
+        existing.setCreditAccount(glAccountRepository.getReferenceById(request.getCreditAccountId()));
         DefaultGLMapping updated = repository.save(existing);
 
         log.info("Updated default GL mapping {}", mappingId);

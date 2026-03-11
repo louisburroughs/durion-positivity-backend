@@ -8,14 +8,18 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
@@ -30,7 +34,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "time_entry_adjustment", indexes = {
-        @Index(name = "idx_tea_time_entry_id", columnList = "timeEntryId")
+        @Index(name = "idx_tea_time_entry_id", columnList = "time_entry_id")
 })
 @Data
 @NoArgsConstructor
@@ -46,8 +50,10 @@ public class TimeEntryAdjustment {
     private UUID adjustmentId;
 
     @NonNull
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID timeEntryId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "time_entry_id", nullable = false)
+    @ToString.Exclude
+    private TimeEntry timeEntry;
 
     @NonNull
     @Column(nullable = false)
@@ -91,4 +97,14 @@ public class TimeEntryAdjustment {
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    @jakarta.persistence.Transient
+    public UUID getTimeEntryId() {
+        return timeEntry != null ? timeEntry.getTimeEntryId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setTimeEntryId(UUID timeEntryId) {
+        this.timeEntry = timeEntryId != null ? new TimeEntry(timeEntryId) : null;
+    }
 }

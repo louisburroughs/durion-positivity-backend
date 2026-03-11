@@ -20,9 +20,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +34,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Entity
 @Table(name = "estimate", uniqueConstraints = @UniqueConstraint(columnNames = { "locationId", "estimateNumber" }))
@@ -79,7 +84,22 @@ public class Estimate {
     @Column(nullable = false, updatable = false)
     private String createdById; // User who created the estimate
     // Configuration reference for approval method
-    private UUID approvalConfigurationId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "approval_configuration_id")
+    @ToString.Exclude
+    private ApprovalConfiguration approvalConfiguration;
+
+    @Transient
+    public UUID getApprovalConfigurationId() {
+        return approvalConfiguration != null ? approvalConfiguration.getId() : null;
+    }
+
+    @Transient
+    public void setApprovalConfigurationId(UUID approvalConfigurationId) {
+        this.approvalConfiguration = approvalConfigurationId != null
+                ? new ApprovalConfiguration(approvalConfigurationId)
+                : null;
+    }
 
     @Column(columnDefinition = "UUID")
     private UUID appointmentId; // Reference to source appointment (Story #65 CAP:140)
@@ -154,5 +174,9 @@ public class Estimate {
         }
         LocalDateTime expiryDate = declinedAt.plusDays(configuredExpiryDays);
         return !referenceTime.isAfter(expiryDate);
+    }
+
+    public Estimate(UUID id) {
+        this.id = id;
     }
 }

@@ -130,7 +130,7 @@ class PromotionValidationServiceIT {
 
                 // Create existing workorder from this estimate
                 Workorder workorder = Workorder.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .customerId(estimate.getCustomerId())
                                 .vehicleId(estimate.getVehicleId())
                                 .shopId(estimate.getLocationId())
@@ -175,7 +175,7 @@ class PromotionValidationServiceIT {
 
                 // Create a pending item (not approved)
                 EstimateItem pendingItem = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Pending service")
                                 .quantity(BigDecimal.ONE)
@@ -238,7 +238,7 @@ class PromotionValidationServiceIT {
                 createApprovedItem(estimate.getId(), "Cabin air filter", BigDecimal.valueOf(35.00));
 
                 Workorder existingWorkorder = Workorder.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .customerId(estimate.getCustomerId())
                                 .vehicleId(estimate.getVehicleId())
                                 .shopId(estimate.getLocationId())
@@ -276,7 +276,7 @@ class PromotionValidationServiceIT {
 
         private EstimateItem createApprovedItem(UUID estimateId, String description, BigDecimal price) {
                 EstimateItem item = EstimateItem.builder()
-                                .estimateId(estimateId)
+                                .estimate(estimateRepository.getReferenceById(estimateId))
                                 .itemType(EstimateItemType.LABOR)
                                 .description(description)
                                 .quantity(BigDecimal.ONE)

@@ -86,7 +86,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
         void testCreateWorkorderItems_HappyPath() {
                 // Given: An approved estimate with labor and part items
                 UUID estimateId = seedApprovedEstimateWithMixedItems();
-                List<EstimateItem> estimateItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> estimateItems = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
                 assertThat(estimateItems).hasSize(3); // 2 labor + 1 part
 
                 long approvedCount = estimateItems.stream()
@@ -165,7 +165,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
         void testFinancialSnapshotImmutable() {
                 // Given: An approved estimate with a labor item
                 UUID estimateId = seedApprovedEstimateWithSingleLaborItem();
-                EstimateItem originalItem = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId).get(0);
+                EstimateItem originalItem = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId).get(0);
 
                 // When: Promote estimate to workorder
                 String workorderIdStr = givenWithGatewayAuth()
@@ -203,7 +203,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
         void testTraceabilityToEstimateItems() {
                 // Given: An approved estimate with multiple items
                 UUID estimateId = seedApprovedEstimateWithMixedItems();
-                List<EstimateItem> estimateItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> estimateItems = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
 
                 // When: Promote estimate to workorder
                 String workorderIdStr = givenWithGatewayAuth()
@@ -343,11 +343,11 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 // 2 APPROVED items, 1 DECLINED item, 1 PENDING_APPROVAL item
                 UUID estimateId = seedApprovedEstimateWithMixedApprovalStatuses();
 
-                List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> allItems = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
                 assertThat(allItems).hasSize(4);
 
                 List<EstimateItem> approvedItems = estimateItemRepository
-                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                .findByEstimate_IdAndApprovalStatusAndDeletedFalse(
                                                 estimateId, ApprovalStatus.APPROVED);
                 assertThat(approvedItems).hasSize(2);
 
@@ -450,7 +450,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
                 // Labor item 1: Oil change
                 EstimateItem labor1 = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil change labor")
                                 .quantity(new BigDecimal("1.5000")) // 1.5 hours
@@ -464,7 +464,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
                 // Labor item 2: Tire rotation
                 EstimateItem labor2 = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Tire rotation labor")
                                 .quantity(new BigDecimal("0.7500")) // 0.75 hours
@@ -478,7 +478,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
                 // Part item: Engine oil filter
                 EstimateItem part1 = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.PART)
                                 .description("Engine oil filter")
                                 .quantity(new BigDecimal("1.0000"))
@@ -516,7 +516,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 estimate = estimateRepository.save(estimate);
 
                 EstimateItem labor = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Diagnostic labor")
                                 .quantity(new BigDecimal("2.0000"))
@@ -588,7 +588,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
                 // Item 1: LABOR, APPROVED (Oil change)
                 EstimateItem laborApproved = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil change labor")
                                 .quantity(new BigDecimal("1.5000"))
@@ -602,7 +602,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
                 // Item 2: PART, APPROVED (Oil filter)
                 EstimateItem partApproved = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.PART)
                                 .description("Oil filter")
                                 .quantity(new BigDecimal("1.0000"))
@@ -616,7 +616,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
                 // Item 3: LABOR, DECLINED (Tire rotation)
                 EstimateItem laborDeclined = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Tire rotation labor")
                                 .quantity(new BigDecimal("0.7500"))
@@ -631,7 +631,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
                 // Item 4: PART, PENDING_APPROVAL (Air filter)
                 EstimateItem partPending = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.PART)
                                 .description("Air filter")
                                 .quantity(new BigDecimal("1.0000"))

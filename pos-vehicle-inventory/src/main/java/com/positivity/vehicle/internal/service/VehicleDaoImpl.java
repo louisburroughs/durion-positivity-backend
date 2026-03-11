@@ -1,5 +1,6 @@
-package com.positivity.vehicle.internal.dao;
+package com.positivity.vehicle.internal.service;
 
+import com.positivity.vehicle.internal.dao.VehicleDao;
 import com.positivity.vehicle.internal.entity.VehicleEntity;
 import com.positivity.vehicle.internal.repository.VehicleRepository;
 import org.springframework.stereotype.Repository;

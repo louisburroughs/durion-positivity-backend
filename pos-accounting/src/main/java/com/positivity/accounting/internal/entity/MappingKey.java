@@ -91,4 +91,11 @@ public class MappingKey {
     public void setPostingCategoryId(UUID postingCategoryId) {
         this.postingCategory = postingCategoryId == null ? null : new PostingCategory(postingCategoryId);
     }
+
+    /**
+     * Convenience constructor for reference assignment.
+     */
+    public MappingKey(UUID mappingKeyId) {
+        this.mappingKeyId = mappingKeyId;
+    }
 }

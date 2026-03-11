@@ -17,9 +17,12 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.accounting.BaseContractIntegrationTest;
+import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
+import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 
 /**
@@ -43,6 +46,9 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private StatementLineMappingRepository statementLineMappingRepository;
 
+        @Autowired
+        private GLAccountRepository glAccountRepository;
+
         // Fixed UUIDs for deterministic testing
         private static final UUID REVENUE_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
         private static final UUID COGS_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000002");
@@ -52,8 +58,29 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @BeforeEach
         void setUp() {
+                // Create referenced GL accounts first
+                createGLAccounts();
                 // Create sample statement line mappings for testing
                 createSampleStatementLineMappings();
+        }
+
+        private void createGLAccounts() {
+                createGLAccount(REVENUE_ACCOUNT_ID, "4000", "Sales Revenue", AccountType.REVENUE);
+                createGLAccount(COGS_ACCOUNT_ID, "5000", "Cost of Goods Sold", AccountType.EXPENSE);
+                createGLAccount(CASH_ACCOUNT_ID, "1000", "Cash", AccountType.ASSET);
+                createGLAccount(AP_ACCOUNT_ID, "2000", "Accounts Payable", AccountType.LIABILITY);
+                createGLAccount(EQUITY_ACCOUNT_ID, "3000", "Owner's Equity", AccountType.EQUITY);
+        }
+
+        private void createGLAccount(UUID id, String code, String name, AccountType type) {
+                GLAccount account = new GLAccount();
+                account.setGlAccountId(id);
+                account.setAccountCode(code);
+                account.setAccountName(name);
+                account.setAccountType(type);
+                account.setCreatedBy("TEST");
+                account.setModifiedBy("TEST");
+                glAccountRepository.save(account);
         }
 
         @Test
@@ -212,7 +239,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
                 // Income Statement Mappings
                 statementLineMappingRepository.save(StatementLineMapping.builder()
                                 .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .glAccountId(REVENUE_ACCOUNT_ID)
+                                .glAccount(new GLAccount(REVENUE_ACCOUNT_ID))
                                 .accountName("Sales Revenue")
                                 .statementType(StatementType.INCOME_STATEMENT)
                                 .statementLineCode("REVENUE_SALES")
@@ -223,7 +250,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
                 statementLineMappingRepository.save(StatementLineMapping.builder()
                                 .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
-                                .glAccountId(COGS_ACCOUNT_ID)
+                                .glAccount(new GLAccount(COGS_ACCOUNT_ID))
                                 .accountName("Cost of Goods Sold")
                                 .statementType(StatementType.INCOME_STATEMENT)
                                 .statementLineCode("EXPENSE_COGS")
@@ -235,7 +262,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
                 // Balance Sheet Mappings
                 statementLineMappingRepository.save(StatementLineMapping.builder()
                                 .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000003"))
-                                .glAccountId(CASH_ACCOUNT_ID)
+                                .glAccount(new GLAccount(CASH_ACCOUNT_ID))
                                 .accountName("Cash")
                                 .statementType(StatementType.BALANCE_SHEET)
                                 .statementLineCode("ASSET_CURRENT_CASH")
@@ -246,7 +273,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
                 statementLineMappingRepository.save(StatementLineMapping.builder()
                                 .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000004"))
-                                .glAccountId(AP_ACCOUNT_ID)
+                                .glAccount(new GLAccount(AP_ACCOUNT_ID))
                                 .accountName("Accounts Payable")
                                 .statementType(StatementType.BALANCE_SHEET)
                                 .statementLineCode("LIABILITY_CURRENT_AP")
@@ -257,7 +284,7 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
                 statementLineMappingRepository.save(StatementLineMapping.builder()
                                 .mappingId(UUID.fromString("00000000-0000-0000-0000-000000000005"))
-                                .glAccountId(EQUITY_ACCOUNT_ID)
+                                .glAccount(new GLAccount(EQUITY_ACCOUNT_ID))
                                 .accountName("Owner's Equity")
                                 .statementType(StatementType.BALANCE_SHEET)
                                 .statementLineCode("EQUITY_OWNERS")

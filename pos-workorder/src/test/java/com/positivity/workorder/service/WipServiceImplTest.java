@@ -121,12 +121,12 @@ class WipServiceImplTest {
                                                 .of(buildAwaitingPartsWorkorder(invocation.getArgument(0),
                                                                 UUID.fromString(LOCATION_1))));
 
-                lenient().when(stateTransitionRepository.findByWorkorderId(any(UUID.class)))
+                lenient().when(stateTransitionRepository.findByWorkorder_Id(any(UUID.class)))
                                 .thenAnswer(invocation -> List.of(
                                                 WorkorderStateTransition.builder()
                                                                 .id(UUID.fromString(
                                                                                 "00000000-0000-0000-0000-000000000001"))
-                                                                .workorderId(invocation.getArgument(0))
+                                                                .workorder(new Workorder(invocation.getArgument(0)))
                                                                 .fromStatus(WorkorderStatus.ASSIGNED)
                                                                 .toStatus(WorkorderStatus.AWAITING_PARTS)
                                                                 .transitionedAt(Instant.now(TEST_CLOCK))
@@ -134,9 +134,9 @@ class WipServiceImplTest {
                                                                 .reason("parts delayed")
                                                                 .build()));
 
-                lenient().when(technicianAssignmentRepository.findByWorkorderIdInAndCurrentTrue(any()))
+                lenient().when(technicianAssignmentRepository.findByWorkorder_IdInAndCurrentTrue(any()))
                                 .thenReturn(List.of());
-                lenient().when(technicianAssignmentRepository.findByWorkorderIdAndCurrentTrue(any(UUID.class)))
+                lenient().when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(any(UUID.class)))
                                 .thenReturn(Optional.empty());
 
                 lenient().when(workorderPartRepository.findByWorkorderId(any(UUID.class))).thenReturn(List.of());

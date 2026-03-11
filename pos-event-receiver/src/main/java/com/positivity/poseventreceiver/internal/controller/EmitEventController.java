@@ -1,7 +1,6 @@
 package com.positivity.poseventreceiver.internal.controller;
 
-// WARN: Do NOT import EmitEvent here - see warning in class below
-import com.positivity.poseventreceiver.internal.dao.EventDao;
+import com.positivity.poseventreceiver.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -62,7 +61,7 @@ public class EmitEventController {
      *
      * The pos-event-receiver module must NEVER emit events to itself.
      * This is an architectural invariant that must be preserved.
-    */
+     */
     @PostMapping
     @Operation(summary = "Receive emitted event", description = "Stores a preregistered emitted event payload")
     @ApiResponse(responseCode = "200", description = "Event stored successfully")

@@ -20,24 +20,24 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
     /**
      * Find all lines for a journal entry.
      */
-    List<JournalEntryLine> findByJournalEntryId(UUID journalEntryId);
+    List<JournalEntryLine> findByJournalEntry_JournalEntryId(UUID journalEntryId);
 
     /**
      * Find all lines posting to a specific GL account.
      */
-    @Query("SELECT jel FROM JournalEntryLine jel WHERE jel.glAccountId = :glAccountId")
+    @Query("SELECT jel FROM JournalEntryLine jel WHERE jel.glAccount.glAccountId = :glAccountId")
     List<JournalEntryLine> findByGLAccount(UUID glAccountId);
 
     /**
      * Calculate total debits for a journal entry.
      */
-    @Query("SELECT COALESCE(SUM(jel.debitAmount), 0) FROM JournalEntryLine jel WHERE jel.journalEntryId = :journalEntryId")
+    @Query("SELECT COALESCE(SUM(jel.debitAmount), 0) FROM JournalEntryLine jel WHERE jel.journalEntry.journalEntryId = :journalEntryId")
     BigDecimal sumDebitsByJournalEntry(UUID journalEntryId);
 
     /**
      * Calculate total credits for a journal entry.
      */
-    @Query("SELECT COALESCE(SUM(jel.creditAmount), 0) FROM JournalEntryLine jel WHERE jel.journalEntryId = :journalEntryId")
+    @Query("SELECT COALESCE(SUM(jel.creditAmount), 0) FROM JournalEntryLine jel WHERE jel.journalEntry.journalEntryId = :journalEntryId")
     BigDecimal sumCreditsByJournalEntry(UUID journalEntryId);
 
     /**
@@ -45,7 +45,7 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
      */
     @Query("SELECT COALESCE(SUM(CASE WHEN jel.debitAmount > 0 THEN jel.debitAmount ELSE -jel.creditAmount END), 0) " +
             "FROM JournalEntryLine jel " +
-            "JOIN JournalEntry je ON jel.journalEntryId = je.journalEntryId " +
-            "WHERE jel.glAccountId = :glAccountId AND je.status = 'POSTED'")
+            "JOIN jel.journalEntry je " +
+            "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status = 'POSTED'")
     BigDecimal getAccountBalance(UUID glAccountId);
 }

@@ -125,7 +125,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
                 assertThat(workorder.getCompletedBy()).isEqualTo(SYSTEM_USER_ID);
 
                 List<WorkorderSnapshot> snapshots = workorderSnapshotRepository
-                                .findByWorkorderIdOrderByCapturedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByCapturedAtDesc(workorderId);
                 assertThat(snapshots)
                                 .extracting(WorkorderSnapshot::getSnapshotType)
                                 .contains("BILLABLE_SCOPE_FINALIZED");
@@ -246,7 +246,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
                 assertThat(reopened.getReopenReason()).isEqualTo("Correcting part quantity before invoicing");
 
                 List<WorkorderSnapshot> snapshots = workorderSnapshotRepository
-                                .findByWorkorderIdOrderByCapturedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByCapturedAtDesc(workorderId);
                 assertThat(snapshots)
                                 .extracting(WorkorderSnapshot::getSnapshotType)
                                 .contains("BILLABLE_SCOPE_SUPERSEDED");
@@ -282,7 +282,6 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
                                 .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .shopId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                                .estimateId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .approvalId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .status(status)
                                 .isReopened(isReopened)

@@ -154,6 +154,8 @@ class DefaultGLMappingServiceTest {
             when(repository.save(any(DefaultGLMapping.class))).thenReturn(savedMapping);
             when(glAccountRepository.findById(DEBIT_ACCOUNT_ID)).thenReturn(Optional.of(debitAccount));
             when(glAccountRepository.findById(CREDIT_ACCOUNT_ID)).thenReturn(Optional.of(creditAccount));
+            when(glAccountRepository.getReferenceById(DEBIT_ACCOUNT_ID)).thenReturn(debitAccount);
+            when(glAccountRepository.getReferenceById(CREDIT_ACCOUNT_ID)).thenReturn(creditAccount);
 
             // Act
             DefaultGLMappingResponse response = service.createDefaultMapping(validRequest);
@@ -186,6 +188,8 @@ class DefaultGLMappingServiceTest {
             when(repository.save(captor.capture())).thenReturn(savedMapping);
             when(glAccountRepository.findById(DEBIT_ACCOUNT_ID)).thenReturn(Optional.of(debitAccount));
             when(glAccountRepository.findById(CREDIT_ACCOUNT_ID)).thenReturn(Optional.of(creditAccount));
+            when(glAccountRepository.getReferenceById(DEBIT_ACCOUNT_ID)).thenReturn(debitAccount);
+            when(glAccountRepository.getReferenceById(CREDIT_ACCOUNT_ID)).thenReturn(creditAccount);
 
             // Act
             service.createDefaultMapping(validRequest);
@@ -260,6 +264,8 @@ class DefaultGLMappingServiceTest {
             when(repository.save(any(DefaultGLMapping.class))).thenReturn(globalMapping);
             when(glAccountRepository.findById(DEBIT_ACCOUNT_ID)).thenReturn(Optional.of(debitAccount));
             when(glAccountRepository.findById(CREDIT_ACCOUNT_ID)).thenReturn(Optional.of(creditAccount));
+            when(glAccountRepository.getReferenceById(DEBIT_ACCOUNT_ID)).thenReturn(debitAccount);
+            when(glAccountRepository.getReferenceById(CREDIT_ACCOUNT_ID)).thenReturn(creditAccount);
 
             // Act
             DefaultGLMappingResponse response = service.createDefaultMapping(globalRequest);
@@ -304,6 +310,8 @@ class DefaultGLMappingServiceTest {
             when(repository.save(any(DefaultGLMapping.class))).thenReturn(updatedMapping);
             when(glAccountRepository.findById(DEBIT_ACCOUNT_ID)).thenReturn(Optional.of(debitAccount));
             when(glAccountRepository.findById(CREDIT_ACCOUNT_ID)).thenReturn(Optional.of(creditAccount));
+            when(glAccountRepository.getReferenceById(DEBIT_ACCOUNT_ID)).thenReturn(debitAccount);
+            when(glAccountRepository.getReferenceById(CREDIT_ACCOUNT_ID)).thenReturn(creditAccount);
 
             // Act
             DefaultGLMappingResponse response = service.updateDefaultMapping(MAPPING_ID, updateRequest);

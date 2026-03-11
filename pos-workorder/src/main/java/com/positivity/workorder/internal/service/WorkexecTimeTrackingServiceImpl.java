@@ -10,6 +10,7 @@ import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
@@ -44,8 +45,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingService {
-    private final Clock clock;
-
+        private final Clock clock;
 
         private static final String SYSTEM_USER_ID = "system";
         private static final UUID UNSPECIFIED_WORKORDER_ITEM_ID = UUID
@@ -177,7 +177,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
 
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderServiceId(workorderItemId)
+                                .workorderService(new WorkorderService(workorderItemId))
                                 .technicianId(request.getTechnicianId())
                                 .startTime(startTime)
                                 .endTime(endTime)
@@ -230,7 +230,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                         "Workorder is not in a timer-eligible state");
                 }
 
-                technicianAssignmentRepository.findByWorkorderIdAndCurrentTrue(request.getWorkorderId())
+                technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(request.getWorkorderId())
                                 .ifPresent(assignment -> {
                                         if (!mechanicId.equals(assignment.getTechnicianId())) {
                                                 throw new WorkexecTimeTrackingService.WorkexecConflictException(
@@ -252,7 +252,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
 
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderServiceId(workorderItemId)
+                                .workorderService(new WorkorderService(workorderItemId))
                                 .technicianId(mechanicId)
                                 .startTime(LocalDateTime.now(ZoneOffset.UTC))
                                 .hoursWorked(BigDecimal.ZERO)

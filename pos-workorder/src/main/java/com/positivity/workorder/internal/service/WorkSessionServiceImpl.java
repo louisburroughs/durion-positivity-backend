@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.dto.StopWorkSessionRequest;
 import com.positivity.workorder.internal.dto.WorkSessionResponse;
 import com.positivity.workorder.internal.entity.BreakSegment;
 import com.positivity.workorder.internal.entity.WorkSession;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkSessionStatus;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
@@ -46,7 +47,6 @@ import java.util.UUID;
 public class WorkSessionServiceImpl implements WorkSessionService {
     private final Clock clock;
 
-
     private final WorkSessionRepository workSessionRepository;
     private final BreakSegmentRepository breakSegmentRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -80,7 +80,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         // 3. Build and save session
         WorkSession session = WorkSession.builder()
                 .mechanicId(request.getMechanicId())
-                .workOrderId(request.getWorkOrderId())
+                .workOrder(new Workorder(request.getWorkOrderId()))
                 .workOrderTaskId(request.getWorkOrderTaskId())
                 .locationId(request.getLocationId())
                 .resourceId(request.getResourceId())

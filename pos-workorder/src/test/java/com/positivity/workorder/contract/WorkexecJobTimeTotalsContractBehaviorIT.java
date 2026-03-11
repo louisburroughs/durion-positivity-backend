@@ -22,6 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 
 @DisplayName("CAP-121 Workexec Job Time Totals Contract Behavior Tests")
@@ -132,7 +133,8 @@ class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBe
                         BigDecimal hoursWorked) {
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderServiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .workorderService(new WorkorderService(
+                                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
                                 .technicianId(technicianId)
                                 .startTime(startTimeUtc)
                                 .endTime(endTimeUtc)

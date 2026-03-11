@@ -37,7 +37,6 @@ import com.positivity.shopmanager.internal.entity.ShopAuditEntry;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
 import com.positivity.shopmanager.internal.repository.ShopAuditRepository;
 import com.positivity.shopmanager.internal.service.ShopAuditServiceImpl;
-import com.positivity.shopmanager.service.ShopAuditService;
 
 /**
  * RED tests for Story #61 — Audit Trail for Schedule and Assignment Changes.

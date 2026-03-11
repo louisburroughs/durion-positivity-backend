@@ -42,8 +42,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class WipServiceImpl implements WipService {
-    private final Clock clock;
-
+        private final Clock clock;
 
         private static final String PARTS_PENDING = "PARTS_PENDING";
         private static final Set<WorkorderStatus> ACTIVE_WIP_STATUSES = EnumSet.of(
@@ -82,7 +81,8 @@ public class WipServiceImpl implements WipService {
                 // (ADR-0017)
                 try {
                         UUID shopUuid = UUID.fromString(locationId);
-                        workorders = workorderRepository.findByShopIdAndStatusIn(shopUuid, ACTIVE_WIP_STATUSES, pageable);
+                        workorders = workorderRepository.findByShopIdAndStatusIn(shopUuid, ACTIVE_WIP_STATUSES,
+                                        pageable);
                         return enrichStatusPage(workorders, pageable);
                 } catch (IllegalArgumentException e) {
                         throw new IllegalArgumentException("locationId is not a valid UUID: " + locationId, e);
@@ -97,7 +97,7 @@ public class WipServiceImpl implements WipService {
                                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
 
                 List<WorkorderStateTransition> transitions = stateTransitionRepository
-                                .findByWorkorderIdOrderByTransitionedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);
                 List<WorkorderStatusHistoryEntry> history = transitions.stream()
                                 .map(t -> WorkorderStatusHistoryEntry.builder()
                                                 .status(t.getToStatus())
@@ -108,7 +108,8 @@ public class WipServiceImpl implements WipService {
                                 .toList();
 
                 List<String> partsBlocking = resolveBlockingPartNumbers(wo);
-                String assignedTechnicianId = technicianAssignmentRepository.findByWorkorderIdAndCurrentTrue(workorderId)
+                String assignedTechnicianId = technicianAssignmentRepository
+                                .findByWorkorder_IdAndCurrentTrue(workorderId)
                                 .map(TechnicianAssignment::getTechnicianId)
                                 .map(UUID::toString)
                                 .orElse(null);
@@ -156,7 +157,8 @@ public class WipServiceImpl implements WipService {
                         return new PageImpl<>(List.of(), pageable, workorders.getTotalElements());
                 }
 
-                Set<UUID> workorderIds = content.stream().map(Workorder::getId).collect(java.util.stream.Collectors.toSet());
+                Set<UUID> workorderIds = content.stream().map(Workorder::getId)
+                                .collect(java.util.stream.Collectors.toSet());
                 Map<UUID, String> technicianByWorkorderId = resolveAssignedTechnicians(workorderIds);
                 Map<UUID, CustomerReferenceService.CustomerContact> customerById = customerReferenceService.resolveAll(
                                 content.stream()
@@ -168,7 +170,7 @@ public class WipServiceImpl implements WipService {
                                                 .map(Workorder::getVehicleId)
                                                 .filter(java.util.Objects::nonNull)
                                                 .collect(java.util.stream.Collectors.toSet()));
-                final Map<UUID, CustomerReferenceService.CustomerContact> customerLookup = customerById ;
+                final Map<UUID, CustomerReferenceService.CustomerContact> customerLookup = customerById;
                 final Map<UUID, VehicleReferenceService.VehicleReference> vehicleLookup = vehicleById;
 
                 List<WorkorderStatusView> mapped = content.stream()
@@ -183,7 +185,7 @@ public class WipServiceImpl implements WipService {
                         return Map.of();
                 }
                 List<TechnicianAssignment> assignments = technicianAssignmentRepository
-                                .findByWorkorderIdInAndCurrentTrue(workorderIds);
+                                .findByWorkorder_IdInAndCurrentTrue(workorderIds);
                 if (assignments.isEmpty()) {
                         return Map.of();
                 }

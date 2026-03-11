@@ -244,9 +244,9 @@ class EstimateServiceImplTest {
 
     @Test
     void updateEstimateItem_valid_updatesItem() {
-        EstimateItem item = EstimateItem.builder().id(ITEM_ID).estimateId(estimate.getId()).build();
+        EstimateItem item = EstimateItem.builder().id(ITEM_ID).estimate(estimate).build();
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
-        when(estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(any(UUID.class), any(UUID.class)))
+        when(estimateItemRepository.findByIdAndEstimate_IdAndDeletedFalse(any(UUID.class), any(UUID.class)))
                 .thenReturn(Optional.of(item));
         when(estimateItemRepository.save(any(EstimateItem.class))).thenAnswer(i -> i.getArgument(0));
         UpdateEstimateItemRequest request = new UpdateEstimateItemRequest("new description", null, null, null);
@@ -258,9 +258,9 @@ class EstimateServiceImplTest {
 
     @Test
     void deleteEstimateItem_valid_deletesItem() {
-        EstimateItem item = EstimateItem.builder().id(ITEM_ID).estimateId(estimate.getId()).build();
+        EstimateItem item = EstimateItem.builder().id(ITEM_ID).estimate(estimate).build();
         when(estimateRepository.findById(any(UUID.class))).thenReturn(Optional.of(estimate));
-        when(estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(any(UUID.class), any(UUID.class)))
+        when(estimateItemRepository.findByIdAndEstimate_IdAndDeletedFalse(any(UUID.class), any(UUID.class)))
                 .thenReturn(Optional.of(item));
 
         estimateService.deleteEstimateItem(estimate.getId(), item.getId());
