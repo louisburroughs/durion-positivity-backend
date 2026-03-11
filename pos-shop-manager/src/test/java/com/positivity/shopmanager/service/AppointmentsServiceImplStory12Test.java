@@ -427,9 +427,9 @@ class AppointmentsServiceImplStory12Test {
 
                 when(appointmentRepository.findByIdempotencyKey("test-key"))
                                 .thenReturn(java.util.Optional.of(existing));
-                when(appointmentServiceRequestRepository.findByAppointmentId(existing.getAppointmentId()))
+                when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(existing.getAppointmentId()))
                                 .thenReturn(List.of(AppointmentServiceRequest.builder()
-                                                .appointmentId(existing.getAppointmentId())
+                                                .appointment(existing)
                                                 .serviceEntityId(SERVICE_REQUEST_ID)
                                                 .build()));
 

@@ -41,6 +41,8 @@ import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 
 /**
  * Contract Behavioral Integration Tests for Credit Memo (CAP-052)
@@ -67,6 +69,12 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private GLAccountRepository glAccountRepository;
 
+        @Autowired
+        private JournalEntryRepository journalEntryRepository;
+
+        @Autowired
+        private JournalEntryLineRepository journalEntryLineRepository;
+
         @MockitoBean
         private InvoiceServiceClient invoiceServiceClient;
 
@@ -78,6 +86,8 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @BeforeEach
         void setUp() {
                 // Clean up any existing test data
+                journalEntryLineRepository.deleteAll();
+                journalEntryRepository.deleteAll();
                 creditMemoRepository.deleteAll();
                 glAccountRepository.deleteAll();
 
@@ -113,6 +123,8 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @AfterEach
         void tearDown() {
                 // Clean up test data after each test
+                journalEntryLineRepository.deleteAll();
+                journalEntryRepository.deleteAll();
                 creditMemoRepository.deleteAll();
                 glAccountRepository.deleteAll();
         }

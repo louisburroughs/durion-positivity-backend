@@ -121,7 +121,7 @@ public class WorkorderStateMachine {
                 .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
         List<ChangeRequest> unresolvedApprovalGated = changeRequestRepository
-                .findByWorkorderIdAndStatus(workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
+                .findByWorkorder_IdAndStatus(workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
                 .stream()
                 .filter(changeRequest -> Boolean.TRUE.equals(changeRequest.getIsApprovalGated()))
                 .toList();
@@ -208,7 +208,7 @@ public class WorkorderStateMachine {
                             workorderId, workorder.getStatus(), WorkorderStatus.getStartEligibleStatuses()));
         }
 
-        List<ChangeRequest> pendingApprovalRequests = changeRequestRepository.findByWorkorderIdAndStatus(
+        List<ChangeRequest> pendingApprovalRequests = changeRequestRepository.findByWorkorder_IdAndStatus(
                 workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
 
         if (!pendingApprovalRequests.isEmpty()) {
@@ -319,7 +319,8 @@ public class WorkorderStateMachine {
                         || COMPLETION_ELIGIBLE_STATUSES.contains(workorder.getStatus()));
 
         WorkorderStatus snapshotStatus = invoiceReady ? WorkorderStatus.COMPLETED : workorder.getStatus();
-        Instant workorderCompletedAt = workorder.getCompletedAt() != null ? workorder.getCompletedAt() : Instant.now(clock);
+        Instant workorderCompletedAt = workorder.getCompletedAt() != null ? workorder.getCompletedAt()
+                : Instant.now(clock);
 
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
                 .findByWorkOrder_Id(workorder.getId());
@@ -387,7 +388,7 @@ public class WorkorderStateMachine {
             String snapshotData = objectMapper.writeValueAsString(snapshotPayload);
 
             WorkorderSnapshot snapshot = WorkorderSnapshot.builder()
-                    .workorderId(workorder.getId())
+                    .workorder(workorder)
                     .status(workorder.getStatus())
                     .capturedBy(actorId)
                     .snapshotType(snapshotType)
@@ -418,7 +419,7 @@ public class WorkorderStateMachine {
     private void recordTransition(UUID workorderId, WorkorderStatus fromStatus, WorkorderStatus toStatus,
             String actorId, String reason) {
         WorkorderStateTransition transition = WorkorderStateTransition.builder()
-                .workorderId(workorderId)
+                .workorder(new Workorder(workorderId))
                 .fromStatus(fromStatus)
                 .toStatus(toStatus)
                 .transitionedBy(actorId)
@@ -485,11 +486,11 @@ public class WorkorderStateMachine {
     }
 
     public List<WorkorderStateTransition> getTransitionHistory(UUID workorderId) {
-        return transitionRepository.findByWorkorderIdOrderByTransitionedAtDesc(workorderId);
+        return transitionRepository.findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);
     }
 
     public List<WorkorderSnapshot> getSnapshotHistory(UUID workorderId) {
-        return snapshotRepository.findByWorkorderIdOrderByCapturedAtDesc(workorderId);
+        return snapshotRepository.findByWorkorder_IdOrderByCapturedAtDesc(workorderId);
     }
 
     private void createAuditEvent(UUID workorderId, String actorId, String eventType, String details) {

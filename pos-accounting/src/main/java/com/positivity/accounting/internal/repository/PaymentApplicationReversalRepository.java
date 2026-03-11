@@ -23,7 +23,7 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
      * @param originalPaymentApplicationId original application identifier
      * @return reversal if exists
      */
-    Optional<PaymentApplicationReversal> findByOriginalPaymentApplicationId(UUID originalPaymentApplicationId);
+    Optional<PaymentApplicationReversal> findByOriginalPaymentApplication_PaymentApplicationId(UUID originalPaymentApplicationId);
 
     /**
      * Find all reversals for a payment application.
@@ -31,7 +31,7 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
      * @param originalPaymentApplicationId original application identifier
      * @return list of reversals (should be 0 or 1 in normal cases)
      */
-    List<PaymentApplicationReversal> findAllByOriginalPaymentApplicationId(UUID originalPaymentApplicationId);
+    List<PaymentApplicationReversal> findAllByOriginalPaymentApplication_PaymentApplicationId(UUID originalPaymentApplicationId);
 
     /**
      * Find all reversals with pagination.
@@ -48,5 +48,5 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
      * @param originalPaymentApplicationId original application identifier
      * @return true if already reversed
      */
-    boolean existsByOriginalPaymentApplicationId(UUID originalPaymentApplicationId);
+    boolean existsByOriginalPaymentApplication_PaymentApplicationId(UUID originalPaymentApplicationId);
 }

@@ -10,6 +10,7 @@ import com.positivity.workorder.internal.dto.StartTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.StopTravelSegmentRequest;
 import com.positivity.workorder.internal.entity.TravelSegment;
 import com.positivity.workorder.internal.entity.TravelSegmentAdjustment;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.TravelSegmentStatus;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
@@ -38,7 +39,6 @@ import java.util.UUID;
 public class TravelSegmentServiceImpl implements TravelSegmentService {
     private final Clock clock;
 
-
     private final TravelSegmentRepository travelSegmentRepository;
     private final TravelSegmentAdjustmentRepository travelSegmentAdjustmentRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -62,7 +62,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
                 .segmentType(request.getSegmentType())
                 .fromLocationId(request.getFromLocationId())
                 .toLocationId(request.getToLocationId())
-                .workOrderId(request.getWorkOrderId())
+                .workOrder(request.getWorkOrderId() != null ? new Workorder(request.getWorkOrderId()) : null)
                 .actedForPersonId(request.getActedForPersonId())
                 .actedByUserId(request.getActedForPersonId() != null ? actor : null)
                 .onBehalfReasonCode(request.getOnBehalfReasonCode())
@@ -140,7 +140,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
         }
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         TravelSegmentAdjustment adjustment = TravelSegmentAdjustment.builder()
-                .travelSegmentId(travelSegmentId)
+                .travelSegment(segment)
                 .adjustedStartAt(request.getAdjustedStartAt())
                 .adjustedEndAt(request.getAdjustedEndAt())
                 .adjustmentReason(request.getAdjustmentReason())

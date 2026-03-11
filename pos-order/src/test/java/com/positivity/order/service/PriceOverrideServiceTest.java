@@ -122,6 +122,11 @@ class PriceOverrideServiceTest {
         @Test
         void testApplyPriceOverride_LargeDiscount_RequiresApproval() {
                 // Given: Large discount (20%) that requires approval
+                createOrderWithLine(
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000009"),
+                                BigDecimal.valueOf(1000.00));
+
                 ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
                 request.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
                 request.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000009").toString());
@@ -260,7 +265,7 @@ class PriceOverrideServiceTest {
                 assertThat(approved.approvedAt()).isNotNull();
 
                 // Verify approval record created
-                assertThat(approvalRecordRepository.findByPriceOverrideId(override.getOverrideId()))
+                assertThat(approvalRecordRepository.findByPriceOverride_OverrideId(override.getOverrideId()))
                                 .hasSize(1)
                                 .first()
                                 .satisfies(record -> {
@@ -290,7 +295,7 @@ class PriceOverrideServiceTest {
                 assertThat(rejected.rejectedAt()).isNotNull();
 
                 // Verify approval record created
-                assertThat(approvalRecordRepository.findByPriceOverrideId(override.getOverrideId()))
+                assertThat(approvalRecordRepository.findByPriceOverride_OverrideId(override.getOverrideId()))
                                 .hasSize(1)
                                 .first()
                                 .satisfies(record -> {
@@ -387,9 +392,32 @@ class PriceOverrideServiceTest {
         }
 
         private PriceOverride createOverride(UUID orderId, UUID orderLineId, OverrideStatus status) {
+                SalesOrder order = salesOrderRepository.findById(orderId)
+                                .orElseGet(() -> salesOrderRepository.save(SalesOrder.builder()
+                                                .orderId(orderId)
+                                                .clerkId("clerk-1")
+                                                .terminalId("terminal-1")
+                                                .status(SalesOrderStatus.DRAFT)
+                                                .subtotal(BigDecimal.valueOf(100.00).setScale(4))
+                                                .createdBy("test-user")
+                                                .updatedBy("test-user")
+                                                .build()));
+
+                SalesOrderLine line = salesOrderLineRepository.findById(orderLineId)
+                                .orElseGet(() -> salesOrderLineRepository.save(SalesOrderLine.builder()
+                                                .orderLineId(orderLineId)
+                                                .order(order)
+                                                .itemSku("SKU-TEST")
+                                                .itemDescription("Test item")
+                                                .quantity(1)
+                                                .unitPrice(BigDecimal.valueOf(100.00).setScale(4))
+                                                .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
+                                                .priceSource(PriceSource.MANUAL)
+                                                .build()));
+
                 PriceOverride override = PriceOverride.builder()
-                                .orderId(orderId)
-                                .orderLineId(orderLineId)
+                                .order(order)
+                                .orderLine(line)
                                 .productId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .originalPrice(BigDecimal.valueOf(100.00))
                                 .overridePrice(BigDecimal.valueOf(80.00))

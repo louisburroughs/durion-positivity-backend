@@ -75,7 +75,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
 
                 // Validate uniqueness within category
                 String trimmedName = request.getKeyName().trim();
-                if (mappingKeyRepository.existsByPostingCategoryIdAndKeyName(
+                if (mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(
                                 request.getPostingCategoryId(), trimmedName)) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Mapping key with name '" + trimmedName +
@@ -84,7 +84,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 }
 
                 MappingKey mappingKey = new MappingKey();
-                mappingKey.setPostingCategoryId(request.getPostingCategoryId());
+                mappingKey.setPostingCategory(category);
                 mappingKey.setKeyName(trimmedName);
                 mappingKey.setDescription(request.getDescription());
                 mappingKey.setIsActive(true);
@@ -150,7 +150,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 // Validate uniqueness if name is changing
                 String trimmedName = request.getKeyName().trim();
                 if (!mappingKey.getKeyName().equals(trimmedName) &&
-                                mappingKeyRepository.existsByPostingCategoryIdAndKeyName(
+                                mappingKeyRepository.existsByPostingCategory_PostingCategoryIdAndKeyName(
                                                 mappingKey.getPostingCategoryId(), trimmedName)) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Mapping key with name '" + trimmedName +
@@ -204,12 +204,15 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 if (isActive != null) {
                         keyPage = mappingKeyRepository.findAll(
                                         (root, query, cb) -> cb.and(
-                                                        cb.equal(root.get("postingCategoryId"), postingCategoryId),
+                                                        cb.equal(root.get("postingCategory").get("postingCategoryId"),
+                                                                        postingCategoryId),
                                                         cb.equal(root.get("isActive"), isActive)),
                                         pageable);
                 } else {
                         keyPage = mappingKeyRepository.findAll(
-                                        (root, query, cb) -> cb.equal(root.get("postingCategoryId"), postingCategoryId),
+                                        (root, query, cb) -> cb.equal(
+                                                        root.get("postingCategory").get("postingCategoryId"),
+                                                        postingCategoryId),
                                         pageable);
                 }
 

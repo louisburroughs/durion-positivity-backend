@@ -69,11 +69,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
 
         @AfterEach
         void tearDown() {
-                workorderServiceRepository.deleteAll();
-                workorderPartRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== PARTIAL APPROVAL PROMOTION TESTS ==========
@@ -85,11 +81,11 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 // 2 APPROVED items, 1 DECLINED item, 1 PENDING_APPROVAL item
                 UUID estimateId = seedApprovedEstimateWithMixedApprovalStatuses();
 
-                List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> allItems = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
                 assertThat(allItems).hasSize(4);
 
                 List<EstimateItem> approvedItems = estimateItemRepository
-                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                .findByEstimate_IdAndApprovalStatusAndDeletedFalse(
                                                 estimateId, ApprovalStatus.APPROVED);
                 assertThat(approvedItems).hasSize(2);
 
@@ -156,11 +152,11 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 // Given: An approved estimate where ALL items are approved
                 UUID estimateId = seedApprovedEstimateWithAllItemsApproved();
 
-                List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> allItems = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
                 assertThat(allItems).hasSize(3);
 
                 List<EstimateItem> approvedItems = estimateItemRepository
-                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                .findByEstimate_IdAndApprovalStatusAndDeletedFalse(
                                                 estimateId, ApprovalStatus.APPROVED);
                 assertThat(approvedItems).hasSize(3);
 
@@ -194,11 +190,11 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 // Given: An approved estimate where ALL items are declined
                 UUID estimateId = seedApprovedEstimateWithAllItemsDeclined();
 
-                List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+                List<EstimateItem> allItems = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
                 assertThat(allItems).hasSize(2);
 
                 List<EstimateItem> approvedItems = estimateItemRepository
-                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                .findByEstimate_IdAndApprovalStatusAndDeletedFalse(
                                                 estimateId, ApprovalStatus.APPROVED);
                 assertThat(approvedItems).isEmpty();
 
@@ -210,7 +206,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .statusCode(409);
 
                 // Then: no workorder should be created
-                assertThat(workorderRepository.findAllByEstimateId(estimateId)).isEmpty();
+                assertThat(workorderRepository.findAllByEstimate_Id(estimateId)).isEmpty();
         }
 
         @Test
@@ -220,7 +216,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 UUID estimateId = seedApprovedEstimateWithMixedApprovalStatuses();
 
                 List<EstimateItem> approvedItems = estimateItemRepository
-                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                .findByEstimate_IdAndApprovalStatusAndDeletedFalse(
                                                 estimateId, ApprovalStatus.APPROVED);
 
                 // When: Promote estimate to workorder
@@ -279,7 +275,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 UUID estimateId = seedApprovedEstimateWithMixedApprovalStatuses();
 
                 List<EstimateItem> approvedItems = estimateItemRepository
-                                .findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                                .findByEstimate_IdAndApprovalStatusAndDeletedFalse(
                                                 estimateId, ApprovalStatus.APPROVED);
                 List<UUID> approvedItemIds = approvedItems.stream().map(EstimateItem::getId).toList();
 
@@ -343,7 +339,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
 
                 // Item 1: LABOR, APPROVED (Oil Change)
                 EstimateItem laborApproved = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil Change Service")
                                 .quantity(BigDecimal.valueOf(1.0))
@@ -357,7 +353,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
 
                 // Item 2: PART, APPROVED (Oil Filter)
                 EstimateItem partApproved = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.PART)
                                 .description("Oil Filter")
                                 .quantity(BigDecimal.valueOf(1.0))
@@ -371,7 +367,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
 
                 // Item 3: LABOR, DECLINED (Tire Rotation)
                 EstimateItem laborDeclined = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Tire Rotation")
                                 .quantity(BigDecimal.valueOf(1.0))
@@ -386,7 +382,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
 
                 // Item 4: PART, PENDING_APPROVAL (Air Filter)
                 EstimateItem partPending = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.PART)
                                 .description("Air Filter")
                                 .quantity(BigDecimal.valueOf(1.0))
@@ -427,7 +423,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 estimate = estimateRepository.save(estimate);
 
                 EstimateItem item1 = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Diagnostic Service")
                                 .quantity(BigDecimal.valueOf(1.0))
@@ -440,7 +436,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .build();
 
                 EstimateItem item2 = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Brake Inspection")
                                 .quantity(BigDecimal.valueOf(1.0))
@@ -453,7 +449,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .build();
 
                 EstimateItem item3 = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.PART)
                                 .description("Brake Pads")
                                 .quantity(BigDecimal.valueOf(1.0))
@@ -495,7 +491,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 estimate = estimateRepository.save(estimate);
 
                 EstimateItem item1 = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Engine Overhaul")
                                 .quantity(BigDecimal.valueOf(1.0))
@@ -509,7 +505,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                                 .build();
 
                 EstimateItem item2 = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.PART)
                                 .description("Transmission Rebuild Kit")
                                 .quantity(BigDecimal.valueOf(1.0))

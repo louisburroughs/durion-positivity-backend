@@ -55,6 +55,7 @@ import com.positivity.inventory.internal.repository.AsnLineRepository;
 import com.positivity.inventory.internal.repository.AsnRepository;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.internal.service.AsnServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -79,6 +80,9 @@ class AsnServiceImplTest {
     private PurchaseOrderRepository purchaseOrderRepository;
 
     @Mock
+    private PurchaseOrderLineRepository purchaseOrderLineRepository;
+
+    @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     @Mock
@@ -93,6 +97,7 @@ class AsnServiceImplTest {
                 asnLineRepository,
                 goodsReceiptRepository,
                 purchaseOrderRepository,
+                purchaseOrderLineRepository,
                 inventoryLedgerEntryRepository,
                 applicationEventPublisher);
         authenticateAs("asn-test-user");
@@ -291,7 +296,7 @@ class AsnServiceImplTest {
                 .build();
 
         AsnLineEntity asnLine = AsnLineEntity.builder()
-                .poId(poId)
+            .purchaseOrder(approvedPo)
                 .sku("SKU-TEST-001")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
@@ -354,7 +359,7 @@ class AsnServiceImplTest {
                 .build();
 
         AsnLineEntity asnLine = AsnLineEntity.builder()
-                .poId(poId)
+            .purchaseOrder(approvedPo)
                 .sku("SKU-OVR-001")
                 .quantityShipped(BigDecimal.ONE)
                 .quantityReceived(BigDecimal.ZERO)
@@ -408,13 +413,13 @@ class AsnServiceImplTest {
                 .build();
 
         AsnLineEntity asnLine1 = AsnLineEntity.builder()
-                .poId(poId)
+            .purchaseOrder(approvedPo)
                 .sku("SKU-1")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
                 .build();
         AsnLineEntity asnLine2 = AsnLineEntity.builder()
-                .poId(poId)
+            .purchaseOrder(approvedPo)
                 .sku("SKU-2")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
@@ -478,7 +483,7 @@ class AsnServiceImplTest {
                 .build();
 
         AsnLineEntity asnLine1 = AsnLineEntity.builder()
-                .poId(poId)
+            .purchaseOrder(approvedPo)
                 .sku("SKU-1")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)

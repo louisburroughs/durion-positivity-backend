@@ -1,7 +1,6 @@
 package com.positivity.inventory.internal.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import com.positivity.inventory.internal.entity.CountEntry;
@@ -20,16 +19,15 @@ public interface CountEntryRepository extends JpaRepository<CountEntry, UUID> {
      * Find all count entries for a specific cycle count task.
      * Ordered by recount sequence number.
      */
-    List<CountEntry> findByCycleCountTaskIdOrderByRecountSequenceNumberAsc(UUID cycleCountTaskId);
+    List<CountEntry> findByCycleCountTask_TaskIdOrderByRecountSequenceNumberAsc(UUID cycleCountTaskId);
     
     /**
      * Find the latest count entry for a task (highest sequence number).
      */
-    @Query("SELECT ce FROM CountEntry ce WHERE ce.cycleCountTaskId = :taskId ORDER BY ce.recountSequenceNumber DESC LIMIT 1")
-    Optional<CountEntry> findLatestByTaskId(UUID taskId);
+    Optional<CountEntry> findFirstByCycleCountTask_TaskIdOrderByRecountSequenceNumberDesc(UUID taskId);
     
     /**
      * Count the number of entries for a specific task.
      */
-    long countByCycleCountTaskId(UUID cycleCountTaskId);
+    long countByCycleCountTask_TaskId(UUID cycleCountTaskId);
 }

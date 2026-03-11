@@ -13,8 +13,11 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,8 +39,13 @@ public class MechanicSkill {
     @Column(name = "id", columnDefinition = "UUID")
     private UUID id;
 
-    @Column(name = "mechanic_id", columnDefinition = "UUID")
-    private UUID mechanicId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "mechanic_id")
+    private Mechanic mechanic;
+
+    public UUID getMechanicId() {
+        return mechanic != null ? mechanic.getMechanicId() : null;
+    }
 
     @Column(name = "skill_code")
     private String skillCode;

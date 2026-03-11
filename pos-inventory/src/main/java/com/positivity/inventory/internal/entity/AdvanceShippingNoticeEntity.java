@@ -11,6 +11,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -54,8 +56,9 @@ public class AdvanceShippingNoticeEntity {
     @Column(nullable = false)
     private AsnStatus status;
 
-    @Column(nullable = false)
-    private UUID poId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "po_id", nullable = false)
+    private PurchaseOrderEntity purchaseOrder;
 
     private LocalDate shipDate;
 

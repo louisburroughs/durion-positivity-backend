@@ -1,5 +1,6 @@
 package com.positivity.people.service;
 
+import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.UserPersonLink;
 import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.repository.UserPersonLinkRepository;
@@ -43,7 +44,7 @@ class UserPersonTranslationServiceTest {
 	@Test
 	void getPersonUuidForUser_returnsMappedPersonUuid() {
 		UserPersonLink link = new UserPersonLink();
-		link.setPersonId(testPersonId);
+		link.setPerson(Person.builder().id(testPersonId).build());
 		link.setUserId(testUserId);
 		when(userPersonLinkRepository.findByUserId(testUserId)).thenReturn(Optional.of(link));
 
@@ -63,11 +64,11 @@ class UserPersonTranslationServiceTest {
 	@Test
 	void getUserIdForPerson_returnsOptionalUserId() {
 		UserPersonLink link = new UserPersonLink();
-		link.setPersonId(testPersonId);
+		link.setPerson(Person.builder().id(testPersonId).build());
 		link.setUserId(testUserId);
 		link.setStatus(UserLinkStatus.ACTIVE);
-		when(userPersonLinkRepository.findByPersonIdAndStatus(testPersonId, UserLinkStatus.ACTIVE))
-			.thenReturn(Optional.of(link));
+		when(userPersonLinkRepository.findByPerson_IdAndStatus(testPersonId, UserLinkStatus.ACTIVE))
+				.thenReturn(Optional.of(link));
 
 		Optional<UUID> result = userPersonTranslationService.getUserIdForPerson(testPersonId);
 
@@ -76,8 +77,8 @@ class UserPersonTranslationServiceTest {
 
 	@Test
 	void getUserIdForPerson_returnsEmptyWhenNoLinkExists() {
-		when(userPersonLinkRepository.findByPersonIdAndStatus(missingPersonId, UserLinkStatus.ACTIVE))
-			.thenReturn(Optional.empty());
+		when(userPersonLinkRepository.findByPerson_IdAndStatus(missingPersonId, UserLinkStatus.ACTIVE))
+				.thenReturn(Optional.empty());
 
 		Optional<UUID> result = userPersonTranslationService.getUserIdForPerson(missingPersonId);
 
@@ -86,7 +87,7 @@ class UserPersonTranslationServiceTest {
 
 	@Test
 	void isUserLinkedToPerson_returnsTrueWhenLinkExists() {
-		when(userPersonLinkRepository.existsByUserIdAndPersonId(testUserId, testPersonId)).thenReturn(true);
+		when(userPersonLinkRepository.existsByUserIdAndPerson_Id(testUserId, testPersonId)).thenReturn(true);
 
 		boolean result = userPersonTranslationService.isUserLinkedToPerson(testUserId, testPersonId);
 

@@ -13,10 +13,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -36,7 +40,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Table(name = "estimate_snapshot")
 @Getter
-@ToString
+@ToString(exclude = { "estimate" })
 @EqualsAndHashCode
 @NoArgsConstructor
 @AllArgsConstructor
@@ -50,8 +54,9 @@ public class EstimateSnapshot {
     @Column(columnDefinition = "UUID", updatable = false)
     private UUID id;
 
-    @Column(nullable = false, columnDefinition = "UUID", updatable = false)
-    private UUID estimateId; // Reference to the source estimate
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "estimate_id", nullable = false, updatable = false)
+    private Estimate estimate;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20, updatable = false)
@@ -77,10 +82,19 @@ public class EstimateSnapshot {
     @Column(length = 500, updatable = false)
     private String notes; // Optional notes about why snapshot was captured
 
+    @Transient
+    public UUID getEstimateId() {
+        return estimate != null ? estimate.getId() : null;
+    }
+
+    public void setEstimateId(UUID estimateId) {
+        this.estimate = estimateId != null ? new Estimate(estimateId) : null;
+    }
+
     @PrePersist
     protected void prePersist() {
         if (capturedAt == null) {
             capturedAt = LocalDateTime.now(Clock.systemUTC());
         }
-}
+    }
 }

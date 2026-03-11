@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import com.positivity.shared.id.UUIDv7Id;
+
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Data
@@ -16,8 +17,7 @@ public class CarApiMake {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-    private String makeId;
+    private UUID makeId;
     private String makeName;
     private LocalDateTime cacheTimestamp;
 }
-

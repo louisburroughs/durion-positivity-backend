@@ -378,7 +378,7 @@ class EstimateRevisionWorkflowTest {
                                 .shopId(UUID.fromString("550e8400-e29b-41d4-a716-446655440050"))
                                 .customerId(UUID.fromString("550e8400-e29b-41d4-a716-446655440051"))
                                 .vehicleId(UUID.fromString("550e8400-e29b-41d4-a716-446655440052"))
-                                .estimateId(estimateId)
+                                .estimate(estimateRepository.getReferenceById(estimateId))
                                 .status(WorkorderStatus.DRAFT)
                                 .build();
 

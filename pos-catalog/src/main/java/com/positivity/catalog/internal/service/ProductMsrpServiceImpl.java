@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.catalog.internal.dto.CreateMsrpRequestDto;
 import com.positivity.catalog.internal.dto.ProductMsrpDto;
 import com.positivity.catalog.internal.dto.UpdateMsrpRequestDto;
+import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.ProductMsrpEntity;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
@@ -41,12 +42,12 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
     @Override
     @Transactional
     public ProductMsrpDto createMsrp(@NonNull UUID productId, @NonNull CreateMsrpRequestDto request) {
-        validateProductExists(productId);
+        ProductEntity product = requireProduct(productId);
         validateDates(request.getEffectiveStartDate(), request.getEffectiveEndDate());
         validateAmountAndCurrency(request.getAmount(), request.getCurrency());
 
         if (request.getEffectiveEndDate() == null
-                && productMsrpRepository.countByProductIdAndEffectiveEndDateIsNull(productId) > 0) {
+            && productMsrpRepository.countByProduct_IdAndEffectiveEndDateIsNull(productId) > 0) {
             throw new CatalogValidationException(
                     "Only one open-ended MSRP record is allowed per product.");
         }
@@ -61,7 +62,7 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
         }
 
         ProductMsrpEntity entity = new ProductMsrpEntity();
-        entity.setProductId(productId);
+        entity.setProduct(product);
         entity.setAmount(request.getAmount().setScale(4, RoundingMode.HALF_UP));
         entity.setCurrency(normalizeCurrency(request.getCurrency()));
         entity.setEffectiveStartDate(request.getEffectiveStartDate());
@@ -76,7 +77,7 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
     public ProductMsrpDto updateMsrp(@NonNull UUID productId, @NonNull UUID msrpId,
             @NonNull UpdateMsrpRequestDto request) {
         // 1) Validate basic request integrity before touching persistence.
-        validateProductExists(productId);
+        requireProduct(productId);
         validateDates(request.getEffectiveStartDate(), request.getEffectiveEndDate());
         validateAmountAndCurrency(request.getAmount(), request.getCurrency());
 
@@ -84,7 +85,7 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
         ProductMsrpEntity entity = productMsrpRepository.findById(msrpId)
                 .orElseThrow(() -> new CatalogNotFoundException("MSRP record not found: " + msrpId));
 
-        if (!entity.getProductId().equals(productId)) {
+        if (entity.getProduct() == null || !entity.getProduct().getId().equals(productId)) {
             throw new CatalogNotFoundException("MSRP record not found for product: " + productId);
         }
 
@@ -102,7 +103,7 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
         // If this update sets effectiveEndDate to null, allow it only when no other
         // open-ended record exists (excluding this record if it is already open-ended).
         if (request.getEffectiveEndDate() == null) {
-            long openEndedCount = productMsrpRepository.countByProductIdAndEffectiveEndDateIsNull(productId);
+            long openEndedCount = productMsrpRepository.countByProduct_IdAndEffectiveEndDateIsNull(productId);
             boolean entityCurrentlyOpenEnded = entity.getEffectiveEndDate() == null;
             long otherOpenEndedCount = entityCurrentlyOpenEnded ? openEndedCount - 1 : openEndedCount;
             if (otherOpenEndedCount > 0) {
@@ -134,24 +135,23 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
     @Override
     @Transactional(readOnly = true)
     public Optional<ProductMsrpDto> getActiveMsrp(@NonNull UUID productId, @NonNull LocalDate asOf) {
-        validateProductExists(productId);
+        requireProduct(productId);
         return productMsrpRepository.findActive(productId, asOf).map(this::toDto);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ProductMsrpDto> getAllMsrp(@NonNull UUID productId) {
-        validateProductExists(productId);
-        return productMsrpRepository.findByProductIdOrderByEffectiveStartDateDesc(productId)
+        requireProduct(productId);
+        return productMsrpRepository.findByProduct_IdOrderByEffectiveStartDateDesc(productId)
                 .stream()
                 .map(this::toDto)
                 .toList();
     }
 
-    private void validateProductExists(UUID productId) {
-        if (!productRepository.existsById(productId)) {
-            throw new CatalogNotFoundException("Product not found: " + productId);
-        }
+    private ProductEntity requireProduct(UUID productId) {
+        return productRepository.findById(productId)
+                .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + productId));
     }
 
     private void validateDates(LocalDate startDate, LocalDate endDate) {
@@ -179,7 +179,7 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
     private ProductMsrpDto toDto(ProductMsrpEntity entity) {
         ProductMsrpDto dto = new ProductMsrpDto();
         dto.setMsrpId(entity.getMsrpId());
-        dto.setProductId(entity.getProductId());
+        dto.setProductId(entity.getProduct() == null ? null : entity.getProduct().getId());
         dto.setAmount(entity.getAmount().toPlainString());
         dto.setCurrency(entity.getCurrency());
         dto.setEffectiveStartDate(entity.getEffectiveStartDate());

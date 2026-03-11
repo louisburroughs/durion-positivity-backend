@@ -1,6 +1,5 @@
 package com.positivity.workorder.internal.entity;
 
-
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 
@@ -20,6 +19,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -79,9 +79,11 @@ public class WorkorderService {
     @Nullable
     private String taxCode; // Snapshotted tax code at promotion time
 
-    @Column(columnDefinition = "UUID")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "origin_estimate_item_id")
+    @ToString.Exclude
     @Nullable
-    private UUID originEstimateItemId; // Traceability link to source EstimateItem
+    private EstimateItem originEstimateItem; // Traceability link to source EstimateItem
 
     // Flag to indicate this service was declined by customer during estimate
     // approval
@@ -94,7 +96,10 @@ public class WorkorderService {
     private WorkorderItemStatus status = WorkorderItemStatus.OPEN;
 
     // Reference to the change request that added this item
-    private UUID changeRequestId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "change_request_id")
+    @ToString.Exclude
+    private ChangeRequest changeRequest;
 
     // Emergency/Safety flags and documentation
     @Builder.Default
@@ -121,5 +126,29 @@ public class WorkorderService {
     public boolean canExecute() {
         return status != WorkorderItemStatus.PENDING_APPROVAL
                 || (isEmergencySafety && customerDenialAcknowledged != null);
+    }
+
+    @jakarta.persistence.Transient
+    public UUID getOriginEstimateItemId() {
+        return originEstimateItem != null ? originEstimateItem.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setOriginEstimateItemId(UUID originEstimateItemId) {
+        this.originEstimateItem = originEstimateItemId != null ? new EstimateItem(originEstimateItemId) : null;
+    }
+
+    @jakarta.persistence.Transient
+    public UUID getChangeRequestId() {
+        return changeRequest != null ? changeRequest.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setChangeRequestId(UUID changeRequestId) {
+        this.changeRequest = changeRequestId != null ? new ChangeRequest(changeRequestId) : null;
+    }
+
+    public WorkorderService(UUID id) {
+        this.id = id;
     }
 }

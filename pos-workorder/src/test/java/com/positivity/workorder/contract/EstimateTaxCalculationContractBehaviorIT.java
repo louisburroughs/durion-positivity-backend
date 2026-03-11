@@ -47,9 +47,8 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
 
     @AfterEach
     void tearDown() {
-        estimateItemRepository.deleteAll();
-        estimateRepository.deleteAll();
-    }
+                purgeTestData();
+        }
 
     @Test
     @DisplayName("Contract: Calculate taxes and totals for draft estimate - Happy Path")
@@ -219,18 +218,18 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
 
         Estimate savedEstimate = estimateRepository.save(estimate);
 
-        estimateItemRepository.save(buildItem(savedEstimate.getId(), EstimateItemType.PART, "Front brake pads",
+        estimateItemRepository.save(buildItem(savedEstimate, EstimateItemType.PART, "Front brake pads",
                 new BigDecimal("2"), new BigDecimal("50.00")));
-        estimateItemRepository.save(buildItem(savedEstimate.getId(), EstimateItemType.LABOR, "Brake labor",
+        estimateItemRepository.save(buildItem(savedEstimate, EstimateItemType.LABOR, "Brake labor",
                 new BigDecimal("5"), new BigDecimal("20.00")));
 
         return savedEstimate.getId();
     }
 
-    private EstimateItem buildItem(UUID estimateId, EstimateItemType type, String description,
+    private EstimateItem buildItem(Estimate estimate, EstimateItemType type, String description,
             BigDecimal quantity, BigDecimal unitPrice) {
         return EstimateItem.builder()
-                .estimateId(estimateId)
+                .estimate(estimate)
                 .itemType(type)
                 .description(description)
                 .quantity(quantity)

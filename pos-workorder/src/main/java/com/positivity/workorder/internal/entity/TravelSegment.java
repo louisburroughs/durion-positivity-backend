@@ -9,14 +9,18 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
@@ -43,6 +47,9 @@ import java.util.UUID;
 @Builder
 @EntityListeners(AuditingEntityListener.class)
 public class TravelSegment {
+    public TravelSegment(UUID travelSegmentId) {
+        this.travelSegmentId = travelSegmentId;
+    }
 
     @Id
     @GeneratedValue
@@ -80,8 +87,10 @@ public class TravelSegment {
     private UUID toLocationId;
 
     @Nullable
-    @Column(columnDefinition = "UUID")
-    private UUID workOrderId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "work_order_id")
+    @ToString.Exclude
+    private Workorder workOrder;
 
     @Nullable
     @Column
@@ -133,4 +142,14 @@ public class TravelSegment {
     @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
+
+    @jakarta.persistence.Transient
+    public UUID getWorkOrderId() {
+        return workOrder != null ? workOrder.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setWorkOrderId(UUID workOrderId) {
+        this.workOrder = workOrderId != null ? new Workorder(workOrderId) : null;
+    }
 }

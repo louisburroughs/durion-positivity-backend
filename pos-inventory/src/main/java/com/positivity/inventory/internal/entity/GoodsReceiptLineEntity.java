@@ -40,7 +40,9 @@ public class GoodsReceiptLineEntity {
     @JoinColumn(name = "receipt_id", nullable = false)
     private GoodsReceiptEntity goodsReceipt;
 
-    private UUID poLineId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "po_line_id")
+    private PurchaseOrderLineEntity poLine;
 
     @Column(nullable = false)
     private String sku;

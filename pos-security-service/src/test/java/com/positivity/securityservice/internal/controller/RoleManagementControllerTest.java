@@ -28,7 +28,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
-import com.positivity.securityservice.internal.security.CustomUserDetailsService;
+import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.service.RoleManagementService;
 import com.positivity.securityservice.service.RolePermissionService;

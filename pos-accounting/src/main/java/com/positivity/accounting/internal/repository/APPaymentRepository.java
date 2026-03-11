@@ -23,7 +23,7 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
         /**
          * Find all payments for a vendor bill.
          */
-        List<APPayment> findByVendorBillId(UUID vendorBillId);
+        List<APPayment> findByVendorBill_VendorBillId(UUID vendorBillId);
 
         /**
          * Find all payments for a vendor.

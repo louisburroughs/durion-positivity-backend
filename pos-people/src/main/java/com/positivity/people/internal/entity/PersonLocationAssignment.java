@@ -17,8 +17,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
@@ -44,10 +47,14 @@ public class PersonLocationAssignment {
 	@Column(columnDefinition = "UUID")
 	private UUID id;
 
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "person_id", nullable = false)
 	@NonNull
-	@NotNull
-	@Column(name = "person_id", nullable = false)
-	private UUID personId;
+	private Person person;
+
+	public UUID getPersonId() {
+		return person != null ? person.getId() : null;
+	}
 
 	@NonNull
 	@NotNull

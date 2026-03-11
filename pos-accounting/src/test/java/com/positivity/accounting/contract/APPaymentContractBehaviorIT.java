@@ -28,12 +28,14 @@ import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
+import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 
 /**
@@ -66,6 +68,9 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private APPaymentAllocationRepository allocationRepository;
 
+        @Autowired
+        private JournalEntryRepository journalEntryRepository;
+
         private static final String API_V1_AP_PAYMENTS = "/v1/accounting/ap/payments";
         private static final String API_V1_AP_BILLS = "/v1/accounting/ap/bills";
 
@@ -79,6 +84,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 // Clean up any existing test data
                 allocationRepository.deleteAll();
                 apPaymentRepository.deleteAll();
+                journalEntryRepository.deleteAll();
                 vendorBillRepository.deleteAll();
 
                 // Setup test vendor and bills
@@ -114,6 +120,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 // Clean up test data after each test
                 allocationRepository.deleteAll();
                 apPaymentRepository.deleteAll();
+                journalEntryRepository.deleteAll();
                 vendorBillRepository.deleteAll();
         }
 
@@ -158,7 +165,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 assertThat(savedPayment.getUnappliedAmount()).isEqualByComparingTo(BigDecimal.ZERO);
 
                 List<APPaymentAllocation> allocations = allocationRepository
-                                .findByPaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId());
+                                .findByPayment_PaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId());
                 assertThat(allocations).hasSize(2);
 
                 // Verify bill1 (oldest due) gets allocated first: $500
@@ -209,7 +216,7 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 APPayment savedPayment = apPaymentRepository.findByPaymentRef(paymentRef).orElseThrow();
                 assertThat(savedPayment.getUnappliedAmount()).isEqualByComparingTo(new BigDecimal("100.00"));
                 assertThat(allocationRepository
-                                .findByPaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId()))
+                                .findByPayment_PaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId()))
                                 .hasSize(1);
         }
 
@@ -325,7 +332,11 @@ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
                 payment.setStatus(APPaymentStatus.GL_POSTED);
                 payment.setGatewayTransactionId("TXN-67890");
                 payment.setGatewayTimestamp(Instant.now(TEST_CLOCK));
-                payment.setGlJournalEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+                JournalEntry journalEntry = new JournalEntry();
+                journalEntry.setTransactionDate(LocalDate.now(TEST_CLOCK).atStartOfDay());
+                journalEntry.setDescription("Contract test journal entry");
+                journalEntry = journalEntryRepository.save(journalEntry);
+                payment.setGlJournalEntry(journalEntry);
                 payment.setGlPostedAt(Instant.now(TEST_CLOCK));
                 payment.setCreatedBy("test-user");
                 payment = apPaymentRepository.save(payment);

@@ -59,8 +59,9 @@ public class PaymentApplicationReversal {
         }
     }
 
-    @Column(name = "original_payment_application_id", nullable = false, columnDefinition = "UUID")
-    private UUID originalPaymentApplicationId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "original_payment_application_id", nullable = false, columnDefinition = "UUID")
+    private PaymentApplication originalPaymentApplication;
 
     @Column(name = "amount", precision = 19, scale = 4, nullable = false)
     private BigDecimal amount;
@@ -76,4 +77,14 @@ public class PaymentApplicationReversal {
 
     @Column(name = "trace_id", length = 100)
     private String traceId;
+
+    @Transient
+    public UUID getOriginalPaymentApplicationId() {
+        return originalPaymentApplication != null ? originalPaymentApplication.getPaymentApplicationId() : null;
+    }
+
+    public void setOriginalPaymentApplicationId(UUID originalPaymentApplicationId) {
+        this.originalPaymentApplication = originalPaymentApplicationId == null ? null
+                : new PaymentApplication(originalPaymentApplicationId);
+    }
 }

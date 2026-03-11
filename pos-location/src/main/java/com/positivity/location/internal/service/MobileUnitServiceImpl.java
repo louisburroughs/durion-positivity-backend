@@ -9,12 +9,14 @@ import com.positivity.location.internal.dto.CoverageRuleResponse;
 import com.positivity.location.internal.dto.EligibleMobileUnitResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.MobileUnitCoverageRuleEntity;
 import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
 import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
+import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.MobileUnitCoverageRuleRepository;
 import com.positivity.location.internal.repository.MobileUnitRepository;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
@@ -59,6 +61,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     protected final ServiceAreaRepository serviceAreaRepository;
     protected final TravelBufferPolicyRepository travelBufferPolicyRepository;
     protected final ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+    protected final LocationRepository locationRepository;
 
     public MobileUnitServiceImpl(
             MobileUnitRepository mobileUnitRepository,
@@ -66,6 +69,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             ServiceAreaRepository serviceAreaRepository,
             TravelBufferPolicyRepository travelBufferPolicyRepository,
             ServiceLocationCapabilityRepository serviceLocationCapabilityRepository,
+            LocationRepository locationRepository,
             Clock clock) {
         this.clock = clock;
         this.mobileUnitRepository = mobileUnitRepository;
@@ -73,6 +77,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         this.serviceAreaRepository = serviceAreaRepository;
         this.travelBufferPolicyRepository = travelBufferPolicyRepository;
         this.serviceLocationCapabilityRepository = serviceLocationCapabilityRepository;
+        this.locationRepository = locationRepository;
     }
 
     /**
@@ -132,7 +137,9 @@ public class MobileUnitServiceImpl implements MobileUnitService {
 
         MobileUnitEntity entity = MobileUnitEntity.builder()
                 .name(request.getName())
-                .baseLocationId(request.getBaseLocationId())
+                .baseLocation(baseLocationId != null
+                        ? locationRepository.findById(baseLocationId).orElse(null)
+                        : null)
                 .status(normalizedStatus)
                 .travelBufferPolicyId(request.getTravelBufferPolicyId())
                 .notes(request.getNotes())
@@ -457,7 +464,8 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         Set<UUID> resolvedIds = new LinkedHashSet<>();
         if (!requestedIds.isEmpty()) {
             Set<UUID> foundIds = new LinkedHashSet<>();
-            for (ServiceLocationCapabilityEntity capability : serviceLocationCapabilityRepository.findAllById(requestedIds)) {
+            for (ServiceLocationCapabilityEntity capability : serviceLocationCapabilityRepository
+                    .findAllById(requestedIds)) {
                 foundIds.add(capability.getId());
             }
             for (UUID requestedId : requestedIds) {

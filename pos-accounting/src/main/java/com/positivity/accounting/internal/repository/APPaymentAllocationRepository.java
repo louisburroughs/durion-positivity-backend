@@ -24,7 +24,7 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
      * @param paymentId UUID of the payment
      * @return List of allocations, ordered by allocation_sequence
      */
-    List<APPaymentAllocation> findByPaymentIdOrderByAllocationSequenceAsc(UUID paymentId);
+    List<APPaymentAllocation> findByPayment_PaymentIdOrderByAllocationSequenceAsc(UUID paymentId);
 
     /**
      * Find all allocations for a given vendor bill.
@@ -32,7 +32,7 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
      * @param vendorBillId UUID of the vendor bill
      * @return List of allocations for the bill across all payments
      */
-    List<APPaymentAllocation> findByVendorBillId(UUID vendorBillId);
+    List<APPaymentAllocation> findByVendorBill_VendorBillId(UUID vendorBillId);
 
     /**
      * Calculate the sum of all allocations for a given vendor bill.
@@ -43,6 +43,6 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
      * @param vendorBillId UUID of the vendor bill
      * @return Sum of all allocations, or 0 if no allocations exist
      */
-    @Query("SELECT COALESCE(SUM(a.appliedAmount), 0) FROM APPaymentAllocation a WHERE a.vendorBillId = :vendorBillId")
+    @Query("SELECT COALESCE(SUM(a.appliedAmount), 0) FROM APPaymentAllocation a WHERE a.vendorBill.vendorBillId = :vendorBillId")
     BigDecimal sumAllocatedAmountByVendorBillId(@Param("vendorBillId") UUID vendorBillId);
 }

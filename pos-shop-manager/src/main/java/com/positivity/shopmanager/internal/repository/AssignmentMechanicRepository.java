@@ -7,5 +7,5 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AssignmentMechanicRepository extends JpaRepository<AssignmentMechanic, UUID> {
-    List<AssignmentMechanic> findByAssignmentId(@NonNull UUID assignmentId);
+    List<AssignmentMechanic> findByAssignment_AssignmentId(@NonNull UUID assignmentId);
 }

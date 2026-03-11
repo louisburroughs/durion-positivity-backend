@@ -33,6 +33,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.ScopeType;
+import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -78,6 +79,9 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         @Autowired
         private RoleAssignmentRepository roleAssignmentRepository;
 
+        @Autowired
+        private PrincipalRoleRepository principalRoleRepository;
+
         private User testUser;
         private Role testRole;
 
@@ -85,6 +89,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         void setupTestData() {
                 // Clean up any existing test data
                 roleAssignmentRepository.deleteAll();
+                principalRoleRepository.deleteAll();
                 userRepository.deleteAll();
                 roleRepository.deleteAll();
 
@@ -109,7 +114,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         @DisplayName("Should revoke assignment immediately with today's date")
         void testImmediateRevocation() throws Exception {
                 // Given: Create a role assignment
-                RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
+                RoleAssignment assignment = createAssignment(
                                 LocalDateTime.now(TEST_CLOCK), null, ScopeType.GLOBAL);
 
                 Instant beforeRevocation = Instant.now();
@@ -136,7 +141,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         @DisplayName("Should support scheduled revocation with future date")
         void testScheduledRevocation() throws Exception {
                 // Given: Create a role assignment
-                RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
+                RoleAssignment assignment = createAssignment(
                                 LocalDateTime.now(TEST_CLOCK), null, ScopeType.GLOBAL);
 
                 LocalDateTime futureDate = LocalDateTime.now().plusDays(30).withNano(0);
@@ -166,7 +171,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         @DisplayName("Should support backdated revocation with past date")
         void testBackdatedRevocation() throws Exception {
                 // Given: Create a role assignment
-                RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
+                RoleAssignment assignment = createAssignment(
                                 LocalDateTime.now(TEST_CLOCK).minusDays(30), null, ScopeType.GLOBAL);
 
                 LocalDateTime pastDate = LocalDateTime.now(TEST_CLOCK).minusDays(5);
@@ -195,7 +200,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         @DisplayName("Should update revokedAt when revocation is changed")
         void testUpdatingRevocation() throws Exception {
                 // Given: Create and revoke an assignment
-                RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
+                RoleAssignment assignment = createAssignment(
                                 LocalDateTime.now(TEST_CLOCK), null, ScopeType.GLOBAL);
 
                 LocalDateTime firstEndDate = LocalDateTime.now(TEST_CLOCK).plusDays(7);
@@ -248,7 +253,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         @DisplayName("Should retrieve revoked assignments with includeHistory=true")
         void testRetrieveRevokedAssignments() throws Exception {
                 // Given: Create and revoke an assignment
-                RoleAssignment assignment = createAssignment(testUser.getId(), testRole.getId(),
+                RoleAssignment assignment = createAssignment(
                                 LocalDateTime.now(TEST_CLOCK).minusDays(30), null, ScopeType.GLOBAL);
 
                 mockMvc.perform(
@@ -285,8 +290,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         /**
          * Helper method to create a role assignment
          */
-        private RoleAssignment createAssignment(UUID userId, UUID roleId,
-                        LocalDateTime startDate, LocalDateTime endDate, ScopeType scopeType) {
+        private RoleAssignment createAssignment(LocalDateTime startDate, LocalDateTime endDate, ScopeType scopeType) {
                 RoleAssignment assignment = new RoleAssignment();
                 assignment.setId(UUIDv7Generator.generate());
                 assignment.setUser(testUser);

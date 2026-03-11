@@ -7,5 +7,5 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface OverrideRecordRepository extends JpaRepository<OverrideRecord, UUID> {
-    List<OverrideRecord> findByAppointmentId(@NonNull UUID appointmentId);
+    List<OverrideRecord> findByAppointment_AppointmentId(@NonNull UUID appointmentId);
 }

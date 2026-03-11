@@ -7,5 +7,5 @@ import java.util.List;
 import java.util.UUID;
 
 public interface TravelSegmentAdjustmentRepository extends JpaRepository<TravelSegmentAdjustment, UUID> {
-    List<TravelSegmentAdjustment> findByTravelSegmentId(UUID travelSegmentId);
+    List<TravelSegmentAdjustment> findByTravelSegment_TravelSegmentId(UUID travelSegmentId);
 }

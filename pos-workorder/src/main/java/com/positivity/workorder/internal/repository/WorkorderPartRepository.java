@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @Repository
 public interface WorkorderPartRepository extends JpaRepository<WorkorderPart, UUID> {
-    List<WorkorderPart> findByChangeRequestId(UUID changeRequestId);
+    List<WorkorderPart> findByChangeRequest_Id(UUID changeRequestId);
 
     /**
      * Find all parts directly associated with a workorder (CAP:004 Story #27).
@@ -18,8 +18,10 @@ public interface WorkorderPartRepository extends JpaRepository<WorkorderPart, UU
     List<WorkorderPart> findByWorkorderId(UUID workorderId);
 
     /**
-     * Find only standalone parts (parts with direct workorder reference but no service).
-     * This avoids duplicates when parts have both workorder and workOrderService set.
+     * Find only standalone parts (parts with direct workorder reference but no
+     * service).
+     * This avoids duplicates when parts have both workorder and workOrderService
+     * set.
      * CAP:007 - Prevent duplicate parts in invoice line items.
      */
     List<WorkorderPart> findByWorkorderIdAndWorkOrderServiceIsNull(UUID workorderId);

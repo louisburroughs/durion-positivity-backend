@@ -12,16 +12,20 @@ import com.positivity.shared.id.UUIDv7Generator;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -50,8 +54,20 @@ public class TechnicianAssignment {
     private Long id;
 
     @NonNull
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID workorderId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "workorder_id", nullable = false)
+    @ToString.Exclude
+    private Workorder workorder;
+
+    @jakarta.persistence.Transient
+    public UUID getWorkorderId() {
+        return workorder != null ? workorder.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setWorkorderId(UUID workorderId) {
+        this.workorder = new Workorder(workorderId);
+    }
 
     @NonNull
     @Column(nullable = false, columnDefinition = "UUID")
@@ -98,10 +114,11 @@ public class TechnicianAssignment {
         if (assignedAt == null) {
             assignedAt = LocalDateTime.now(Clock.systemUTC());
         }
-if (current == null) {
+        if (current == null) {
             current = true;
         }
     }
+
     /**
      * Mark this assignment as no longer current and set unassignment timestamp.
      * 

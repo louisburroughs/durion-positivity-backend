@@ -33,8 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * absent,
  * so {@code @WithMockUser} is not used — header-based auth is the only
  * supported pattern.</li>
- * <li>ADR-0017: HTTP status codes — 200 success, 404 not found, 403
- * forbidden</li>
+ * <li>ADR-0017: HTTP status codes — 200 success, 404 not found, 401
+ * unauthenticated, 403 forbidden</li>
  * </ul>
  *
  * Issue: CAP-252
@@ -229,24 +229,24 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // SS-007 — Unauthenticated request returns 403
+    // SS-007 — Unauthenticated request returns 401
     // -------------------------------------------------------------------------
 
     /**
-     * SS-007: A request without any authentication must be rejected with HTTP 403.
+     * SS-007: A request without any authentication must be rejected with HTTP 401.
      *
      * <p>
      * NOTE: If Spring Security is fully disabled in the test profile
-     * ({@code security.enabled=false}), this test may return 200 instead of 403.
+     * ({@code security.enabled=false}), this test may return 200 instead of 401.
      * The assertion documents the required production contract regardless.
      *
      * Issue: CAP-252
      */
     @Test
-    @DisplayName("SS-007: unauthenticated request to snapshot endpoint returns 403")
-    void snapshotByParty_unauthenticated_returns403() throws Exception {
+    @DisplayName("SS-007: unauthenticated request to snapshot endpoint returns 401")
+    void snapshotByParty_unauthenticated_returns401() throws Exception {
         mockMvc.perform(
                 get("/v1/crm/snapshot/party/{partyId}", UUID.fromString("00000000-0000-0000-0000-000000000001")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }

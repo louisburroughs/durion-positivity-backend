@@ -15,8 +15,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -38,11 +41,17 @@ public class AssignmentMechanic {
     @Column(name = "id", columnDefinition = "UUID")
     private UUID id;
 
-    @Column(name = "assignment_id", nullable = false, columnDefinition = "UUID")
-    private UUID assignmentId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "assignment_id", nullable = false)
+    private Assignment assignment;
 
-    @Column(name = "mechanic_id", nullable = false, columnDefinition = "UUID")
-    private UUID mechanicId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "mechanic_id", nullable = false)
+    private Mechanic mechanic;
+
+    public UUID getMechanicId() {
+        return mechanic != null ? mechanic.getMechanicId() : null;
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 10)

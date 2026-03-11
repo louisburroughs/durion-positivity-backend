@@ -49,7 +49,7 @@ class EligibilityEvaluationServiceImplTest {
                 PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.IN,
                                 accountId.toString());
 
-                when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+                when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
                 when(accountProvider.getAccountContext(any()))
                                 .thenReturn(Optional.of(new AccountContext(accountId, 5)));
 
@@ -71,7 +71,7 @@ class EligibilityEvaluationServiceImplTest {
                 UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 PromotionEligibilityRule rule = rule(ConditionType.VEHICLE_TAG, RuleOperator.EQUALS, "tractor");
 
-                when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+                when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
                 when(vehicleProvider.getVehicleContext(any()))
                                 .thenReturn(Optional.of(new VehicleContext(vehicleId, List.of("tractor"))));
 
@@ -96,7 +96,7 @@ class EligibilityEvaluationServiceImplTest {
                                 RuleOperator.GREATER_THAN_OR_EQUAL_TO,
                                 "20");
 
-                when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+                when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
                 when(accountProvider.getAccountContext(any()))
                                 .thenReturn(Optional.of(new AccountContext(accountId, 5)));
 
@@ -118,7 +118,7 @@ class EligibilityEvaluationServiceImplTest {
                 UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000002");
                 PromotionEligibilityRule rule = rule(ConditionType.VEHICLE_TAG, RuleOperator.EQUALS, "tractor");
 
-                when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+                when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
                 when(vehicleProvider.getVehicleContext(any()))
                                 .thenReturn(Optional.of(new VehicleContext(vehicleId, List.of("trailer"))));
 
@@ -153,7 +153,7 @@ class EligibilityEvaluationServiceImplTest {
                 PromotionEligibilityRule rule2 = rule(ConditionType.VEHICLE_TAG, RuleOperator.EQUALS, "fleet");
                 rule2.setRuleCombination(RuleCombination.OR);
 
-                when(ruleRepo.findByPromotionId(promotionId)).thenReturn(List.of(rule1, rule2));
+                when(ruleRepo.findByPromotion_PromotionOfferId(promotionId)).thenReturn(List.of(rule1, rule2));
                 when(accountProvider.getAccountContext(accountId))
                                 .thenReturn(Optional.of(new AccountContext(accountId, 5)));
                 when(vehicleProvider.getVehicleContext(vehicleId))
@@ -174,7 +174,7 @@ class EligibilityEvaluationServiceImplTest {
         @Test
         void givenNoRules_whenEvaluate_thenEligible() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-                when(ruleRepo.findByPromotionId(promotionId)).thenReturn(List.of());
+                when(ruleRepo.findByPromotion_PromotionOfferId(promotionId)).thenReturn(List.of());
 
                 EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
                                 ruleRepo,
@@ -196,7 +196,7 @@ class EligibilityEvaluationServiceImplTest {
                 PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.IN,
                                 otherAccountId.toString());
 
-                when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+                when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
                 when(accountProvider.getAccountContext(any()))
                                 .thenReturn(Optional.of(new AccountContext(accountId, 1)));
 
@@ -219,7 +219,7 @@ class EligibilityEvaluationServiceImplTest {
                 PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.NOT_IN,
                                 accountId.toString());
 
-                when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+                when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
                 when(accountProvider.getAccountContext(any()))
                                 .thenReturn(Optional.of(new AccountContext(accountId, 1)));
 
@@ -242,7 +242,7 @@ class EligibilityEvaluationServiceImplTest {
                 PromotionEligibilityRule rule = rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.EQUALS,
                                 accountId.toString());
 
-                when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+                when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
 
                 EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
                                 ruleRepo,
@@ -263,7 +263,7 @@ class EligibilityEvaluationServiceImplTest {
                                 RuleOperator.GREATER_THAN_OR_EQUAL_TO,
                                 "10");
 
-                when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+                when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
 
                 EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
                                 ruleRepo,
@@ -283,7 +283,7 @@ class EligibilityEvaluationServiceImplTest {
                 UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000003");
                 PromotionEligibilityRule rule = rule(ConditionType.VEHICLE_TAG, RuleOperator.IN, "tractor");
 
-                when(ruleRepo.findByPromotionId(any())).thenReturn(List.of(rule));
+                when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
 
                 EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
                                 ruleRepo,
@@ -301,7 +301,7 @@ class EligibilityEvaluationServiceImplTest {
         void givenMatchingPromotionAndRule_whenDeleteRule_thenDeletesScopedRule() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID ruleId = UUID.fromString("00000000-0000-0000-0000-000000000002");
-                when(ruleRepo.deleteByRuleIdAndPromotionId(ruleId, promotionId)).thenReturn(1L);
+                when(ruleRepo.deleteByRuleIdAndPromotion_PromotionOfferId(ruleId, promotionId)).thenReturn(1L);
 
                 EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
                                 ruleRepo,
@@ -311,14 +311,14 @@ class EligibilityEvaluationServiceImplTest {
 
                 service.deleteRule(promotionId, ruleId);
 
-                verify(ruleRepo).deleteByRuleIdAndPromotionId(ruleId, promotionId);
+                verify(ruleRepo).deleteByRuleIdAndPromotion_PromotionOfferId(ruleId, promotionId);
         }
 
         @Test
         void givenRuleNotUnderPromotion_whenDeleteRule_thenThrowsNotFound() {
                 UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 UUID ruleId = UUID.fromString("00000000-0000-0000-0000-000000000003");
-                when(ruleRepo.deleteByRuleIdAndPromotionId(ruleId, promotionId)).thenReturn(0L);
+                when(ruleRepo.deleteByRuleIdAndPromotion_PromotionOfferId(ruleId, promotionId)).thenReturn(0L);
 
                 EligibilityEvaluationServiceImpl service = new EligibilityEvaluationServiceImpl(
                                 ruleRepo,

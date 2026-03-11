@@ -79,7 +79,7 @@ public class AssignmentServiceImpl implements AssignmentService {
                                 AssignmentStatusEnum.CONFIRMED,
                                 AssignmentStatusEnum.IN_PROGRESS);
                 assignmentRepository
-                                .findByAppointmentIdAndStatusIn(request.getAppointmentId(), activeStatuses)
+                                .findByAppointment_AppointmentIdAndStatusIn(request.getAppointmentId(), activeStatuses)
                                 .ifPresent(existing -> {
                                         throw new IllegalStateException(
                                                         "An active assignment already exists for appointment: "
@@ -99,7 +99,7 @@ public class AssignmentServiceImpl implements AssignmentService {
                 }
 
                 Assignment assignment = assignmentRepository.save(Assignment.builder()
-                                .appointmentId(request.getAppointmentId())
+                                .appointment(appointment)
                                 .status(AssignmentStatusEnum.CONFIRMED)
                                 .resourceId(request.getResourceId())
                                 .resourceType(request.getResourceType())
@@ -113,23 +113,25 @@ public class AssignmentServiceImpl implements AssignmentService {
                 for (int i = 0; i < mechanics.size(); i++) {
                         MechanicAssignmentItem item = mechanics.get(i);
                         assignmentMechanicRepository.save(AssignmentMechanic.builder()
-                                        .assignmentId(assignment.getAssignmentId())
-                                        .mechanicId(resolvedMechanics.get(i).getMechanicId())
+                                        .assignment(assignment)
+                                        .mechanic(resolvedMechanics.get(i))
                                         .role(MechanicRoleEnum.valueOf(item.getRole().name()))
                                         .build());
                 }
 
-                var mechLinks = assignmentMechanicRepository.findByAssignmentId(assignment.getAssignmentId());
+                var mechLinks = assignmentMechanicRepository
+                                .findByAssignment_AssignmentId(assignment.getAssignmentId());
                 return mapToResponse(assignment, mechLinks);
         }
 
         @Override
         @Transactional(readOnly = true)
         public @NonNull List<AssignmentResponse> getByAppointmentId(@NonNull UUID appointmentId) {
-                var assignments = assignmentRepository.findByAppointmentId(appointmentId);
+                var assignments = assignmentRepository.findByAppointment_AppointmentId(appointmentId);
                 List<AssignmentResponse> results = new ArrayList<>();
                 for (var assignment : assignments) {
-                        var mechLinks = assignmentMechanicRepository.findByAssignmentId(assignment.getAssignmentId());
+                        var mechLinks = assignmentMechanicRepository
+                                        .findByAssignment_AssignmentId(assignment.getAssignmentId());
                         results.add(mapToResponse(assignment, mechLinks));
                 }
                 return results;
@@ -176,7 +178,7 @@ public class AssignmentServiceImpl implements AssignmentService {
                                 .toList();
                 return AssignmentResponse.builder()
                                 .assignmentId(assignment.getAssignmentId())
-                                .appointmentId(assignment.getAppointmentId())
+                                .appointmentId(assignment.getAppointment().getAppointmentId())
                                 .mechanics(mechanicInfos)
                                 .resourceId(assignment.getResourceId())
                                 .resourceType(assignment.getResourceType())

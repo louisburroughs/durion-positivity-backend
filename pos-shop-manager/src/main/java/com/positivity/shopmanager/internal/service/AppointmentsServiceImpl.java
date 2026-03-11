@@ -216,7 +216,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .build();
 
         Appointment saved = appointmentRepository.save(appointment);
-        saveServiceRequests(saved.getAppointmentId(), request.getServiceRequestIds());
+        saveServiceRequests(saved, request.getServiceRequestIds());
         eventPublisher.publishEvent(new AppointmentCreatedEvent(
                 saved.getAppointmentId(),
                 saved.getCrmCustomerId().toString(),
@@ -312,7 +312,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         Instant rescheduledAt = Instant.now(clock);
 
         AppointmentAudit audit = AppointmentAudit.builder()
-                .appointmentId(appointmentId)
+                .appointment(appointment)
                 .action(AppointmentAction.RESCHEDULED)
                 .actorId(actorId)
                 .previousStartAt(previousStartAt)
@@ -323,7 +323,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         appointmentAuditRepository.save(audit);
 
         rescheduleHistoryRepository.save(RescheduleHistory.builder()
-                .appointmentId(appointmentId)
+                .appointment(appointment)
                 .previousStartAt(previousStartAt)
                 .previousEndAt(previousEndAt)
                 .newStartAt(request.getNewStartAt())
@@ -387,7 +387,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         AppointmentAudit audit = AppointmentAudit.builder()
-                .appointmentId(appointmentId)
+                .appointment(appointment)
                 .action(AppointmentAction.CANCELLED)
                 .actorId(actorId)
                 .cancellationReason(request.getCancellationReason().name())
@@ -1027,14 +1027,14 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return response;
     }
 
-    private void saveServiceRequests(UUID appointmentId, List<UUID> serviceRequestIds) {
+    private void saveServiceRequests(Appointment appointment, List<UUID> serviceRequestIds) {
         if (serviceRequestIds == null || serviceRequestIds.isEmpty()) {
             return;
         }
 
         List<AppointmentServiceRequest> entries = serviceRequestIds.stream()
                 .map(serviceEntityId -> AppointmentServiceRequest.builder()
-                        .appointmentId(appointmentId)
+                        .appointment(appointment)
                         .serviceEntityId(serviceEntityId)
                         .build())
                 .toList();
@@ -1042,7 +1042,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     private List<UUID> loadServiceRequestIds(UUID appointmentId) {
-        return appointmentServiceRequestRepository.findByAppointmentId(appointmentId).stream()
+        return appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId).stream()
                 .map(AppointmentServiceRequest::getServiceEntityId)
                 .toList();
     }

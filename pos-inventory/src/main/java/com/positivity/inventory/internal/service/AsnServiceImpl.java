@@ -28,6 +28,7 @@ import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.GoodsReceiptLineEntity;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
+import com.positivity.inventory.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.inventory.internal.enums.AsnStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
@@ -39,6 +40,7 @@ import com.positivity.inventory.internal.repository.AsnLineRepository;
 import com.positivity.inventory.internal.repository.AsnRepository;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.service.AsnService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -54,6 +56,7 @@ public class AsnServiceImpl implements AsnService {
         private final AsnLineRepository asnLineRepository;
         private final GoodsReceiptRepository goodsReceiptRepository;
         private final PurchaseOrderRepository purchaseOrderRepository;
+        private final PurchaseOrderLineRepository purchaseOrderLineRepository;
         private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
         private final ApplicationEventPublisher eventPublisher;
 
@@ -82,7 +85,7 @@ public class AsnServiceImpl implements AsnService {
                                 .asnReferenceNumber(request.getAsnReferenceNumber())
                                 .vendorId(request.getVendorId())
                                 .status(AsnStatus.LOADED)
-                                .poId(request.getRelatedPoIds().get(0))
+                                .purchaseOrder(requireApprovedPurchaseOrder(request.getRelatedPoIds().get(0)))
                                 .shipDate(request.getShipDate())
                                 .expectedArrivalDate(request.getExpectedArrivalDate())
                                 .build();
@@ -92,8 +95,8 @@ public class AsnServiceImpl implements AsnService {
                 List<AsnLineEntity> lineEntities = request.getLineItems().stream()
                                 .map(line -> AsnLineEntity.builder()
                                                 .asn(savedAsnRef)
-                                                .poId(line.getPoId())
-                                                .poLineId(line.getPoLineId())
+                                                .purchaseOrder(requireApprovedPurchaseOrder(line.getPoId()))
+                                                .poLine(resolvePurchaseOrderLine(line.getPoLineId()))
                                                 .sku(line.getSku())
                                                 .quantityShipped(line.getQuantityShipped())
                                                 .quantityReceived(BigDecimal.ZERO)
@@ -138,9 +141,13 @@ public class AsnServiceImpl implements AsnService {
                 }
 
                 UUID poId = asn != null
-                                ? (asn.getPoId() != null
-                                                ? asn.getPoId()
-                                                : asn.getLines().stream().findFirst().map(AsnLineEntity::getPoId)
+                                ? (asn.getPurchaseOrder() != null
+                                                ? asn.getPurchaseOrder().getPurchaseOrderId()
+                                                : asn.getLines().stream()
+                                                                .map(AsnLineEntity::getPurchaseOrder)
+                                                                .filter(po -> po != null && po.getPurchaseOrderId() != null)
+                                                                .map(PurchaseOrderEntity::getPurchaseOrderId)
+                                                                .findFirst()
                                                                 .orElse(request.getPoId()))
                                 : request.getPoId();
 
@@ -164,8 +171,8 @@ public class AsnServiceImpl implements AsnService {
 
                 GoodsReceiptEntity receiptEntity = GoodsReceiptEntity.builder()
                                 .receiptNumber(generateReceiptNumber())
-                                .poId(poId)
-                                .asnId(asn != null ? asn.getAsnId() : request.getAsnId())
+                                .purchaseOrder(purchaseOrder)
+                                .asn(asn)
                                 .locationId(request.getLocationId())
                                 .totalAccruedAmountMinor(receiptTotalMinor)
                                 .build();
@@ -175,7 +182,7 @@ public class AsnServiceImpl implements AsnService {
                         long lineAccruedMinor = lineAccruedAmountMinor(line);
                         GoodsReceiptLineEntity receiptLine = GoodsReceiptLineEntity.builder()
                                         .goodsReceipt(receiptEntity)
-                                        .poLineId(line.getPoLineId())
+                                        .poLine(resolvePurchaseOrderLine(line.getPoLineId()))
                                         .sku(line.getSku())
                                         .quantityReceived(line.getQuantityReceived())
                                         .unitCostMinor(line.getUnitCostMinor())
@@ -194,7 +201,7 @@ public class AsnServiceImpl implements AsnService {
                                 "receiptId", persistedReceipt.getReceiptId().toString(),
                                 "poId", poId.toString(),
                                 "asnId",
-                                persistedReceipt.getAsnId() == null ? "" : persistedReceipt.getAsnId().toString(),
+                                persistedReceipt.getAsn() == null ? "" : persistedReceipt.getAsn().getAsnId().toString(),
                                 "lineItems", request.getLines().stream()
                                                 .map(line -> Map.of(
                                                                 "sku", line.getSku(),
@@ -242,7 +249,7 @@ public class AsnServiceImpl implements AsnService {
                                 "receiptId", persistedReceipt.getReceiptId().toString(),
                                 "poId", poId.toString(),
                                 "asnId",
-                                persistedReceipt.getAsnId() == null ? "" : persistedReceipt.getAsnId().toString(),
+                                persistedReceipt.getAsn() == null ? "" : persistedReceipt.getAsn().getAsnId().toString(),
                                 "totalAccruedAmountMinor", receiptTotalMinor,
                                 "actorId", actorId,
                                 "occurredAt", Instant.now(clock).toString()));
@@ -322,7 +329,8 @@ public class AsnServiceImpl implements AsnService {
                 List<AsnLineResponse> lineResponses = entity.getLines().stream()
                                 .map(line -> AsnLineResponse.builder()
                                                 .asnLineId(line.getAsnLineId())
-                                                .poId(line.getPoId())
+                                                .poId(line.getPurchaseOrder() == null ? null
+                                                                : line.getPurchaseOrder().getPurchaseOrderId())
                                                 .sku(line.getSku())
                                                 .quantityShipped(line.getQuantityShipped())
                                                 .quantityReceived(line.getQuantityReceived())
@@ -348,7 +356,7 @@ public class AsnServiceImpl implements AsnService {
                 List<GoodsReceiptLineResponse> lineResponses = entity.getLines().stream()
                                 .map(line -> GoodsReceiptLineResponse.builder()
                                                 .receiptLineId(line.getReceiptLineId())
-                                                .poLineId(line.getPoLineId())
+                                                .poLineId(line.getPoLine() == null ? null : line.getPoLine().getLineId())
                                                 .sku(line.getSku())
                                                 .quantityReceived(line.getQuantityReceived())
                                                 .unitCostMinor(line.getUnitCostMinor())
@@ -359,13 +367,35 @@ public class AsnServiceImpl implements AsnService {
                 return GoodsReceiptResponse.builder()
                                 .receiptId(entity.getReceiptId())
                                 .receiptNumber(entity.getReceiptNumber())
-                                .poId(entity.getPoId())
-                                .asnId(entity.getAsnId())
+                                .poId(entity.getPurchaseOrder() == null ? null
+                                                : entity.getPurchaseOrder().getPurchaseOrderId())
+                                .asnId(entity.getAsn() == null ? null : entity.getAsn().getAsnId())
                                 .locationId(entity.getLocationId())
                                 .totalAccruedAmountMinor(entity.getTotalAccruedAmountMinor())
                                 .createdBy(entity.getCreatedBy())
                                 .createdAt(entity.getCreatedAt())
                                 .lines(lineResponses)
                                 .build();
+        }
+
+        private @NonNull PurchaseOrderEntity requireApprovedPurchaseOrder(@NonNull UUID poId) {
+                PurchaseOrderEntity purchaseOrder = purchaseOrderRepository.findById(poId)
+                                .orElseThrow(() -> new InvalidPoReferenceException(
+                                                "INVALID_PO_REFERENCE: PO " + poId
+                                                                + " is unknown or not APPROVED"));
+                if (purchaseOrder.getStatus() != PurchaseOrderStatus.APPROVED
+                                && purchaseOrder.getStatus() != PurchaseOrderStatus.PARTIALLY_RECEIVED) {
+                        throw new InvalidPoReferenceException(
+                                        "INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED");
+                }
+                return purchaseOrder;
+        }
+
+        private PurchaseOrderLineEntity resolvePurchaseOrderLine(UUID poLineId) {
+                if (poLineId == null) {
+                        return null;
+                }
+                return purchaseOrderLineRepository.findById(poLineId)
+                                .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrderLine", poLineId.toString()));
         }
 }

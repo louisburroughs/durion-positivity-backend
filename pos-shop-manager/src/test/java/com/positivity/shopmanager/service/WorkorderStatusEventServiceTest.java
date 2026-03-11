@@ -86,7 +86,7 @@ class WorkorderStatusEventServiceTest {
         private WorkOrderAppointmentMapping buildMapping(UUID workOrderId, UUID appointmentId) {
                 return WorkOrderAppointmentMapping.builder()
                                 .workOrderId(workOrderId)
-                                .appointmentId(appointmentId)
+                                .appointment(Appointment.builder().appointmentId(appointmentId).build())
                                 .build();
         }
 

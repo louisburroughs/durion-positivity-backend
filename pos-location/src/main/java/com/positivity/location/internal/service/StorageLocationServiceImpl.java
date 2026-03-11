@@ -7,6 +7,7 @@ import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
 import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
@@ -77,9 +78,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     public StorageLocationResponse createStorageLocation(@NonNull UUID siteId,
             @NonNull StorageLocationRequest request) {
         // Issue CAP-214 #39: Validate site and uniqueness constraints for create.
-        if (!locationRepository.existsById(siteId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "SITE_NOT_FOUND");
-        }
+        Location site = locationRepository.findById(siteId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SITE_NOT_FOUND"));
 
         String name = normalizeRequired(request.getName(), "name");
         String barcode = normalizeOptional(request.getBarcode());
@@ -93,10 +93,11 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         }
 
         UUID parentId = request.getParentStorageLocationId();
+        StorageLocationEntity parentEntity = null;
         if (parentId != null) {
-            StorageLocationEntity parent = storageLocationRepository.findById(parentId)
+            parentEntity = storageLocationRepository.findById(parentId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "PARENT_NOT_FOUND"));
-            if (!siteId.equals(parent.getSiteId())) {
+            if (!siteId.equals(parentEntity.getSiteId())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PARENT_SITE_MISMATCH");
             }
         }
@@ -106,8 +107,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 .barcode(barcode)
                 .type(type)
                 .status(StorageLocationStatus.ACTIVE)
-                .siteId(siteId)
-                .parentStorageLocationId(parentId)
+                .site(site)
+                .parentStorageLocation(parentEntity)
                 .capacity(serializeJson(request.getCapacity(), CAPACITY))
                 .temperature(serializeJson(request.getTemperature(), TEMPERATURE))
                 .build());
@@ -338,7 +339,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 || wouldCreateCycle(storageLocationId, proposedParentId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "CYCLE_DETECTED");
         }
-        existing.setParentStorageLocationId(proposedParentId);
+        existing.setParentStorageLocation(parent);
     }
 
     private void applyPatchedStatus(UUID siteId, UUID storageLocationId,

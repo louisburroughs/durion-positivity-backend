@@ -6,6 +6,7 @@ import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.entity.BayEntity;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.exception.DuplicateResourceException;
@@ -54,7 +55,8 @@ public class BayServiceImpl implements BayService {
     }
 
     public BayResponse createBay(UUID locationId, BayRequest request) {
-        validateLocationExists(locationId);
+        Location location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Location not found"));
 
         String name = requireName(request.getName());
         String bayType = normalizeBayType(request.getBayType());
@@ -72,7 +74,7 @@ public class BayServiceImpl implements BayService {
         List<String> validatedCapabilityCodes = validateServiceCapabilityIds(request.getServiceCapabilityIds());
 
         BayEntity entity = BayEntity.builder()
-                .locationId(locationId)
+                .location(location)
                 .name(name)
                 .normalizedName(normalizeName(name))
                 .bayType(bayType)

@@ -15,16 +15,16 @@ public interface UserPersonLinkRepository extends JpaRepository<UserPersonLink, 
 
 	Optional<UserPersonLink> findByUserId(@NonNull UUID userId);
 
-	List<UserPersonLink> findByPersonId(@NonNull UUID personId);
+	List<UserPersonLink> findByPerson_Id(@NonNull UUID personId);
 
-	Optional<UserPersonLink> findByPersonIdAndStatus(@NonNull UUID personId, @NonNull UserLinkStatus status);
+	Optional<UserPersonLink> findByPerson_IdAndStatus(@NonNull UUID personId, @NonNull UserLinkStatus status);
 
-	Optional<UserPersonLink> findFirstByPersonIdAndStatusOrderByCreatedAtDesc(@NonNull UUID personId,
+	Optional<UserPersonLink> findFirstByPerson_IdAndStatusOrderByCreatedAtDesc(@NonNull UUID personId,
 			@NonNull UserLinkStatus status);
 
 	boolean existsByUserId(@NonNull UUID userId);
 
-	boolean existsByUserIdAndPersonId(@NonNull UUID userId, @NonNull UUID personId);
+	boolean existsByUserIdAndPerson_Id(@NonNull UUID userId, @NonNull UUID personId);
 
 	void deleteByUserId(@NonNull UUID userId);
 

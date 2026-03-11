@@ -271,7 +271,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
 
     private UUID seedRule(UUID promotionId, ConditionType conditionType, RuleOperator operator, String value) {
         PromotionEligibilityRule rule = new PromotionEligibilityRule();
-        rule.setPromotionId(promotionId);
+        rule.setPromotion(promotionOfferRepository.getReferenceById(promotionId));
         rule.setConditionType(conditionType);
         rule.setOperator(operator);
         rule.setValue(value);

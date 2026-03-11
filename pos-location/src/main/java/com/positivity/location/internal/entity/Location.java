@@ -96,10 +96,21 @@ public class Location {
     private Integer checkInBufferMinutes;
     private Integer cleanupBufferMinutes;
     // Issue CAP-214 #38: Persist default storage role assignments at site level.
-    @Column(name = "default_staging_location_id", columnDefinition = "UUID")
-    private UUID defaultStagingLocationId;
-    @Column(name = "default_quarantine_location_id", columnDefinition = "UUID")
-    private UUID defaultQuarantineLocationId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "default_staging_location_id")
+    private StorageLocationEntity defaultStagingLocation;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "default_quarantine_location_id")
+    private StorageLocationEntity defaultQuarantineLocation;
+
+    public UUID getDefaultStagingLocationId() {
+        return defaultStagingLocation != null ? defaultStagingLocation.getId() : null;
+    }
+
+    public UUID getDefaultQuarantineLocationId() {
+        return defaultQuarantineLocation != null ? defaultQuarantineLocation.getId() : null;
+    }
+
     @Version
     private Long version;
 

@@ -51,7 +51,6 @@ import java.util.UUID;
 public class IdempotencyServiceImpl implements IdempotencyService {
     private final Clock clock;
 
-
     private static final Logger log = LoggerFactory.getLogger(IdempotencyServiceImpl.class);
     private static final Duration KEY_EXPIRATION = Duration.ofHours(24);
     private static final String EXPIRED_KEY_LOG_MESSAGE = "Idempotency key {} has expired";

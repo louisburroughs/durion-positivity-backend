@@ -9,9 +9,12 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -20,6 +23,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -44,11 +48,15 @@ public class WorkOrderPartSubstitution {
     @Column(columnDefinition = "UUID")
     private UUID substitutionId;
 
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID workorderId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "workorder_id", nullable = false)
+    @ToString.Exclude
+    private Workorder workorder;
 
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID workorderLineItemId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "workorder_line_item_id", nullable = false)
+    @ToString.Exclude
+    private WorkorderPart workorderLineItem;
 
     @Column(nullable = false, columnDefinition = "UUID")
     private UUID originalProductId;
@@ -87,5 +95,25 @@ public class WorkOrderPartSubstitution {
         if (selectedAt == null) {
             selectedAt = Instant.now(Clock.systemUTC());
         }
-}
+    }
+
+    @jakarta.persistence.Transient
+    public UUID getWorkorderId() {
+        return workorder != null ? workorder.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setWorkorderId(UUID workorderId) {
+        this.workorder = workorderId != null ? new Workorder(workorderId) : null;
+    }
+
+    @jakarta.persistence.Transient
+    public UUID getWorkorderLineItemId() {
+        return workorderLineItem != null ? workorderLineItem.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setWorkorderLineItemId(UUID workorderLineItemId) {
+        this.workorderLineItem = workorderLineItemId != null ? new WorkorderPart(workorderLineItemId) : null;
+    }
 }

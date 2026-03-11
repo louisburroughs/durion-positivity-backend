@@ -11,5 +11,5 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
 
     List<TimeEntry> findByPersonIdAndStatus(UUID personId, TimeEntryStatus status);
 
-    List<TimeEntry> findByWorkOrderIdAndStatus(UUID workOrderId, TimeEntryStatus status);
+    List<TimeEntry> findByWorkOrder_IdAndStatus(UUID workOrderId, TimeEntryStatus status);
 }

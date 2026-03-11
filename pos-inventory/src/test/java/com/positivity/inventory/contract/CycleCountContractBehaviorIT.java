@@ -106,7 +106,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 CountEntry existingEntry = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("auditor-2")
                                 .actualQuantity(48)
                                 .expectedQuantity(50)
@@ -148,7 +148,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 CountEntry first = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("auditor-3")
                                 .actualQuantity(70)
                                 .expectedQuantity(75)
@@ -158,13 +158,13 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 CountEntry second = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("auditor-3")
                                 .actualQuantity(72)
                                 .expectedQuantity(75)
                                 .variance(-3)
                                 .recountSequenceNumber(1)
-                                .recountOfCountEntryId(first.getCountEntryId())
+                                .recountOfCountEntry(first)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 
@@ -198,7 +198,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 CountEntry first = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("auditor-4")
                                 .actualQuantity(195)
                                 .expectedQuantity(200)
@@ -208,13 +208,13 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 CountEntry second = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("auditor-4")
                                 .actualQuantity(197)
                                 .expectedQuantity(200)
                                 .variance(-3)
                                 .recountSequenceNumber(1)
-                                .recountOfCountEntryId(first.getCountEntryId())
+                                .recountOfCountEntry(first)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 
@@ -250,7 +250,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 CountEntry first = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("auditor-5")
                                 .actualQuantity(28)
                                 .expectedQuantity(30)
@@ -260,24 +260,24 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 CountEntry second = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("auditor-5")
                                 .actualQuantity(29)
                                 .expectedQuantity(30)
                                 .variance(-1)
                                 .recountSequenceNumber(1)
-                                .recountOfCountEntryId(first.getCountEntryId())
+                                .recountOfCountEntry(first)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 
                 CountEntry third = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("manager-2")
                                 .actualQuantity(30)
                                 .expectedQuantity(30)
                                 .variance(0)
                                 .recountSequenceNumber(2)
-                                .recountOfCountEntryId(second.getCountEntryId())
+                                .recountOfCountEntry(second)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 
@@ -387,7 +387,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 CountEntry entry1 = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("auditor-8")
                                 .actualQuantity(38)
                                 .expectedQuantity(40)
@@ -397,13 +397,13 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 CountEntry entry2 = countEntryRepository.save(CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId("auditor-8")
                                 .actualQuantity(39)
                                 .expectedQuantity(40)
                                 .variance(-1)
                                 .recountSequenceNumber(1)
-                                .recountOfCountEntryId(entry1.getCountEntryId())
+                                .recountOfCountEntry(entry1)
                                 .countedAt(Instant.now(TEST_CLOCK))
                                 .build());
 

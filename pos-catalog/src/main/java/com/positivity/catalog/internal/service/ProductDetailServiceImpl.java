@@ -282,7 +282,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         Instant now = Instant.now(clock);
         try {
             return productReplacementRepository
-                    .findByOriginalProductIdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId)
+                    .findByOriginalProduct_IdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId)
                     .stream()
                     .filter(replacement -> isEffectiveReplacement(replacement, now))
                     .map(this::toSubstitutionHint)
@@ -378,8 +378,9 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             reason = "Replacement option";
         }
         return SubstitutionHint.builder()
-                .productId(replacement.getReplacementProductId() != null
-                        ? replacement.getReplacementProductId().toString()
+            .productId(replacement.getReplacementProduct() != null
+                && replacement.getReplacementProduct().getId() != null
+                    ? replacement.getReplacementProduct().getId().toString()
                         : null)
                 .reason(reason)
                 .build();

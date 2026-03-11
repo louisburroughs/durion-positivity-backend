@@ -76,11 +76,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
         @AfterEach
         void tearDown() {
-                changeRequestRepository.deleteAll();
-                transitionRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== WORKORDER START TESTS ==========
@@ -118,7 +114,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Verify transition was recorded
                 List<WorkorderStateTransition> transitions = transitionRepository
-                                .findByWorkorderIdOrderByTransitionedAtDesc(workorderId);
+                                .findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);
                 assertThat(transitions).isNotEmpty();
 
                 // Find the transition to WORK_IN_PROGRESS
@@ -144,7 +140,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Verify pending change request exists
                 List<ChangeRequest> pendingChangeRequests = changeRequestRepository
-                                .findByWorkorderIdAndStatus(workorderId,
+                                .findByWorkorder_IdAndStatus(workorderId,
                                                 ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
                 assertThat(pendingChangeRequests).isNotEmpty();
 
@@ -301,7 +297,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // Add approved item
                 EstimateItem item = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Oil change labor")
                                 .quantity(new BigDecimal("1.0000"))
@@ -352,10 +348,11 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
          */
         private UUID seedApprovedWorkorderWithPendingChangeRequest() {
                 UUID workorderId = seedApprovedWorkorder();
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
                 // Create a pending change request
                 ChangeRequest changeRequest = ChangeRequest.builder()
-                                .workorderId(workorderId)
+                                .workorder(workorder)
                                 .requestedByUserId(SYSTEM_USER_ID)
                                 .requestedAt(LocalDateTime.now(TEST_CLOCK))
                                 .updatedAt(LocalDateTime.now(TEST_CLOCK))

@@ -88,10 +88,15 @@ class ArchitectureTests {
     @Test
     void repositoriesShouldOnlyBeAccessedFromServiceLayer() {
         ArchRule rule = noClasses()
-                .that().resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
+                .that().resideOutsideOfPackages(
+                        "..service..",
+                        "..dao..",
+                        "..internal.dao..",
+                        "..internal.repository..",
+                        "..internal.config..")
                 .should().dependOnClassesThat()
                 .resideInAPackage("..internal.repository..")
-                .because("repositories should only be accessed from service layer");
+                .because("repositories should only be accessed from service/dao layers");
 
         // Allow empty check - some modules may not have repositories yet
         rule.allowEmptyShould(true).check(allClasses);

@@ -1,7 +1,7 @@
 package com.positivity.poseventreceiver.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.poseventreceiver.internal.dao.EventDao;
+import com.positivity.poseventreceiver.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EventTypeMapper;
 import com.positivity.poseventreceiver.internal.dto.EventTypeRequest;
 import com.positivity.poseventreceiver.internal.dto.EventTypeResponse;

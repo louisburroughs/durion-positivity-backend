@@ -1,7 +1,12 @@
 package com.positivity.workorder.internal.entity;
 
-
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import com.positivity.shared.id.UUIDv7Id;
 import java.time.Instant;
 import java.util.UUID;
@@ -16,7 +21,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 /**
- * Entity for tracking idempotency keys to prevent duplicate workorder creation.
+ * Entity for tracking idempotency keys to prevent duplicate processing.
  * 
  * <p>
  * This entity stores idempotency keys submitted with workorder creation
@@ -75,6 +80,7 @@ public class IdempotencyKey {
 
     @Column(nullable = false)
     private Instant expiresAt;
+
     public IdempotencyKey(String keyValue, UUID workorderId, Instant expiresAt) {
         this.keyValue = keyValue;
         this.workorderId = workorderId;

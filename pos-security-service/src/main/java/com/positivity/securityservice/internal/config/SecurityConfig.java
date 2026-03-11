@@ -1,6 +1,6 @@
 package com.positivity.securityservice.internal.config;
 
-import com.positivity.securityservice.internal.security.CustomUserDetailsService;
+import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.security.GatewayHeaderAuthenticationFilter;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;

@@ -130,10 +130,10 @@ class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBe
                         LocalDateTime startTimeUtc,
                         LocalDateTime endTimeUtc,
                         BigDecimal hoursWorked) {
+                var service = seedWorkorderService(workorder, technicianId);
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorder.getId())
-                                .workorderServiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .workorderService(service)
                                 .technicianId(technicianId)
                                 .startTime(startTimeUtc)
                                 .endTime(endTimeUtc)

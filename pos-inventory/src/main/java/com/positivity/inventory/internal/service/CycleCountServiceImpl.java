@@ -82,13 +82,13 @@ public class CycleCountServiceImpl implements CycleCountService {
 
                 // Create count entry
                 CountEntry countEntry = CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId(request.getAuditorId())
                                 .actualQuantity(request.getActualQuantity())
                                 .expectedQuantity(task.getExpectedQuantity())
                                 .variance(variance)
                                 .recountSequenceNumber(0) // Original count
-                                .recountOfCountEntryId(null)
+                                .recountOfCountEntry(null)
                                 .countedAt(Instant.now(clock))
                                 .build();
 
@@ -144,13 +144,13 @@ public class CycleCountServiceImpl implements CycleCountService {
                 // Create recount entry
                 int newSequenceNumber = previousEntry.getRecountSequenceNumber() + 1;
                 CountEntry recountEntry = CountEntry.builder()
-                                .cycleCountTaskId(task.getTaskId())
+                                .cycleCountTask(task)
                                 .auditorId(request.getAuditorId())
                                 .actualQuantity(request.getActualQuantity())
                                 .expectedQuantity(task.getExpectedQuantity())
                                 .variance(variance)
                                 .recountSequenceNumber(newSequenceNumber)
-                                .recountOfCountEntryId(previousEntry.getCountEntryId())
+                                .recountOfCountEntry(previousEntry)
                                 .countedAt(Instant.now(clock))
                                 .build();
 
@@ -184,7 +184,7 @@ public class CycleCountServiceImpl implements CycleCountService {
         @Override
         @Transactional(readOnly = true)
         public List<CountEntryResponse> getCountHistory(UUID taskId) {
-                return countEntryRepository.findByCycleCountTaskIdOrderByRecountSequenceNumberAsc(taskId)
+                return countEntryRepository.findByCycleCountTask_TaskIdOrderByRecountSequenceNumberAsc(taskId)
                                 .stream()
                                 .map(this::toCountEntryResponse)
                                 .toList();
@@ -285,7 +285,9 @@ public class CycleCountServiceImpl implements CycleCountService {
         private CountEntryResponse toCountEntryResponse(CountEntry countEntry) {
                 return CountEntryResponse.builder()
                                 .countEntryId(countEntry.getCountEntryId())
-                                .cycleCountTaskId(countEntry.getCycleCountTaskId())
+                                .cycleCountTaskId(countEntry.getCycleCountTask() == null
+                                                ? null
+                                                : countEntry.getCycleCountTask().getTaskId())
                                 .auditorId(countEntry.getAuditorId())
                                 .actualQuantity(countEntry.getActualQuantity())
                                 .expectedQuantity(countEntry.getExpectedQuantity())

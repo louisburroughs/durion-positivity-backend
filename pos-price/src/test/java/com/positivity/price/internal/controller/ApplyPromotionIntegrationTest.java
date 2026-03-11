@@ -212,7 +212,7 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
                                 LocalDate.now(clock).plusDays(30));
 
                 PromotionEligibilityRule rule = new PromotionEligibilityRule();
-                rule.setPromotionId(offer.getPromotionOfferId());
+                rule.setPromotion(offer);
                 rule.setConditionType(ConditionType.ACCOUNT_FLEET_SIZE);
                 rule.setOperator(RuleOperator.GREATER_THAN_OR_EQUAL_TO);
                 rule.setValue("1000");
