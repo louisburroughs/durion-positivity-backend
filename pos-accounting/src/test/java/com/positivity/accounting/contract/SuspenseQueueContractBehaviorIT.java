@@ -32,6 +32,8 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 
 import java.time.Instant;
@@ -63,6 +65,10 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
         private GLAccountRepository glAccountRepository;
         @Autowired
         private DefaultGLMappingRepository defaultGLMappingRepository;
+        @Autowired
+        private JournalEntryRepository journalEntryRepository;
+        @Autowired
+        private JournalEntryLineRepository journalEntryLineRepository;
 
         private static final String API_V1 = "/v1/accounting/events";
 
@@ -70,6 +76,8 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
         void setUp() {
                 reprocessingAttemptHistoryRepository.deleteAll();
                 accountingEventRepository.deleteAll();
+                journalEntryLineRepository.deleteAll();
+                journalEntryRepository.deleteAll();
                 defaultGLMappingRepository.deleteAll();
                 glAccountRepository.deleteAll();
 

@@ -54,7 +54,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 		Objects.requireNonNull(personId, "personId must not be null");
 		String resolvedActor = resolveActorFromSecurityContext();
 
-		if (workSessionRepository.findByPersonIdAndEndedAtIsNull(personId).isPresent()) {
+		if (workSessionRepository.findByPerson_IdAndEndedAtIsNull(personId).isPresent()) {
 			throw new IllegalStateException("An active session already exists for personId=" + personId);
 		}
 
@@ -79,7 +79,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 		Objects.requireNonNull(personId, "personId must not be null");
 		String resolvedActor = resolveActorFromSecurityContext();
 
-		WorkSession session = workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)
+		WorkSession session = workSessionRepository.findByPerson_IdAndEndedAtIsNull(personId)
 				.orElseThrow(
 						() -> new WorkSessionNotFoundException("No active session found for personId=" + personId));
 
@@ -89,7 +89,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 		session.setActor(resolvedActor);
 		WorkSession savedSession = workSessionRepository.save(session);
 
-		workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(savedSession.getSessionId())
+		workSessionBreakRepository.findBySession_SessionIdAndEndedAtIsNull(savedSession.getSessionId())
 				.ifPresent(activeBreak -> {
 					activeBreak.setEndedAt(endedAt);
 					activeBreak.setActor(resolvedActor);
@@ -109,7 +109,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 						() -> new WorkSessionNotFoundException(
 								"No active work session found for sessionId=" + sessionId));
 
-		if (workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(session.getSessionId()).isPresent()) {
+		if (workSessionBreakRepository.findBySession_SessionIdAndEndedAtIsNull(session.getSessionId()).isPresent()) {
 			throw new IllegalStateException("A break is already active for sessionId=" + sessionId);
 		}
 
@@ -133,7 +133,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 		Objects.requireNonNull(sessionId, "sessionId must not be null");
 		String resolvedActor = resolveActorFromSecurityContext();
 
-		WorkSessionBreak activeBreak = workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId)
+		WorkSessionBreak activeBreak = workSessionBreakRepository.findBySession_SessionIdAndEndedAtIsNull(sessionId)
 				.orElseThrow(() -> new IllegalStateException("No active break found for sessionId=" + sessionId));
 
 		activeBreak.setEndedAt(Instant.now(clock));

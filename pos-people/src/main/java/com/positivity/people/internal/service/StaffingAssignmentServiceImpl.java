@@ -52,7 +52,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 		}
 
 		if (request.isPrimary()) {
-			repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
+			repository.findFirstByPerson_IdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
 					.ifPresent(existing -> {
 						if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),
 								request.getEffectiveFrom(), request.getEffectiveTo())) {
@@ -90,7 +90,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
 	@Override
 	public @NonNull List<StaffingAssignmentResponse> findByPersonId(@NonNull UUID personId) {
-		return repository.findByPersonId(personId).stream().map(this::toResponse).toList();
+		return repository.findByPerson_Id(personId).stream().map(this::toResponse).toList();
 	}
 
 	@Override
@@ -117,7 +117,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 		PersonLocationAssignment assignment = existingAssignment.get();
 
 		if (request.isPrimary()) {
-			repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
+			repository.findFirstByPerson_IdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
 					.filter(existing -> !existing.getId().equals(assignmentId))
 					.ifPresent(existing -> {
 						if (!dateRangesOverlap(existing.getEffectiveFrom(), existing.getEffectiveTo(),

@@ -32,7 +32,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 
 /**
@@ -59,6 +61,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         private JournalEntryRepository journalEntryRepository;
         @Autowired
         private GLAccountRepository glAccountRepository;
+        @Autowired
+        private JournalEntryLineRepository journalEntryLineRepository;
+        @Autowired
+        private DefaultGLMappingRepository defaultGLMappingRepository;
 
         private static final String API_V1 = "/v1/accounting";
 
@@ -83,7 +89,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         @BeforeEach
         void cleanState() {
+                journalEntryLineRepository.deleteAll();
                 journalEntryRepository.deleteAll();
+                defaultGLMappingRepository.deleteAll();
                 glAccountRepository.deleteAll();
         }
 

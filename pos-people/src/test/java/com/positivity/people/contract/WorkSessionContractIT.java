@@ -5,6 +5,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.people.BaseContractIntegrationTest;
+import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +26,11 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
 	@Autowired
 	private WorkSessionBreakRepository workSessionBreakRepository;
 
+	@Autowired
+	private PersonRepository personRepository;
+
 	private static final UUID PERSON_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+	private static final UUID ISOLATED_PERSON_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
 	private static final String START_PAYLOAD = """
 			{
@@ -36,6 +43,8 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
 	void cleanData() {
 		workSessionBreakRepository.deleteAll();
 		workSessionRepository.deleteAll();
+		ensurePersonExists(PERSON_ID, "Ava", "Technician");
+		ensurePersonExists(ISOLATED_PERSON_ID, "Blake", "Technician");
 	}
 
 	@Test
@@ -111,13 +120,12 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
 	@Test
 	@DisplayName("VE-120-001: starting a second active session returns 4xx")
 	void VE_120_001_startWorkSession_whenAlreadyActive_returns4xx() throws Exception {
-		UUID isolatedPersonId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 		String isolatedPayload = """
 				{
 				  "personId": "%s",
 				  "actor": "test-user"
 				}
-				""".formatted(isolatedPersonId);
+				""".formatted(ISOLATED_PERSON_ID);
 
 		mockMvc
 			.perform(withAuth(post("/v1/people/workSessions/start").contentType(MediaType.APPLICATION_JSON)
@@ -139,6 +147,20 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{}")))
 			.andExpect(status().isNotFound());
+	}
+
+	private void ensurePersonExists(UUID personId, String firstName, String lastName) {
+		if (personRepository.existsById(personId)) {
+			return;
+		}
+		personRepository.save(Person.builder()
+				.id(personId)
+				.firstName(firstName)
+				.lastName(lastName)
+				.primaryEmail(firstName.toLowerCase() + "." + lastName.toLowerCase() + "@example.com")
+				.employeeNumber("EMP-" + personId.toString().substring(0, 8))
+				.status(EmployeeStatus.ACTIVE)
+				.build());
 	}
 
 }
