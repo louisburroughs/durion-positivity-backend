@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderLaborService;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
 
     private final WorkorderLaborEntryRepository laborRepository;
     private final WorkorderRepository workorderRepository;
+    private final WorkorderServiceRepository workorderServiceRepository;
     private final IdempotencyService idempotencyService;
 
     private static final Set<WorkorderStatus> LABOR_ALLOWED_STATUSES = Set.of(
@@ -111,10 +113,18 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
                     "Active labor session already exists for service " + serviceId);
         }
 
+        WorkorderService workorderService = workorderServiceRepository.findById(serviceId)
+                .orElseThrow(() -> new NoSuchElementException("Workorder service not found: " + serviceId));
+        if (workorderService.getWorkOrder() == null
+                || !workorderId.equals(workorderService.getWorkOrder().getId())) {
+            throw new IllegalStateException(
+                    "Service " + serviceId + " does not belong to workorder " + workorderId);
+        }
+
         // Create new labor entry
         WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                 .workorder(workorder)
-                .workorderService(new WorkorderService(serviceId))
+                .workorderService(workorderService)
                 .technicianId(technicianId)
                 .startTime(LocalDateTime.now(clock))
                 .hoursWorked(BigDecimal.ZERO)

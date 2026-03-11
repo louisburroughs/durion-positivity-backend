@@ -93,7 +93,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 	@Transactional(readOnly = true)
 	@NonNull
 	public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull UUID timeEntryId) {
-		return adjustmentRepository.findByTimeEntryId(timeEntryId).stream().map(this::toDto).toList();
+		return adjustmentRepository.findByTimeEntry_TimeEntryId(timeEntryId).stream().map(this::toDto).toList();
 	}
 
 	@Override

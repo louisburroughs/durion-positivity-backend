@@ -161,7 +161,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				.perform(get("/v1/people/reports/attendanceJobtimeDiscrepancy").param("startDate", "2026-02-17")
 						.param("endDate", "2026-02-17")
 						.param("timezone", "UTC"))
-				.andExpect(status().isForbidden());
+				.andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -463,7 +463,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				.perform(post("/v1/people/{personUuid}/access/assignments", personUuid)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"roleCode\":\"SHOP_MANAGER\"}"))
-				.andExpect(status().isForbidden());
+				.andExpect(status().isUnauthorized());
 	}
 
 	@Test

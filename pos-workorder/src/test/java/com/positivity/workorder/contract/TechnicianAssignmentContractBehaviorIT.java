@@ -73,10 +73,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
         @AfterEach
         void tearDown() {
-                assignmentRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== TECHNICIAN ASSIGNMENT TESTS ==========

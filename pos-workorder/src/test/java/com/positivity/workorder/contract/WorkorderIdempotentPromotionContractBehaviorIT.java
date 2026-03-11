@@ -66,12 +66,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
 
         @AfterEach
         void tearDown() {
-                idempotencyKeyRepository.deleteAll();
-                workorderServiceRepository.deleteAll();
-                workorderPartRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== IDEMPOTENT PROMOTION TESTS (Issue #164) ==========

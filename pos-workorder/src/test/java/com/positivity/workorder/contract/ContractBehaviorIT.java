@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,8 +25,10 @@ import tools.jackson.databind.ObjectMapper;
 @ActiveProfiles("test")
 @DisplayName("Workorder Estimate Backend Contract Behavioral Tests")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
-
-       
+        @AfterEach
+        void tearDown() {
+                purgeTestData();
+        }
 
         @Autowired
         private ObjectMapper objectMapper;

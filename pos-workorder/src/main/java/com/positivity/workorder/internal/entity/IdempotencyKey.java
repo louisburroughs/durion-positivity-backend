@@ -1,6 +1,12 @@
 package com.positivity.workorder.internal.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import com.positivity.shared.id.UUIDv7Id;
 import java.time.Instant;
 import java.util.UUID;
@@ -15,7 +21,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 /**
- * Entity for tracking idempotency keys to prevent duplicate workorder creation.
+ * Entity for tracking idempotency keys to prevent duplicate processing.
  * 
  * <p>
  * This entity stores idempotency keys submitted with workorder creation
@@ -46,50 +52,14 @@ public class IdempotencyKey {
     @Column(nullable = false, unique = true, length = 255)
     private String keyValue;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workorder_id")
-    @ToString.Exclude
-    private Workorder workorder;
+    @Column(columnDefinition = "UUID")
+    private UUID workorderId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "change_request_id")
-    @ToString.Exclude
-    private ChangeRequest changeRequest;
+    @Column(columnDefinition = "UUID")
+    private UUID changeRequestId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "labor_entry_id")
-    @ToString.Exclude
-    private WorkorderLaborEntry laborEntry;
-
-    @Transient
-    public UUID getWorkorderId() {
-        return workorder != null ? workorder.getId() : null;
-    }
-
-    @Transient
-    public void setWorkorderId(UUID workorderId) {
-        this.workorder = new Workorder(workorderId);
-    }
-
-    @Transient
-    public UUID getChangeRequestId() {
-        return changeRequest != null ? changeRequest.getId() : null;
-    }
-
-    @Transient
-    public void setChangeRequestId(UUID changeRequestId) {
-        this.changeRequest = new ChangeRequest(changeRequestId);
-    }
-
-    @Transient
-    public UUID getLaborEntryId() {
-        return laborEntry != null ? laborEntry.getId() : null;
-    }
-
-    @Transient
-    public void setLaborEntryId(UUID laborEntryId) {
-        this.laborEntry = new WorkorderLaborEntry(laborEntryId);
-    }
+    @Column(columnDefinition = "UUID")
+    private UUID laborEntryId;
 
     @Column(columnDefinition = "UUID")
     private UUID partUsageEventId;
@@ -111,16 +81,16 @@ public class IdempotencyKey {
     @Column(nullable = false)
     private Instant expiresAt;
 
-    public IdempotencyKey(String keyValue, Workorder workorder, Instant expiresAt) {
+    public IdempotencyKey(String keyValue, UUID workorderId, Instant expiresAt) {
         this.keyValue = keyValue;
-        this.workorder = workorder;
+        this.workorderId = workorderId;
         this.expiresAt = expiresAt;
     }
 
-    public IdempotencyKey(String keyValue, Workorder workorder, ChangeRequest changeRequest, Instant expiresAt) {
+    public IdempotencyKey(String keyValue, UUID workorderId, UUID changeRequestId, Instant expiresAt) {
         this.keyValue = keyValue;
-        this.workorder = workorder;
-        this.changeRequest = changeRequest;
+        this.workorderId = workorderId;
+        this.changeRequestId = changeRequestId;
         this.expiresAt = expiresAt;
     }
 }

@@ -52,8 +52,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
 
         @AfterEach
         void tearDown() {
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== SUBMIT FOR APPROVAL TESTS (Issue #168) ==========

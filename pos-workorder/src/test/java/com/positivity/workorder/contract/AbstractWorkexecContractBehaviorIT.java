@@ -11,6 +11,7 @@ import com.positivity.security.common.GatewaySecurityConstants;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,11 +21,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -62,6 +65,12 @@ abstract class AbstractWorkexecContractBehaviorIT {
     protected IdempotencyKeyRepository idempotencyKeyRepository;
 
     @Autowired
+    protected WorkorderServiceRepository workorderServiceRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
     private WebApplicationContext webApplicationContext;
 
     @BeforeEach
@@ -97,10 +106,7 @@ abstract class AbstractWorkexecContractBehaviorIT {
 
     @AfterEach
     void tearDownBaseContractTest() {
-        laborEntryRepository.deleteAll();
-        idempotencyKeyRepository.deleteAll();
-        technicianAssignmentRepository.deleteAll();
-        workorderRepository.deleteAll();
+        purgeTestData();
     }
 
     protected Workorder seedWorkorder(UUID locationId, WorkorderStatus status) {
@@ -116,5 +122,30 @@ abstract class AbstractWorkexecContractBehaviorIT {
 
     protected Workorder seedWorkorderInProgress() {
         return seedWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), WorkorderStatus.WORK_IN_PROGRESS);
+    }
+
+    protected WorkorderService seedWorkorderService(Workorder workorder, UUID technicianId) {
+        WorkorderService service = WorkorderService.builder()
+                .workOrder(workorder)
+                .serviceEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .technicianId(technicianId)
+                .description("Contract labor")
+                .build();
+        return workorderServiceRepository.save(service);
+    }
+
+    protected void purgeTestData() {
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        try {
+            var tableNames = jdbcTemplate.queryForList(
+                    "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
+                            + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_TYPE = 'BASE TABLE'",
+                    String.class);
+            for (String tableName : tableNames) {
+                jdbcTemplate.execute("TRUNCATE TABLE \"" + tableName + "\"");
+            }
+        } finally {
+            jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
+        }
     }
 }

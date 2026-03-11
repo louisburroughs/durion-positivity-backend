@@ -25,6 +25,7 @@ import org.springframework.context.annotation.Import;
 
 import com.positivity.workorder.internal.repository.BreakSegmentRepository;
 import com.positivity.workorder.internal.repository.WorkSessionRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import io.restassured.http.ContentType;
@@ -64,25 +65,31 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private BreakSegmentRepository breakSegmentRepository;
 
+        @Autowired
+        private WorkorderRepository workorderRepository;
+
         @AfterEach
         void tearDown() {
-                breakSegmentRepository.deleteAll();
-                workSessionRepository.deleteAll();
+                purgeTestData();
         }
 
         // ── Fixtures ─────────────────────────────────────────────────────────────
 
         private static final UUID MECHANIC_ID = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
-        private static final UUID WORK_ORDER_ID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
         private static final UUID TASK_ID = UUID.fromString("cccccccc-0000-0000-0000-000000000003");
         private static final UUID LOCATION_ID = UUID.fromString("dddddddd-0000-0000-0000-000000000004");
 
-        private Map<String, Object> validStartBody() {
+        private Map<String, Object> validStartBody(UUID workOrderId) {
                 return Map.of(
                                 "mechanicId", MECHANIC_ID.toString(),
-                                "workOrderId", WORK_ORDER_ID.toString(),
+                                "workOrderId", workOrderId.toString(),
                                 "workOrderTaskId", TASK_ID.toString(),
                                 "locationId", LOCATION_ID.toString());
+        }
+
+        private UUID seedWorkorder() {
+                Workorder workorder = Workorder.builder().build();
+                return workorderRepository.save(workorder).getId();
         }
 
         // ── WSC-001: Start session happy path ─────────────────────────────────────
@@ -91,9 +98,10 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("WSC-001: POST /start returns 201 with IN_PROGRESS status, non-null startAt and workSessionId")
         void startWorkSession_happyPath_returns201WithInProgressStatus() {
                 // Issue CAP-139 Story #68: AC1 — happy path start
+                UUID workorderId = seedWorkorder();
                 givenWithGatewayAuth()
                                 .contentType(ContentType.JSON)
-                                .body(validStartBody())
+                                .body(validStartBody(workorderId))
                                 .when()
                                 .post("/v1/workorders/workSessions/start")
                                 .then()
@@ -138,10 +146,11 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("WSC-003: Starting a second session for same mechanic without override returns 409")
         void startWorkSession_overlap_withoutOverride_returns409() {
                 // Issue CAP-139 Story #68: AC2 — overlap rejection
+                UUID workorderId = seedWorkorder();
                 // Seed first session
                 givenWithGatewayAuth()
                                 .contentType(ContentType.JSON)
-                                .body(validStartBody())
+                                .body(validStartBody(workorderId))
                                 .when()
                                 .post("/v1/workorders/workSessions/start")
                                 .then()
@@ -150,7 +159,7 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
                 // Attempt second session for same mechanic — should conflict
                 givenWithGatewayAuth()
                                 .contentType(ContentType.JSON)
-                                .body(validStartBody())
+                                .body(validStartBody(workorderId))
                                 .when()
                                 .post("/v1/workorders/workSessions/start")
                                 .then()
@@ -164,11 +173,12 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("WSC-004: POST /{workSessionId}/stop returns 200 with COMPLETED status and non-null endAt")
         void stopWorkSession_happyPath_returns200WithCompletedStatus() {
                 // Issue CAP-139 Story #68: AC4 — stop session
+                UUID workorderId = seedWorkorder();
 
                 // Start a session first to get a workSessionId
                 String startedId = givenWithGatewayAuth()
                                 .contentType(ContentType.JSON)
-                                .body(validStartBody())
+                                .body(validStartBody(workorderId))
                                 .when()
                                 .post("/v1/workorders/workSessions/start")
                                 .then()
@@ -215,11 +225,12 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("WSC-006: POST /{workSessionId}/breaks returns 201 with non-null breakStartAt")
         void addBreakSegment_happyPath_returns201() {
                 // Issue CAP-139 Story #68: AC6 — add break
+                UUID workorderId = seedWorkorder();
 
                 // Start a session first
                 String workSessionId = givenWithGatewayAuth()
                                 .contentType(ContentType.JSON)
-                                .body(validStartBody())
+                                .body(validStartBody(workorderId))
                                 .when()
                                 .post("/v1/workorders/workSessions/start")
                                 .then()
@@ -245,9 +256,10 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
         void addBreakSegment_onLockedSession_returns409() {
                 // Issue CAP-139 Story #68: break on locked session rejected
                 // Seed an APPROVED (locked) session directly via repository.
+                Workorder workorder = workorderRepository.save(Workorder.builder().build());
                 WorkSession lockedSession = WorkSession.builder()
                                 .mechanicId(MECHANIC_ID)
-                                .workOrder(new Workorder(WORK_ORDER_ID))
+                                .workOrder(workorder)
                                 .workOrderTaskId(TASK_ID)
                                 .locationId(LOCATION_ID)
                                 .startAt(Instant.now(TEST_CLOCK).minus(2, ChronoUnit.HOURS))
@@ -276,11 +288,12 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("WSC-008: POST /{workSessionId}/breaks/{breakSegmentId}/stop returns 200 with non-null breakEndAt")
         void WSC008_stopBreakSegment_happyPath_returns200() {
                 // Issue CAP-139 Story #68: AC7 — stop break segment happy path
+                UUID workorderId = seedWorkorder();
 
                 // Step 1: Start a work session to get a workSessionId
                 String workSessionId = givenWithGatewayAuth()
                                 .contentType(ContentType.JSON)
-                                .body(validStartBody())
+                                .body(validStartBody(workorderId))
                                 .when()
                                 .post("/v1/workorders/workSessions/start")
                                 .then()
