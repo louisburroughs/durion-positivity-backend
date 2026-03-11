@@ -1,14 +1,13 @@
 package com.positivity.workorder.contract;
 
-import java.time.ZoneOffset;
-import java.time.Instant;
-import java.time.Clock;
-
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -24,9 +23,6 @@ import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
-import com.positivity.workorder.internal.repository.WorkorderPartRepository;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
-import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 /**
@@ -50,15 +46,6 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private EstimateItemRepository estimateItemRepository;
-
-        // @Autowired
-        // private WorkorderRepository workorderRepository;
-
-        // @Autowired
-        // private WorkorderServiceRepository workorderServiceRepository;
-
-        // @Autowired
-        // private WorkorderPartRepository workorderPartRepository;
 
         private UUID testCustomerId;
         private UUID testLocationId;

@@ -1,15 +1,14 @@
 package com.positivity.workorder.contract;
 
-import java.time.ZoneOffset;
-import java.time.Instant;
-import java.time.Clock;
-
 import static org.hamcrest.Matchers.emptyIterable;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,7 +24,6 @@ import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import io.restassured.http.ContentType;
@@ -67,9 +65,6 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private EstimateItemRepository estimateItemRepository;
-
-        // @Autowired
-        // private WorkorderRepository workorderRepository;
 
         @AfterEach
         void tearDown() {
