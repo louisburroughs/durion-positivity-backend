@@ -3,7 +3,7 @@
 **Status:** Draft  
 **Version:** 1.0  
 **Date:** 2026-03-11  
-**Domain:** Positivity (pos-nlti, pos-mcp-server)  
+**Domain:** Positivity (`pos-mcp-server`)  
 **Capability:** natural-language  
 
 ---
@@ -54,7 +54,7 @@ Build a Natural Language Task Interface (NLTI) on top of the existing Durion Pos
 
 **Acceptance Criteria:**
 
-- `POST /nlt/v1/requests` with a valid `prompt` returns HTTP 200/202 with `correlationId`, `sessionId`, `requestId`, and `status`.
+- `POST /v1/nlt/requests` with a valid `prompt` returns HTTP 200/202 with `correlationId`, `sessionId`, `requestId`, and `status`.
 - Missing `prompt` returns HTTP 400 with `{status:"ERROR", code:"VALIDATION_ERROR", correlationId, details[]}`.
 - Inbound `X-Correlation-Id` is echoed in the response and propagated to all logs and traces.
 - Repeated requests sharing the same `sessionId` reuse existing session metadata (no duplicate session).
@@ -91,7 +91,7 @@ Conversation memory / history beyond session-scoped metadata is out of scope for
 
 **Acceptance Criteria:**
 
-- `GET /nlt/v1/tools?service={domain}` returns only actions the authenticated subject can call.
+- `GET /v1/nlt/tools?service={domain}` returns only actions the authenticated subject can call.
 - If AuthZ service is unavailable, endpoint returns HTTP 503 and logs `correlationId` (fail-closed).
 - Unauthorized invocation attempt returns `NOT_AUTHORIZED` with `correlationId` without calling downstream.
 - Discovery logged with `correlationId`, `subjectId`, returned action count.
@@ -139,8 +139,8 @@ Conversation memory / history beyond session-scoped metadata is out of scope for
 
 **Acceptance Criteria:**
 
-- `GET /nlt/v1/plans/{planId}` returns step list, `riskLevel`, `requiresConfirmation`, estimated impact.
-- `POST /nlt/v1/plans/{planId}/confirm` records `userId`, timestamp, and a confirmation token tied to the session.
+- `GET /v1/nlt/plans/{planId}` returns step list, `riskLevel`, `requiresConfirmation`, estimated impact.
+- `POST /v1/nlt/plans/{planId}/confirm` records `userId`, timestamp, and a confirmation token tied to the session.
 - `HIGH` risk plan blocks execution unless an unexpired confirmation record exists for the same user and session.
 - Confirmation attempted by a different user → HTTP 403 and recorded in audit log.
 - Expired confirmation token → plan returns to pre-confirmation state.
@@ -156,7 +156,7 @@ Conversation memory / history beyond session-scoped metadata is out of scope for
 **Acceptance Criteria:**
 
 - Every execution produces a complete event chain: `REQUEST` → `INTENT` → `PLAN` → `CONFIRMATION` (if required) → `EXECUTION` steps.
-- `GET /nlt/v1/audit?correlationId=&from=&to=&eventType=` returns paginated events in timestamp order.
+- `GET /v1/nlt/audit?correlationId=&from=&to=&eventType=` returns paginated events in timestamp order.
 - Sensitive data is not stored in plaintext; oversized payloads are stored by reference (blob store) with only metadata in the ledger.
 - `nlt.audit.write_failures` metric emitted; write failure above threshold blocks destructive execution.
 - Audit writes are durable and idempotent from the writer's perspective.
@@ -304,12 +304,12 @@ All write endpoints require explicit `@PreAuthorize` permission guards:
 
 | Endpoint | Permission Required |
 |----------|---------------------|
-| `POST /mcp/v1/tools` | `mcp:tool:write` |
-| `PUT /mcp/v1/tools/{id}` | `mcp:tool:write` |
-| `DELETE /mcp/v1/tools/{id}` | `mcp:tool:admin` |
-| `POST /mcp/v1/tools/{id}/roles` | `mcp:tool:write` |
-| `POST /mcp/v1/tools/{id}/workflows` | `mcp:tool:write` |
-| `POST /mcp/v1/tools/{id}/intents` | `mcp:tool:write` |
+| `POST /v1/mcp/tools` | `mcp:tool:write` |
+| `PUT /v1/mcp/tools/{id}` | `mcp:tool:write` |
+| `DELETE /v1/mcp/tools/{id}` | `mcp:tool:admin` |
+| `POST /v1/mcp/tools/{id}/roles` | `mcp:tool:write` |
+| `POST /v1/mcp/tools/{id}/workflows` | `mcp:tool:write` |
+| `POST /v1/mcp/tools/{id}/intents` | `mcp:tool:write` |
 
 - All state-changing endpoints carry `@EmitEvent` and register event types at startup.
 - `mcp:tool:read` permission for list/get operations.
@@ -327,17 +327,13 @@ User (UI/API)
 API Gateway (auth, rate-limit, header forwarding)
     │
     ▼
-pos-nlti (NEW MODULE)
-    ├── NltController          POST /nlt/v1/requests
+pos-mcp-server (ENHANCED EXISTING MODULE)
+    ├── NltController          POST /v1/nlt/requests
     ├── IntentParserService    NLP classification + slot extraction
     ├── PlanningService        IntentV1 → PlanV1
     ├── ConfirmationService    Risk gate + token management
     ├── ExecutionOrchestrator  Sequential step runner + idempotency
     ├── AuditLedgerService     Append-only event ledger
-    └── ToolRegistryClient     Calls pos-mcp-server via REST
-    │
-    ▼
-pos-mcp-server (ENHANCED)
     ├── ToolRegistryService    Role/workflow/intent/embedding resolution
     ├── EmbeddingService       Provider-configurable (OpenAI default)
     ├── ToolAuditService       Invocation log persistence
@@ -351,10 +347,10 @@ Domain Services (pos-workorder, pos-accounting, pos-inventory, pos-customer, …
 ### Data Flow: Request → Execution
 
 ```
-1. POST /nlt/v1/requests          { prompt, sessionId?, clientContext? }
+1. POST /v1/nlt/requests          { prompt, sessionId?, clientContext? }
 2. IntentParserService            → IntentV1 (type, slots, confidence, riskLevel)
    └── If NEEDS_CLARIFICATION     ← return clarification response to user
-3. ToolRegistryClient             GET /mcp/v1/tools (auth-filtered + embedding-ranked)
+3. ToolRegistryService            Resolve tools (auth-filtered + embedding-ranked)
 4. PlanningService                IntentV1 + tools → PlanV1 (steps, preconditions)
 5. ConfirmationService            If riskLevel=HIGH → require confirmation token
 6. ExecutionOrchestrator          Execute steps via domain tool adapters
@@ -363,41 +359,32 @@ Domain Services (pos-workorder, pos-accounting, pos-inventory, pos-customer, …
 
 ### Module Location
 
-- New module: `pos-nlti/` — following existing `pos-*` conventions
-- Enhanced module: `pos-mcp-server/`
+- Enhanced existing module: `pos-mcp-server/` (NLTI + MCP registry features implemented here)
 
 ### Package Conventions
 
 All code follows the mandatory internal package structure from `AGENTS.md`:
 
-```
-com.positivity.nlti/
-├── NltiApplication.java            ← @SpringBootApplication (root)
-├── service/                        ← PUBLIC API (service interfaces only)
+```text
+com.positivity.mcp/
+├── PositivityMcpServerApplication.java   ← @SpringBootApplication (root)
+├── service/                              ← PUBLIC API (service interfaces only)
 │   ├── NltiRequestService.java
 │   ├── IntentParserService.java
 │   ├── PlanningService.java
 │   ├── ExecutionOrchestratorService.java
-│   └── AuditLedgerService.java
+│   ├── AuditLedgerService.java
+│   └── ToolRegistryService.java
 └── internal/
-    ├── controller/
-    ├── repository/
+    ├── controller/                       ← nlt + mcp endpoints
+    ├── repository/                       ← nlti + mcp tables
     ├── entity/
     ├── dto/
     ├── config/
     ├── domain/
-    └── enums/
-
-com.positivity.mcp/
-├── McpApplication.java
-├── service/
-│   └── ToolRegistryService.java    ← existing, extended
-└── internal/
-    ├── controller/                 ← admin/write APIs (new)
-    ├── repository/                 ← mcp_tool, mcp_role, mcp_intent, log tables
-    ├── entity/
-    ├── config/                     ← EmbeddingService, adaptive tuning config
-    └── dto/
+    ├── enums/
+    ├── adapter/                          ← domain adapters
+    └── client/                           ← external clients (authz, embeddings)
 ```
 
 ### API Contracts
@@ -531,7 +518,7 @@ com.positivity.mcp/
 
 Deliverables:
 
-- `pos-nlti` module scaffolded with NLTI API endpoint, session management, correlation propagation.
+- `pos-mcp-server` enhanced with NLTI API endpoint, session management, and correlation propagation.
 - Intent parser with classification and slot extraction.
 - Audit ledger (append-only) and observability baseline.
 
@@ -581,10 +568,10 @@ Coordinate decomposition of each phase into Backend/API/Domain/Test specialist s
 
 Responsible for all externally-visible DTOs, controller methods, and OpenAPI annotations:
 
-- `NltController` (`POST /nlt/v1/requests`, `GET /nlt/v1/requests/{requestId}`)
-- `ToolRegistryController` (`GET /nlt/v1/tools`)
-- `PlanController` (`GET /nlt/v1/plans/{planId}`, `POST /nlt/v1/plans/{planId}/confirm`)
-- `AuditController` (`GET /nlt/v1/audit`)
+- `NltController` (`POST /v1/nlt/requests`, `GET /v1/nlt/requests/{requestId}`)
+- `ToolRegistryController` (`GET /v1/nlt/tools`)
+- `PlanController` (`GET /v1/nlt/plans/{planId}`, `POST /v1/nlt/plans/{planId}/confirm`)
+- `AuditController` (`GET /v1/nlt/audit`)
 - MCP `AdminController` (all write endpoints)
 - All `*V1` DTO records and validation annotations
 - `@EmitEvent` and event type registry for all state-changing endpoints
@@ -594,7 +581,7 @@ Responsible for all externally-visible DTOs, controller methods, and OpenAPI ann
 
 Responsible for service implementations, entities, repositories, and domain logic:
 
-- `pos-nlti` entities: `NltiRequest`, `Intent`, `Plan`, `PlanStep`, `Confirmation`, `AuditEvent`, `Session`
+- `pos-mcp-server` entities: `NltiRequest`, `Intent`, `Plan`, `PlanStep`, `Confirmation`, `AuditEvent`, `Session`
 - `pos-mcp-server` entities: `McpTool`, `McpRole`, `McpToolRole`, `McpWorkflowState`, `McpToolWorkflow`, `McpIntent`, `McpIntentTool`, `McpToolInvocationLog`
 - Service implementations: `IntentParserServiceImpl`, `PlanningServiceImpl`, `ExecutionOrchestratorServiceImpl`, `AuditLedgerServiceImpl`
 - `ToolRegistryServiceImpl` (resolution core: pre-filter → embed → top-K → score → rank)
@@ -604,9 +591,8 @@ Responsible for service implementations, entities, repositories, and domain logi
 
 ### Agent: Client Coder
 
-Responsible for outbound integration in `pos-nlti`:
+Responsible for outbound integration in `pos-mcp-server`:
 
-- `ToolRegistryClient` → calls `pos-mcp-server` REST API
 - `AuthZClient` → calls `pos-security-service` for permission checks (fail-closed wrapper)
 - Domain tool adapters: `WorkorderToolAdapter`, `AccountingToolAdapter` (WorkExec + Accounting actions listed in Story 8)
 - `EmbeddingServiceImpl` (OpenAI provider + provider strategy interface)
@@ -615,7 +601,7 @@ Responsible for outbound integration in `pos-nlti`:
 
 Responsible for all test coverage:
 
-- ArchUnit tests for `pos-nlti` internal package encapsulation
+- ArchUnit tests for `pos-mcp-server` internal package encapsulation
 - Unit tests: intent parser accuracy (benchmark utterances), slot extraction, planner determinism, scorer edge cases
 - Contract tests: each tool adapter (validation, error, idempotency)
 - Integration tests: clarification flow (ASK → REPLY → READY), confirmation gate, cross-user rejection, expired token
@@ -626,8 +612,7 @@ Responsible for all test coverage:
 
 ### Agent: Documentation Agent
 
-- Update `pos-mcp-server/README.md` with registry architecture, config reference, and seeding runbook.
-- Create `pos-nlti/README.md` with module purpose, API summary, session/correlation model, and local run instructions.
+- Update `pos-mcp-server/README.md` with NLTI module purpose, API summary, registry architecture, config reference, seeding runbook, and local run instructions.
 - Document fallback behavior and incident troubleshooting paths.
 
 ### Agent: SRE / Observability
@@ -657,7 +642,7 @@ Responsible for all test coverage:
 | 1 | Which blob store should back oversized audit payloads? (S3-compatible?) | Architecture | Phase 1 kick-off |
 | 2 | Session store technology — Redis or DB-backed? | Architecture | Phase 1 kick-off |
 | 3 | LLM model selection for intent parsing — hosted or self-managed? | Platform Engineering | Phase 1 kick-off |
-| 4 | IDs for `pos-nlti` module and pom.xml version pinning strategy | Lead Coder | Phase 1 start |
+| 4 | Package and namespace strategy for NLTI components within `pos-mcp-server` | Lead Coder | Phase 1 start |
 | 5 | Minimum viable clarification UX — does convert-to-plan require frontend support in Phase 3? | Product / Frontend | Phase 2 |
 
 ---
