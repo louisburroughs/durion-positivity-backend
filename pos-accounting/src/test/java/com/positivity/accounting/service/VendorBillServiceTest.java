@@ -152,7 +152,7 @@ class VendorBillServiceTest {
             VendorBillLine line1 = buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
             VendorBillLine line2 = buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
             // Both scoring and validation calls return matching lines
-            when(billLineRepository.findByVendorBillIdOrderByLineNumber(testBillId))
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
                     .thenReturn(List.of(line1, line2));
 
             VendorInvoiceReceivedEvent event = buildInvoiceEvent(testVendorId, new BigDecimal("1300.00"));
@@ -182,7 +182,7 @@ class VendorBillServiceTest {
             VendorBillLine line2 = buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
             // First call (scoring): return 2 lines → Jaccard = 1.0 → 30 pts
             // Second call (validation): return only 1 line → count mismatch → discrepancy
-            when(billLineRepository.findByVendorBillIdOrderByLineNumber(testBillId))
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
                     .thenReturn(List.of(line1, line2)) // scoring call
                     .thenReturn(List.of(line1));        // validation call: count mismatch (2 vs 1)
 
@@ -212,7 +212,7 @@ class VendorBillServiceTest {
             VendorBillLine line2 = buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
             // Scoring: return empty (0 pts line items)
             // Validation: return matching lines to avoid discrepancy → reach confidence branch
-            when(billLineRepository.findByVendorBillIdOrderByLineNumber(testBillId))
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
                     .thenReturn(List.of()) // scoring: empty, 0 pts
                     .thenReturn(List.of(line1, line2)); // validation: matching lines, no discrepancy
 
@@ -247,11 +247,11 @@ class VendorBillServiceTest {
             // Both bills: scoring calls return matching lines for each
             VendorBillLine l1 = buildBillLine(testBillId, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
             VendorBillLine l2 = buildBillLine(testBillId, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
-            when(billLineRepository.findByVendorBillIdOrderByLineNumber(testBillId))
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(testBillId))
                     .thenReturn(List.of(l1, l2));
             VendorBillLine l3 = buildBillLine(billId2, testProductId1, new BigDecimal("100.00"), new BigDecimal("12.50"));
             VendorBillLine l4 = buildBillLine(billId2, testProductId2, new BigDecimal("1.00"), new BigDecimal("50.00"));
-            when(billLineRepository.findByVendorBillIdOrderByLineNumber(billId2))
+            when(billLineRepository.findByVendorBill_VendorBillIdOrderByLineNumber(billId2))
                     .thenReturn(List.of(l3, l4));
 
             VendorInvoiceReceivedEvent event = buildInvoiceEvent(testVendorId, new BigDecimal("1300.00"));
