@@ -28,6 +28,10 @@ class PdfRenderingLargeCsvIT {
         request.setFormat(DocumentFormat.CSV);
         request.setContent(csvBuilder.toString());
 
+        // Warm up PDF engine/font initialization so this assertion measures
+        // steady-state rendering throughput rather than first-call startup cost.
+        pdfRenderingService.renderPdf(request);
+
         long start = System.nanoTime();
         byte[] pdf = pdfRenderingService.renderPdf(request);
         long elapsedMillis = (System.nanoTime() - start) / 1_000_000;

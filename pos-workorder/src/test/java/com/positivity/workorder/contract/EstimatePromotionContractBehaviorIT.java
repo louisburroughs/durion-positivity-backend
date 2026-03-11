@@ -51,14 +51,14 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private EstimateItemRepository estimateItemRepository;
 
-        @Autowired
-        private WorkorderRepository workorderRepository;
+        // @Autowired
+        // private WorkorderRepository workorderRepository;
 
-        @Autowired
-        private WorkorderServiceRepository workorderServiceRepository;
+        // @Autowired
+        // private WorkorderServiceRepository workorderServiceRepository;
 
-        @Autowired
-        private WorkorderPartRepository workorderPartRepository;
+        // @Autowired
+        // private WorkorderPartRepository workorderPartRepository;
 
         private UUID testCustomerId;
         private UUID testLocationId;

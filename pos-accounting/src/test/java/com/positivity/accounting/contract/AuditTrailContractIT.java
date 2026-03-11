@@ -172,7 +172,7 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
         // AC1: no audit entry must be persisted on rejection
         assertThat(auditRepository.count())
                 .as("no audit entry should be created when override is rejected")
-                .isEqualTo(0);
+                .isZero();
     }
 
     // -----------------------------------------------------------------------
@@ -211,7 +211,7 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
         // No entry should be persisted on forbidden-category rejection
         assertThat(auditRepository.count())
                 .as("no audit entry should be created for forbidden category override")
-                .isEqualTo(0);
+                .isZero();
     }
 
     // -----------------------------------------------------------------------
@@ -252,22 +252,15 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
 
         String createBody = create.getResponse().getContentAsString();
 
-        // AC3: actor MUST be resolved from SecurityContext, not from request payload
+        // AC3: actor is resolved from auth context and timestamp is server-generated
         assertThat(createBody)
-                .as("actorId should be resolved from the authenticated principal (ADR-0018)")
-                .contains("\"actorId\":\"" + TEST_USER + "\"");
-
-        // AC3: timestamp must be present (immutable, set server-side)
-        assertThat(createBody)
-                .as("timestamp must be present in the audit entry")
+                .as("actorId and timestamp should both be present in the audit entry")
+                .contains("\"actorId\":\"" + TEST_USER + "\"")
                 .contains("\"timestamp\":");
     }
 
     // -----------------------------------------------------------------------
-    // AC4 — query by orderId at story-defined path /by-order/{orderId}
-    //
-    // GREEN: controller correctly maps to /by-order/{orderId} and returns
-    // audit entries sorted by ascending timestamp as required by AC4.
+    // AC4 — query by orderId at the by-order endpoint
     // -----------------------------------------------------------------------
 
     @Test
@@ -316,8 +309,8 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
 
         // Issue #1 AC4: entries must be returned in ascending timestamp order
         JsonNode results = objectMapper.readTree(queryResult.getResponse().getContentAsString());
-        String ts0 = results.get(0).get("timestamp").asText();
-        String ts1 = results.get(1).get("timestamp").asText();
+        String ts0 = results.get(0).get("timestamp").asString();
+        String ts1 = results.get(1).get("timestamp").asString();
         assertThat(ts0)
                 .as("audit entries should be sorted by ascending timestamp: results[0] <= results[1]")
                 .isLessThanOrEqualTo(ts1);
@@ -359,13 +352,10 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
 
         // AC5: refundMethod must be CREDIT_MEMO or CASH_REFUND, not VOID/CHARGEBACK
         assertThat(body)
-                .as("settled payment refund must use CREDIT_MEMO or CASH_REFUND method")
+                .as("settled payment refund must use CREDIT_MEMO or CASH_REFUND and never REVERSAL")
                 .satisfiesAnyOf(
                         b -> assertThat(b).contains("\"refundMethod\":\"CREDIT_MEMO\""),
-                        b -> assertThat(b).contains("\"refundMethod\":\"CASH_REFUND\""));
-
-        assertThat(body)
-                .as("settled payment refund must not use REVERSAL method")
+                        b -> assertThat(b).contains("\"refundMethod\":\"CASH_REFUND\""))
                 .doesNotContain("\"refundMethod\":\"REVERSAL\"");
     }
 
@@ -450,10 +440,7 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC8 — audit entry MUST NOT contain glEntryId or postingTimestamp
-    //
-    // EXPECTED GREEN: AuditTrailResponse DTO does not define these fields;
-    // they will simply be absent from the serialized JSON.
+    // AC8 — audit entry must not contain GL posting linkage fields
     // -----------------------------------------------------------------------
 
     @Test
@@ -481,12 +468,8 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
 
         // AC8: neither GL integration field should leak into the audit response
         assertThat(body)
-                .as("glEntryId must not appear in the audit trail response")
-                .doesNotContain("glEntryId");
-
-        assertThat(body)
-                .as("postingTimestamp must not appear in the audit trail response")
-                .doesNotContain("postingTimestamp");
+                .as("glEntryId and postingTimestamp must not appear in the audit trail response")
+                .doesNotContain("glEntryId", "postingTimestamp");
     }
 
     // -----------------------------------------------------------------------

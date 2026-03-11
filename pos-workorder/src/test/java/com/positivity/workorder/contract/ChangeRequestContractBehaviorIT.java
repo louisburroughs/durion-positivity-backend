@@ -55,11 +55,11 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private EstimateRepository estimateRepository;
 
-    @Autowired
-    private WorkorderServiceRepository workorderServiceRepository;
+    // @Autowired
+    // private WorkorderServiceRepository workorderServiceRepository;
 
-    @Autowired
-    private WorkorderPartRepository workorderPartRepository;
+    // @Autowired
+    // private WorkorderPartRepository workorderPartRepository;
 
     private UUID testCustomerId;
     private UUID testLocationId;
@@ -70,8 +70,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
 
     @AfterEach
     void tearDown() {
-                purgeTestData();
-        }
+        purgeTestData();
+    }
 
     // ========== CHANGE REQUEST CREATION TESTS ==========
 
@@ -419,7 +419,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .subtotal(BigDecimal.valueOf(100.00))
                 .taxAmount(BigDecimal.ZERO)
                 .total(BigDecimal.valueOf(100.00))
-                .createdById(SYSTEM_USER_ID.toString())
+                .createdById(SYSTEM_USER_ID)
                 .build();
         Estimate savedEstimate = estimateRepository.save(estimate);
 
@@ -452,7 +452,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .subtotal(BigDecimal.valueOf(100.00))
                 .taxAmount(BigDecimal.ZERO)
                 .total(BigDecimal.valueOf(100.00))
-                .createdById(SYSTEM_USER_ID.toString())
+                .createdById(SYSTEM_USER_ID)
                 .build();
         Estimate savedEstimate = estimateRepository.save(estimate);
 

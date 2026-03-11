@@ -68,8 +68,8 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private EstimateItemRepository estimateItemRepository;
 
-        @Autowired
-        private WorkorderRepository workorderRepository;
+        // @Autowired
+        // private WorkorderRepository workorderRepository;
 
         @AfterEach
         void tearDown() {

@@ -62,8 +62,8 @@ class WorkSessionContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private WorkSessionRepository workSessionRepository;
 
-        @Autowired
-        private BreakSegmentRepository breakSegmentRepository;
+        // @Autowired
+        // private BreakSegmentRepository breakSegmentRepository;
 
         @Autowired
         private WorkorderRepository workorderRepository;

@@ -6,8 +6,8 @@ import java.util.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -16,7 +16,6 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.contract.ContractTestConfiguration;
-import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
 
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
@@ -25,10 +24,12 @@ import io.restassured.specification.RequestSpecification;
 /**
  * Shared contract-test scaffolding for REST Assured based tests.
  *
- * <p>Test requests include both gateway auth headers and a synthetic bearer
+ * <p>
+ * Test requests include both gateway auth headers and a synthetic bearer
  * token. The token exists only to provide a decodable {@code userId} claim
  * for {@code GatewayAuthoritiesFilter} in test runtime. It is not signed or
- * validated and must never be reused outside tests.</p>
+ * validated and must never be reused outside tests.
+ * </p>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
@@ -38,9 +39,6 @@ public abstract class BaseContractIntegrationTest {
 
     @Autowired
     protected MockMvc mockMvc;
-
-    @Autowired(required = false)
-    private IdempotencyKeyRepository idempotencyKeyRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -148,9 +146,11 @@ public abstract class BaseContractIntegrationTest {
     /**
      * Builds a synthetic JWT-like token for tests only.
      *
-     * <p>This token is intentionally unsigned and used only so
+     * <p>
+     * This token is intentionally unsigned and used only so
      * {@code GatewayAuthoritiesFilter} can decode the payload and extract
-     * {@code userId}. It must never be used in production code.</p>
+     * {@code userId}. It must never be used in production code.
+     * </p>
      */
     private static String buildTestOnlyBearerToken(String userId) {
         String headerJson = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
