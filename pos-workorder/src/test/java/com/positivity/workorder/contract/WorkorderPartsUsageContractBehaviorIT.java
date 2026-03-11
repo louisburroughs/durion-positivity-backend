@@ -53,11 +53,11 @@ import io.restassured.http.ContentType;
 @Import(ContractTestConfiguration.class)
 class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest {
 
-        @Autowired
-        private EstimateRepository estimateRepository;
+        // @Autowired
+        // private EstimateRepository estimateRepository;
 
-        @Autowired
-        private EstimateItemRepository estimateItemRepository;
+        // @Autowired
+        // private EstimateItemRepository estimateItemRepository;
 
         @Autowired
         private WorkorderRepository workorderRepository;

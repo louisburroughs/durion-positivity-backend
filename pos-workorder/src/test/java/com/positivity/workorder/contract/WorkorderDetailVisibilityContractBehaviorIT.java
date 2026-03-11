@@ -64,11 +64,11 @@ import io.restassured.specification.RequestSpecification;
 class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegrationTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-        @Autowired
-        private EstimateRepository estimateRepository;
+        // @Autowired
+        // private EstimateRepository estimateRepository;
 
-        @Autowired
-        private EstimateItemRepository estimateItemRepository;
+        // @Autowired
+        // private EstimateItemRepository estimateItemRepository;
 
         @Autowired
         private WorkorderRepository workorderRepository;
@@ -82,8 +82,8 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
         @Autowired
         private WorkorderLaborEntryRepository laborEntryRepository;
 
-        @Autowired
-        private TechnicianAssignmentRepository technicianAssignmentRepository;
+        // @Autowired
+        // private TechnicianAssignmentRepository technicianAssignmentRepository;
 
         @Autowired
         private CustomerRepository customerRepository;
@@ -322,7 +322,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
         private RequestSpecification givenWithAuthorities(String... authorities) {
                 return RestAssured.given()
                                 .contentType(ContentType.JSON)
-                                .header("X-User-Id", SYSTEM_USER_ID.toString())
+                                .header("X-User-Id", SYSTEM_USER_ID)
                                 .header("X-Authorities", String.join(",", authorities));
         }
 

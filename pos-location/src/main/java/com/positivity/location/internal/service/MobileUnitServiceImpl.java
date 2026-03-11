@@ -1,28 +1,7 @@
 package com.positivity.location.internal.service;
 
-import java.time.Clock;
-
-import com.positivity.location.service.MobileUnitService;
-
-import com.positivity.location.internal.dto.CoverageRuleRequest;
-import com.positivity.location.internal.dto.CoverageRuleResponse;
-import com.positivity.location.internal.dto.EligibleMobileUnitResponse;
-import com.positivity.location.internal.dto.MobileUnitRequest;
-import com.positivity.location.internal.dto.MobileUnitResponse;
-import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.MobileUnitCoverageRuleEntity;
-import com.positivity.location.internal.entity.MobileUnitEntity;
-import com.positivity.location.internal.entity.ServiceAreaEntity;
-import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
-import com.positivity.location.internal.exception.DuplicateResourceException;
-import com.positivity.location.internal.exception.ResourceNotFoundException;
-import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.repository.MobileUnitCoverageRuleRepository;
-import com.positivity.location.internal.repository.MobileUnitRepository;
-import com.positivity.location.internal.repository.ServiceAreaRepository;
-import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
-import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -36,13 +15,32 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.location.internal.dto.CoverageRuleRequest;
+import com.positivity.location.internal.dto.CoverageRuleResponse;
+import com.positivity.location.internal.dto.EligibleMobileUnitResponse;
+import com.positivity.location.internal.dto.MobileUnitRequest;
+import com.positivity.location.internal.dto.MobileUnitResponse;
+import com.positivity.location.internal.entity.MobileUnitCoverageRuleEntity;
+import com.positivity.location.internal.entity.MobileUnitEntity;
+import com.positivity.location.internal.entity.ServiceAreaEntity;
+import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
+import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.ResourceNotFoundException;
+import com.positivity.location.internal.repository.LocationRepository;
+import com.positivity.location.internal.repository.MobileUnitCoverageRuleRepository;
+import com.positivity.location.internal.repository.MobileUnitRepository;
+import com.positivity.location.internal.repository.ServiceAreaRepository;
+import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
+import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
+import com.positivity.location.service.MobileUnitService;
 
 /**
  * Public API for mobile unit management and eligibility evaluation.
@@ -55,6 +53,12 @@ public class MobileUnitServiceImpl implements MobileUnitService {
 
     private static final String MOBILE_UNIT_NAME_TAKEN = "MOBILE_UNIT_NAME_TAKEN";
     private static final String MOBILE_UNIT_CONFLICT = "MOBILE_UNIT_CONFLICT";
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String STATUS_INACTIVE = "INACTIVE";
+    private static final String PATCH_KEY_STATUS = "status";
+    private static final String PATCH_KEY_TRAVEL_BUFFER_POLICY_ID = "travelBufferPolicyId";
+    private static final String PATCH_KEY_NOTES = "notes";
+    private static final String FIELD_MAX_DISTANCE = "maxDistance";
 
     protected final MobileUnitRepository mobileUnitRepository;
     protected final MobileUnitCoverageRuleRepository coverageRuleRepository;
@@ -89,7 +93,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     @Transactional
     public MobileUnitResponse createMobileUnit(Map<String, Object> request) {
         MobileUnitRequest typedRequest = toMobileUnitRequest(request);
-        return createMobileUnit(typedRequest);
+        return createMobileUnitInternal(typedRequest);
     }
 
     /**
@@ -100,41 +104,73 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      */
     @Transactional
     public MobileUnitResponse createMobileUnit(MobileUnitRequest request) {
-        // Issue #76: ACTIVE mobile units require policy, capabilities, and coverage
-        // rules.
+        return createMobileUnitInternal(request);
+    }
+
+    private MobileUnitResponse createMobileUnitInternal(MobileUnitRequest request) {
         String normalizedStatus = normalizeStatus(request.getStatus());
-        List<String> capabilityIds = request.getCapabilityIds() == null ? List.of() : request.getCapabilityIds();
-        List<CoverageRuleRequest> coverageRules = request.getCoverageRules() == null ? List.of()
-                : request.getCoverageRules();
+        List<String> capabilityIds = nonNullList(request.getCapabilityIds());
+        List<CoverageRuleRequest> coverageRules = nonNullList(request.getCoverageRules());
 
-        if ("ACTIVE".equals(normalizedStatus)) {
-            if (request.getTravelBufferPolicyId() == null || capabilityIds.isEmpty() || coverageRules.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "ACTIVE mobile unit requires travelBufferPolicyId, capabilityIds, and coverageRules");
-            }
-        }
-
-        if (request.getTravelBufferPolicyId() != null && travelBufferPolicyRepository != null
-                && travelBufferPolicyRepository.findById(request.getTravelBufferPolicyId()).isEmpty()) {
-            throw new IllegalArgumentException("Unknown travelBufferPolicyId: " + request.getTravelBufferPolicyId());
-        }
+        validateCreateMobileUnitRequest(
+                normalizedStatus,
+                request.getTravelBufferPolicyId(),
+                capabilityIds,
+                coverageRules);
 
         Set<UUID> resolvedCapabilityIds = resolveCapabilityIds(capabilityIds);
+        validateDistanceTierRules(coverageRules);
+        validateUnitNameUniqueness(request.getBaseLocationId(), request.getName());
 
-        if (coverageRules.stream().anyMatch(rule -> "DISTANCE_TIER".equalsIgnoreCase(rule.getRuleType()))) {
+        MobileUnitEntity persisted = persistMobileUnitEntity(request, normalizedStatus, resolvedCapabilityIds);
+        if (!coverageRules.isEmpty()) {
+            replaceCoverageRulesInternal(persisted.getId(), coverageRules);
+        }
+        return toMobileUnitResponse(persisted);
+    }
+
+    private <T> List<T> nonNullList(List<T> values) {
+        return values == null ? List.of() : values;
+    }
+
+    private void validateCreateMobileUnitRequest(
+            String normalizedStatus,
+            UUID travelBufferPolicyId,
+            List<String> capabilityIds,
+            List<CoverageRuleRequest> coverageRules) {
+        if (STATUS_ACTIVE.equals(normalizedStatus)
+                && (travelBufferPolicyId == null || capabilityIds.isEmpty() || coverageRules.isEmpty())) {
+            throw new IllegalArgumentException(
+                    "ACTIVE mobile unit requires travelBufferPolicyId, capabilityIds, and coverageRules");
+        }
+
+        if (travelBufferPolicyId != null && travelBufferPolicyRepository.findById(travelBufferPolicyId).isEmpty()) {
+            throw new IllegalArgumentException("Unknown travelBufferPolicyId: " + travelBufferPolicyId);
+        }
+    }
+
+    private void validateDistanceTierRules(List<CoverageRuleRequest> coverageRules) {
+        boolean hasDistanceTierRules = coverageRules.stream()
+                .anyMatch(rule -> "DISTANCE_TIER".equalsIgnoreCase(rule.getRuleType()));
+        if (hasDistanceTierRules) {
             validateDistanceTiers(coverageRules.stream().map(this::toTierMap).toList());
         }
+    }
 
-        UUID baseLocationId = request.getBaseLocationId();
-        String unitName = request.getName() == null ? "" : request.getName().trim();
-        if (baseLocationId != null && !unitName.isEmpty()) {
-            boolean repositoryDuplicate = mobileUnitRepository != null
-                    && mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCase(baseLocationId, unitName);
-            if (repositoryDuplicate) {
-                throw new DuplicateResourceException(MOBILE_UNIT_NAME_TAKEN);
-            }
+    private void validateUnitNameUniqueness(UUID baseLocationId, String name) {
+        String unitName = name == null ? "" : name.trim();
+        if (baseLocationId != null
+                && !unitName.isEmpty()
+                && mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCase(baseLocationId, unitName)) {
+            throw new DuplicateResourceException(MOBILE_UNIT_NAME_TAKEN);
         }
+    }
 
+    private MobileUnitEntity persistMobileUnitEntity(
+            MobileUnitRequest request,
+            String normalizedStatus,
+            Set<UUID> resolvedCapabilityIds) {
+        UUID baseLocationId = request.getBaseLocationId();
         MobileUnitEntity entity = MobileUnitEntity.builder()
                 .name(request.getName())
                 .baseLocation(baseLocationId != null
@@ -146,23 +182,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .capabilityIds(resolvedCapabilityIds)
                 .build();
 
-        MobileUnitEntity persisted = entity;
-        if (mobileUnitRepository != null) {
-            try {
-                MobileUnitEntity saved = mobileUnitRepository.save(entity);
-                if (saved != null) {
-                    persisted = saved;
-                }
-            } catch (DataIntegrityViolationException exception) {
-                throw toMobileUnitConflictException(exception);
-            }
+        try {
+            return mobileUnitRepository.save(entity);
+        } catch (DataIntegrityViolationException exception) {
+            throw toMobileUnitConflictException(exception);
         }
-
-        if (!coverageRules.isEmpty()) {
-            replaceCoverageRules(persisted.getId(), coverageRules);
-        }
-
-        return toMobileUnitResponse(persisted);
     }
 
     /**
@@ -220,9 +244,6 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      */
     @Transactional(readOnly = true)
     public Page<MobileUnitResponse> list(int page, int size) {
-        if (mobileUnitRepository == null) {
-            return new PageImpl<>(List.of(), PageRequest.of(page, size), 0);
-        }
         Pageable pageable = PageRequest.of(page, size);
         return mobileUnitRepository.findAll(pageable).map(this::toMobileUnitResponse);
     }
@@ -235,9 +256,6 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      */
     @Transactional(readOnly = true)
     public java.util.Optional<MobileUnitResponse> getById(UUID id) {
-        if (mobileUnitRepository == null) {
-            return java.util.Optional.empty();
-        }
         return mobileUnitRepository.findById(id).map(this::toMobileUnitResponse);
     }
 
@@ -250,15 +268,16 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      */
     @Transactional
     public MobileUnitResponse patch(UUID id, Map<String, Object> patch) {
-        MobileUnitEntity entity = mobileUnitRepository == null ? null : mobileUnitRepository.findById(id).orElse(null);
+        MobileUnitEntity entity = mobileUnitRepository.findById(id).orElse(null);
         if (entity == null) {
             return MobileUnitResponse.builder()
                     .id(id)
                     .name((String) patch.get("name"))
-                    .status(patch.containsKey("status") ? normalizeStatus(String.valueOf(patch.get("status")))
-                            : "INACTIVE")
-                    .travelBufferPolicyId(parseUuid(patch.get("travelBufferPolicyId")))
-                    .notes((String) patch.get("notes"))
+                    .status(patch.containsKey(PATCH_KEY_STATUS)
+                            ? normalizeStatus(String.valueOf(patch.get(PATCH_KEY_STATUS)))
+                            : STATUS_INACTIVE)
+                    .travelBufferPolicyId(parseUuid(patch.get(PATCH_KEY_TRAVEL_BUFFER_POLICY_ID)))
+                    .notes((String) patch.get(PATCH_KEY_NOTES))
                     .updatedAt(Instant.now(clock))
                     .build();
         }
@@ -266,24 +285,22 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         if (patch.containsKey("name")) {
             entity.setName((String) patch.get("name"));
         }
-        if (patch.containsKey("status")) {
-            entity.setStatus(normalizeStatus(String.valueOf(patch.get("status"))));
+        if (patch.containsKey(PATCH_KEY_STATUS)) {
+            entity.setStatus(normalizeStatus(String.valueOf(patch.get(PATCH_KEY_STATUS))));
         }
-        if (patch.containsKey("notes")) {
-            entity.setNotes((String) patch.get("notes"));
+        if (patch.containsKey(PATCH_KEY_NOTES)) {
+            entity.setNotes((String) patch.get(PATCH_KEY_NOTES));
         }
-        if (patch.containsKey("travelBufferPolicyId")) {
-            entity.setTravelBufferPolicyId(parseUuid(patch.get("travelBufferPolicyId")));
+        if (patch.containsKey(PATCH_KEY_TRAVEL_BUFFER_POLICY_ID)) {
+            entity.setTravelBufferPolicyId(parseUuid(patch.get(PATCH_KEY_TRAVEL_BUFFER_POLICY_ID)));
         }
         entity.setUpdatedAt(Instant.now(clock));
 
         MobileUnitEntity saved = entity;
-        if (mobileUnitRepository != null) {
-            try {
-                saved = mobileUnitRepository.save(entity);
-            } catch (DataIntegrityViolationException exception) {
-                throw toMobileUnitConflictException(exception);
-            }
+        try {
+            saved = mobileUnitRepository.save(entity);
+        } catch (DataIntegrityViolationException exception) {
+            throw toMobileUnitConflictException(exception);
         }
         return toMobileUnitResponse(saved);
     }
@@ -297,9 +314,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      */
     @Transactional
     public List<CoverageRuleResponse> replaceCoverageRules(UUID id, List<CoverageRuleRequest> rules) {
-        if (coverageRuleRepository == null) {
-            return List.of();
-        }
+        List<CoverageRuleRequest> typedRules = rules == null ? List.of() : rules;
+        return replaceCoverageRulesInternal(id, typedRules);
+    }
+
+    private List<CoverageRuleResponse> replaceCoverageRulesInternal(UUID id, List<CoverageRuleRequest> rules) {
         MobileUnitEntity unit = mobileUnitRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Mobile unit not found"));
 
@@ -308,7 +327,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         List<MobileUnitCoverageRuleEntity> entities = new ArrayList<>();
         for (CoverageRuleRequest rule : rules) {
             ServiceAreaEntity serviceArea = null;
-            if (rule.getServiceAreaId() != null && serviceAreaRepository != null) {
+            if (rule.getServiceAreaId() != null) {
                 serviceArea = serviceAreaRepository.findById(rule.getServiceAreaId()).orElse(null);
             }
             entities.add(MobileUnitCoverageRuleEntity.builder()
@@ -337,7 +356,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         UUID unitId = parseUuid(id);
         List<CoverageRuleRequest> typedRules = rulePayload == null ? List.of()
                 : rulePayload.stream().map(this::toCoverageRuleRequest).toList();
-        return replaceCoverageRules(unitId, typedRules);
+        return replaceCoverageRulesInternal(unitId, typedRules);
     }
 
     /**
@@ -348,9 +367,6 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      */
     @Transactional(readOnly = true)
     public List<CoverageRuleResponse> getCoverageRules(UUID id) {
-        if (coverageRuleRepository == null) {
-            return List.of();
-        }
         return coverageRuleRepository.findByMobileUnit_IdOrderByPriorityAsc(id).stream()
                 .map(this::toCoverageRuleResponse)
                 .toList();
@@ -366,9 +382,6 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      */
     @Transactional(readOnly = true)
     public List<EligibleMobileUnitResponse> findEligibleMobileUnits(String postalCode, String countryCode, Instant at) {
-        if (coverageRuleRepository == null) {
-            return List.of();
-        }
         LocalDate atDate = at == null ? LocalDate.now(ZoneOffset.UTC) : at.atZone(ZoneOffset.UTC).toLocalDate();
         List<MobileUnitCoverageRuleEntity> rules = coverageRuleRepository.findEligibleCoverageRules(postalCode,
                 countryCode,
@@ -377,7 +390,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         Map<UUID, EligibleMobileUnitResponse> ordered = new LinkedHashMap<>();
         for (MobileUnitCoverageRuleEntity rule : rules) {
             MobileUnitEntity unit = rule.getMobileUnit();
-            if (unit == null || !"ACTIVE".equalsIgnoreCase(unit.getStatus())) {
+            if (unit == null || !STATUS_ACTIVE.equalsIgnoreCase(unit.getStatus())) {
                 continue;
             }
             ordered.putIfAbsent(unit.getId(), EligibleMobileUnitResponse.builder()
@@ -402,9 +415,9 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         return MobileUnitRequest.builder()
                 .name((String) request.get("name"))
                 .baseLocationId(parseUuid(request.get("baseLocationId")))
-                .status(request.get("status") == null ? null : String.valueOf(request.get("status")))
-                .travelBufferPolicyId(parseUuid(request.get("travelBufferPolicyId")))
-                .notes((String) request.get("notes"))
+                .status(request.get(PATCH_KEY_STATUS) == null ? null : String.valueOf(request.get(PATCH_KEY_STATUS)))
+                .travelBufferPolicyId(parseUuid(request.get(PATCH_KEY_TRAVEL_BUFFER_POLICY_ID)))
+                .notes((String) request.get(PATCH_KEY_NOTES))
                 .capabilityIds(rawCapabilityIds.stream().map(String::valueOf).toList())
                 .coverageRules(rawCoverage.stream().map(this::toCoverageRuleRequest).toList())
                 .build();
@@ -417,13 +430,13 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .priority(parseInteger(source.get("priority")))
                 .validFrom(parseLocalDate(source.get("validFrom")))
                 .validTo(parseLocalDate(source.get("validTo")))
-                .maxDistance(parseBigDecimal(source.get("maxDistance")))
+                .maxDistance(parseBigDecimal(source.get(FIELD_MAX_DISTANCE)))
                 .build();
     }
 
     private Map<String, Object> toTierMap(CoverageRuleRequest request) {
         Map<String, Object> map = new HashMap<>();
-        map.put("maxDistance", request.getMaxDistance());
+        map.put(FIELD_MAX_DISTANCE, request.getMaxDistance());
         return map;
     }
 
@@ -432,72 +445,80 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             return Set.of();
         }
 
-        List<String> normalized = capabilityIds.stream()
+        CapabilityResolutionContext context = buildCapabilityResolutionContext(capabilityIds);
+        Set<UUID> resolvedIds = new LinkedHashSet<>();
+        resolvedIds.addAll(resolveCapabilityIdsByUuid(context.requestedIds, context.invalidValues));
+        resolvedIds.addAll(resolveCapabilityIdsByCode(context.requestedCodes, context.invalidValues));
+        assertNoInvalidCapabilityValues(context.invalidValues);
+        return resolvedIds;
+    }
+
+    private CapabilityResolutionContext buildCapabilityResolutionContext(List<String> capabilityIds) {
+        CapabilityResolutionContext context = new CapabilityResolutionContext();
+        List<String> normalizedValues = capabilityIds.stream()
                 .map(value -> value == null ? "" : value.trim())
                 .toList();
-
-        Set<String> invalidValues = new LinkedHashSet<>();
-        Set<UUID> requestedIds = new LinkedHashSet<>();
-        Map<String, UUID> requestedCodes = new LinkedHashMap<>();
-        for (String value : normalized) {
+        for (String value : normalizedValues) {
             if (value.isBlank()) {
-                invalidValues.add("<blank>");
+                context.invalidValues.add("<blank>");
                 continue;
             }
             UUID parsedId = parseUuid(value);
             if (parsedId != null) {
-                requestedIds.add(parsedId);
+                context.requestedIds.add(parsedId);
             } else {
-                requestedCodes.put(value.toUpperCase(Locale.ROOT), null);
+                context.requestedCodes.put(value.toUpperCase(Locale.ROOT), null);
             }
         }
+        return context;
+    }
 
-        if (serviceLocationCapabilityRepository == null) {
-            if (!invalidValues.isEmpty() || !requestedCodes.isEmpty()) {
-                Set<String> fallbackInvalid = new LinkedHashSet<>(invalidValues);
-                fallbackInvalid.addAll(requestedCodes.keySet());
-                throw new IllegalArgumentException("Invalid capabilityIds: " + String.join(", ", fallbackInvalid));
-            }
-            return requestedIds;
+    private Set<UUID> resolveCapabilityIdsByUuid(Set<UUID> requestedIds, Set<String> invalidValues) {
+        if (requestedIds.isEmpty()) {
+            return Set.of();
         }
-
+        Set<UUID> foundIds = new LinkedHashSet<>();
+        for (ServiceLocationCapabilityEntity capability : serviceLocationCapabilityRepository
+                .findAllById(requestedIds)) {
+            foundIds.add(capability.getId());
+        }
         Set<UUID> resolvedIds = new LinkedHashSet<>();
-        if (!requestedIds.isEmpty()) {
-            Set<UUID> foundIds = new LinkedHashSet<>();
-            for (ServiceLocationCapabilityEntity capability : serviceLocationCapabilityRepository
-                    .findAllById(requestedIds)) {
-                foundIds.add(capability.getId());
-            }
-            for (UUID requestedId : requestedIds) {
-                if (foundIds.contains(requestedId)) {
-                    resolvedIds.add(requestedId);
-                } else {
-                    invalidValues.add(requestedId.toString());
-                }
+        for (UUID requestedId : requestedIds) {
+            if (foundIds.contains(requestedId)) {
+                resolvedIds.add(requestedId);
+            } else {
+                invalidValues.add(requestedId.toString());
             }
         }
+        return resolvedIds;
+    }
 
-        if (!requestedCodes.isEmpty()) {
-            List<String> requestedCodeKeys = new ArrayList<>(requestedCodes.keySet());
-            for (ServiceLocationCapabilityEntity capability : serviceLocationCapabilityRepository
-                    .findByCodeIn(requestedCodeKeys)) {
-                if (capability.getCode() != null) {
-                    requestedCodes.put(capability.getCode().toUpperCase(Locale.ROOT), capability.getId());
-                }
-            }
-            for (Map.Entry<String, UUID> entry : requestedCodes.entrySet()) {
-                if (entry.getValue() == null) {
-                    invalidValues.add(entry.getKey());
-                } else {
-                    resolvedIds.add(entry.getValue());
-                }
+    private Set<UUID> resolveCapabilityIdsByCode(Map<String, UUID> requestedCodes, Set<String> invalidValues) {
+        if (requestedCodes.isEmpty()) {
+            return Set.of();
+        }
+        List<String> requestedCodeKeys = new ArrayList<>(requestedCodes.keySet());
+        for (ServiceLocationCapabilityEntity capability : serviceLocationCapabilityRepository
+                .findByCodeIn(requestedCodeKeys)) {
+            if (capability.getCode() != null) {
+                requestedCodes.put(capability.getCode().toUpperCase(Locale.ROOT), capability.getId());
             }
         }
+        Set<UUID> resolvedIds = new LinkedHashSet<>();
+        for (Map.Entry<String, UUID> entry : requestedCodes.entrySet()) {
+            if (entry.getValue() == null) {
+                invalidValues.add(entry.getKey());
+            } else {
+                resolvedIds.add(entry.getValue());
+            }
+        }
+        return resolvedIds;
+    }
 
+    private void assertNoInvalidCapabilityValues(Set<String> invalidValues) {
         if (!invalidValues.isEmpty()) {
             throw new IllegalArgumentException("Invalid capabilityIds: " + String.join(", ", invalidValues));
         }
-        return resolvedIds;
     }
 
     private MobileUnitResponse toMobileUnitResponse(MobileUnitEntity entity) {
@@ -530,7 +551,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
 
     private String normalizeStatus(String status) {
         if (status == null || status.isBlank()) {
-            return "INACTIVE";
+            return STATUS_INACTIVE;
         }
         return status.trim().toUpperCase(Locale.ROOT);
     }
@@ -540,12 +561,18 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             return null;
         }
         if (entry instanceof Map<?, ?> map) {
-            return parseBigDecimal(map.get("maxDistance"));
+            return parseBigDecimal(map.get(FIELD_MAX_DISTANCE));
         }
         if (entry instanceof CoverageRuleRequest request) {
             return request.getMaxDistance();
         }
         return parseBigDecimal(entry);
+    }
+
+    private static final class CapabilityResolutionContext {
+        private final Set<String> invalidValues = new LinkedHashSet<>();
+        private final Set<UUID> requestedIds = new LinkedHashSet<>();
+        private final Map<String, UUID> requestedCodes = new LinkedHashMap<>();
     }
 
     private Integer parseInteger(Object value) {
