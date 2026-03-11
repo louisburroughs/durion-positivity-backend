@@ -51,6 +51,7 @@ import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
 import com.positivity.workorder.internal.exception.WorkSessionStateException;
 import com.positivity.workorder.internal.repository.BreakSegmentRepository;
 import com.positivity.workorder.internal.repository.WorkSessionRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.WorkSessionServiceImpl;
 
 /**
@@ -92,6 +93,9 @@ class WorkSessionServiceImplTest {
         private BreakSegmentRepository breakSegmentRepository;
 
         @Mock
+        private WorkorderRepository workorderRepository;
+
+        @Mock
         private ApplicationEventPublisher eventPublisher;
 
         @InjectMocks
@@ -111,6 +115,7 @@ class WorkSessionServiceImplTest {
         void setUp() {
                 ReflectionTestUtils.setField(workSessionService, "allowOverlappingSessions", false);
                 setAuthenticatedUser(List.of(), SYSTEM_USER_ID.toString());
+                when(workorderRepository.findById(WORK_ORDER_ID)).thenReturn(Optional.of(new Workorder(WORK_ORDER_ID)));
         }
 
         @AfterEach
