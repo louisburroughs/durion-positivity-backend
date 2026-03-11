@@ -89,11 +89,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
 
         @AfterEach
         void tearDown() {
-                laborEntryRepository.deleteAll();
-                workorderServiceRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== LABOR TRACKING TESTS ==========

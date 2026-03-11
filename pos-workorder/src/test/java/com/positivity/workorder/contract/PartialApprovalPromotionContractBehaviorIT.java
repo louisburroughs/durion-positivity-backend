@@ -69,11 +69,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
 
         @AfterEach
         void tearDown() {
-                workorderServiceRepository.deleteAll();
-                workorderPartRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== PARTIAL APPROVAL PROMOTION TESTS ==========

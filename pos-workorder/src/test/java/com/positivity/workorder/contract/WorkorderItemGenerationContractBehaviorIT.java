@@ -72,11 +72,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
         @AfterEach
         void tearDown() {
-                workorderServiceRepository.deleteAll();
-                workorderPartRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== WORKORDER ITEM GENERATION TESTS ==========

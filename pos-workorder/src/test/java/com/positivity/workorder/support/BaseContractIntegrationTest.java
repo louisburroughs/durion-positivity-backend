@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -40,6 +41,9 @@ public abstract class BaseContractIntegrationTest {
 
     @Autowired(required = false)
     private IdempotencyKeyRepository idempotencyKeyRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     protected static final String SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
     private static final String TEST_BEARER_TOKEN = buildTestOnlyBearerToken(SYSTEM_USER_ID);
@@ -101,10 +105,27 @@ public abstract class BaseContractIntegrationTest {
 
     @BeforeEach
     void configureRestAssuredDefaults() {
-        if (idempotencyKeyRepository != null) {
-            idempotencyKeyRepository.deleteAll();
-        }
+        purgeTestData();
         RestAssured.port = port;
+    }
+
+    /**
+     * Clears all application tables for test isolation while tolerating FK-heavy
+     * schemas.
+     */
+    protected void purgeTestData() {
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        try {
+            var tableNames = jdbcTemplate.queryForList(
+                    "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
+                            + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_TYPE = 'BASE TABLE'",
+                    String.class);
+            for (String tableName : tableNames) {
+                jdbcTemplate.execute("TRUNCATE TABLE \"" + tableName + "\"");
+            }
+        } finally {
+            jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
+        }
     }
 
     protected RequestSpecification givenWithGatewayAuth() {

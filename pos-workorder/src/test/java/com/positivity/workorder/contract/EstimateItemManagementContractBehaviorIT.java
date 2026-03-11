@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.is;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +27,11 @@ import com.positivity.workorder.support.BaseContractIntegrationTest;
  * - State constraints: Proper error codes for invalid states
  */
 class EstimateItemManagementContractBehaviorIT extends BaseContractIntegrationTest {
+
+        @AfterEach
+        void tearDown() {
+                purgeTestData();
+        }
 
         @Test
         @DisplayName("Contract: Add PART item to draft estimate - Happy Path")

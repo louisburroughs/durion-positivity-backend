@@ -93,15 +93,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
 
         @AfterEach
         void tearDown() {
-                laborEntryRepository.deleteAll();
-                technicianAssignmentRepository.deleteAll();
-                workorderPartRepository.deleteAll();
-                workorderServiceRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
-                customerRepository.deleteAll();
-                vehicleRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== FULL AUTHORITIES TESTS ==========

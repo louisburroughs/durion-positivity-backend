@@ -70,12 +70,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        changeRequestRepository.deleteAll();
-        workorderServiceRepository.deleteAll();
-        workorderPartRepository.deleteAll();
-        workorderRepository.deleteAll();
-        estimateRepository.deleteAll();
-    }
+                purgeTestData();
+        }
 
     // ========== CHANGE REQUEST CREATION TESTS ==========
 

@@ -19,8 +19,10 @@ import com.positivity.workorder.internal.exception.WorkSessionLockedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
 import com.positivity.workorder.internal.exception.WorkSessionStateException;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.BreakSegmentRepository;
 import com.positivity.workorder.internal.repository.WorkSessionRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.WorkSessionService;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -49,6 +51,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     private final WorkSessionRepository workSessionRepository;
     private final BreakSegmentRepository breakSegmentRepository;
+    private final WorkorderRepository workorderRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Value("${timekeeping.allowOverlappingSessions:false}")
@@ -78,9 +81,12 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         }
 
         // 3. Build and save session
+        Workorder workorder = workorderRepository.findById(request.getWorkOrderId())
+                .orElseThrow(() -> new WorkorderNotFoundException(request.getWorkOrderId()));
+
         WorkSession session = WorkSession.builder()
                 .mechanicId(request.getMechanicId())
-                .workOrder(new Workorder(request.getWorkOrderId()))
+                .workOrder(workorder)
                 .workOrderTaskId(request.getWorkOrderTaskId())
                 .locationId(request.getLocationId())
                 .resourceId(request.getResourceId())

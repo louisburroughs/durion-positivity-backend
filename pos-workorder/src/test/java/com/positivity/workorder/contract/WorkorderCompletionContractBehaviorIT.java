@@ -24,14 +24,17 @@ import org.springframework.context.annotation.Import;
 
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.ChangeRequest;
+import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.entity.WorkorderSnapshot;
+import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -62,6 +65,9 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         private WorkorderSnapshotRepository workorderSnapshotRepository;
 
         @Autowired
+        private EstimateRepository estimateRepository;
+
+        @Autowired
         private AuditEventRepository auditEventRepository;
 
         @Autowired
@@ -69,12 +75,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
 
         @AfterEach
         void tearDown() {
-                changeRequestRepository.deleteAll();
-                workorderPartRepository.deleteAll();
-                workorderServiceRepository.deleteAll();
-                workorderSnapshotRepository.deleteAll();
-                auditEventRepository.deleteAll();
-                workorderRepository.deleteAll();
+                purgeTestData();
         }
 
         @Test
@@ -278,11 +279,21 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         }
 
         private UUID seedWorkorder(WorkorderStatus status, boolean isReopened) {
+                Estimate estimate = estimateRepository.save(Estimate.builder()
+                                .estimateNumber("EST-CWC-" + UUID.randomUUID())
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .status(EstimateStatus.APPROVED)
+                                .createdById("system")
+                                .build());
+
                 Workorder workorder = Workorder.builder()
                                 .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .shopId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .approvalId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .estimate(estimate)
                                 .status(status)
                                 .isReopened(isReopened)
                                 .completedAt(status == WorkorderStatus.COMPLETED

@@ -47,9 +47,8 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
 
     @AfterEach
     void tearDown() {
-        estimateItemRepository.deleteAll();
-        estimateRepository.deleteAll();
-    }
+                purgeTestData();
+        }
 
     @Test
     @DisplayName("Contract: Calculate taxes and totals for draft estimate - Happy Path")

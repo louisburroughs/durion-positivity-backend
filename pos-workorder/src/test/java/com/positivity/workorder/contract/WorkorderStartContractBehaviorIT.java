@@ -76,11 +76,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
         @AfterEach
         void tearDown() {
-                changeRequestRepository.deleteAll();
-                transitionRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== WORKORDER START TESTS ==========

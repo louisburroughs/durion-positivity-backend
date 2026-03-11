@@ -74,11 +74,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
 
         @AfterEach
         void tearDown() {
-                usageEventRepository.deleteAll();
-                workorderPartRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== PARTS USAGE TRACKING TESTS ==========

@@ -23,7 +23,6 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.workorder.internal.entity.IdempotencyKey;
-import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
 import com.positivity.workorder.internal.service.IdempotencyServiceImpl;
 
@@ -63,7 +62,7 @@ class IdempotencyServiceTest {
     void getExistingWorkorderId_existingNotExpired_returnsWorkorderId() {
         // Arrange
         Instant futureExpiry = Instant.now(TEST_CLOCK).plus(1, ChronoUnit.HOURS);
-        IdempotencyKey key = new IdempotencyKey(testKeyValue, new Workorder(testWorkorderId), futureExpiry);
+        IdempotencyKey key = new IdempotencyKey(testKeyValue, testWorkorderId, futureExpiry);
         when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
 
         // Act
@@ -79,7 +78,7 @@ class IdempotencyServiceTest {
     void getExistingWorkorderId_expired_returnsEmpty() {
         // Arrange
         Instant pastExpiry = Instant.now(TEST_CLOCK).minus(1, ChronoUnit.HOURS);
-        IdempotencyKey key = new IdempotencyKey(testKeyValue, new Workorder(testWorkorderId), pastExpiry);
+        IdempotencyKey key = new IdempotencyKey(testKeyValue, testWorkorderId, pastExpiry);
         when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
 
         // Act

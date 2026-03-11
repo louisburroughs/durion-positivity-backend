@@ -15,6 +15,7 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkexecTimeTrackingService;
 import lombok.RequiredArgsConstructor;
@@ -48,8 +49,6 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
         private final Clock clock;
 
         private static final String SYSTEM_USER_ID = "system";
-        private static final UUID UNSPECIFIED_WORKORDER_ITEM_ID = UUID
-                        .fromString("00000000-0000-0000-0000-000000000001");
 
         private static final Set<WorkorderStatus> TIMER_ELIGIBLE_STATUSES = Set.of(
                         WorkorderStatus.APPROVED,
@@ -60,6 +59,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
 
         private final WorkorderRepository workorderRepository;
         private final WorkorderLaborEntryRepository laborEntryRepository;
+        private final WorkorderServiceRepository workorderServiceRepository;
         private final TechnicianAssignmentRepository technicianAssignmentRepository;
         private final IdempotencyService idempotencyService;
 
@@ -168,16 +168,17 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                 .longValue();
                 LocalDateTime startTime = endTime.minusSeconds(secondsWorked);
 
-                UUID workorderItemId = UUID.nameUUIDFromBytes(
-                                ("workexec-labor-performed:" + request.getSource().getSourceReferenceId())
-                                                .getBytes(StandardCharsets.UTF_8));
+                WorkorderService workorderService = resolveOrCreateWorkorderService(
+                                workorder,
+                                null,
+                                request.getTechnicianId());
 
                 String notes = "sourceSystem=" + request.getSource().getSystem() +
                                 ";sourceReferenceId=" + request.getSource().getSourceReferenceId();
 
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderService(new WorkorderService(workorderItemId))
+                                .workorderService(workorderService)
                                 .technicianId(request.getTechnicianId())
                                 .startTime(startTime)
                                 .endTime(endTime)
@@ -246,13 +247,14 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                         "Mechanic already has an active timer");
                 }
 
-                UUID workorderItemId = request.getWorkorderItemId() != null
-                                ? request.getWorkorderItemId()
-                                : UNSPECIFIED_WORKORDER_ITEM_ID;
+                WorkorderService workorderService = resolveOrCreateWorkorderService(
+                                workorder,
+                                request.getWorkorderItemId(),
+                                mechanicId);
 
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderService(new WorkorderService(workorderItemId))
+                                .workorderService(workorderService)
                                 .technicianId(mechanicId)
                                 .startTime(LocalDateTime.now(ZoneOffset.UTC))
                                 .hoursWorked(BigDecimal.ZERO)
@@ -315,21 +317,47 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                         .getSeconds();
                 }
 
-                UUID workorderItemId = UNSPECIFIED_WORKORDER_ITEM_ID.equals(entry.getWorkorderServiceId())
-                                ? null
-                                : entry.getWorkorderServiceId();
-
                 return WorkexecTimerEntryResponse.builder()
                                 .timeEntryId(entry.getId())
                                 .mechanicId(entry.getTechnicianId())
                                 .workorderId(entry.getWorkorder().getId())
-                                .workorderItemId(workorderItemId)
+                                .workorderItemId(entry.getWorkorderServiceId())
                                 .laborCode(entry.getNotes())
                                 .startTime(entry.getStartTime())
                                 .endTime(entry.getEndTime())
                                 .durationInSeconds(durationInSeconds)
                                 .status(entry.getEndTime() == null ? "ACTIVE" : "COMPLETED")
                                 .build();
+        }
+
+        @NonNull
+        private WorkorderService resolveOrCreateWorkorderService(
+                        @NonNull Workorder workorder,
+                        @Nullable UUID requestedWorkorderItemId,
+                        @Nullable UUID technicianId) {
+                if (requestedWorkorderItemId != null) {
+                        WorkorderService service = workorderServiceRepository.findById(requestedWorkorderItemId)
+                                        .orElseThrow(() -> new NoSuchElementException(
+                                                        "Workorder service not found: " + requestedWorkorderItemId));
+                        if (service.getWorkOrder() != null
+                                        && !workorder.getId().equals(service.getWorkOrder().getId())) {
+                                throw new WorkexecTimeTrackingService.WorkexecConflictException(
+                                                "INVALID_STATE",
+                                                "workorderItemId does not belong to the provided workorder");
+                        }
+                        return service;
+                }
+
+                return workorderServiceRepository.findByWorkOrder_Id(workorder.getId()).stream()
+                                .findFirst()
+                                .orElseGet(() -> workorderServiceRepository.save(WorkorderService.builder()
+                                                .workOrder(workorder)
+                                                .serviceEntityId(UUID.nameUUIDFromBytes(
+                                                                ("workexec-auto-service:" + workorder.getId())
+                                                                                .getBytes(StandardCharsets.UTF_8)))
+                                                .technicianId(technicianId)
+                                                .description("Workexec auto-created labor service")
+                                                .build()));
         }
 
         private boolean isBlockedForLaborPosting(Workorder workorder) {

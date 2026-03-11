@@ -636,13 +636,8 @@ public class EstimateServiceImpl implements EstimateService {
                                 .findApplicableConfigurations(locationId, customerId);
 
                 if (configs.isEmpty()) {
-                        // Create and return default configuration
-                        return ApprovalConfiguration.builder()
-                                        .approvalMethod(ApprovalConfiguration.ApprovalMethod.CLICK_CONFIRM)
-                                        .declineExpiryDays(30)
-                                        .requireSignature(false)
-                                        .priority(0)
-                                        .build();
+                        // No persisted configuration found; keep relation null on Estimate.
+                        return null;
                 }
 
                 // Return highest priority configuration

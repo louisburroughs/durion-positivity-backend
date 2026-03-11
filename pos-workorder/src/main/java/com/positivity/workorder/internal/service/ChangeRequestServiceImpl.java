@@ -235,7 +235,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Create immutable ApprovalRecord for audit trail
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
-                .changeRequest(new ChangeRequest(changeRequestId))
+                .changeRequest(changeRequest)
                 .workorder(changeRequest.getWorkorder())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED)
                 .resolvedAt(LocalDateTime.now(clock))
@@ -280,7 +280,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Create immutable ApprovalRecord for audit trail
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
-                .changeRequest(new ChangeRequest(changeRequestId))
+                .changeRequest(changeRequest)
                 .workorder(changeRequest.getWorkorder())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.REJECTED)
                 .resolvedAt(LocalDateTime.now(clock))
@@ -328,7 +328,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Create immutable ApprovalRecord for audit trail with exception flag
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
-                .changeRequest(new ChangeRequest(changeRequestId))
+                .changeRequest(changeRequest)
                 .workorder(changeRequest.getWorkorder())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED_WITH_EXCEPTION)
                 .resolvedAt(LocalDateTime.now(clock))
