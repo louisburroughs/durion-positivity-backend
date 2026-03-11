@@ -31,6 +31,7 @@ import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
@@ -40,6 +41,7 @@ import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
 import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.service.APPaymentFailurePersistenceService;
 import com.positivity.accounting.internal.service.APPaymentServiceImpl;
@@ -71,6 +73,9 @@ class APPaymentServiceTest {
     private VendorBillRepository billRepository;
 
     @Mock
+    private JournalEntryRepository journalEntryRepository;
+
+    @Mock
     private PaymentGatewayProvider paymentGateway;
 
     @Mock
@@ -90,8 +95,8 @@ class APPaymentServiceTest {
         testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testPaymentRef = "PAY-REF-001";
 
-        // Default: allocationRepository.findByPaymentIdOrderByAllocationSequenceAsc returns empty
-        when(allocationRepository.findByPaymentIdOrderByAllocationSequenceAsc(any(UUID.class)))
+        // Default: allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc returns empty
+        when(allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc(any(UUID.class)))
                 .thenReturn(List.of());
         // Default: allocationRepository.saveAll returns empty list
         when(allocationRepository.saveAll(any())).thenReturn(List.of());
@@ -175,7 +180,7 @@ class APPaymentServiceTest {
         APPayment existingPayment = buildExistingPayment(TEST_PAYMENT_ID, testPaymentRef,
                 testVendorId, new BigDecimal("1500.00"), PaymentMethod.ACH);
         when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.of(existingPayment));
-        when(allocationRepository.findByPaymentIdOrderByAllocationSequenceAsc(TEST_PAYMENT_ID))
+        when(allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc(TEST_PAYMENT_ID))
                 .thenReturn(List.of());
 
         APPaymentResponse result = service.executePayment(request, "test-user");
@@ -358,8 +363,11 @@ class APPaymentServiceTest {
         APPayment payment = buildExistingPayment(TEST_PAYMENT_ID, testPaymentRef,
                 testVendorId, new BigDecimal("1500.00"), PaymentMethod.ACH);
         payment.setStatus(APPaymentStatus.GL_POST_PENDING);
+        JournalEntry journalEntry = new JournalEntry();
+        journalEntry.setJournalEntryId(journalEntryId);
 
         when(paymentRepository.findById(TEST_PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(journalEntryRepository.findById(journalEntryId)).thenReturn(Optional.of(journalEntry));
         when(paymentRepository.save(any(APPayment.class))).thenReturn(payment);
 
         service.acknowledgeGLPosted(TEST_PAYMENT_ID, journalEntryId);
