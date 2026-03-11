@@ -22,8 +22,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -35,6 +38,10 @@ import java.util.UUID;
 @Slf4j
 @Tag(name = "Audit Trail", description = "Audit trail operations for tracking accounting exceptions and overrides")
 public class AuditTrailController {
+
+    private static final String X_CORRELATION_ID = "X-Correlation-Id";
+    private static final String INTERNAL_ERROR_CODE = "INTERNAL_ERROR";
+    private static final String AUTHORIZATION_DENIED_CODE = "AUTHORIZATION_DENIED";
 
     private final AuditTrailService auditService;
     private final AuditTrailQueryService queryService;
@@ -53,18 +60,22 @@ public class AuditTrailController {
     @PostMapping("/price-override")
     @EmitEvent(id = "ACCOUNTING_AUDIT_PRICE_OVERRIDE", apiVersion = "1")
     @PreAuthorize("hasAuthority('accounting:events:submit')")
-    public ResponseEntity<?> recordPriceOverride(@Valid @RequestBody PriceOverrideRequest request) {
+    public ResponseEntity<Object> recordPriceOverride(@Valid @RequestBody PriceOverrideRequest request, HttpServletRequest httpRequest) {
         try {
             AuditTrailResponse response = auditService.recordPriceOverride(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            return ResponseEntity.status(HttpStatus.CREATED).body((Object) response);
         } catch (AuditTrailAuthorizationException e) {
             log.warn("Price override authorization denied: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", e.getMessage()));
+                    .body(buildErrorResponse(AUTHORIZATION_DENIED_CODE, e.getMessage(), HttpStatus.FORBIDDEN, httpRequest));
         } catch (Exception e) {
             log.error("Error recording price override", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to record price override"));
+                    .body(buildErrorResponse(
+                            INTERNAL_ERROR_CODE,
+                            "Failed to record price override",
+                            HttpStatus.INTERNAL_SERVER_ERROR,
+                            httpRequest));
         }
     }
 
@@ -82,18 +93,22 @@ public class AuditTrailController {
     @PostMapping("/refund")
     @EmitEvent(id = "ACCOUNTING_AUDIT_REFUND", apiVersion = "1")
     @PreAuthorize("hasAuthority('accounting:events:submit')")
-    public ResponseEntity<?> recordRefund(@Valid @RequestBody RefundRequest request) {
+    public ResponseEntity<Object> recordRefund(@Valid @RequestBody RefundRequest request, HttpServletRequest httpRequest) {
         try {
             AuditTrailResponse response = auditService.recordRefund(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            return ResponseEntity.status(HttpStatus.CREATED).body((Object) response);
         } catch (AuditTrailAuthorizationException e) {
             log.warn("Refund authorization denied: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", e.getMessage()));
+                    .body(buildErrorResponse(AUTHORIZATION_DENIED_CODE, e.getMessage(), HttpStatus.FORBIDDEN, httpRequest));
         } catch (Exception e) {
             log.error("Error recording refund", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to record refund"));
+                    .body(buildErrorResponse(
+                            INTERNAL_ERROR_CODE,
+                            "Failed to record refund",
+                            HttpStatus.INTERNAL_SERVER_ERROR,
+                            httpRequest));
         }
     }
 
@@ -110,14 +125,18 @@ public class AuditTrailController {
     @PostMapping("/cancellation")
     @EmitEvent(id = "ACCOUNTING_AUDIT_CANCELLATION", apiVersion = "1")
     @PreAuthorize("hasAuthority('accounting:events:submit')")
-    public ResponseEntity<?> recordCancellation(@Valid @RequestBody CancellationRequest request) {
+    public ResponseEntity<Object> recordCancellation(@Valid @RequestBody CancellationRequest request, HttpServletRequest httpRequest) {
         try {
             AuditTrailResponse response = auditService.recordCancellation(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            return ResponseEntity.status(HttpStatus.CREATED).body((Object) response);
         } catch (Exception e) {
             log.error("Error recording cancellation", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to record cancellation"));
+                    .body(buildErrorResponse(
+                            INTERNAL_ERROR_CODE,
+                            "Failed to record cancellation",
+                            HttpStatus.INTERNAL_SERVER_ERROR,
+                            httpRequest));
         }
     }
 
@@ -130,7 +149,7 @@ public class AuditTrailController {
             @ApiResponse(responseCode = "404", description = "Order not found"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
-    @GetMapping("/order/{orderId}")
+    @GetMapping({"/order/{orderId}", "/by-order/{orderId}"})
     @PreAuthorize("hasAuthority('accounting:events:view')")
     public ResponseEntity<List<AuditTrailResponse>> getByOrderId(
             @Parameter(description = "Order ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID orderId) {
@@ -212,9 +231,18 @@ public class AuditTrailController {
         return ResponseEntity.ok(entries);
     }
 
-    private static class Map {
-        public static java.util.Map<String, String> of(String key, String value) {
-            return java.util.Collections.singletonMap(key, value);
+    private Map<String, Object> buildErrorResponse(String code, String message, HttpStatus status, HttpServletRequest request) {
+        String correlationId = request.getHeader(X_CORRELATION_ID);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
         }
+        return Map.of(
+                "code", code,
+                "message", message,
+                "error", message,
+                "status", status.value(),
+                "timestamp", Instant.now().toString(),
+                "correlationId", correlationId);
     }
+
 }
