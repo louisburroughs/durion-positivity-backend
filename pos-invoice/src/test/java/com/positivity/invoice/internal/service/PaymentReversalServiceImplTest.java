@@ -34,6 +34,7 @@ import org.springframework.security.core.context.SecurityContextImpl;
 
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
+import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.RefundStatus;
@@ -215,7 +216,7 @@ class PaymentReversalServiceImplTest {
         PaymentIntent captured = capturedPaymentIntent();
         captured.setCreatedAt(OLD_CAPTURE);
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(captured));
-        when(refundRecordRepository.findByPaymentIntentId(PAYMENT_INTENT_ID)).thenReturn(List.of());
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of());
         GatewayPaymentResult successResult = successResult();
         when(paymentGatewayPort.refund(any())).thenReturn(successResult);
         when(refundRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -268,7 +269,7 @@ class PaymentReversalServiceImplTest {
     void refundPayment_success_createsRefundRecord() {
         PaymentIntent pi = capturedPaymentIntent(); // capturedAmount = 500
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
-        when(refundRecordRepository.findByPaymentIntentId(PAYMENT_INTENT_ID)).thenReturn(List.of()); // no prior refunds
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of()); // no prior refunds
 
         GatewayPaymentResult successResult = successResult();
         when(paymentGatewayPort.refund(any(GatewayRefundRequest.class))).thenReturn(successResult);
@@ -304,7 +305,7 @@ class PaymentReversalServiceImplTest {
         RefundRecord priorRefund = new RefundRecord();
         priorRefund.setAmount(BigDecimal.valueOf(100_00, 2));
         priorRefund.setStatus(RefundStatus.COMPLETED);
-        when(refundRecordRepository.findByPaymentIntentId(PAYMENT_INTENT_ID)).thenReturn(List.of(priorRefund));
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of(priorRefund));
 
         GatewayPaymentResult successResult = successResult();
         when(paymentGatewayPort.refund(any(GatewayRefundRequest.class))).thenReturn(successResult);
@@ -329,7 +330,7 @@ class PaymentReversalServiceImplTest {
     void refundPayment_exceedsRefundable_throwsInsufficientRefundableAmountException() {
         PaymentIntent pi = capturedPaymentIntent(); // capturedAmount = 500
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
-        when(refundRecordRepository.findByPaymentIntentId(PAYMENT_INTENT_ID)).thenReturn(List.of());
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of());
 
         // 200 > capturedAmount 100 — wait, capturedPaymentIntent has 500; trying 600 to
         // exceed
@@ -354,7 +355,7 @@ class PaymentReversalServiceImplTest {
         PaymentIntent pi = capturedPaymentIntent();
         pi.setCreatedAt(OLD_CAPTURE); // 182 days ago — outside 180-day refund window
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
-        when(refundRecordRepository.findByPaymentIntentId(PAYMENT_INTENT_ID)).thenReturn(List.of());
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of());
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
                 INVOICE_ID,
@@ -491,7 +492,7 @@ class PaymentReversalServiceImplTest {
     void refundPayment_gatewayFailure_savesFailedRefundRecord() {
         PaymentIntent pi = capturedPaymentIntent();
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
-        when(refundRecordRepository.findByPaymentIntentId(PAYMENT_INTENT_ID)).thenReturn(List.of());
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of());
 
         GatewayPaymentResult failResult = org.mockito.Mockito.mock(GatewayPaymentResult.class);
         when(failResult.isSuccessful()).thenReturn(false);
@@ -537,7 +538,7 @@ class PaymentReversalServiceImplTest {
     private PaymentIntent authorizedPaymentIntent() {
         PaymentIntent pi = new PaymentIntent();
         pi.setId(PAYMENT_INTENT_ID);
-        pi.setInvoiceId(INVOICE_ID);
+        pi.setInvoice(invoice(INVOICE_ID));
         pi.setStatus(PaymentIntentStatus.AUTHORIZED);
         pi.setAuthorizedAmount(BigDecimal.valueOf(200_00, 2));
         pi.setCapturedAmount(BigDecimal.ZERO);
@@ -553,7 +554,7 @@ class PaymentReversalServiceImplTest {
     private PaymentIntent capturedPaymentIntent() {
         PaymentIntent pi = new PaymentIntent();
         pi.setId(PAYMENT_INTENT_ID);
-        pi.setInvoiceId(INVOICE_ID);
+        pi.setInvoice(invoice(INVOICE_ID));
         pi.setStatus(PaymentIntentStatus.CAPTURED);
         pi.setAuthorizedAmount(BigDecimal.valueOf(500_00, 2));
         pi.setCapturedAmount(BigDecimal.valueOf(500_00, 2));
@@ -570,6 +571,12 @@ class PaymentReversalServiceImplTest {
         when(result.isSuccessful()).thenReturn(true);
         when(result.getGatewayReference()).thenReturn("gw-txn-xyz");
         return result;
+    }
+
+    private Invoice invoice(UUID id) {
+        Invoice invoice = new Invoice();
+        invoice.setId(id);
+        return invoice;
     }
 
     /**

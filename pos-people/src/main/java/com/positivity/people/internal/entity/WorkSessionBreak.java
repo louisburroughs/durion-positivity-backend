@@ -3,7 +3,11 @@ package com.positivity.people.internal.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -12,12 +16,14 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import jakarta.persistence.GeneratedValue;
 import com.positivity.shared.id.UUIDv7Id;
+
+import lombok.Data;
 
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "work_session_break")
+@Data
 public class WorkSessionBreak {
 
 	@Id
@@ -26,8 +32,13 @@ public class WorkSessionBreak {
 	@Column(name = "break_id", nullable = false, updatable = false, columnDefinition = "uuid")
 	private UUID breakId;
 
-	@Column(name = "session_id", nullable = false)
-	private UUID sessionId;
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "session_id", nullable = false)
+	private WorkSession session;
+
+	public UUID getSessionId() {
+		return session != null ? session.getSessionId() : null;
+	}
 
 	@Column(name = "started_at", nullable = false)
 	private Instant startedAt;
@@ -48,60 +59,6 @@ public class WorkSessionBreak {
 
 	@PrePersist
 	void ensureId() {
-	}
-
-	public UUID getBreakId() {
-		return breakId;
-	}
-
-	public void setBreakId(UUID breakId) {
-		this.breakId = breakId;
-	}
-
-	public UUID getSessionId() {
-		return sessionId;
-	}
-
-	public void setSessionId(UUID sessionId) {
-		this.sessionId = sessionId;
-	}
-
-	public Instant getStartedAt() {
-		return startedAt;
-	}
-
-	public void setStartedAt(Instant startedAt) {
-		this.startedAt = startedAt;
-	}
-
-	public Instant getEndedAt() {
-		return endedAt;
-	}
-
-	public void setEndedAt(Instant endedAt) {
-		this.endedAt = endedAt;
-	}
-
-	public String getActor() {
-		return actor;
-	}
-
-	public void setActor(String actor) {
-		this.actor = actor;
-	}
-
-	public Instant getCreatedAt() {
-		return createdAt;
-	}
-
-	public void setCreatedAt(Instant createdAt) {
-	}
-
-	public Instant getUpdatedAt() {
-		return updatedAt;
-	}
-
-	public void setUpdatedAt(Instant updatedAt) {
 	}
 
 }

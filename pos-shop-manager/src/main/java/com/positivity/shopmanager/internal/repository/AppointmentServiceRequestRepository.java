@@ -7,5 +7,5 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AppointmentServiceRequestRepository extends JpaRepository<AppointmentServiceRequest, UUID> {
-    List<AppointmentServiceRequest> findByAppointmentId(@NonNull UUID appointmentId);
+    List<AppointmentServiceRequest> findByAppointment_AppointmentId(@NonNull UUID appointmentId);
 }

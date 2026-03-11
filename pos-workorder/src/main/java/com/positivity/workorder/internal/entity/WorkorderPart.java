@@ -1,6 +1,5 @@
 package com.positivity.workorder.internal.entity;
 
-
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.shared.id.UUIDv7Id;
@@ -29,6 +28,10 @@ import java.util.UUID;
 })
 @EntityListeners(AuditingEntityListener.class)
 public class WorkorderPart {
+    public WorkorderPart(UUID id) {
+        this.id = id;
+    }
+
     @Id
     @GeneratedValue
     @UUIDv7Id
@@ -76,9 +79,11 @@ public class WorkorderPart {
     @Nullable
     private String taxCode; // Snapshotted tax code at promotion time
 
-    @Column(columnDefinition = "UUID")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "origin_estimate_item_id")
+    @ToString.Exclude
     @Nullable
-    private UUID originEstimateItemId; // Traceability link to source EstimateItem
+    private EstimateItem originEstimateItem; // Traceability link to source EstimateItem
 
     // Issue #49: Track substitution metadata for immutable substitution history.
     @Builder.Default
@@ -106,7 +111,10 @@ public class WorkorderPart {
     private WorkorderItemStatus status = WorkorderItemStatus.OPEN;
 
     // Reference to the change request that added this item
-    private UUID changeRequestId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "change_request_id")
+    @ToString.Exclude
+    private ChangeRequest changeRequest;
 
     // Emergency/Safety flags and documentation
     @Builder.Default
@@ -150,5 +158,25 @@ public class WorkorderPart {
      */
     public boolean canConsumeInventory() {
         return status != WorkorderItemStatus.PENDING_APPROVAL;
+    }
+
+    @Transient
+    public UUID getOriginEstimateItemId() {
+        return originEstimateItem != null ? originEstimateItem.getId() : null;
+    }
+
+    @Transient
+    public void setOriginEstimateItemId(UUID originEstimateItemId) {
+        this.originEstimateItem = originEstimateItemId != null ? new EstimateItem(originEstimateItemId) : null;
+    }
+
+    @Transient
+    public UUID getChangeRequestId() {
+        return changeRequest != null ? changeRequest.getId() : null;
+    }
+
+    @Transient
+    public void setChangeRequestId(UUID changeRequestId) {
+        this.changeRequest = changeRequestId != null ? new ChangeRequest(changeRequestId) : null;
     }
 }

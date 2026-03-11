@@ -1,18 +1,9 @@
 package com.positivity.workorder.contract;
 
-import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
-import com.positivity.workorder.internal.enums.WorkorderStatus;
-import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
-import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
-import com.positivity.workorder.support.BaseContractIntegrationTest;
-import io.restassured.http.ContentType;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.notNullValue;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -22,10 +13,22 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.notNullValue;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
+
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.support.BaseContractIntegrationTest;
+
+import io.restassured.http.ContentType;
 
 @DisplayName("CAP-121 Workexec Time Tracking Contract Behavior Tests")
 @Import(ContractTestConfiguration.class)
@@ -38,13 +41,11 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
         private WorkorderLaborEntryRepository laborEntryRepository;
 
         @Autowired
-        private TechnicianAssignmentRepository technicianAssignmentRepository;
+        private WorkorderServiceRepository workorderServiceRepository;
 
         @AfterEach
         void tearDown() {
-                laborEntryRepository.deleteAll();
-                technicianAssignmentRepository.deleteAll();
-                workorderRepository.deleteAll();
+                purgeTestData();
         }
 
         @Test
@@ -206,7 +207,7 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
                                 .body("[0].localDate", equalTo(date))
                                 .body("[0].totalJobMinutes", equalTo(120));
 
-                assertThat(laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorder.getId())).hasSize(2);
+                assertThat(laborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorder.getId())).hasSize(2);
         }
 
         private Workorder seedWorkorder(WorkorderStatus status, UUID shopId) {
@@ -226,10 +227,12 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
                         LocalDateTime endTimeUtc,
                         BigDecimal hoursWorked) {
                 long seconds = hoursWorked.multiply(BigDecimal.valueOf(3600)).longValue();
+                var service = workorderServiceRepository.findByWorkOrder_Id(workorder.getId()).stream()
+                                .findFirst()
+                                .orElseGet(() -> seedWorkorderService(workorder, technicianId));
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorder.getId())
-                                .workorderServiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .workorderService(service)
                                 .technicianId(technicianId)
                                 .startTime(endTimeUtc.minusSeconds(seconds))
                                 .endTime(endTimeUtc)
@@ -238,5 +241,15 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
                                 .createdAt(endTimeUtc.toInstant(ZoneOffset.UTC))
                                 .build();
                 laborEntryRepository.save(entry);
+        }
+
+        private WorkorderService seedWorkorderService(Workorder workorder, UUID technicianId) {
+                WorkorderService service = WorkorderService.builder()
+                                .workOrder(workorder)
+                                .serviceEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .technicianId(technicianId)
+                                .description("Contract labor")
+                                .build();
+                return workorderServiceRepository.save(service);
         }
 }

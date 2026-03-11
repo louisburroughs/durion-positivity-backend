@@ -31,13 +31,13 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
 
 	@Override
 	@NonNull public Optional<UUID> getUserIdForPerson(@NonNull UUID personUuid) {
-		return userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE)
+		return userPersonLinkRepository.findByPerson_IdAndStatus(personUuid, UserLinkStatus.ACTIVE)
 			.map(UserPersonLink::getUserId);
 	}
 
 	@Override
 	public boolean isUserLinkedToPerson(@NonNull UUID userId, @NonNull UUID personUuid) {
-		return userPersonLinkRepository.existsByUserIdAndPersonId(userId, personUuid);
+		return userPersonLinkRepository.existsByUserIdAndPerson_Id(userId, personUuid);
 	}
 
 }

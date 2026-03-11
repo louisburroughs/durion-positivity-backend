@@ -107,7 +107,7 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
         if (event.getPayload() != null && event.getPayload().getSkills() != null) {
             List<MechanicSkill> skills = event.getPayload().getSkills().stream()
                     .map(s -> MechanicSkill.builder()
-                            .mechanicId(saved.getMechanicId())
+                            .mechanic(saved)
                             .skillCode(s.getSkillCode())
                             .proficiencyLevel(s.getProficiencyLevel())
                             .build())
@@ -151,7 +151,7 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
         if (event.getPayload() != null && event.getPayload().getSkills() != null) {
             List<MechanicSkill> skills = event.getPayload().getSkills().stream()
                     .map(s -> MechanicSkill.builder()
-                            .mechanicId(saved.getMechanicId())
+                            .mechanic(saved)
                             .skillCode(s.getSkillCode())
                             .proficiencyLevel(s.getProficiencyLevel())
                             .build())

@@ -7,6 +7,7 @@ import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
 import com.positivity.workorder.internal.entity.TimeEntry;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.TimeEntryStatus;
 import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryStateException;
@@ -70,7 +71,6 @@ class TimeEntryServiceImplTest {
         SecurityContextHolder.clearContext();
     }
 
-    
     @Mock
     private TimeEntryRepository timeEntryRepository;
     @Mock
@@ -80,7 +80,7 @@ class TimeEntryServiceImplTest {
 
     private TimeEntry submittedEntry() {
         return TimeEntry.builder()
-                .timeEntryId(TIME_ENTRY_ID).personId(PERSON_ID).workOrderId(WORK_ORDER_ID)
+                .timeEntryId(TIME_ENTRY_ID).personId(PERSON_ID).workOrder(new Workorder(WORK_ORDER_ID))
                 .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600)).endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.SUBMITTED).build();
     }

@@ -69,7 +69,7 @@ public class GLMappingServiceImpl implements GLMappingService {
                 GLMapping mapping = new GLMapping();
                 mapping.setSourceSystem(request.getSourceSystem());
                 mapping.setExternalCode(request.getExternalCode());
-                mapping.setGlAccountId(request.getGlAccountId());
+                mapping.setGlAccount(glAccount);
                 mapping.setEffectiveStartDate(request.getEffectiveStartDate());
                 mapping.setEffectiveEndDate(request.getEffectiveEndDate());
                 mapping.setDimensions(request.getDimensions());

@@ -279,7 +279,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         for (JournalEntryLine line : original.getLines()) {
             JournalEntryLine reversalLine = new JournalEntryLine();
             reversalLine.setLineId(UUIDv7Generator.generate());
-            reversalLine.setJournalEntryId(reversal.getJournalEntryId());
+            reversalLine.setJournalEntry(reversal);
             reversalLine.setGlAccountId(line.getGlAccountId());
             reversalLine.setDebitAmount(line.getCreditAmount()); // Swap
             reversalLine.setCreditAmount(line.getDebitAmount()); // Swap
@@ -363,8 +363,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         }
         int lineNumber = 1;
         for (JournalEntryLine line : entry.getLines()) {
-            if (line.getJournalEntryId() == null) {
-                line.setJournalEntryId(entry.getJournalEntryId());
+            if (line.getJournalEntry() == null) {
+                line.setJournalEntry(entry);
             }
             if (line.getLineNumber() == null) {
                 line.setLineNumber(lineNumber);

@@ -20,12 +20,12 @@ public interface PriceOverrideRepository extends JpaRepository<PriceOverride, UU
     /**
      * Find all overrides for a specific order.
      */
-    List<PriceOverride> findByOrderId(UUID orderId);
+    List<PriceOverride> findByOrder_OrderId(UUID orderId);
 
     /**
      * Find override for a specific order line.
      */
-    Optional<PriceOverride> findByOrderIdAndOrderLineId(UUID orderId, UUID orderLineId);
+    Optional<PriceOverride> findByOrder_OrderIdAndOrderLine_OrderLineId(UUID orderId, UUID orderLineId);
 
     /**
      * Find all overrides by status.

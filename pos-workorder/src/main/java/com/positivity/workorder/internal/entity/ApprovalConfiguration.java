@@ -1,6 +1,5 @@
 package com.positivity.workorder.internal.entity;
 
-
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -46,7 +45,7 @@ public class ApprovalConfiguration {
     @PrePersist
     protected void prePersist() {
         calculatePriority();
-}
+    }
 
     // Location ID - if null, applies to all locations
     private UUID locationId;
@@ -96,5 +95,9 @@ public class ApprovalConfiguration {
         } else {
             priority = 0;
         }
+    }
+
+    public ApprovalConfiguration(UUID id) {
+        this.id = id;
     }
 }

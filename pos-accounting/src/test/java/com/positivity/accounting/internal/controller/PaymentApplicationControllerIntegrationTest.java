@@ -37,6 +37,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 
 /**
@@ -61,6 +62,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         @Autowired
         private PaymentApplicationRepository paymentApplicationRepository;
 
+        @Autowired
+        private PaymentApplicationReversalRepository paymentApplicationReversalRepository;
+
         @MockitoBean
         private InvoiceServiceClient invoiceServiceClient;
 
@@ -77,6 +81,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                 // BaseIntegrationTest.setUpMockMvc()
 
                 // Clean up test data
+                paymentApplicationReversalRepository.deleteAll();
                 paymentApplicationRepository.deleteAll();
                 receivablePaymentRepository.deleteAll();
 
@@ -154,7 +159,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(nextUuid());
-                application.setPaymentId(testPaymentId);
+                application.setPayment(receivablePaymentRepository.getReferenceById(testPaymentId));
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoice1Id);
                 application.setAppliedAmount(new BigDecimal("100.00"));
@@ -179,7 +184,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(nextUuid());
-                application.setPaymentId(testPaymentId);
+                application.setPayment(receivablePaymentRepository.getReferenceById(testPaymentId));
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoice1Id);
                 application.setAppliedAmount(new BigDecimal("300.00"));
@@ -255,7 +260,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.customerCredit").doesNotExist());
 
                 // Assert: Verify database state
-                List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(testPaymentId);
+                List<PaymentApplication> applications = paymentApplicationRepository.findByPayment_PaymentId(testPaymentId);
                 assertThat(applications).hasSize(1);
                 assertThat(applications.get(0).getAppliedAmount()).isEqualByComparingTo("500.00");
                 assertThat(applications.get(0).getInvoiceId()).isEqualTo(testInvoice1Id);
@@ -287,7 +292,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.applications.length()").value(2));
 
                 // Assert
-                List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(testPaymentId);
+                List<PaymentApplication> applications = paymentApplicationRepository.findByPayment_PaymentId(testPaymentId);
                 assertThat(applications).hasSize(2);
 
                 ReceivablePayment payment = receivablePaymentRepository.findById(testPaymentId).orElseThrow();
@@ -350,7 +355,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.appliedAmount").value(500.00));
 
                 // Assert: Only one application created
-                List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(testPaymentId);
+                List<PaymentApplication> applications = paymentApplicationRepository.findByPayment_PaymentId(testPaymentId);
                 assertThat(applications).hasSize(1);
 
                 ReceivablePayment payment = receivablePaymentRepository.findById(testPaymentId).orElseThrow();
@@ -389,7 +394,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.applications.length()").value(2)); // All applications returned
 
                 // Assert: Only two applications created (not duplicated)
-                List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(testPaymentId);
+                List<PaymentApplication> applications = paymentApplicationRepository.findByPayment_PaymentId(testPaymentId);
                 assertThat(applications).hasSize(2);
 
                 // Assert: Total applied is correct (not doubled)
@@ -518,7 +523,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
                 PaymentApplication application = new PaymentApplication();
                 application.setPaymentApplicationId(nextUuid());
-                application.setPaymentId(testPaymentId);
+                application.setPayment(receivablePaymentRepository.getReferenceById(testPaymentId));
                 application.setCustomerId(testCustomerId);
                 application.setInvoiceId(testInvoice1Id);
                 application.setAppliedAmount(new BigDecimal("500.00"));

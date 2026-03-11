@@ -65,8 +65,9 @@ public class Reconciliation {
         }
     }
 
-    @Column(name = "gl_account_id", nullable = false)
-    private UUID glAccountId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "gl_account_id", nullable = false)
+    private GLAccount glAccount;
 
     @Column(name = "account_code", length = 20)
     private String accountCode;
@@ -165,4 +166,12 @@ public class Reconciliation {
         this.reconciliationId = reconciliationId;
     }
 
+    @Transient
+    public UUID getGlAccountId() {
+        return glAccount != null ? glAccount.getGlAccountId() : null;
+    }
+
+    public void setGlAccountId(UUID glAccountId) {
+        this.glAccount = glAccountId == null ? null : new GLAccount(glAccountId);
+    }
 }

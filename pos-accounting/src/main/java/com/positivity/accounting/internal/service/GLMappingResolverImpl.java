@@ -301,7 +301,7 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      */
     @Override
     public java.util.List<GLMapping> getMappingHistory(UUID postingCategoryId, UUID mappingKeyId) {
-        return mappingRepository.findByPostingCategoryId(postingCategoryId)
+        return mappingRepository.findByPostingCategory_PostingCategoryId(postingCategoryId)
                 .stream()
                 .filter(m -> mappingKeyId.equals(m.getMappingKeyId()))
                 .sorted((a, b) -> a.getEffectiveStartDate().compareTo(b.getEffectiveStartDate()))

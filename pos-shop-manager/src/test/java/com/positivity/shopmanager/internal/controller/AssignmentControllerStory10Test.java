@@ -6,15 +6,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.shopmanager.internal.controller.AssignmentController;
-import com.positivity.shopmanager.service.AssignmentService;
-import com.positivity.shopmanager.service.dto.AssignmentResponse;
-import com.positivity.shopmanager.service.enums.AssignmentStatus;
-import java.time.ZoneOffset;
-import java.time.Instant;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -29,6 +26,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
+
+import com.positivity.shopmanager.service.AssignmentService;
+import com.positivity.shopmanager.service.dto.AssignmentResponse;
+import com.positivity.shopmanager.service.enums.AssignmentStatus;
 
 /**
  * Controller slice tests for CAP-249 Story #10: Appointment Assignment Show —

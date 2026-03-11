@@ -40,10 +40,13 @@ public class AsnLineEntity {
     @JoinColumn(name = "asn_id", nullable = false)
     private AdvanceShippingNoticeEntity asn;
 
-    @Column(nullable = false)
-    private UUID poId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "po_id", nullable = false)
+    private PurchaseOrderEntity purchaseOrder;
 
-    private UUID poLineId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "po_line_id")
+    private PurchaseOrderLineEntity poLine;
 
     @Column(nullable = false)
     private String sku;

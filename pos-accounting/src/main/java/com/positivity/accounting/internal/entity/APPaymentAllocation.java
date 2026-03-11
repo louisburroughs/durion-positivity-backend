@@ -12,10 +12,14 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -66,11 +70,14 @@ public class APPaymentAllocation {
     @UUIDv7Id
     @Column(name = "allocation_id", nullable = false, columnDefinition = "UUID")
     private UUID allocationId;
-    @Column(name = "payment_id", nullable = false)
-    private UUID paymentId;
 
-    @Column(name = "vendor_bill_id", nullable = false)
-    private UUID vendorBillId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "payment_id", nullable = false)
+    private APPayment payment;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "vendor_bill_id", nullable = false)
+    private VendorBill vendorBill;
 
     @Column(name = "applied_amount", precision = 19, scale = 4, nullable = false)
     private BigDecimal appliedAmount;
@@ -84,8 +91,26 @@ public class APPaymentAllocation {
     private Instant createdAt;
 
     public APPaymentAllocation(UUID paymentId, UUID vendorBillId, BigDecimal appliedAmount) {
-        this.paymentId = paymentId;
-        this.vendorBillId = vendorBillId;
+        setPaymentId(paymentId);
+        setVendorBillId(vendorBillId);
         this.appliedAmount = appliedAmount;
+    }
+
+    @Transient
+    public UUID getPaymentId() {
+        return payment != null ? payment.getPaymentId() : null;
+    }
+
+    public void setPaymentId(UUID paymentId) {
+        this.payment = paymentId == null ? null : new APPayment(paymentId);
+    }
+
+    @Transient
+    public UUID getVendorBillId() {
+        return vendorBill != null ? vendorBill.getVendorBillId() : null;
+    }
+
+    public void setVendorBillId(UUID vendorBillId) {
+        this.vendorBill = vendorBillId == null ? null : new VendorBill(vendorBillId);
     }
 }

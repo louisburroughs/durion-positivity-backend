@@ -163,8 +163,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                 BigDecimal varianceQty = expectedQty.subtract(receivedQty).abs();
 
                 InventoryVariance variance = InventoryVariance.builder()
-                        .sessionId(sessionId)
-                        .lineId(line.getLineId())
+                    .session(session)
+                    .line(line)
                         .productId(line.getProductId())
                         .varianceType(varianceType)
                         .varianceQuantity(varianceQty)
@@ -504,7 +504,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             List<InventoryVariance> variances) {
         List<ReceiveItemsResponse.VarianceSummaryResponse> varianceSummaries = variances.stream()
                 .map(variance -> ReceiveItemsResponse.VarianceSummaryResponse.builder()
-                        .lineId(variance.getLineId())
+                .lineId(variance.getLine() == null ? null : variance.getLine().getLineId())
                         .productId(variance.getProductId())
                         .varianceType(variance.getVarianceType().name())
                         .varianceQuantity(variance.getVarianceQuantity())

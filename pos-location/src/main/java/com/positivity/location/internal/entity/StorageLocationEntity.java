@@ -8,8 +8,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -57,11 +60,21 @@ public class StorageLocationEntity {
     @Column(nullable = false, length = 20)
     private StorageLocationStatus status = StorageLocationStatus.ACTIVE;
 
-    @Column(name = "site_id", nullable = false, columnDefinition = "UUID")
-    private UUID siteId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "site_id", nullable = false)
+    private Location site;
 
-    @Column(name = "parent_storage_location_id", columnDefinition = "UUID")
-    private UUID parentStorageLocationId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_storage_location_id")
+    private StorageLocationEntity parentStorageLocation;
+
+    public UUID getSiteId() {
+        return site != null ? site.getId() : null;
+    }
+
+    public UUID getParentStorageLocationId() {
+        return parentStorageLocation != null ? parentStorageLocation.getId() : null;
+    }
 
     @Column(name = "capacity", columnDefinition = "TEXT")
     private String capacity;

@@ -75,7 +75,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         PaymentIntent paymentIntent = paymentIntentRepository.findById(paymentIntentId)
                 .orElseThrow(() -> new PaymentIntentNotFoundException("PaymentIntent not found: " + paymentIntentId));
 
-        if (!paymentIntent.getInvoiceId().equals(invoiceId)) {
+        if (paymentIntent.getInvoice() == null || !paymentIntent.getInvoice().getId().equals(invoiceId)) {
             throw new PaymentIntentNotFoundException("PaymentIntent not found for invoice: " + invoiceId);
         }
 
@@ -117,7 +117,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         PaymentIntent paymentIntent = paymentIntentRepository.findById(paymentIntentId)
                 .orElseThrow(() -> new PaymentIntentNotFoundException("PaymentIntent not found: " + paymentIntentId));
 
-        if (!paymentIntent.getInvoiceId().equals(invoiceId)) {
+        if (paymentIntent.getInvoice() == null || !paymentIntent.getInvoice().getId().equals(invoiceId)) {
             throw new PaymentIntentNotFoundException("PaymentIntent not found for invoice: " + invoiceId);
         }
 
@@ -126,7 +126,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
                     "Payment must be CAPTURED to refund, current: " + paymentIntent.getStatus());
         }
 
-        List<RefundRecord> existingRefunds = refundRecordRepository.findByPaymentIntentId(paymentIntentId);
+        List<RefundRecord> existingRefunds = refundRecordRepository.findByPaymentIntent_Id(paymentIntentId);
 
         Instant capturedAt = paymentIntent.getCreatedAt();
         if (capturedAt != null) {
@@ -152,8 +152,8 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
 
         String requestedBy = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         RefundRecord refundRecord = new RefundRecord();
-        refundRecord.setPaymentIntentId(paymentIntentId);
-        refundRecord.setInvoiceId(invoiceId);
+        refundRecord.setPaymentIntent(paymentIntent);
+        refundRecord.setInvoice(paymentIntent.getInvoice());
         refundRecord.setAmount(amount);
         refundRecord.setReason(reason);
         refundRecord.setNotes(notes);
@@ -168,8 +168,8 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         RefundRecord saved = refundRecordRepository.save(refundRecord);
         RefundPaymentResult resultDto = new RefundPaymentResult();
         resultDto.setRefundId(saved.getId());
-        resultDto.setInvoiceId(saved.getInvoiceId());
-        resultDto.setPaymentIntentId(saved.getPaymentIntentId());
+        resultDto.setInvoiceId(saved.getInvoice() == null ? null : saved.getInvoice().getId());
+        resultDto.setPaymentIntentId(saved.getPaymentIntent() == null ? null : saved.getPaymentIntent().getId());
         resultDto.setAmount(saved.getAmount());
         resultDto.setReason(saved.getReason());
         resultDto.setNotes(saved.getNotes());

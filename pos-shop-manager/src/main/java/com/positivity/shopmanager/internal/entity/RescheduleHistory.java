@@ -12,8 +12,11 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,6 +27,7 @@ import lombok.Setter;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.EntityListeners;
 import org.springframework.data.annotation.CreatedDate;
+
 /**
  * Immutable reschedule history record for an appointment.
  *
@@ -48,9 +52,13 @@ public class RescheduleHistory {
     @Column(name = "reschedule_id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID rescheduleId;
 
-    @NonNull
-    @Column(name = "appointment_id", nullable = false, updatable = false)
-    private UUID appointmentId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "appointment_id", nullable = false, updatable = false)
+    private Appointment appointment;
+
+    public UUID getAppointmentId() {
+        return appointment != null ? appointment.getAppointmentId() : null;
+    }
 
     @NonNull
     @Column(name = "previous_start_at", nullable = false, updatable = false)

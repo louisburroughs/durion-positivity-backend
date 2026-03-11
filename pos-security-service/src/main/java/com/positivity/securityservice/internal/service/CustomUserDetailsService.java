@@ -1,4 +1,4 @@
-package com.positivity.securityservice.internal.security;
+package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.UserRepository;

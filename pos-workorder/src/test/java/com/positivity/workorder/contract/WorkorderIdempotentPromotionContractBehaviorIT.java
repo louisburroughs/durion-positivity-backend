@@ -42,339 +42,334 @@ import io.restassured.response.Response;
 @DisplayName("Workorder Idempotent Promotion Contract Behavior Tests (CAP:004, Issue #164)")
 class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegrationTest {
 
-    @Autowired
-    private EstimateRepository estimateRepository;
+        @Autowired
+        private EstimateRepository estimateRepository;
 
-    @Autowired
-    private WorkorderRepository workorderRepository;
+        @Autowired
+        private WorkorderRepository workorderRepository;
 
-    @Autowired
-    private EstimateItemRepository estimateItemRepository;
+        @Autowired
+        private EstimateItemRepository estimateItemRepository;
 
-    @Autowired
-    private WorkorderServiceRepository workorderServiceRepository;
+        @Autowired
+        private WorkorderServiceRepository workorderServiceRepository;
 
-    @Autowired
-    private WorkorderPartRepository workorderPartRepository;
+        @Autowired
+        private WorkorderPartRepository workorderPartRepository;
 
-    @Autowired
-    private IdempotencyKeyRepository idempotencyKeyRepository;
+        @Autowired
+        private IdempotencyKeyRepository idempotencyKeyRepository;
 
-    private UUID testCustomerId;
-    private UUID testLocationId;
-    private UUID testVehicleId;
+        private UUID testCustomerId;
+        private UUID testLocationId;
+        private UUID testVehicleId;
 
-    @AfterEach
-    void tearDown() {
-        idempotencyKeyRepository.deleteAll();
-        workorderServiceRepository.deleteAll();
-        workorderPartRepository.deleteAll();
-        workorderRepository.deleteAll();
-        estimateItemRepository.deleteAll();
-        estimateRepository.deleteAll();
-    }
+        @AfterEach
+        void tearDown() {
+                purgeTestData();
+        }
 
-    // ========== IDEMPOTENT PROMOTION TESTS (Issue #164) ==========
+        // ========== IDEMPOTENT PROMOTION TESTS (Issue #164) ==========
 
-    @Test
-    @DisplayName("WO-IDM-001: Successfully create workorder with idempotency key")
-    void testCreateWorkorder_WithIdempotencyKey_HappyPath() {
-        UUID estimateId = seedApprovedEstimate();
-        String idempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        @Test
+        @DisplayName("WO-IDM-001: Successfully create workorder with idempotency key")
+        void testCreateWorkorder_WithIdempotencyKey_HappyPath() {
+                UUID estimateId = seedApprovedEstimate();
+                String idempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 
-        String requestBody = String.format("""
-                {
-                    "estimateId": "%s",
-                    "customerId": "%s"
-                }
-                """, estimateId, testCustomerId);
+                String requestBody = String.format("""
+                                {
+                                    "estimateId": "%s",
+                                    "customerId": "%s"
+                                }
+                                """, estimateId, testCustomerId);
 
-        Response response = givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .header("Idempotency-Key", idempotencyKey)
-                .body(requestBody)
-                .when()
-                .post("/v1/workorders")
-                .then()
-                .statusCode(200)
-                .body("id", notNullValue())
-                .body("estimateId", equalTo(estimateId.toString()))
-                .body("customerId", equalTo(testCustomerId.toString()))
-                .body("status", equalTo("DRAFT"))
-                .log().ifValidationFails()
-                .extract().response();
+                Response response = givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .header("Idempotency-Key", idempotencyKey)
+                                .body(requestBody)
+                                .when()
+                                .post("/v1/workorders")
+                                .then()
+                                .statusCode(200)
+                                .body("id", notNullValue())
+                                .body("estimateId", equalTo(estimateId.toString()))
+                                .body("customerId", equalTo(testCustomerId.toString()))
+                                .body("status", equalTo("DRAFT"))
+                                .log().ifValidationFails()
+                                .extract().response();
 
-        String workorderId = response.path("id");
+                String workorderId = response.path("id");
 
-        // Verify idempotency key was registered
-        IdempotencyKey key = idempotencyKeyRepository.findByKeyValue(idempotencyKey)
-                .orElseThrow(() -> new AssertionError("Idempotency key not registered"));
-        org.assertj.core.api.Assertions.assertThat(key.getWorkorderId()).hasToString(workorderId);
-    }
+                // Verify idempotency key was registered
+                IdempotencyKey key = idempotencyKeyRepository.findByKeyValue(idempotencyKey)
+                                .orElseThrow(() -> new AssertionError("Idempotency key not registered"));
+                org.assertj.core.api.Assertions.assertThat(key.getWorkorderId()).hasToString(workorderId);
+        }
 
-    @Test
-    @DisplayName("WO-IDM-002: Retry with same idempotency key returns existing workorder")
-    void testCreateWorkorder_WithSameIdempotencyKey_ReturnsExisting() {
-        UUID estimateId = seedApprovedEstimate();
-        String idempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        @Test
+        @DisplayName("WO-IDM-002: Retry with same idempotency key returns existing workorder")
+        void testCreateWorkorder_WithSameIdempotencyKey_ReturnsExisting() {
+                UUID estimateId = seedApprovedEstimate();
+                String idempotencyKey = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
 
-        String requestBody = String.format("""
-                {
-                    "estimateId": "%s",
-                    "customerId": "%s"
-                }
-                """, estimateId, testCustomerId);
+                String requestBody = String.format("""
+                                {
+                                    "estimateId": "%s",
+                                    "customerId": "%s"
+                                }
+                                """, estimateId, testCustomerId);
 
-        // First request - creates workorder
-        Response firstResponse = givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .header("Idempotency-Key", idempotencyKey)
-                .body(requestBody)
-                .when()
-                .post("/v1/workorders")
-                .then()
-                .statusCode(200)
-                .body("id", notNullValue())
-                .log().ifValidationFails()
-                .extract().response();
+                // First request - creates workorder
+                Response firstResponse = givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .header("Idempotency-Key", idempotencyKey)
+                                .body(requestBody)
+                                .when()
+                                .post("/v1/workorders")
+                                .then()
+                                .statusCode(200)
+                                .body("id", notNullValue())
+                                .log().ifValidationFails()
+                                .extract().response();
 
-        String firstWorkorderId = firstResponse.path("id");
+                String firstWorkorderId = firstResponse.path("id");
 
-        // Second request - same key, should return existing workorder
-        Response secondResponse = givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .header("Idempotency-Key", idempotencyKey)
-                .body(requestBody)
-                .when()
-                .post("/v1/workorders")
-                .then()
-                .statusCode(200)
-                .body("id", equalTo(firstWorkorderId))
-                .body("estimateId", equalTo(estimateId.toString()))
-                .log().ifValidationFails()
-                .extract().response();
+                // Second request - same key, should return existing workorder
+                Response secondResponse = givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .header("Idempotency-Key", idempotencyKey)
+                                .body(requestBody)
+                                .when()
+                                .post("/v1/workorders")
+                                .then()
+                                .statusCode(200)
+                                .body("id", equalTo(firstWorkorderId))
+                                .body("estimateId", equalTo(estimateId.toString()))
+                                .log().ifValidationFails()
+                                .extract().response();
 
-        String secondWorkorderId = secondResponse.path("id");
+                String secondWorkorderId = secondResponse.path("id");
 
-        // Assert same workorder returned
-        org.assertj.core.api.Assertions.assertThat(secondWorkorderId).isEqualTo(firstWorkorderId);
+                // Assert same workorder returned
+                org.assertj.core.api.Assertions.assertThat(secondWorkorderId).isEqualTo(firstWorkorderId);
 
-        // Verify only one workorder exists
-        long count = workorderRepository.count();
-        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1);
-    }
+                // Verify only one workorder exists
+                long count = workorderRepository.count();
+                org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1);
+        }
 
-    @Test
-    @DisplayName("WO-IDM-003: Different idempotency keys create different workorders")
-    void testCreateWorkorder_WithDifferentIdempotencyKeys_CreatesDifferent() {
-        UUID estimateId1 = seedApprovedEstimate();
-        UUID estimateId2 = seedApprovedEstimate();
-        String idempotencyKey1 = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-        String idempotencyKey2 = UUID.fromString("00000000-0000-0000-0000-000000000002").toString();
+        @Test
+        @DisplayName("WO-IDM-003: Different idempotency keys create different workorders")
+        void testCreateWorkorder_WithDifferentIdempotencyKeys_CreatesDifferent() {
+                UUID estimateId1 = seedApprovedEstimate();
+                UUID estimateId2 = seedApprovedEstimate();
+                String idempotencyKey1 = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+                String idempotencyKey2 = UUID.fromString("00000000-0000-0000-0000-000000000002").toString();
 
-        String requestBody1 = String.format("""
-                {
-                    "estimateId": "%s",
-                    "customerId": "%s"
-                }
-                """, estimateId1, testCustomerId);
+                String requestBody1 = String.format("""
+                                {
+                                    "estimateId": "%s",
+                                    "customerId": "%s"
+                                }
+                                """, estimateId1, testCustomerId);
 
-        String requestBody2 = String.format("""
-                {
-                    "estimateId": "%s",
-                    "customerId": "%s"
-                }
-                """, estimateId2, testCustomerId);
+                String requestBody2 = String.format("""
+                                {
+                                    "estimateId": "%s",
+                                    "customerId": "%s"
+                                }
+                                """, estimateId2, testCustomerId);
 
-        // First request
-        Response firstResponse = givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .header("Idempotency-Key", idempotencyKey1)
-                .body(requestBody1)
-                .when()
-                .post("/v1/workorders")
-                .then()
-                .statusCode(200)
-                .body("id", notNullValue())
-                .log().ifValidationFails()
-                .extract().response();
+                // First request
+                Response firstResponse = givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .header("Idempotency-Key", idempotencyKey1)
+                                .body(requestBody1)
+                                .when()
+                                .post("/v1/workorders")
+                                .then()
+                                .statusCode(200)
+                                .body("id", notNullValue())
+                                .log().ifValidationFails()
+                                .extract().response();
 
-        String firstWorkorderId = firstResponse.path("id");
+                String firstWorkorderId = firstResponse.path("id");
 
-        // Second request with different key
-        Response secondResponse = givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .header("Idempotency-Key", idempotencyKey2)
-                .body(requestBody2)
-                .when()
-                .post("/v1/workorders")
-                .then()
-                .statusCode(200)
-                .body("id", notNullValue())
-                .log().ifValidationFails()
-                .extract().response();
+                // Second request with different key
+                Response secondResponse = givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .header("Idempotency-Key", idempotencyKey2)
+                                .body(requestBody2)
+                                .when()
+                                .post("/v1/workorders")
+                                .then()
+                                .statusCode(200)
+                                .body("id", notNullValue())
+                                .log().ifValidationFails()
+                                .extract().response();
 
-        String secondWorkorderId = secondResponse.path("id");
+                String secondWorkorderId = secondResponse.path("id");
 
-        // Assert different workorders created
-        org.assertj.core.api.Assertions.assertThat(secondWorkorderId).isNotEqualTo(firstWorkorderId);
+                // Assert different workorders created
+                org.assertj.core.api.Assertions.assertThat(secondWorkorderId).isNotEqualTo(firstWorkorderId);
 
-        // Verify two workorders exist
-        long count = workorderRepository.count();
-        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(2);
-    }
+                // Verify two workorders exist
+                long count = workorderRepository.count();
+                org.assertj.core.api.Assertions.assertThat(count).isEqualTo(2);
+        }
 
-    @Test
-    @DisplayName("WO-IDM-004: Missing idempotency key allows duplicate creation")
-    void testCreateWorkorder_WithoutIdempotencyKey_AllowsDuplicates() {
-        UUID estimateId = seedApprovedEstimate();
-        UUID secondEstimateId = seedApprovedEstimate();
+        @Test
+        @DisplayName("WO-IDM-004: Missing idempotency key allows duplicate creation")
+        void testCreateWorkorder_WithoutIdempotencyKey_AllowsDuplicates() {
+                UUID estimateId = seedApprovedEstimate();
+                UUID secondEstimateId = seedApprovedEstimate();
 
-        String firstRequestBody = String.format("""
-                {
-                    "estimateId": "%s",
-                    "customerId": "%s"
-                }
-                """, estimateId, testCustomerId);
+                String firstRequestBody = String.format("""
+                                {
+                                    "estimateId": "%s",
+                                    "customerId": "%s"
+                                }
+                                """, estimateId, testCustomerId);
 
-        String secondRequestBody = String.format("""
-                {
-                    "estimateId": "%s",
-                    "customerId": "%s"
-                }
-                """, secondEstimateId, testCustomerId);
+                String secondRequestBody = String.format("""
+                                {
+                                    "estimateId": "%s",
+                                    "customerId": "%s"
+                                }
+                                """, secondEstimateId, testCustomerId);
 
-        // First request without key
-        Response firstResponse = givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(firstRequestBody)
-                .when()
-                .post("/v1/workorders")
-                .then()
-                .statusCode(200)
-                .body("id", notNullValue())
-                .log().ifValidationFails()
-                .extract().response();
+                // First request without key
+                Response firstResponse = givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(firstRequestBody)
+                                .when()
+                                .post("/v1/workorders")
+                                .then()
+                                .statusCode(200)
+                                .body("id", notNullValue())
+                                .log().ifValidationFails()
+                                .extract().response();
 
-        String firstWorkorderId = firstResponse.path("id");
+                String firstWorkorderId = firstResponse.path("id");
 
-        // Second request without key - should create new workorder
-        Response secondResponse = givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(secondRequestBody)
-                .when()
-                .post("/v1/workorders")
-                .then()
-                .statusCode(200)
-                .body("id", notNullValue())
-                .log().ifValidationFails()
-                .extract().response();
+                // Second request without key - should create new workorder
+                Response secondResponse = givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(secondRequestBody)
+                                .when()
+                                .post("/v1/workorders")
+                                .then()
+                                .statusCode(200)
+                                .body("id", notNullValue())
+                                .log().ifValidationFails()
+                                .extract().response();
 
-        String secondWorkorderId = secondResponse.path("id");
+                String secondWorkorderId = secondResponse.path("id");
 
-        // Assert different workorders created (no idempotency)
-        org.assertj.core.api.Assertions.assertThat(secondWorkorderId).isNotEqualTo(firstWorkorderId);
+                // Assert different workorders created (no idempotency)
+                org.assertj.core.api.Assertions.assertThat(secondWorkorderId).isNotEqualTo(firstWorkorderId);
 
-        // Verify two workorders exist
-        long count = workorderRepository.count();
-        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(2);
-    }
+                // Verify two workorders exist
+                long count = workorderRepository.count();
+                org.assertj.core.api.Assertions.assertThat(count).isEqualTo(2);
+        }
 
-    @Test
-    @DisplayName("WO-IDM-005: Whitespace-only idempotency key treated as missing")
-    void testCreateWorkorder_WithWhitespaceIdempotencyKey_TreatedAsMissing() {
-        UUID estimateId = seedApprovedEstimate();
-        UUID secondEstimateId = seedApprovedEstimate();
+        @Test
+        @DisplayName("WO-IDM-005: Whitespace-only idempotency key treated as missing")
+        void testCreateWorkorder_WithWhitespaceIdempotencyKey_TreatedAsMissing() {
+                UUID estimateId = seedApprovedEstimate();
+                UUID secondEstimateId = seedApprovedEstimate();
 
-        String firstRequestBody = String.format("""
-                {
-                    "estimateId": "%s",
-                    "customerId": "%s"
-                }
-                """, estimateId, testCustomerId);
+                String firstRequestBody = String.format("""
+                                {
+                                    "estimateId": "%s",
+                                    "customerId": "%s"
+                                }
+                                """, estimateId, testCustomerId);
 
-        String secondRequestBody = String.format("""
-                {
-                    "estimateId": "%s",
-                    "customerId": "%s"
-                }
-                """, secondEstimateId, testCustomerId);
+                String secondRequestBody = String.format("""
+                                {
+                                    "estimateId": "%s",
+                                    "customerId": "%s"
+                                }
+                                """, secondEstimateId, testCustomerId);
 
-        // First request with whitespace-only key (spaces)
-        Response firstResponse = givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .header("Idempotency-Key", "   ")
-                .body(firstRequestBody)
-                .when()
-                .post("/v1/workorders")
-                .then()
-                .statusCode(200)
-                .body("id", notNullValue())
-                .log().ifValidationFails()
-                .extract().response();
+                // First request with whitespace-only key (spaces)
+                Response firstResponse = givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .header("Idempotency-Key", "   ")
+                                .body(firstRequestBody)
+                                .when()
+                                .post("/v1/workorders")
+                                .then()
+                                .statusCode(200)
+                                .body("id", notNullValue())
+                                .log().ifValidationFails()
+                                .extract().response();
 
-        String firstWorkorderId = firstResponse.path("id");
+                String firstWorkorderId = firstResponse.path("id");
 
-        // Second request with whitespace-only key (tabs and spaces) - should create new
-        // workorder
-        Response secondResponse = givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .header("Idempotency-Key", " \t ")
-                .body(secondRequestBody)
-                .when()
-                .post("/v1/workorders")
-                .then()
-                .statusCode(200)
-                .body("id", notNullValue())
-                .log().ifValidationFails()
-                .extract().response();
+                // Second request with whitespace-only key (tabs and spaces) - should create new
+                // workorder
+                Response secondResponse = givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .header("Idempotency-Key", " \t ")
+                                .body(secondRequestBody)
+                                .when()
+                                .post("/v1/workorders")
+                                .then()
+                                .statusCode(200)
+                                .body("id", notNullValue())
+                                .log().ifValidationFails()
+                                .extract().response();
 
-        String secondWorkorderId = secondResponse.path("id");
+                String secondWorkorderId = secondResponse.path("id");
 
-        // Assert different workorders created (whitespace keys treated as missing)
-        org.assertj.core.api.Assertions.assertThat(secondWorkorderId).isNotEqualTo(firstWorkorderId);
+                // Assert different workorders created (whitespace keys treated as missing)
+                org.assertj.core.api.Assertions.assertThat(secondWorkorderId).isNotEqualTo(firstWorkorderId);
 
-        // Verify two workorders exist
-        long count = workorderRepository.count();
-        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(2);
+                // Verify two workorders exist
+                long count = workorderRepository.count();
+                org.assertj.core.api.Assertions.assertThat(count).isEqualTo(2);
 
-        // Verify no idempotency keys were registered (whitespace keys are ignored)
-        long keyCount = idempotencyKeyRepository.count();
-        org.assertj.core.api.Assertions.assertThat(keyCount).isEqualTo(0);
-    }
+                // Verify no idempotency keys were registered (whitespace keys are ignored)
+                long keyCount = idempotencyKeyRepository.count();
+                org.assertj.core.api.Assertions.assertThat(keyCount).isEqualTo(0);
+        }
 
-    // ========== HELPER METHODS ==========
+        // ========== HELPER METHODS ==========
 
-    /**
-     * Seed an approved estimate for workorder creation.
-     */
-    private UUID seedApprovedEstimate() {
-        testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        /**
+         * Seed an approved estimate for workorder creation.
+         */
+        private UUID seedApprovedEstimate() {
+                testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        Estimate estimate = Estimate.builder()
-                .customerId(testCustomerId)
-                .locationId(testLocationId)
-                .vehicleId(testVehicleId)
-                .status(EstimateStatus.APPROVED)
-                .createdById(SYSTEM_USER_ID.toString())
-                .build();
+                Estimate estimate = Estimate.builder()
+                                .customerId(testCustomerId)
+                                .locationId(testLocationId)
+                                .vehicleId(testVehicleId)
+                                .status(EstimateStatus.APPROVED)
+                                .createdById(SYSTEM_USER_ID.toString())
+                                .build();
 
-        Estimate saved = estimateRepository.save(estimate);
+                Estimate saved = estimateRepository.save(estimate);
 
-        EstimateItem approvedItem = EstimateItem.builder()
-                .estimateId(saved.getId())
-                .itemType(EstimateItemType.LABOR)
-                .description("Test labor")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("100.00"))
-                .lineTotal(new BigDecimal("100.00"))
-                .approvalStatus(ApprovalStatus.APPROVED)
-                .createdById(SYSTEM_USER_ID.toString())
-                .build();
-        estimateItemRepository.save(approvedItem);
+                EstimateItem approvedItem = EstimateItem.builder()
+                                .estimate(saved)
+                                .itemType(EstimateItemType.LABOR)
+                                .description("Test labor")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("100.00"))
+                                .lineTotal(new BigDecimal("100.00"))
+                                .approvalStatus(ApprovalStatus.APPROVED)
+                                .createdById(SYSTEM_USER_ID.toString())
+                                .build();
+                estimateItemRepository.save(approvedItem);
 
-        return saved.getId();
-    }
+                return saved.getId();
+        }
 }

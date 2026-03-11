@@ -48,7 +48,8 @@ class TimeEntryAdjustmentServiceTest {
 		UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
 		TimeEntryAdjustment adj = new TimeEntryAdjustment();
 		adj.setAdjustmentId(id);
-		adj.setTimeEntryId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+		adj.setTimeEntry(new TimeEntry());
+		adj.getTimeEntry().setTimeEntryId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
 		adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
 
 		when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));

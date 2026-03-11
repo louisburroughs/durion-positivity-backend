@@ -14,9 +14,9 @@ import java.util.UUID;
 
 public interface PersonLocationAssignmentRepository extends JpaRepository<PersonLocationAssignment, UUID> {
 
-	List<PersonLocationAssignment> findByPersonId(@NonNull UUID personId);
+	List<PersonLocationAssignment> findByPerson_Id(@NonNull UUID personId);
 
-	Optional<PersonLocationAssignment> findFirstByPersonIdAndIsPrimaryTrueAndStatus(@NonNull UUID personId,
+	Optional<PersonLocationAssignment> findFirstByPerson_IdAndIsPrimaryTrueAndStatus(@NonNull UUID personId,
 			@NonNull AssignmentStatus status);
 
 	@Query("""
@@ -25,14 +25,14 @@ public interface PersonLocationAssignmentRepository extends JpaRepository<Person
 			  AND a.effectiveFrom <= :date
 			  AND (a.effectiveTo IS NULL OR a.effectiveTo >= :date)
 			  AND (:locationId IS NULL OR a.locationId = :locationId)
-			ORDER BY a.locationId, a.personId, a.effectiveFrom DESC
+			ORDER BY a.locationId, a.person.id, a.effectiveFrom DESC
 			""")
 	@NonNull List<PersonLocationAssignment> findActiveByDateAndOptionalLocation(@Param("date") @NonNull LocalDate date,
 			@Param("locationId") UUID locationId);
 
 	@Query("""
 			SELECT a FROM PersonLocationAssignment a
-			WHERE a.personId = :personId
+			WHERE a.person.id = :personId
 			  AND a.status = 'ACTIVE'
 			  AND a.effectiveFrom <= :date
 			  AND (a.effectiveTo IS NULL OR a.effectiveTo >= :date)
@@ -43,7 +43,7 @@ public interface PersonLocationAssignmentRepository extends JpaRepository<Person
 
 	@Query("""
 			SELECT COUNT(a) > 0 FROM PersonLocationAssignment a
-			WHERE a.personId = :personId
+			WHERE a.person.id = :personId
 			  AND a.locationId = :locationId
 			  AND a.role = :role
 			  AND a.status = 'ACTIVE'
@@ -57,7 +57,7 @@ public interface PersonLocationAssignmentRepository extends JpaRepository<Person
 	@Query("""
 			SELECT COUNT(a) > 0 FROM PersonLocationAssignment a
 			WHERE a.id <> :assignmentId
-			  AND a.personId = :personId
+			  AND a.person.id = :personId
 			  AND a.locationId = :locationId
 			  AND a.role = :role
 			  AND a.status = 'ACTIVE'

@@ -35,9 +35,6 @@ public class CostTierEntity {
     @JoinColumn(name = "supplier_item_cost_id", nullable = false)
     private SupplierItemCostEntity supplierItemCost;
 
-    @Column(name = "supplier_item_cost_id", insertable = false, updatable = false, columnDefinition = "UUID")
-    private UUID supplierItemCostId;
-
     @Column(name = "min_quantity", nullable = false)
     private Integer minQuantity;
 

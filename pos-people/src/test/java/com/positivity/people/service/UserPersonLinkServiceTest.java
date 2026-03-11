@@ -147,7 +147,7 @@ class UserPersonLinkServiceTest {
 	void findPersonByUserId_success() {
 		UserPersonLink link = new UserPersonLink();
 		link.setUserId(testUserId);
-		link.setPersonId(testPersonId);
+		link.setPerson(Person.builder().id(testPersonId).build());
 
 		Person person = Person.builder()
 				.id(testPersonId)
@@ -183,13 +183,13 @@ class UserPersonLinkServiceTest {
 
 		UserPersonLink firstLink = new UserPersonLink();
 		firstLink.setUserId(testUserId);
-		firstLink.setPersonId(testPersonId);
+		firstLink.setPerson(Person.builder().id(testPersonId).build());
 
 		UserPersonLink secondLink = new UserPersonLink();
 		secondLink.setUserId(testUserId2);
-		secondLink.setPersonId(testPersonId);
+		secondLink.setPerson(Person.builder().id(testPersonId).build());
 
-		when(linkRepository.findByPersonId(testPersonId)).thenReturn(List.of(firstLink, secondLink));
+		when(linkRepository.findByPerson_Id(testPersonId)).thenReturn(List.of(firstLink, secondLink));
 
 		List<UUID> userIds = service.findUserIdsByPersonId(testPersonId);
 
@@ -200,7 +200,7 @@ class UserPersonLinkServiceTest {
 	void findUserIdsByPersonId_empty() {
 		when(personRepository.findById(testPersonId2))
 				.thenReturn(Optional.of(Person.builder().id(testPersonId2).build()));
-		when(linkRepository.findByPersonId(testPersonId2)).thenReturn(List.of());
+		when(linkRepository.findByPerson_Id(testPersonId2)).thenReturn(List.of());
 
 		List<UUID> userIds = service.findUserIdsByPersonId(testPersonId2);
 

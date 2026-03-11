@@ -67,7 +67,7 @@ class TravelSegmentContractBehaviorIT extends BaseContractIntegrationTest {
 
         @AfterEach
         void tearDown() {
-                travelSegmentRepository.deleteAll();
+                purgeTestData();
         }
 
         // ── Fixtures ─────────────────────────────────────────────────────────────

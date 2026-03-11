@@ -3,13 +3,17 @@ package com.positivity.workorder.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -28,8 +32,20 @@ public class SubstituteAudit {
     @Column(columnDefinition = "UUID")
     private UUID auditId;
 
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID linkId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "link_id", nullable = false)
+    @ToString.Exclude
+    private SubstituteLink link;
+
+    @jakarta.persistence.Transient
+    public UUID getLinkId() {
+        return link != null ? link.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setLinkId(UUID linkId) {
+        this.link = linkId != null ? new SubstituteLink(linkId) : null;
+    }
 
     @Column(nullable = false)
     private String operation;

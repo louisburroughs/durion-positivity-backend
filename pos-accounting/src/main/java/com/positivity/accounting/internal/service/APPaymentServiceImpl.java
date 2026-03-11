@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
+import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
@@ -33,6 +34,7 @@ import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
 import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.service.APPaymentService;
 import com.positivity.accounting.service.OutboxService;
@@ -56,6 +58,7 @@ public class APPaymentServiceImpl implements APPaymentService {
         private final APPaymentRepository paymentRepository;
         private final APPaymentAllocationRepository allocationRepository;
         private final VendorBillRepository billRepository;
+        private final JournalEntryRepository journalEntryRepository;
         private final PaymentGatewayProvider paymentGateway;
         private final OutboxService outboxService;
         private final APPaymentFailurePersistenceService paymentFailurePersistenceService;
@@ -144,7 +147,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                         payment = paymentRepository.save(payment);
 
                         List<APPaymentAllocation> savedAllocations = allocationRepository
-                                        .findByPaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+                                        .findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
 
                         APPaymentGLPostingEvent glPostingEvent = APPaymentGLPostingEvent.builder()
                                         .eventId(UUIDv7Generator.generate())
@@ -286,12 +289,12 @@ public class APPaymentServiceImpl implements APPaymentService {
                 int sequence = 1;
 
                 for (ExecuteAPPaymentRequest.AllocationLineRequest allocationLine : request.getAllocations()) {
-                        validateBillForAllocation(allocationLine.getVendorBillId(), payment.getVendorId());
+                        VendorBill bill = validateBillForAllocation(allocationLine.getVendorBillId(), payment.getVendorId());
 
-                        APPaymentAllocation allocation = new APPaymentAllocation(
-                                        payment.getPaymentId(),
-                                        allocationLine.getVendorBillId(),
-                                        allocationLine.getAppliedAmount());
+                        APPaymentAllocation allocation = new APPaymentAllocation();
+                        allocation.setPayment(payment);
+                        allocation.setVendorBill(bill);
+                        allocation.setAppliedAmount(allocationLine.getAppliedAmount());
                         allocation.setAllocationSequence(sequence++);
                         allocations.add(allocation);
                 }
@@ -316,10 +319,10 @@ public class APPaymentServiceImpl implements APPaymentService {
                         if (billOpen.compareTo(BigDecimal.ZERO) > 0) {
                                 BigDecimal toApply = remaining.min(billOpen);
 
-                                APPaymentAllocation allocation = new APPaymentAllocation(
-                                                payment.getPaymentId(),
-                                                bill.getVendorBillId(),
-                                                toApply);
+                                APPaymentAllocation allocation = new APPaymentAllocation();
+                                allocation.setPayment(payment);
+                                allocation.setVendorBill(bill);
+                                allocation.setAppliedAmount(toApply);
                                 allocation.setAllocationSequence(sequence++);
                                 allocations.add(allocation);
 
@@ -330,7 +333,8 @@ public class APPaymentServiceImpl implements APPaymentService {
                 return allocations;
         }
 
-        private void validateBillForAllocation(@NonNull UUID vendorBillId, @NonNull UUID expectedVendorId) {
+        private @NonNull VendorBill validateBillForAllocation(@NonNull UUID vendorBillId,
+                        @NonNull UUID expectedVendorId) {
                 VendorBill bill = billRepository.findById(vendorBillId)
                                 .orElseThrow(() -> new IllegalArgumentException("Bill not found: " + vendorBillId));
 
@@ -342,6 +346,8 @@ public class APPaymentServiceImpl implements APPaymentService {
                         throw new IllegalArgumentException(
                                         "Bill " + vendorBillId + " does not belong to vendor " + expectedVendorId);
                 }
+
+                return bill;
         }
 
         private @NonNull List<VendorBill> getEligibleBillsSortedByDueDate(@NonNull UUID vendorId) {
@@ -392,8 +398,11 @@ public class APPaymentServiceImpl implements APPaymentService {
         public void acknowledgeGLPosted(@NonNull UUID paymentId, @NonNull UUID journalEntryId) {
                 APPayment payment = paymentRepository.findById(paymentId)
                                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+                JournalEntry journalEntry = journalEntryRepository.findById(journalEntryId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Journal entry not found: " + journalEntryId));
 
-                payment.setGlJournalEntryId(journalEntryId);
+                payment.setGlJournalEntry(journalEntry);
                 payment.setGlPostedAt(Instant.now(clock));
                 payment.setStatus(APPaymentStatus.GL_POSTED);
                 paymentRepository.save(payment);
@@ -416,7 +425,7 @@ public class APPaymentServiceImpl implements APPaymentService {
 
         private @NonNull APPaymentResponse toResponse(@NonNull APPayment payment) {
                 List<APPaymentAllocation> allocations = allocationRepository
-                                .findByPaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+                                .findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
 
                 return APPaymentResponse.builder()
                                 .paymentId(payment.getPaymentId())

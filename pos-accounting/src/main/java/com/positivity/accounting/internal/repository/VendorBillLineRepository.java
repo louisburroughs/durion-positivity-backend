@@ -16,10 +16,10 @@ public interface VendorBillLineRepository extends JpaRepository<VendorBillLine, 
     /**
      * Find all line items for a vendor bill.
      */
-    List<VendorBillLine> findByVendorBillIdOrderByLineNumber(UUID vendorBillId);
+    List<VendorBillLine> findByVendorBill_VendorBillIdOrderByLineNumber(UUID vendorBillId);
 
     /**
      * Delete all line items for a vendor bill.
      */
-    void deleteByVendorBillId(UUID vendorBillId);
+    void deleteByVendorBill_VendorBillId(UUID vendorBillId);
 }

@@ -70,9 +70,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
 
         @AfterEach
         void tearDown() {
-                adjustmentEventRepository.deleteAll();
-                workorderPartRepository.deleteAll();
-                workorderRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== SUBSTITUTION TESTS ==========

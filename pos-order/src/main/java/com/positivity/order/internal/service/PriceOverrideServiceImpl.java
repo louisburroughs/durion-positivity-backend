@@ -4,6 +4,7 @@ import com.positivity.order.internal.entity.ApprovalRecord;
 import com.positivity.order.internal.entity.OverrideStatus;
 import com.positivity.order.internal.entity.PriceOverride;
 import com.positivity.order.internal.entity.PriceOverrideReasonCode;
+import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.event.OrderPriceOverrideApplied;
 import com.positivity.order.internal.exception.InvalidPriceOverrideException;
@@ -91,10 +92,18 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 OverrideStatus initialStatus = requiresApproval ? OverrideStatus.PENDING_APPROVAL
                                 : OverrideStatus.APPROVED;
 
+                UUID orderId = UUID.fromString(request.getOrderId());
+                UUID orderLineId = UUID.fromString(request.getOrderLineId());
+                SalesOrder order = salesOrderRepository.findById(orderId)
+                                .orElseThrow(() -> new InvalidPriceOverrideException("Order not found: " + orderId));
+                SalesOrderLine orderLine = salesOrderLineRepository.findById(orderLineId)
+                                .orElseThrow(() -> new InvalidPriceOverrideException(
+                                                "Order line not found: " + orderLineId));
+
                 // Create price override record
                 PriceOverride override = PriceOverride.builder()
-                                .orderId(UUID.fromString(request.getOrderId()))
-                                .orderLineId(UUID.fromString(request.getOrderLineId()))
+                                .order(order)
+                                .orderLine(orderLine)
                                 .productId(UUID.fromString(request.getProductId()))
                                 .originalPrice(request.getOriginalPrice())
                                 .overridePrice(request.getOverridePrice())
@@ -121,32 +130,28 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
                 if (!requiresApproval) {
                         // Update the order line's unit price to reflect the approved override.
-                        SalesOrderLine line = salesOrderLineRepository.findById(savedOverride.getOrderLineId())
-                                        .orElseThrow(() -> new InvalidPriceOverrideException(
-                                                        "Order line not found: " + savedOverride.getOrderLineId()));
+                        SalesOrderLine line = savedOverride.getOrderLine();
                         line.setUnitPrice(savedOverride.getOverridePrice());
                         salesOrderLineRepository.save(line);
 
                         // Recalculate order subtotal.
-                        var order = salesOrderRepository.findById(savedOverride.getOrderId())
-                                        .orElseThrow(() -> new InvalidPriceOverrideException(
-                                                        "Order not found: " + savedOverride.getOrderId()));
+                        var persistedOrder = savedOverride.getOrder();
                         List<SalesOrderLine> lines = salesOrderLineRepository
-                                        .findByOrder_OrderId(order.getOrderId());
+                                        .findByOrder_OrderId(persistedOrder.getOrderId());
                         BigDecimal newSubtotal = lines.stream()
                                         .map(l -> l.getUnitPrice().multiply(
                                                         BigDecimal.valueOf(l.getQuantity())))
                                         .reduce(BigDecimal.ZERO, BigDecimal::add)
                                         .setScale(4, RoundingMode.HALF_UP);
-                        order.setSubtotal(newSubtotal);
-                        order.setUpdatedBy(actorUsername);
-                        salesOrderRepository.save(order);
+                        persistedOrder.setSubtotal(newSubtotal);
+                        persistedOrder.setUpdatedBy(actorUsername);
+                        salesOrderRepository.save(persistedOrder);
 
                         // Publish domain event
                         eventPublisher.publishEvent(new OrderPriceOverrideApplied(
                                         savedOverride.getOverrideId(),
-                                        savedOverride.getOrderId(),
-                                        savedOverride.getOrderLineId(),
+                                        savedOverride.getOrder().getOrderId(),
+                                        savedOverride.getOrderLine().getOrderLineId(),
                                         savedOverride.getProductId(),
                                         savedOverride.getOriginalPrice(),
                                         savedOverride.getOverridePrice(),
@@ -184,7 +189,7 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 override = priceOverrideRepository.save(override);
 
                 ApprovalRecord approvalRecord = ApprovalRecord.builder()
-                                .priceOverrideId(overrideId)
+                                .priceOverride(override)
                                 .reviewerUserId(approverUserId)
                                 .reviewerRole(command.approverRole())
                                 .action("APPROVED")
@@ -221,7 +226,7 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 override = priceOverrideRepository.save(override);
 
                 ApprovalRecord approvalRecord = ApprovalRecord.builder()
-                                .priceOverrideId(overrideId)
+                                .priceOverride(override)
                                 .reviewerUserId(reviewerUserId)
                                 .reviewerRole(command.reviewerRole())
                                 .action("REJECTED")
@@ -245,7 +250,7 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
         @Override
         @Transactional(readOnly = true)
         public List<PriceOverrideDetail> getOverridesByOrderId(UUID orderId) {
-                return priceOverrideRepository.findByOrderId(orderId).stream().map(this::toDetail).toList();
+                return priceOverrideRepository.findByOrder_OrderId(orderId).stream().map(this::toDetail).toList();
         }
 
         @Override
@@ -291,8 +296,8 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                                 : BigDecimal.ZERO;
                 return new PriceOverrideResult(
                                 override.getOverrideId(),
-                                override.getOrderId().toString(),
-                                override.getOrderLineId().toString(),
+                                override.getOrder() == null ? null : override.getOrder().getOrderId().toString(),
+                                override.getOrderLine() == null ? null : override.getOrderLine().getOrderLineId().toString(),
                                 override.getProductId().toString(),
                                 override.getOriginalPrice(),
                                 override.getOverridePrice(),
@@ -318,8 +323,8 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                                 : BigDecimal.ZERO;
                 return new PriceOverrideDetail(
                                 override.getOverrideId(),
-                                override.getOrderId().toString(),
-                                override.getOrderLineId().toString(),
+                                override.getOrder() == null ? null : override.getOrder().getOrderId().toString(),
+                                override.getOrderLine() == null ? null : override.getOrderLine().getOrderLineId().toString(),
                                 override.getProductId().toString(),
                                 override.getOriginalPrice(),
                                 override.getOverridePrice(),

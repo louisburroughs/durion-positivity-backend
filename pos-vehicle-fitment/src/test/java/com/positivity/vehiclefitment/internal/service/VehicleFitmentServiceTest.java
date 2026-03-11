@@ -130,12 +130,14 @@ class VehicleFitmentServiceTest {
 
         @Test
         void getVehicleVariableValues_emptyCache_callsApiAndReturnsData() {
+                VehicleVariable variable = new VehicleVariable();
+                variable.setId(VARIABLE_ID);
                 VehicleVariableValue saved = new VehicleVariableValue();
-                saved.setVariableId(VARIABLE_ID);
+                saved.setVariable(variable);
                 saved.setValue("Car");
                 saved.setCacheTimestamp(LocalDateTime.now(TEST_CLOCK));
 
-                when(vehicleVariableValueRepository.findByVariableId(VARIABLE_ID))
+                when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID))
                                 .thenReturn(List.of())
                                 .thenReturn(List.of(saved));
 
@@ -150,7 +152,7 @@ class VehicleFitmentServiceTest {
 
         @Test
         void getVehicleVariableValues_parseError_throwsVehicleFitmentException() {
-                when(vehicleVariableValueRepository.findByVariableId(VARIABLE_ID)).thenReturn(List.of());
+                when(vehicleVariableValueRepository.findByVariable_Id(VARIABLE_ID)).thenReturn(List.of());
                 when(responseSpec.body(String.class)).thenReturn("{bad-json}");
 
                 assertThatThrownBy(() -> service.getVehicleVariableValues(VARIABLE_ID))

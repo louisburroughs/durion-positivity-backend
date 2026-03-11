@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.dto.StopWorkSessionRequest;
 import com.positivity.workorder.internal.dto.WorkSessionResponse;
 import com.positivity.workorder.internal.entity.BreakSegment;
 import com.positivity.workorder.internal.entity.WorkSession;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkSessionStatus;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
@@ -18,8 +19,10 @@ import com.positivity.workorder.internal.exception.WorkSessionLockedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
 import com.positivity.workorder.internal.exception.WorkSessionStateException;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.BreakSegmentRepository;
 import com.positivity.workorder.internal.repository.WorkSessionRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.WorkSessionService;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -46,9 +49,9 @@ import java.util.UUID;
 public class WorkSessionServiceImpl implements WorkSessionService {
     private final Clock clock;
 
-
     private final WorkSessionRepository workSessionRepository;
     private final BreakSegmentRepository breakSegmentRepository;
+    private final WorkorderRepository workorderRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Value("${timekeeping.allowOverlappingSessions:false}")
@@ -78,9 +81,12 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         }
 
         // 3. Build and save session
+        Workorder workorder = workorderRepository.findById(request.getWorkOrderId())
+                .orElseThrow(() -> new WorkorderNotFoundException(request.getWorkOrderId()));
+
         WorkSession session = WorkSession.builder()
                 .mechanicId(request.getMechanicId())
-                .workOrderId(request.getWorkOrderId())
+                .workOrder(workorder)
                 .workOrderTaskId(request.getWorkOrderTaskId())
                 .locationId(request.getLocationId())
                 .resourceId(request.getResourceId())
@@ -123,7 +129,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
         // Compute net duration (total elapsed minus completed breaks)
         long totalSeconds = Duration.between(session.getStartAt(), endAt).toSeconds();
-        List<BreakSegment> breaks = breakSegmentRepository.findByWorkSessionId(session.getWorkSessionId());
+        List<BreakSegment> breaks = breakSegmentRepository.findByWorkSession_WorkSessionId(session.getWorkSessionId());
         long breakSeconds = breaks.stream()
                 .filter(b -> b.getBreakEndAt() != null)
                 .mapToLong(b -> Duration.between(b.getBreakStartAt(), b.getBreakEndAt()).toSeconds())
@@ -153,7 +159,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         }
 
         // Guard: reject if an open break already exists
-        breakSegmentRepository.findFirstByWorkSessionIdAndBreakEndAtIsNull(workSessionId)
+        breakSegmentRepository.findFirstByWorkSession_WorkSessionIdAndBreakEndAtIsNull(workSessionId)
                 .ifPresent(existing -> {
                     throw new WorkSessionStateException(
                             "A break segment is already open for this work session. Stop it before starting another.");
@@ -161,7 +167,6 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
         BreakSegment seg = BreakSegment.builder()
                 .workSession(session)
-                .workSessionId(session.getWorkSessionId())
                 .breakStartAt(Instant.now(clock))
                 .breakType(request.getBreakType())
                 .notes(request.getNotes())
@@ -184,7 +189,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         BreakSegment seg = breakSegmentRepository.findById(breakSegmentId)
                 .orElseThrow(() -> new BreakSegmentNotFoundException(breakSegmentId));
 
-        if (!seg.getWorkSessionId().equals(workSessionId)) {
+        if (!seg.getWorkSession().getWorkSessionId().equals(workSessionId)) {
             throw new BreakSegmentNotFoundException(breakSegmentId, workSessionId);
         }
 
@@ -224,7 +229,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     private BreakSegmentResponse toBreakResponse(BreakSegment b) {
         return BreakSegmentResponse.builder()
                 .breakSegmentId(b.getBreakSegmentId())
-                .workSessionId(b.getWorkSessionId())
+                .workSessionId(b.getWorkSession().getWorkSessionId())
                 .breakStartAt(b.getBreakStartAt())
                 .breakEndAt(b.getBreakEndAt())
                 .breakType(b.getBreakType())

@@ -11,8 +11,8 @@ import java.util.UUID;
 @Repository
 public interface WorkorderStateTransitionRepository extends JpaRepository<WorkorderStateTransition, UUID> {
     @NonNull
-    List<WorkorderStateTransition> findByWorkorderId(@NonNull UUID workorderId);
+    List<WorkorderStateTransition> findByWorkorder_Id(@NonNull UUID workorderId);
 
     @NonNull
-    List<WorkorderStateTransition> findByWorkorderIdOrderByTransitionedAtDesc(@NonNull UUID workorderId);
+    List<WorkorderStateTransition> findByWorkorder_IdOrderByTransitionedAtDesc(@NonNull UUID workorderId);
 }

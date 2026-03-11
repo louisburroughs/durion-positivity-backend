@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,21 +93,12 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
 
         @AfterEach
         void tearDown() {
-                laborEntryRepository.deleteAll();
-                technicianAssignmentRepository.deleteAll();
-                workorderPartRepository.deleteAll();
-                workorderServiceRepository.deleteAll();
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
-                customerRepository.deleteAll();
-                vehicleRepository.deleteAll();
+                purgeTestData();
         }
 
         // ========== FULL AUTHORITIES TESTS ==========
 
         @Test
-        @Disabled("RestAssured NPE framework bug - see Story #157 for similar issue")
         @DisplayName("VIS-001: Get detail with full authorities - all capabilities true, financials present")
         void testGetDetailWithFullAuthorities() {
                 // Given: A workorder with services and parts
@@ -159,7 +149,6 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
         // ========== LIMITED AUTHORITIES TESTS ==========
 
         @Test
-        @Disabled("RestAssured NPE framework bug - see Story #157 for similar issue")
         @DisplayName("VIS-002: Get detail without financial authority - financial fields null")
         void testGetDetailWithoutFinancialAuthority() {
                 // Given: A workorder with services and parts
@@ -193,7 +182,6 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
         }
 
         @Test
-        @Disabled("RestAssured NPE framework bug - see Story #157 for similar issue")
         @DisplayName("VIS-003: Get detail with minimal authorities - most capabilities false")
         void testGetDetailWithMinimalAuthorities() {
                 // Given: A workorder
@@ -220,7 +208,6 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
         // ========== DERIVED FIELDS TESTS ==========
 
         @Test
-        @Disabled("RestAssured NPE framework bug - see Story #157 for similar issue")
         @DisplayName("VIS-004: Verify derived fields calculated correctly")
         void testDerivedFieldsCalculation() {
                 // Given: A workorder in WORK_IN_PROGRESS status
@@ -241,7 +228,6 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
         }
 
         @Test
-        @Disabled("RestAssured NPE framework bug - see Story #157 for similar issue")
         @DisplayName("VIS-005: Verify capability flags reflect authorities correctly")
         void testCapabilityFlagsAccuracy() {
                 // Given: A workorder
@@ -266,7 +252,6 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
         }
 
         @Test
-        @Disabled("RestAssured NPE framework bug - see Story #157 for similar issue")
         @DisplayName("VIS-006: Verify nested service/part financial fields omitted when canViewFinancials=false")
         void testNestedFinancialFieldsOmitted() {
                 // Given: A workorder with services and parts
@@ -295,7 +280,6 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
         }
 
         @Test
-        @Disabled("RestAssured NPE framework bug - see Story #157 for similar issue")
         @DisplayName("VIS-007: Verify labor totals calculated from labor entries")
         void testLaborTotalsCalculation() {
                 // Given: A workorder with labor entries
@@ -315,7 +299,6 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
         }
 
         @Test
-        @Disabled("RestAssured NPE framework bug - see Story #157 for similar issue")
         @DisplayName("VIS-008: Verify parts usage totals aggregated correctly")
         void testPartsUsageTotalsAggregation() {
                 // Given: A workorder with parts usage
@@ -432,8 +415,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                 // Create labor entry
                 WorkorderLaborEntry laborEntry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderId(workorder.getId())
-                                .workorderServiceId(service.getId())
+                                .workorderService(service)
                                 .technicianId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(2))
                                 .endTime(LocalDateTime.now(TEST_CLOCK))

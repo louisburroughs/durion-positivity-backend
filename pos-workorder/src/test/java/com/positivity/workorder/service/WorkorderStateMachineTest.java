@@ -114,7 +114,7 @@ class WorkorderStateMachineTest {
     @Test
     void testStartWorkorder_Success() throws Exception {
         when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
-        when(changeRequestRepository.findByWorkorderIdAndStatus(testWorkorderId,
+        when(changeRequestRepository.findByWorkorder_IdAndStatus(testWorkorderId,
                 ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
                 .thenReturn(Collections.emptyList());
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
@@ -143,10 +143,10 @@ class WorkorderStateMachineTest {
         when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
         ChangeRequest pendingRequest = ChangeRequest.builder()
                 .id(testChangeRequestId)
-                .workorderId(testWorkorderId)
+                .workorder(testWorkorder)
                 .status(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
                 .build();
-        when(changeRequestRepository.findByWorkorderIdAndStatus(testWorkorderId,
+        when(changeRequestRepository.findByWorkorder_IdAndStatus(testWorkorderId,
                 ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
                 .thenReturn(List.of(pendingRequest));
 
@@ -203,25 +203,25 @@ class WorkorderStateMachineTest {
     @Test
     void testGetTransitionHistory() {
         List<WorkorderStateTransition> expectedHistory = Collections.emptyList();
-        when(transitionRepository.findByWorkorderIdOrderByTransitionedAtDesc(testWorkorderId))
+        when(transitionRepository.findByWorkorder_IdOrderByTransitionedAtDesc(testWorkorderId))
                 .thenReturn(expectedHistory);
 
         List<WorkorderStateTransition> result = stateMachine.getTransitionHistory(testWorkorderId);
 
         assertEquals(expectedHistory, result);
-        verify(transitionRepository).findByWorkorderIdOrderByTransitionedAtDesc(testWorkorderId);
+        verify(transitionRepository).findByWorkorder_IdOrderByTransitionedAtDesc(testWorkorderId);
     }
 
     @Test
     void testGetSnapshotHistory() {
         List<WorkorderSnapshot> expectedSnapshots = Collections.emptyList();
-        when(snapshotRepository.findByWorkorderIdOrderByCapturedAtDesc(testWorkorderId))
+        when(snapshotRepository.findByWorkorder_IdOrderByCapturedAtDesc(testWorkorderId))
                 .thenReturn(expectedSnapshots);
 
         List<WorkorderSnapshot> result = stateMachine.getSnapshotHistory(testWorkorderId);
 
         assertEquals(expectedSnapshots, result);
-        verify(snapshotRepository).findByWorkorderIdOrderByCapturedAtDesc(testWorkorderId);
+        verify(snapshotRepository).findByWorkorder_IdOrderByCapturedAtDesc(testWorkorderId);
     }
 
     @Test

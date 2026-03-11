@@ -15,6 +15,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
@@ -36,8 +37,8 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "workorder_labor_entry", indexes = {
-        @Index(name = "idx_labor_workorder_id", columnList = "workorderId"),
-        @Index(name = "idx_labor_service_id", columnList = "workorderServiceId"),
+        @Index(name = "idx_labor_workorder_id", columnList = "workorder_id"),
+        @Index(name = "idx_labor_service_id", columnList = "workorder_service_id"),
         @Index(name = "idx_labor_start_time", columnList = "startTime")
 })
 @Data
@@ -56,15 +57,24 @@ public class WorkorderLaborEntry {
     @NonNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "workorder_id", nullable = false, updatable = false)
+    @ToString.Exclude
     private Workorder workorder;
 
     @NonNull
-    @Column(name = "workorder_id", nullable = false, updatable = false, insertable = false, columnDefinition = "UUID")
-    private UUID workorderId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "workorder_service_id", nullable = false, updatable = false)
+    @ToString.Exclude
+    private WorkorderService workorderService;
 
-    @NonNull
-    @Column(nullable = false, updatable = false, columnDefinition = "UUID")
-    private UUID workorderServiceId;
+    @jakarta.persistence.Transient
+    public UUID getWorkorderServiceId() {
+        return workorderService != null ? workorderService.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setWorkorderServiceId(UUID workorderServiceId) {
+        this.workorderService = new WorkorderService(workorderServiceId);
+    }
 
     @NonNull
     @Column(nullable = false, updatable = false, columnDefinition = "UUID")
@@ -143,5 +153,10 @@ public class WorkorderLaborEntry {
     private BigDecimal calculateHours(LocalDateTime start, LocalDateTime end) {
         long minutes = java.time.Duration.between(start, end).toMinutes();
         return BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), 2, java.math.RoundingMode.HALF_UP);
+    }
+
+    @SuppressWarnings("null")
+    public WorkorderLaborEntry(UUID id) {
+        this.id = id;
     }
 }

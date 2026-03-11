@@ -15,6 +15,7 @@ import com.positivity.shopmanager.internal.entity.AppointmentAudit;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 
 import java.time.Instant;
 import java.util.List;
@@ -94,6 +95,9 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
         @Autowired
         private AppointmentAuditRepository appointmentAuditRepository;
 
+        @Autowired
+        private RescheduleHistoryRepository rescheduleHistoryRepository;
+
         // Mocked to prevent context-startup failures; not invoked by reschedule/cancel
         // stubs
         @MockitoBean
@@ -110,6 +114,7 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
         @BeforeEach
         void cleanDatabase() {
                 appointmentAuditRepository.deleteAll();
+                rescheduleHistoryRepository.deleteAll();
                 appointmentRepository.deleteAll();
         }
 

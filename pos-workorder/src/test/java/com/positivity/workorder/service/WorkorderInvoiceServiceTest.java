@@ -31,6 +31,7 @@ import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
 import com.positivity.workorder.internal.client.InvoiceClient;
+import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderService;
@@ -526,7 +527,7 @@ class WorkorderInvoiceServiceTest {
         private Workorder completedWorkorder() {
                 return Workorder.builder()
                                 .id(workorderId)
-                                .estimateId(estimateId)
+                                .estimate(new Estimate(estimateId))
                                 .approvalId(approvalId)
                                 .status(WorkorderStatus.COMPLETED)
                                 .updatedAt(LocalDateTime.now(TEST_CLOCK))

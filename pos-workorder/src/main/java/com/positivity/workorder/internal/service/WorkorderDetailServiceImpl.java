@@ -54,7 +54,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
 
                 // Load current technician assignment
                 Optional<TechnicianAssignment> currentAssignment = technicianAssignmentRepository
-                                .findByWorkorderIdAndCurrentTrue(workorderId);
+                                .findByWorkorder_IdAndCurrentTrue(workorderId);
 
                 // Calculate capability flags
                 WorkorderCapabilities capabilities = calculateCapabilities(userAuthorities);
@@ -143,7 +143,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                                 .map(service -> {
                                         // Calculate total labor hours from labor entries
                                         BigDecimal totalLaborHours = laborEntryRepository
-                                                        .findByWorkorderServiceIdOrderByStartTimeDesc(service.getId())
+                                                        .findByWorkorderService_IdOrderByStartTimeDesc(service.getId())
                                                         .stream()
                                                         .map(WorkorderLaborEntry::getHoursWorked)
                                                         .reduce(BigDecimal.ZERO, BigDecimal::add);

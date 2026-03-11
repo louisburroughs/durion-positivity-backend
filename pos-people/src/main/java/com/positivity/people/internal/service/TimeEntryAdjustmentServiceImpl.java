@@ -39,7 +39,8 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 
 	@Override
 	@Transactional
-	@NonNull public TimeEntryAdjustmentResponse createAdjustment(@NonNull TimeEntryAdjustmentRequest request) {
+	@NonNull
+	public TimeEntryAdjustmentResponse createAdjustment(@NonNull TimeEntryAdjustmentRequest request) {
 		if (request.getReasonCode() == null || request.getReasonCode().isBlank()) {
 			throw new IllegalArgumentException("reasonCode is required");
 		}
@@ -49,7 +50,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 		}
 
 		Optional<com.positivity.people.internal.entity.TimeEntry> entryOptional = timeEntryRepository
-			.findById(request.getTimeEntryId());
+				.findById(request.getTimeEntryId());
 		if (entryOptional.isEmpty()) {
 			throw new NotFoundException("Time entry not found");
 		}
@@ -70,7 +71,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 		}
 
 		com.positivity.people.internal.entity.TimeEntryAdjustment adjustment = new com.positivity.people.internal.entity.TimeEntryAdjustment();
-		adjustment.setTimeEntryId(request.getTimeEntryId());
+		adjustment.setTimeEntry(entry);
 		adjustment.setReasonCode(request.getReasonCode());
 		adjustment.setNotes(request.getNotes());
 		if (request.getProposedStartAt() != null) {
@@ -90,15 +91,16 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 
 	@Override
 	@Transactional(readOnly = true)
-	@NonNull public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull UUID timeEntryId) {
-		return adjustmentRepository.findByTimeEntryId(timeEntryId).stream().map(this::toDto).toList();
+	@NonNull
+	public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull UUID timeEntryId) {
+		return adjustmentRepository.findByTimeEntry_TimeEntryId(timeEntryId).stream().map(this::toDto).toList();
 	}
 
 	@Override
 	@Transactional
 	public boolean approveAdjustment(java.util.UUID adjustmentId, String approverUserId, String correlationId) {
 		Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt = adjustmentRepository
-			.findById(adjustmentId);
+				.findById(adjustmentId);
 		if (opt.isEmpty()) {
 			throw new NotFoundException("Adjustment not found: " + adjustmentId);
 		}
@@ -117,8 +119,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 			audit.setCorrelationId(correlationId);
 			audit.setDetails("Adjustment approved");
 			auditRepository.save(audit);
-		}
-		catch (Exception ignore) {
+		} catch (Exception ignore) {
 			// Audit logging failure should not prevent adjustment approval flow.
 		}
 

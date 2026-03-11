@@ -53,7 +53,7 @@ public class VehicleReferenceService {
             List<CarApiMake> makes = new ArrayList<>();
             for (JsonNode node : results) {
                 CarApiMake make = new CarApiMake();
-                make.setMakeId(node.path("id").asString(""));
+                make.setMakeId(UUID.fromString(node.path("id").asString()));
                 make.setMakeName(node.path("name").asString(""));
                 make.setCacheTimestamp(LocalDateTime.now(clock));
                 makes.add(makeRepository.save(make));
@@ -83,7 +83,7 @@ public class VehicleReferenceService {
                 CarApiModel model = new CarApiModel();
                 model.setModelId(UUID.fromString(node.path("id").asString()));
                 model.setModelName(node.path("name").asString(""));
-                model.setMakeId(makeId);
+                model.setMake(makeRepository.getReferenceById(makeId));
                 model.setCacheTimestamp(LocalDateTime.now(clock));
                 models.add(modelRepository.save(model));
             }

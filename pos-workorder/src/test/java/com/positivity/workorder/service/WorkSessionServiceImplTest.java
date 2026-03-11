@@ -40,6 +40,7 @@ import com.positivity.workorder.internal.dto.StartWorkSessionRequest;
 import com.positivity.workorder.internal.dto.StopWorkSessionRequest;
 import com.positivity.workorder.internal.dto.WorkSessionResponse;
 import com.positivity.workorder.internal.entity.BreakSegment;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkSession;
 import com.positivity.workorder.internal.enums.BreakType;
 import com.positivity.workorder.internal.enums.WorkSessionStatus;
@@ -50,6 +51,7 @@ import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
 import com.positivity.workorder.internal.exception.WorkSessionStateException;
 import com.positivity.workorder.internal.repository.BreakSegmentRepository;
 import com.positivity.workorder.internal.repository.WorkSessionRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.WorkSessionServiceImpl;
 
 /**
@@ -91,6 +93,9 @@ class WorkSessionServiceImplTest {
         private BreakSegmentRepository breakSegmentRepository;
 
         @Mock
+        private WorkorderRepository workorderRepository;
+
+        @Mock
         private ApplicationEventPublisher eventPublisher;
 
         @InjectMocks
@@ -110,6 +115,7 @@ class WorkSessionServiceImplTest {
         void setUp() {
                 ReflectionTestUtils.setField(workSessionService, "allowOverlappingSessions", false);
                 setAuthenticatedUser(List.of(), SYSTEM_USER_ID.toString());
+                when(workorderRepository.findById(WORK_ORDER_ID)).thenReturn(Optional.of(new Workorder(WORK_ORDER_ID)));
         }
 
         @AfterEach
@@ -130,7 +136,7 @@ class WorkSessionServiceImplTest {
                 return WorkSession.builder()
                                 .workSessionId(SESSION_ID)
                                 .mechanicId(MECHANIC_ID)
-                                .workOrderId(WORK_ORDER_ID)
+                                .workOrder(new Workorder(WORK_ORDER_ID))
                                 .workOrderTaskId(TASK_ID)
                                 .locationId(LOCATION_ID)
                                 .startAt(startAt)
@@ -267,7 +273,7 @@ class WorkSessionServiceImplTest {
                 Instant startAt = Instant.now(TEST_CLOCK).minus(45, ChronoUnit.MINUTES);
                 WorkSession session = inProgressSession(startAt);
                 when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-                when(breakSegmentRepository.findByWorkSessionId(SESSION_ID)).thenReturn(List.of());
+                when(breakSegmentRepository.findByWorkSession_WorkSessionId(SESSION_ID)).thenReturn(List.of());
                 when(workSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
                 WorkSessionResponse response = workSessionService.stopSession(SESSION_ID, new StopWorkSessionRequest());
@@ -297,7 +303,7 @@ class WorkSessionServiceImplTest {
                 // Issue CAP-139 Story #68: start break
                 WorkSession session = inProgressSession(Instant.now(TEST_CLOCK).minus(60, ChronoUnit.MINUTES));
                 when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-                when(breakSegmentRepository.findFirstByWorkSessionIdAndBreakEndAtIsNull(SESSION_ID))
+                when(breakSegmentRepository.findFirstByWorkSession_WorkSessionIdAndBreakEndAtIsNull(SESSION_ID))
                                 .thenReturn(Optional.empty());
                 when(breakSegmentRepository.save(any())).thenAnswer(inv -> {
                         BreakSegment bs = inv.getArgument(0);
@@ -320,7 +326,7 @@ class WorkSessionServiceImplTest {
                 // Issue CAP-139 Story #68: open-break guard
                 WorkSession session = inProgressSession(Instant.now(TEST_CLOCK).minus(60, ChronoUnit.MINUTES));
                 when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-                when(breakSegmentRepository.findFirstByWorkSessionIdAndBreakEndAtIsNull(SESSION_ID))
+                when(breakSegmentRepository.findFirstByWorkSession_WorkSessionIdAndBreakEndAtIsNull(SESSION_ID))
                                 .thenReturn(Optional.of(new BreakSegment()));
 
                 AddBreakSegmentRequest request = AddBreakSegmentRequest.builder()
@@ -337,7 +343,7 @@ class WorkSessionServiceImplTest {
                 // Issue CAP-139 Story #68: no open-break guard triggered
                 WorkSession session = inProgressSession(Instant.now(TEST_CLOCK).minus(60, ChronoUnit.MINUTES));
                 when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-                when(breakSegmentRepository.findFirstByWorkSessionIdAndBreakEndAtIsNull(SESSION_ID))
+                when(breakSegmentRepository.findFirstByWorkSession_WorkSessionIdAndBreakEndAtIsNull(SESSION_ID))
                                 .thenReturn(Optional.empty());
                 when(breakSegmentRepository.save(any())).thenAnswer(inv -> {
                         BreakSegment bs = inv.getArgument(0);
@@ -362,7 +368,6 @@ class WorkSessionServiceImplTest {
                 BreakSegment openBreak = BreakSegment.builder()
                                 .breakSegmentId(BREAK_ID)
                                 .workSession(session)
-                                .workSessionId(SESSION_ID)
                                 .breakStartAt(Instant.now(TEST_CLOCK).minus(10, ChronoUnit.MINUTES))
                                 .build();
                 when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
@@ -394,7 +399,9 @@ class WorkSessionServiceImplTest {
                 WorkSession session = inProgressSession(Instant.now(TEST_CLOCK).minus(60, ChronoUnit.MINUTES));
                 UUID otherSessionId = UUID.fromString("99999999-0000-0000-0000-000000000009");
                 BreakSegment breakFromOtherSession = mock(BreakSegment.class);
-                when(breakFromOtherSession.getWorkSessionId()).thenReturn(otherSessionId);
+                WorkSession otherSession = mock(WorkSession.class);
+                when(otherSession.getWorkSessionId()).thenReturn(otherSessionId);
+                when(breakFromOtherSession.getWorkSession()).thenReturn(otherSession);
                 when(breakFromOtherSession.getBreakEndAt()).thenReturn(null);
                 when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
                 when(breakSegmentRepository.findById(BREAK_ID)).thenReturn(Optional.of(breakFromOtherSession));
@@ -418,13 +425,13 @@ class WorkSessionServiceImplTest {
                 BreakSegment closedBreak = BreakSegment.builder()
                                 .breakSegmentId(BREAK_ID)
                                 .workSession(session)
-                                .workSessionId(SESSION_ID)
                                 .breakStartAt(breakStart)
                                 .breakEndAt(breakEnd)
                                 .build();
 
                 when(workSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-                when(breakSegmentRepository.findByWorkSessionId(SESSION_ID)).thenReturn(List.of(closedBreak));
+                when(breakSegmentRepository.findByWorkSession_WorkSessionId(SESSION_ID))
+                                .thenReturn(List.of(closedBreak));
                 when(workSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
                 WorkSessionResponse response = workSessionService.stopSession(SESSION_ID, new StopWorkSessionRequest());

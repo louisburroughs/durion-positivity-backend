@@ -16,8 +16,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
 import com.positivity.workorder.internal.entity.TimeEntry;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.TimeEntryStatus;
 import com.positivity.workorder.internal.repository.TimeEntryRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import io.restassured.http.ContentType;
@@ -62,9 +64,12 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private TimeEntryRepository timeEntryRepository;
 
+    @Autowired
+    private WorkorderRepository workorderRepository;
+
     @AfterEach
     void cleanTimeEntries() {
-        timeEntryRepository.deleteAll();
+        purgeTestData();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -235,9 +240,10 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
     // ── Fixture builders ──────────────────────────────────────────────────────
 
     private TimeEntry buildSubmittedEntry() {
+        Workorder workorder = workorderRepository.save(Workorder.builder().build());
         return TimeEntry.builder()
                 .personId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .workOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workOrder(workorder)
                 .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
                 .endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.SUBMITTED)
@@ -245,9 +251,10 @@ class TimeEntryContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     private TimeEntry buildApprovedEntry() {
+        Workorder workorder = workorderRepository.save(Workorder.builder().build());
         return TimeEntry.builder()
                 .personId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .workOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .workOrder(workorder)
                 .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
                 .endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.APPROVED)

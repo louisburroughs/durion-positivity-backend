@@ -2,6 +2,7 @@ package com.positivity.location.service;
 
 import java.time.ZoneOffset;
 import java.time.Clock;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -16,6 +17,7 @@ import com.positivity.location.internal.dto.CoverageRuleRequest;
 import com.positivity.location.internal.dto.CoverageRuleResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.MobileUnitCoverageRuleEntity;
 import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
@@ -23,6 +25,7 @@ import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.MobileUnitCoverageRuleRepository;
 import com.positivity.location.internal.repository.MobileUnitRepository;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
@@ -72,6 +75,9 @@ class MobileUnitServiceTest {
 
         @Mock
         private ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+
+        @Mock
+        private LocationRepository locationRepository;
 
         @InjectMocks
         private MobileUnitServiceImpl service;
@@ -136,6 +142,8 @@ class MobileUnitServiceTest {
                 UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 when(mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCase(baseLocationId, "NorthVan"))
                                 .thenReturn(false);
+                when(locationRepository.findById(baseLocationId))
+                                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
                 when(mobileUnitRepository.save(any(MobileUnitEntity.class)))
                                 .thenThrow(new DataIntegrityViolationException(
                                                 "violates uq_mobile_unit_base_location_lower_name"));
@@ -194,11 +202,13 @@ class MobileUnitServiceTest {
                                                 .build()));
                 when(mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCase(baseLocationId, "Unit-1"))
                                 .thenReturn(false);
+                when(locationRepository.findById(baseLocationId))
+                                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
 
                 MobileUnitEntity savedEntity = MobileUnitEntity.builder()
                                 .id(savedId)
                                 .name("Unit-1")
-                                .baseLocationId(baseLocationId)
+                                .baseLocation(Location.builder().id(baseLocationId).build())
                                 .status("ACTIVE")
                                 .travelBufferPolicyId(policyId)
                                 .notes("ready")
@@ -415,13 +425,15 @@ class MobileUnitServiceTest {
                                 .id(activeId)
                                 .name("Active")
                                 .status("ACTIVE")
-                                .baseLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .baseLocation(Location.builder()
+                                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001")).build())
                                 .build();
                 MobileUnitEntity inactiveUnit = MobileUnitEntity.builder()
                                 .id(inactiveId)
                                 .name("Inactive")
                                 .status("INACTIVE")
-                                .baseLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                .baseLocation(Location.builder()
+                                                .id(UUID.fromString("00000000-0000-0000-0000-000000000001")).build())
                                 .build();
 
                 MobileUnitCoverageRuleEntity firstForActive = MobileUnitCoverageRuleEntity.builder()

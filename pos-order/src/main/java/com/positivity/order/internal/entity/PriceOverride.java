@@ -19,6 +19,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -51,14 +53,16 @@ public class PriceOverride {
     /**
      * Order identifier this override applies to.
      */
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID orderId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "order_id", nullable = false)
+    private SalesOrder order;
 
     /**
      * Order line item identifier this override applies to.
      */
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID orderLineId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "order_line_id", nullable = false)
+    private SalesOrderLine orderLine;
 
     /**
      * SKU or product identifier for the line item.

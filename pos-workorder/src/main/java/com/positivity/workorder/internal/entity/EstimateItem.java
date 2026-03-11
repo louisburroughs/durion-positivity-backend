@@ -17,15 +17,20 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * Represents a line item (part or labor) on an estimate.
@@ -47,8 +52,10 @@ public class EstimateItem {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID estimateId; // Foreign key to Estimate
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "estimate_id", nullable = false)
+    @ToString.Exclude
+    private Estimate estimate;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -157,5 +164,19 @@ public class EstimateItem {
                 throw new IllegalArgumentException("LABOR items must have either serviceId or description");
             }
         }
+    }
+
+    public EstimateItem(UUID id) {
+        this.id = id;
+    }
+
+    @Transient
+    public UUID getEstimateId() {
+        return estimate != null ? estimate.getId() : null;
+    }
+
+    @Transient
+    public void setEstimateId(UUID estimateId) {
+        this.estimate = new Estimate(estimateId);
     }
 }

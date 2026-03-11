@@ -7,14 +7,18 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
@@ -31,7 +35,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "work_session", indexes = {
         @Index(name = "idx_work_session_mechanic_id", columnList = "mechanicId"),
-        @Index(name = "idx_work_session_work_order_id", columnList = "workOrderId"),
+        @Index(name = "idx_work_session_work_order_id", columnList = "work_order_id"),
         @Index(name = "idx_work_session_status", columnList = "status")
 })
 @Data
@@ -52,8 +56,20 @@ public class WorkSession {
     private UUID mechanicId;
 
     @NonNull
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID workOrderId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "work_order_id", nullable = false)
+    @ToString.Exclude
+    private Workorder workOrder;
+
+    @jakarta.persistence.Transient
+    public UUID getWorkOrderId() {
+        return workOrder != null ? workOrder.getId() : null;
+    }
+
+    @jakarta.persistence.Transient
+    public void setWorkOrderId(UUID workOrderId) {
+        this.workOrder = new Workorder(workOrderId);
+    }
 
     @NonNull
     @Column(nullable = false, columnDefinition = "UUID")

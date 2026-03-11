@@ -34,8 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code GatewayAuthoritiesFilter} clears SecurityContextHolder when headers
  * absent, so {@code @WithMockUser} is not used — header-based auth is the only
  * supported pattern.</li>
- * <li>ADR-0017: HTTP status codes — 200 success, 404 not found, 403
- * forbidden</li>
+ * <li>ADR-0017: HTTP status codes — 200 success, 404 not found, 401
+ * unauthenticated, 403 forbidden</li>
  * </ul>
  *
  * <p>
@@ -175,28 +175,27 @@ class BillingRulesContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // BR-004 — Returns 403 when caller lacks crm:party:view authority
+    // BR-004 — Returns 401 when caller is unauthenticated
     // -------------------------------------------------------------------------
 
     /**
-     * BR-004: A request without gateway auth headers returns 403 Forbidden.
+     * BR-004: A request without gateway auth headers returns 401 Unauthorized.
      *
      * <p>
      * Per ADR-0014, {@code GatewayAuthoritiesFilter} clears the
      * SecurityContextHolder when {@code X-Authorities} is absent, causing
-     * {@code @PreAuthorize("hasAuthority('crm:party:view')")} to deny the request
-     * with 403. This test passes in RED because the filter behavior is independent
-     * of whether the route handler exists.
+     * and the security entry point to reject the request with 401 before method
+     * security evaluation.
      *
      * Issue: CAP-252
      */
     @Test
-    @DisplayName("BR-004: billing-rules returns 403 when caller has no authority")
-    void billingRules_returns403_whenUnauthorized() throws Exception {
+    @DisplayName("BR-004: billing-rules returns 401 when caller is unauthenticated")
+    void billingRules_returns401_whenUnauthenticated() throws Exception {
         CommercialParty party = createTestParty();
 
         // No X-Authorities/X-User headers → GatewayAuthoritiesFilter clears context
         mockMvc.perform(get("/v1/crm/snapshot/party/{partyId}/billing-rules", party.getPartyId()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }

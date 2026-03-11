@@ -70,12 +70,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        changeRequestRepository.deleteAll();
-        workorderServiceRepository.deleteAll();
-        workorderPartRepository.deleteAll();
-        workorderRepository.deleteAll();
-        estimateRepository.deleteAll();
-    }
+                purgeTestData();
+        }
 
     // ========== CHANGE REQUEST CREATION TESTS ==========
 
@@ -429,7 +425,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Create workorder in WORK_IN_PROGRESS status
         Workorder workorder = Workorder.builder()
-                .estimateId(savedEstimate.getId())
+                .estimate(savedEstimate)
                 .customerId(testCustomerId)
                 .vehicleId(testVehicleId)
                 .shopId(testLocationId)
@@ -462,7 +458,7 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Create workorder in DRAFT status
         Workorder workorder = Workorder.builder()
-                .estimateId(savedEstimate.getId())
+                .estimate(savedEstimate)
                 .customerId(testCustomerId)
                 .vehicleId(testVehicleId)
                 .shopId(testLocationId)

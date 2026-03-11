@@ -18,7 +18,7 @@ public interface ApprovalRecordRepository extends JpaRepository<ApprovalRecord, 
     /**
      * Find all approval records for a specific price override.
      */
-    List<ApprovalRecord> findByPriceOverrideId(UUID priceOverrideId);
+    List<ApprovalRecord> findByPriceOverride_OverrideId(UUID priceOverrideId);
 
     /**
      * Find all approval actions by a specific reviewer.

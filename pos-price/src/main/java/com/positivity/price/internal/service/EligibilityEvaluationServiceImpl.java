@@ -6,6 +6,7 @@ import com.positivity.price.internal.client.VehicleDataProvider;
 import com.positivity.price.internal.client.VehicleContext;
 import com.positivity.price.internal.dto.AddEligibilityRuleRequest;
 import com.positivity.price.internal.entity.PromotionEligibilityRule;
+import com.positivity.price.internal.entity.PromotionOffer;
 import com.positivity.price.internal.enums.ConditionType;
 import com.positivity.price.internal.enums.EligibilityReasonCode;
 import com.positivity.price.internal.enums.RuleCombination;
@@ -54,12 +55,12 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
     @Transactional
     public PromotionEligibilityRule addRule(
             @NonNull UUID promotionId, @NonNull AddEligibilityRuleRequest request) {
-        promotionOfferRepository
+        PromotionOffer promotion = promotionOfferRepository
                 .findById(promotionId)
                 .orElseThrow(() -> new PromotionOfferNotFoundException(promotionId));
 
         PromotionEligibilityRule rule = new PromotionEligibilityRule();
-        rule.setPromotionId(promotionId);
+        rule.setPromotion(promotion);
         rule.setConditionType(request.getConditionType());
         rule.setOperator(request.getOperator());
         rule.setValue(request.getValue());
@@ -73,13 +74,15 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
     @NonNull
     @Transactional(readOnly = true)
     public List<PromotionEligibilityRule> getRules(@NonNull UUID promotionId) {
-        return promotionEligibilityRuleRepository.findByPromotionId(promotionId);
+        return promotionEligibilityRuleRepository.findByPromotion_PromotionOfferId(promotionId);
     }
 
     @Override
     @Transactional
     public void deleteRule(@NonNull UUID promotionId, @NonNull UUID ruleId) {
-        long deleted = promotionEligibilityRuleRepository.deleteByRuleIdAndPromotionId(ruleId, promotionId);
+        long deleted = promotionEligibilityRuleRepository.deleteByRuleIdAndPromotion_PromotionOfferId(
+                ruleId,
+                promotionId);
         if (deleted == 0) {
             throw new EligibilityRuleNotFoundException(ruleId);
         }
@@ -90,7 +93,8 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
     @Transactional(readOnly = true)
     public EligibilityDecision evaluateEligibility(
             @NonNull UUID promotionId, @Nullable UUID accountId, @Nullable UUID vehicleId) {
-        List<PromotionEligibilityRule> rules = promotionEligibilityRuleRepository.findByPromotionId(promotionId);
+        List<PromotionEligibilityRule> rules = promotionEligibilityRuleRepository.findByPromotion_PromotionOfferId(
+                promotionId);
         if (rules.isEmpty()) {
             return new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE);
         }

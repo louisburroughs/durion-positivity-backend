@@ -6,6 +6,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
@@ -28,11 +30,13 @@ public class ProductReplacementEntity {
     @Column(columnDefinition = "UUID")
     private UUID replacementId;
 
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID originalProductId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "original_product_id", nullable = false)
+    private ProductEntity originalProduct;
 
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID replacementProductId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "replacement_product_id", nullable = false)
+    private ProductEntity replacementProduct;
 
     @Column(nullable = false)
     private Integer priorityOrder;

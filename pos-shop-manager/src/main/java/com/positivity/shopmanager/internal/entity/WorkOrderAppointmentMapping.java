@@ -11,8 +11,11 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,8 +37,13 @@ public class WorkOrderAppointmentMapping {
     @Column(name = "work_order_id", nullable = false, columnDefinition = "UUID")
     private UUID workOrderId;
 
-    @Column(name = "appointment_id", nullable = false, columnDefinition = "UUID")
-    private UUID appointmentId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "appointment_id", nullable = false)
+    private Appointment appointment;
+
+    public UUID getAppointmentId() {
+        return appointment != null ? appointment.getAppointmentId() : null;
+    }
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreatedDate

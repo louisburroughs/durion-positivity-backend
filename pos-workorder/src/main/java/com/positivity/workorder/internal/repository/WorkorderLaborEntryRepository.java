@@ -23,55 +23,55 @@ import java.util.UUID;
 @Repository
 public interface WorkorderLaborEntryRepository extends JpaRepository<WorkorderLaborEntry, UUID> {
 
-        /**
-         * Find all labor entries for a workorder, ordered by start time descending
-         * (newest first).
-         * 
-         * @param workorderId the workorder ID
-         * @return list of labor entries
-         */
-        @NonNull
-        List<WorkorderLaborEntry> findByWorkorderIdOrderByStartTimeDesc(@NonNull UUID workorderId);
+  /**
+   * Find all labor entries for a workorder, ordered by start time descending
+   * (newest first).
+   * 
+   * @param workorderId the workorder ID
+   * @return list of labor entries
+   */
+  @NonNull
+  List<WorkorderLaborEntry> findByWorkorder_IdOrderByStartTimeDesc(@NonNull UUID workorderId);
 
-        /**
-         * Find all labor entries for a specific service, ordered by start time
-         * descending.
-         * 
-         * @param workorderServiceId the service ID
-         * @return list of labor entries
-         */
-        @NonNull
-        List<WorkorderLaborEntry> findByWorkorderServiceIdOrderByStartTimeDesc(@NonNull UUID workorderServiceId);
+  /**
+   * Find all labor entries for a specific service, ordered by start time
+   * descending.
+   * 
+   * @param workorderServiceId the service ID
+   * @return list of labor entries
+   */
+  @NonNull
+  List<WorkorderLaborEntry> findByWorkorderService_IdOrderByStartTimeDesc(@NonNull UUID workorderServiceId);
 
-        /**
-         * Find active (not stopped) labor entry for a specific service.
-         * 
-         * @param workorderServiceId the service ID
-         * @return optional active labor entry
-         */
-        @NonNull
-        Optional<WorkorderLaborEntry> findByWorkorderServiceIdAndEndTimeIsNull(@NonNull UUID workorderServiceId);
+  /**
+   * Find active (not stopped) labor entry for a specific service.
+   * 
+   * @param workorderServiceId the service ID
+   * @return optional active labor entry
+   */
+  @NonNull
+  Optional<WorkorderLaborEntry> findByWorkorderService_IdAndEndTimeIsNull(@NonNull UUID workorderServiceId);
 
-        @NonNull
-        List<WorkorderLaborEntry> findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(@NonNull UUID technicianId);
+  @NonNull
+  List<WorkorderLaborEntry> findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(@NonNull UUID technicianId);
 
-        @NonNull
-        List<WorkorderLaborEntry> findByEndTimeIsNotNullAndEndTimeBetween(
-                        @NonNull LocalDateTime startInclusive,
-                        @NonNull LocalDateTime endExclusive);
+  @NonNull
+  List<WorkorderLaborEntry> findByEndTimeIsNotNullAndEndTimeBetween(
+      @NonNull LocalDateTime startInclusive,
+      @NonNull LocalDateTime endExclusive);
 
-        @Query("""
-                        SELECT e
-                        FROM WorkorderLaborEntry e
-                        JOIN e.workorder w
-                        WHERE e.endTime IS NOT NULL
-                          AND e.endTime BETWEEN :startInclusive AND :endExclusive
-                          AND w.status = :finalizedStatus
-                          AND (w.isReopened IS NULL OR w.isReopened = false)
-                        """)
-        @NonNull
-        List<WorkorderLaborEntry> findFinalizedByEndTimeBetween(
-                        @NonNull @Param("startInclusive") LocalDateTime startInclusive,
-                        @NonNull @Param("endExclusive") LocalDateTime endExclusive,
-                        @NonNull @Param("finalizedStatus") WorkorderStatus finalizedStatus);
+  @Query("""
+      SELECT e
+      FROM WorkorderLaborEntry e
+      JOIN e.workorder w
+      WHERE e.endTime IS NOT NULL
+        AND e.endTime BETWEEN :startInclusive AND :endExclusive
+        AND w.status = :finalizedStatus
+        AND (w.isReopened IS NULL OR w.isReopened = false)
+      """)
+  @NonNull
+  List<WorkorderLaborEntry> findFinalizedByEndTimeBetween(
+      @NonNull @Param("startInclusive") LocalDateTime startInclusive,
+      @NonNull @Param("endExclusive") LocalDateTime endExclusive,
+      @NonNull @Param("finalizedStatus") WorkorderStatus finalizedStatus);
 }

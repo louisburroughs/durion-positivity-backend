@@ -3,7 +3,9 @@ package com.positivity.shopmanager.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.Assignment;
+import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AssignmentMechanicRepository;
@@ -73,8 +75,8 @@ class AssignmentServiceImplStory10Test {
                 .notes("Test note")
                 .build();
 
-        when(assignmentRepository.findByAppointmentId(appointmentId)).thenReturn(List.of(assignment));
-        when(assignmentMechanicRepository.findByAssignmentId(assignmentId)).thenReturn(List.of());
+        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
+        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of());
 
         List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -97,8 +99,8 @@ class AssignmentServiceImplStory10Test {
                 .updatedAt(UPDATED)
                 .build();
 
-        when(assignmentRepository.findByAppointmentId(appointmentId)).thenReturn(List.of(assignment));
-        when(assignmentMechanicRepository.findByAssignmentId(assignmentId)).thenReturn(List.of());
+        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
+        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of());
 
         List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -120,8 +122,8 @@ class AssignmentServiceImplStory10Test {
                 .updatedAt(UPDATED)
                 .build();
 
-        when(assignmentRepository.findByAppointmentId(appointmentId)).thenReturn(List.of(assignment));
-        when(assignmentMechanicRepository.findByAssignmentId(assignmentId)).thenReturn(List.of());
+        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
+        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of());
 
         List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -142,8 +144,8 @@ class AssignmentServiceImplStory10Test {
                 .notes(null)
                 .build();
 
-        when(assignmentRepository.findByAppointmentId(appointmentId)).thenReturn(List.of(assignment));
-        when(assignmentMechanicRepository.findByAssignmentId(assignmentId)).thenReturn(List.of());
+        when(assignmentRepository.findByAppointment_AppointmentId(appointmentId)).thenReturn(List.of(assignment));
+        when(assignmentMechanicRepository.findByAssignment_AssignmentId(assignmentId)).thenReturn(List.of());
 
         List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
@@ -161,9 +163,18 @@ class AssignmentServiceImplStory10Test {
      * @return a builder pre-populated with stable defaults
      */
     private static Assignment.AssignmentBuilder baseAssignment(UUID assignmentId, UUID appointmentId) {
+        Appointment appointment = Appointment.builder()
+            .appointmentId(appointmentId)
+            .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+            .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+            .locationId(UUID.fromString("00000000-0000-0000-0000-000000000003"))
+            .startAt(CREATED)
+            .endAt(CREATED.plusSeconds(3600))
+            .status(AppointmentStatus.SCHEDULED)
+            .build();
         return Assignment.builder()
                 .assignmentId(assignmentId)
-                .appointmentId(appointmentId)
+            .appointment(appointment)
                 .status(AssignmentStatusEnum.CONFIRMED)
                 .version(1)
                 .createdAt(CREATED)

@@ -37,8 +37,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
 
         @AfterEach
         void tearDown() {
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         @Test
@@ -211,7 +210,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
         private EstimateItem buildItem(UUID estimateId, EstimateItemType type, String description,
                         BigDecimal quantity, BigDecimal unitPrice) {
                 return EstimateItem.builder()
-                                .estimateId(estimateId)
+                                .estimate(estimateRepository.getReferenceById(estimateId))
                                 .itemType(type)
                                 .description(description)
                                 .quantity(quantity)

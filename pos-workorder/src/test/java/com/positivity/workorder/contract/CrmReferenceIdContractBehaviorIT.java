@@ -73,9 +73,7 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
 
         @AfterEach
         void tearDown() {
-                workorderRepository.deleteAll();
-                estimateItemRepository.deleteAll();
-                estimateRepository.deleteAll();
+                purgeTestData();
         }
 
         // =====================================================================
@@ -359,7 +357,7 @@ class CrmReferenceIdContractBehaviorIT extends BaseContractIntegrationTest {
 
                 // An approved line item is required for the promote precondition check.
                 EstimateItem item = EstimateItem.builder()
-                                .estimateId(estimate.getId())
+                                .estimate(estimate)
                                 .itemType(EstimateItemType.LABOR)
                                 .description("Test labor — CRM reference ID story")
                                 .quantity(new BigDecimal("1.0000"))
