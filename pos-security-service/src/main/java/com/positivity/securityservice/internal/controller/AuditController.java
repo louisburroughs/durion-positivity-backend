@@ -62,10 +62,23 @@ public class AuditController {
     @GetMapping("/events")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<AuditLogEventDto>> searchEvents(
-            @RequestParam String entityId,
-            @RequestParam String entityType,
+            @RequestParam(required = false) String entityId,
+            @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) String eventType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
+        if (eventType != null && !eventType.isBlank() && entityId == null && entityType == null && from == null && to == null) {
+            return ResponseEntity.ok(auditEventService.searchByEventType(eventType));
+        }
+
+        if ((entityId == null) != (entityType == null)) {
+            throw new IllegalArgumentException("entityId and entityType must be provided together");
+        }
+
+        if (entityId == null && entityType == null) {
+            throw new IllegalArgumentException("Provide eventType or both entityId and entityType");
+        }
+
         return ResponseEntity.ok(auditEventService.searchEvents(entityId, entityType, from, to));
     }
 

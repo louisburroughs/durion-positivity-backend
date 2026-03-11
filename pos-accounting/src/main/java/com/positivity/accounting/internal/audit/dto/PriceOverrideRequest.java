@@ -30,15 +30,14 @@ public class PriceOverrideRequest {
     @NotNull(message = "Adjusted price is required")
     private BigDecimal adjustedPrice;
     
-    /**
-     * Legacy client-provided actor identifier; service resolves authoritative
-     * actor from authenticated security context.
-     */
-    private String actorId;
-    
     @NotNull(message = "Actor role is required")
     private String actorRole;
     
     @NotNull(message = "Reason is required")
     private String reason;
+
+    /**
+     * Optional forbidden category code (e.g., BELOW_COST, STACKING_VIOLATION).
+     */
+    private String categoryCode;
 }

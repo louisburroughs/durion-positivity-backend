@@ -460,8 +460,8 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                 request.setReasonCode("RETURNED_GOODS");
 
                 // Act & Assert: Expect 401 Unauthorized.
-                // GatewayAuthoritiesFilter clears security context when X-Authorities
-                // is missing, so request is unauthenticated rather than forbidden.
+                // GatewayAuthoritiesFilter clears the security context when the
+                // X-Authorities header is absent, leaving an unauthenticated request.
                 mockMvc.perform(post(API_V1_CREDIT_MEMOS)
                                 .header("X-User", TEST_USER) // User present but no authorities
                                 .contentType(MediaType.APPLICATION_JSON)

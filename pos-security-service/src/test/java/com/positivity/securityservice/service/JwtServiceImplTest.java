@@ -4,11 +4,13 @@ import java.time.ZoneOffset;
 import java.time.Clock;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,8 +59,12 @@ class JwtServiceImplTest {
                 "jwtSecret",
                 "this-is-a-long-test-secret-key-with-at-least-32-chars");
         ReflectionTestUtils.invokeMethod(sut, "initializeSecretKey");
-        when(roleAuthorityService.expandRolesToAuthorities(any())).thenReturn(Set.of("ROLE_ADMIN"));
-        when(jwtTokenRepository.save(any(JwtToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        org.mockito.Mockito.lenient()
+                .when(roleAuthorityService.expandRolesToAuthorities(any()))
+                .thenReturn(Set.of("ROLE_ADMIN"));
+        org.mockito.Mockito.lenient()
+                .when(jwtTokenRepository.save(any(JwtToken.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -154,5 +160,132 @@ class JwtServiceImplTest {
         assertThat(refreshed.accessToken()).isNotBlank();
         assertThat(refreshed.refreshToken()).isNotBlank();
         verify(jwtTokenRepository).delete(stored);
+    }
+
+    @Test
+    @DisplayName("initializeSecretKey: blank secret throws IllegalStateException")
+    void initializeSecretKey_blankSecret_throws() {
+        JwtServiceImpl fresh = new JwtServiceImpl(
+                TEST_CLOCK, jwtTokenRepository, roleAuthorityService, tokenRevocationManager);
+        ReflectionTestUtils.setField(fresh, "jwtSecret", "");
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT secret must be provided");
+    }
+
+    @Test
+    @DisplayName("initializeSecretKey: secret shorter than 32 bytes throws IllegalStateException")
+    void initializeSecretKey_tooShortSecret_throws() {
+        JwtServiceImpl fresh = new JwtServiceImpl(
+                TEST_CLOCK, jwtTokenRepository, roleAuthorityService, tokenRevocationManager);
+        ReflectionTestUtils.setField(fresh, "jwtSecret", "short");
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("at least 32 characters");
+    }
+
+    @Test
+    @DisplayName("validateToken: returns false when token not found in database")
+    void validateToken_notFoundInDb_returnsFalse() {
+        String token = sut.generateToken("alice", TEST_USER_ID, Set.of("ADMIN"));
+        when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
+        when(jwtTokenRepository.findByToken(token)).thenReturn(Optional.empty());
+
+        assertThat(sut.validateToken(token)).isFalse();
+    }
+
+    @Test
+    @DisplayName("validateToken: returns false for completely invalid token string")
+    void validateToken_invalidTokenString_returnsFalse() {
+        assertThat(sut.validateToken("not.a.jwt")).isFalse();
+    }
+
+    @Test
+    @DisplayName("deleteToken: returns false when token not found in database")
+    void deleteToken_notFound_returnsFalse() {
+        String token = sut.generateToken("alice", TEST_USER_ID, Set.of("ADMIN"));
+        when(jwtTokenRepository.findByToken(token)).thenReturn(Optional.empty());
+
+        assertThat(sut.deleteToken(token)).isFalse();
+        verify(tokenRevocationManager, never()).revokeToken(anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("generateTokenPair: blank username throws IllegalArgumentException")
+    void generateTokenPair_blankUsername_throws() {
+        assertThatThrownBy(() -> sut.generateTokenPair("", TEST_USER_ID, Set.of("ADMIN")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Username cannot be blank");
+    }
+
+    @Test
+    @DisplayName("generateTokenPair: null userId throws IllegalArgumentException")
+    void generateTokenPair_nullUserId_throws() {
+        assertThatThrownBy(() -> sut.generateTokenPair("alice", null, Set.of("ADMIN")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UserId cannot be null");
+    }
+
+    @Test
+    @DisplayName("generateTokenPair: empty roles throws IllegalArgumentException")
+    void generateTokenPair_emptyRoles_throws() {
+        assertThatThrownBy(() -> sut.generateTokenPair("alice", TEST_USER_ID, Set.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Roles cannot be empty");
+    }
+
+    @Test
+    @DisplayName("revokeTokenByJti: blank JTI throws IllegalArgumentException")
+    void revokeTokenByJti_blankJti_throws() {
+        assertThatThrownBy(() -> sut.revokeTokenByJti("", 3600))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("JTI cannot be blank");
+    }
+
+    @Test
+    @DisplayName("revokeTokenByJti: non-positive expiration throws IllegalArgumentException")
+    void revokeTokenByJti_nonPositiveExpiration_throws() {
+        assertThatThrownBy(() -> sut.revokeTokenByJti("some-jti", 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Expiration seconds must be positive");
+    }
+
+    @Test
+    @DisplayName("revokeTokenByJti: valid args delegates to TokenRevocationManager")
+    void revokeTokenByJti_success() {
+        when(tokenRevocationManager.revokeToken("some-jti", 3600)).thenReturn(true);
+
+        sut.revokeTokenByJti("some-jti", 3600);
+
+        verify(tokenRevocationManager).revokeToken("some-jti", 3600);
+    }
+
+    @Test
+    @DisplayName("validateRefreshToken: returns false when not found in database")
+    void validateRefreshToken_notFoundInDb_returnsFalse() {
+        JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, Set.of("ADMIN"));
+        when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
+        when(jwtTokenRepository.findByRefreshToken(pair.refreshToken())).thenReturn(Optional.empty());
+
+        assertThat(sut.validateRefreshToken(pair.refreshToken())).isFalse();
+    }
+
+    @Test
+    @DisplayName("validateRefreshToken: returns false when revoked")
+    void validateRefreshToken_revoked_returnsFalse() {
+        JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, Set.of("ADMIN"));
+        when(tokenRevocationManager.isRevoked(anyString())).thenReturn(true);
+
+        assertThat(sut.validateRefreshToken(pair.refreshToken())).isFalse();
+    }
+
+    @Test
+    @DisplayName("refreshAccessToken: invalid refresh token throws IllegalArgumentException")
+    void refreshAccessToken_invalidRefreshToken_throws() {
+        assertThatThrownBy(() -> sut.refreshAccessToken("not.a.real.token"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid refresh token");
     }
 }

@@ -411,7 +411,6 @@ class AuditTrailServiceTest {
 
     private PriceOverrideRequest createPriceOverrideRequest() {
         PriceOverrideRequest request = new PriceOverrideRequest();
-        request.setActorId(testActorId);
         request.setActorRole(STORE_MANAGER);
         request.setOrderId(testOrderId);
         request.setLineItemId(testLineItemId);

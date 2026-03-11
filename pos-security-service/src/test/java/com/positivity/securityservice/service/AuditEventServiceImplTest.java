@@ -6,9 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -31,11 +28,6 @@ import com.positivity.securityservice.internal.service.AuditEventServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
 class AuditEventServiceImplTest {
-
-        private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
-        @Spy
-        Clock clock = TEST_CLOCK;
 
         @Mock
         private AuditLogEventRepository auditLogEventRepository;
@@ -77,7 +69,7 @@ class AuditEventServiceImplTest {
                 assertThat(result.getEventId()).isEqualTo(eventId);
                 assertThat(result.getTimestamp()).isEqualTo(timestamp);
                 assertThat(result.getEventType()).isEqualTo("PRICING_OVERRIDE");
-                assertThat(result.getActorId()).isEqualTo("user-1");
+                assertThat(result.getActorId()).isEqualTo("system");
                 assertThat(result.getEntityId()).isEqualTo("quote-1");
                 assertThat(result.getEntityType()).isEqualTo("QUOTE");
                 assertThat(result.getOldValue()).isEqualTo("{\"price\":100}");
@@ -236,5 +228,38 @@ class AuditEventServiceImplTest {
                 assertThatThrownBy(() -> auditEventService.searchEvents("quote-5", " ", null, null))
                                 .isInstanceOf(IllegalArgumentException.class)
                                 .hasMessageContaining("entityId and entityType are required");
+        }
+
+        // Issue #: searchByEventType unit coverage (Cycle 3 Low finding)
+        @Test
+        @DisplayName("searchByEventType returns mapped DTOs for matching events")
+        void searchByEventType_returnsMatchingEvents() {
+                AuditLogEvent event = new AuditLogEvent();
+                event.setEventId(UUID.fromString("00000000-0000-0000-0000-000000000010"));
+                event.setTimestamp(Instant.parse("2026-02-21T15:00:00Z"));
+                event.setEventType("RoleAssignedToUser");
+                event.setActorId("admin-1");
+                event.setEntityId("user-10");
+                event.setEntityType("USER");
+                event.setOldValue("{}");
+                event.setNewValue("{\"role\":\"MANAGER\"}");
+
+                when(auditLogEventRepository.findByEventTypeOrderByTimestampDesc("RoleAssignedToUser"))
+                                .thenReturn(List.of(event));
+
+                var result = auditEventService.searchByEventType("RoleAssignedToUser");
+
+                verify(auditLogEventRepository).findByEventTypeOrderByTimestampDesc("RoleAssignedToUser");
+                assertThat(result).hasSize(1);
+                assertThat(result.get(0).getEventType()).isEqualTo("RoleAssignedToUser");
+                assertThat(result.get(0).getEntityId()).isEqualTo("user-10");
+        }
+
+        @Test
+        @DisplayName("searchByEventType throws when eventType is blank")
+        void searchByEventType_withBlankEventType_throwsIllegalArgumentException() {
+                assertThatThrownBy(() -> auditEventService.searchByEventType(""))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("eventType is required");
         }
 }
