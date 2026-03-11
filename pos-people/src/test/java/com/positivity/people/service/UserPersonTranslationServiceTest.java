@@ -67,7 +67,7 @@ class UserPersonTranslationServiceTest {
 		link.setPerson(Person.builder().id(testPersonId).build());
 		link.setUserId(testUserId);
 		link.setStatus(UserLinkStatus.ACTIVE);
-		when(userPersonLinkRepository.findByPersonIdAndStatus(testPersonId, UserLinkStatus.ACTIVE))
+		when(userPersonLinkRepository.findByPerson_IdAndStatus(testPersonId, UserLinkStatus.ACTIVE))
 				.thenReturn(Optional.of(link));
 
 		Optional<UUID> result = userPersonTranslationService.getUserIdForPerson(testPersonId);
@@ -77,7 +77,7 @@ class UserPersonTranslationServiceTest {
 
 	@Test
 	void getUserIdForPerson_returnsEmptyWhenNoLinkExists() {
-		when(userPersonLinkRepository.findByPersonIdAndStatus(missingPersonId, UserLinkStatus.ACTIVE))
+		when(userPersonLinkRepository.findByPerson_IdAndStatus(missingPersonId, UserLinkStatus.ACTIVE))
 				.thenReturn(Optional.empty());
 
 		Optional<UUID> result = userPersonTranslationService.getUserIdForPerson(missingPersonId);
@@ -87,7 +87,7 @@ class UserPersonTranslationServiceTest {
 
 	@Test
 	void isUserLinkedToPerson_returnsTrueWhenLinkExists() {
-		when(userPersonLinkRepository.existsByUserIdAndPersonId(testUserId, testPersonId)).thenReturn(true);
+		when(userPersonLinkRepository.existsByUserIdAndPerson_Id(testUserId, testPersonId)).thenReturn(true);
 
 		boolean result = userPersonTranslationService.isUserLinkedToPerson(testUserId, testPersonId);
 

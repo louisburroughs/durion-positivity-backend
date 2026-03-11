@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
+import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
@@ -33,6 +34,7 @@ import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
 import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.service.APPaymentService;
 import com.positivity.accounting.service.OutboxService;
@@ -56,6 +58,7 @@ public class APPaymentServiceImpl implements APPaymentService {
         private final APPaymentRepository paymentRepository;
         private final APPaymentAllocationRepository allocationRepository;
         private final VendorBillRepository billRepository;
+        private final JournalEntryRepository journalEntryRepository;
         private final PaymentGatewayProvider paymentGateway;
         private final OutboxService outboxService;
         private final APPaymentFailurePersistenceService paymentFailurePersistenceService;
@@ -395,8 +398,11 @@ public class APPaymentServiceImpl implements APPaymentService {
         public void acknowledgeGLPosted(@NonNull UUID paymentId, @NonNull UUID journalEntryId) {
                 APPayment payment = paymentRepository.findById(paymentId)
                                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+                JournalEntry journalEntry = journalEntryRepository.findById(journalEntryId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Journal entry not found: " + journalEntryId));
 
-                payment.setGlJournalEntryId(journalEntryId);
+                payment.setGlJournalEntry(journalEntry);
                 payment.setGlPostedAt(Instant.now(clock));
                 payment.setStatus(APPaymentStatus.GL_POSTED);
                 paymentRepository.save(payment);
