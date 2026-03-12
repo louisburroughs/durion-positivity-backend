@@ -36,4 +36,4 @@ Compile-only NLTI API surface has been scaffolded in this module.
 - DTOs are in `src/main/java/com/positivity/mcp/internal/dto`
 - Service interfaces exposed for API wiring are in `src/main/java/com/positivity/mcp/service`
 
-Current controller methods are intentional stubs and throw `UnsupportedOperationException("Not yet implemented")`.
+These controller methods are now implemented and wired to their corresponding services; behavior is governed by the underlying service implementations.
