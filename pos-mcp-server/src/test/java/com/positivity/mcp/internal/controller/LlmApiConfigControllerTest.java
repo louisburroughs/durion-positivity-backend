@@ -43,7 +43,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 /**
  * Controller slice tests for LlmApiConfigController.
  *
- * <p>Verifies that {@link LlmApiConfigController}:
+ * <p>
+ * Verifies that {@link LlmApiConfigController}:
  * <ul>
  * <li>Returns HTTP 200 (list/get) and 201 (create) for callers with the
  * appropriate {@code mcp:llm_api:*} authority.</li>
@@ -233,7 +234,8 @@ class LlmApiConfigControllerTest {
     }
 
     /**
-     * Maps {@link AccessDeniedException} to HTTP 403 and {@link AuthenticationException}
+     * Maps {@link AccessDeniedException} to HTTP 403 and
+     * {@link AuthenticationException}
      * subtypes to HTTP 401 in the MockMvc test-slice context (ADR-0017).
      */
     @ControllerAdvice

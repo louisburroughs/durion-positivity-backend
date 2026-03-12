@@ -42,7 +42,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 /**
  * Controller slice tests for SystemPromptController.
  *
- * <p>Verifies that {@link SystemPromptController}:
+ * <p>
+ * Verifies that {@link SystemPromptController}:
  * <ul>
  * <li>Returns HTTP 200 (list/get), 201 (create), 200 (update), 204 (delete)
  * for callers with appropriate {@code mcp:system_prompt:*} authority.</li>
@@ -228,7 +229,8 @@ class SystemPromptControllerTest {
     }
 
     /**
-     * Maps {@link AccessDeniedException} to HTTP 403 and {@link AuthenticationException}
+     * Maps {@link AccessDeniedException} to HTTP 403 and
+     * {@link AuthenticationException}
      * subtypes to HTTP 401 in the MockMvc test-slice context (ADR-0017).
      */
     @ControllerAdvice
