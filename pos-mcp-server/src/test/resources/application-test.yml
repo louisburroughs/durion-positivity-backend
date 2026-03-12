@@ -33,6 +33,7 @@ pos:
             ttl-hours: 24
         rate-limit:
             per-session: 1000
+            max-tracked-sessions: 10000
     security:
         permission-registration:
             enabled: false

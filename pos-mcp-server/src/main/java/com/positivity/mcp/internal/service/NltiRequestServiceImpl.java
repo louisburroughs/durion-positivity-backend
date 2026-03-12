@@ -1,11 +1,15 @@
 package com.positivity.mcp.internal.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiRequest;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.enums.NltiRequestStatus;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
+import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.observability.NltiSpanAttributes;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
@@ -20,10 +24,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -47,7 +52,12 @@ public class NltiRequestServiceImpl implements NltiRequestService {
     @Value("${pos.nlti.rate-limit.per-session:100}")
     private int perSessionRateLimit = 100;
 
-    private final ConcurrentHashMap<String, AtomicInteger> sessionRequestCounts = new ConcurrentHashMap<>();
+    @Value("${pos.nlti.rate-limit.max-tracked-sessions:100000}")
+    private long maxTrackedSessions = 100_000;
+
+    private volatile Cache<UUID, AtomicInteger> sessionRequestCounts;
+    private final Counter rateLimitCounterEvictions;
+    private final Counter rateLimitCounterInvalidations;
 
     public NltiRequestServiceImpl(NltiSessionRepository sessionRepository,
                                    NltiRequestRepository requestRepository,
@@ -60,6 +70,8 @@ public class NltiRequestServiceImpl implements NltiRequestService {
         this.requestCount = meterRegistry.counter("nlt.request.count");
         this.errorCount = meterRegistry.counter("nlt.error.count");
         this.requestLatency = meterRegistry.timer("nlt.request.latency_ms");
+        this.rateLimitCounterEvictions = meterRegistry.counter("nlt.rate_limit.session_counter.evictions");
+        this.rateLimitCounterInvalidations = meterRegistry.counter("nlt.rate_limit.session_counter.invalidations");
     }
 
     @Override
@@ -81,8 +93,7 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             currentSpan.setAttribute(NltiSpanAttributes.NLT_CORRELATION_ID, effectiveCorrelationId.toString());
             currentSpan.setAttribute(NltiSpanAttributes.NLT_USER_ID, subjectId);
 
-            AtomicInteger count = sessionRequestCounts.computeIfAbsent(
-                    resolvedSessionId.toString(), k -> new AtomicInteger(0));
+            AtomicInteger count = sessionRequestCounts().get(resolvedSessionId, key -> new AtomicInteger(0));
             if (count.incrementAndGet() > perSessionRateLimit) {
                 count.decrementAndGet();
                 throw new RateLimitExceededException("Rate limit exceeded for session: " + resolvedSessionId);
@@ -110,25 +121,34 @@ public class NltiRequestServiceImpl implements NltiRequestService {
         }
     }
 
-    private UUID resolveSession(@Nullable UUID providedSessionId, String subjectId) {
+    private @NonNull UUID resolveSession(@Nullable UUID providedSessionId, @NonNull String subjectId) {
         if (providedSessionId == null) {
-            return createAndSaveNewSession(subjectId, null);
+            return createAndSaveNewSession(subjectId);
         }
-        return sessionRepository.findByIdAndSubjectId(providedSessionId, subjectId)
-                .map(existing -> {
-                    boolean expired = existing.getUpdatedAt()
-                            .isBefore(OffsetDateTime.now(clock).minusHours(sessionTtlHours));
-                    if (expired) {
-                        return createAndSaveNewSession(subjectId, null);
-                    }
-                    return existing.getId();
-                })
-                .orElseGet(() -> createAndSaveNewSession(subjectId, providedSessionId));
+        Optional<NltiSession> sessionForSubject = sessionRepository.findByIdAndSubjectId(providedSessionId, subjectId);
+        if (sessionForSubject.isPresent()) {
+            NltiSession existing = sessionForSubject.get();
+            boolean expired = existing.getUpdatedAt()
+                    .isBefore(OffsetDateTime.now(clock).minusHours(sessionTtlHours));
+            if (expired) {
+                sessionRequestCounts().invalidate(existing.getId());
+                rateLimitCounterInvalidations.increment();
+                return createAndSaveNewSession(subjectId);
+            }
+            return existing.getId();
+        }
+
+        if (sessionRepository.findById(providedSessionId).isPresent()) {
+            throw new SessionOwnershipViolationException(
+                    "Provided sessionId is not owned by the authenticated subject: " + providedSessionId);
+        }
+
+        return createAndSaveNewSession(subjectId);
     }
 
-    private UUID createAndSaveNewSession(String subjectId, @Nullable UUID id) {
+    private @NonNull UUID createAndSaveNewSession(@NonNull String subjectId) {
         NltiSession session = new NltiSession();
-        UUID sessionId = (id != null) ? id : UUIDv7Generator.generate();
+        UUID sessionId = UUIDv7Generator.generate();
         session.setId(sessionId);
         session.setSubjectId(subjectId);
         sessionRepository.save(session);
@@ -142,6 +162,27 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
+        }
+    }
+
+    private Cache<UUID, AtomicInteger> sessionRequestCounts() {
+        Cache<UUID, AtomicInteger> existing = sessionRequestCounts;
+        if (existing != null) {
+            return existing;
+        }
+        synchronized (this) {
+            if (sessionRequestCounts == null) {
+                sessionRequestCounts = Caffeine.newBuilder()
+                        .expireAfterWrite(Duration.ofHours(sessionTtlHours))
+                        .maximumSize(maxTrackedSessions)
+                        .removalListener((UUID sessionId, AtomicInteger value, RemovalCause cause) -> {
+                            if (cause.wasEvicted()) {
+                                rateLimitCounterEvictions.increment();
+                            }
+                        })
+                        .build();
+            }
+            return sessionRequestCounts;
         }
     }
 }

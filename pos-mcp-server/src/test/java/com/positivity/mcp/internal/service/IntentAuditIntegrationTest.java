@@ -107,6 +107,7 @@ class IntentAuditIntegrationTest {
         ArgumentCaptor<NltiAuditEvent> captor = ArgumentCaptor.forClass(NltiAuditEvent.class);
         verify(auditLedgerService, times(1)).append(captor.capture());
         NltiAuditEvent captured = captor.getValue();
+        org.assertj.core.api.Assertions.assertThat(captured.getId()).isNotNull();
         org.assertj.core.api.Assertions.assertThat(captured.getEventType())
                 .isEqualTo(NltiAuditEventType.INTENT);
         org.assertj.core.api.Assertions.assertThat(captured.getCorrelationId())
@@ -150,6 +151,7 @@ class IntentAuditIntegrationTest {
         ArgumentCaptor<NltiAuditEvent> captor = ArgumentCaptor.forClass(NltiAuditEvent.class);
         verify(auditLedgerService, times(1)).append(captor.capture());
         NltiAuditEvent captured = captor.getValue();
+        org.assertj.core.api.Assertions.assertThat(captured.getId()).isNotNull();
         org.assertj.core.api.Assertions.assertThat(captured.getEventType())
                 .isEqualTo(NltiAuditEventType.INTENT);
         org.assertj.core.api.Assertions.assertThat(captured.getCorrelationId())

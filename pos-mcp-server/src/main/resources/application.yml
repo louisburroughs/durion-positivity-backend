@@ -85,6 +85,7 @@ pos:
       ttl-hours: 24
     rate-limit:
       per-session: 100
+      max-tracked-sessions: 100000
   show-actuator: true
 
 logging:

@@ -5,9 +5,9 @@ import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.service.NltiRequestService;
-import com.positivity.shared.id.UUIDv7Generator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -36,22 +36,14 @@ class NltiController {
     @Operation(summary = "Submit a natural language task request")
     ResponseEntity<NltiResponseV1> submitRequest(
             @Valid @RequestBody @NonNull NltiRequestDTO request,
-            @RequestHeader(value = "X-Correlation-Id", required = false) String correlationIdHeader) {
-        UUID resolvedCorrelationId = parseOrGenerateCorrelationId(correlationIdHeader);
+            @RequestHeader(value = NltiCorrelationIdSupport.CORRELATION_ID_HEADER, required = false)
+            String correlationIdHeader,
+            @NonNull HttpServletRequest servletRequest) {
+        UUID resolvedCorrelationId = NltiCorrelationIdSupport.resolveFromHeader(correlationIdHeader);
+        servletRequest.setAttribute(NltiCorrelationIdSupport.CORRELATION_ID_ATTRIBUTE, resolvedCorrelationId);
         NltiResponseV1 response = nltiRequestService.submit(request, resolvedCorrelationId);
         return ResponseEntity.accepted()
-                .header("X-Correlation-Id", response.correlationId().toString())
+                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, response.correlationId().toString())
                 .body(response);
-    }
-
-    private UUID parseOrGenerateCorrelationId(String header) {
-        if (header != null && !header.isBlank()) {
-            try {
-                return UUID.fromString(header);
-            } catch (IllegalArgumentException ignored) {
-                // fall through to generate
-            }
-        }
-        return UUIDv7Generator.generate();
     }
 }
