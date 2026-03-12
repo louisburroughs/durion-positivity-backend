@@ -21,16 +21,16 @@ public class NltiObservabilityMetricsConfig {
 
     @Bean
     public Timer nltRequestLatencyMs(MeterRegistry registry) {
-        return Timer.builder("nlt.request.latency_ms").register(registry);
+        return Timer.builder("nlt.request.latency").register(registry);
     }
 
     @Bean
     public Timer nltPlanningLatencyMs(MeterRegistry registry) {
-        return Timer.builder("nlt.planning.latency_ms").register(registry);
+        return Timer.builder("nlt.planning.latency").register(registry);
     }
 
     @Bean
     public Timer nltExecutionLatencyMs(MeterRegistry registry) {
-        return Timer.builder("nlt.execution.latency_ms").register(registry);
+        return Timer.builder("nlt.execution.latency").register(registry);
     }
 }
