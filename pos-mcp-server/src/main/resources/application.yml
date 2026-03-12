@@ -78,6 +78,13 @@ springdoc:
     tagsSorter: alpha
   api-docs:
     path: /v3/api-docs
+
+pos:
+  nlti:
+    session:
+      ttl-hours: 24
+    rate-limit:
+      per-session: 100
   show-actuator: true
 
 logging:
