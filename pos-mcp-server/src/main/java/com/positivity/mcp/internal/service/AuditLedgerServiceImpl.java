@@ -4,6 +4,7 @@ import com.positivity.mcp.internal.dto.AuditEventResponse;
 import com.positivity.mcp.internal.dto.AuditQuery;
 import com.positivity.mcp.internal.entity.NltiAuditEvent;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
+import com.positivity.mcp.internal.exception.InvalidAuditEventTypeException;
 import com.positivity.mcp.internal.repository.NltiAuditEventRepository;
 import com.positivity.mcp.service.AuditLedgerService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -11,7 +12,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -86,12 +89,8 @@ public class AuditLedgerServiceImpl implements AuditLedgerService {
                     .findByTimestampBetweenOrderByTimestampAsc(from, to, pageable)
                     .map(this::toResponse);
         } else if (query.eventType() != null) {
-            try {
-                NltiAuditEventType eventType = NltiAuditEventType.valueOf(query.eventType());
-                return auditEventRepository.findByEventTypeOrderByTimestampAsc(eventType, pageable).map(this::toResponse);
-            } catch (IllegalArgumentException ex) {
-                return Page.empty(pageable);
-            }
+            NltiAuditEventType eventType = parseEventType(query.eventType());
+            return auditEventRepository.findByEventTypeOrderByTimestampAsc(eventType, pageable).map(this::toResponse);
         }
 
         return auditEventRepository.findAll(pageable).map(this::toResponse);
@@ -101,6 +100,20 @@ public class AuditLedgerServiceImpl implements AuditLedgerService {
         return eventType == NltiAuditEventType.EXECUTION_STEP
                 || eventType == NltiAuditEventType.EXECUTION_COMPLETE
                 || eventType == NltiAuditEventType.EXECUTION_FAILED;
+    }
+
+    private static @NonNull NltiAuditEventType parseEventType(@NonNull String rawEventType) {
+        String normalized = rawEventType.trim().toUpperCase(Locale.ROOT);
+        try {
+            return NltiAuditEventType.valueOf(normalized);
+        } catch (IllegalArgumentException ex) {
+            String supportedValues = Arrays.stream(NltiAuditEventType.values())
+                    .map(Enum::name)
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElse("");
+            throw new InvalidAuditEventTypeException(
+                    "Invalid eventType '%s'. Supported values: %s".formatted(rawEventType, supportedValues));
+        }
     }
 
     private AuditEventResponse toResponse(NltiAuditEvent event) {

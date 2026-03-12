@@ -16,6 +16,7 @@ import com.positivity.mcp.internal.enums.NltiRiskLevel;
 import com.positivity.mcp.internal.repository.NltiIntentRepository;
 import com.positivity.mcp.service.AuditLedgerService;
 import com.positivity.mcp.service.IntentParserService;
+import com.positivity.shared.id.UUIDv7Generator;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -23,14 +24,18 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class IntentParserServiceImpl implements IntentParserService {
+    private static final Logger log = LoggerFactory.getLogger(IntentParserServiceImpl.class);
 
     private static final Set<String> HIGH_RISK_VERBS = Set.of("delete", "remove");
     private static final Set<String> QUERY_INDICATORS = Set.of(
@@ -68,11 +73,13 @@ public class IntentParserServiceImpl implements IntentParserService {
 
     @Override
     public @NonNull IntentV1 parse(@NonNull String prompt, @NonNull UUID sessionId, @NonNull UUID correlationId) {
+        log.debug("Parsing intent for sessionId={}, correlationId={}", sessionId, correlationId);
         String lower = prompt.toLowerCase(Locale.ROOT);
 
         NltiRiskLevel risk = classifyRisk(lower);
         NltiIntentType type = classifyType(lower, risk);
         NltiIntentStatus status = classifyStatus(type);
+        log.debug("Intent classification result type={}, status={}, risk={}", type, status, risk);
 
         List<IntentSlot> slots = buildSlots(type, lower);
         List<ClarificationQuestion> questions = buildClarificationQuestions(status);
@@ -88,6 +95,8 @@ public class IntentParserServiceImpl implements IntentParserService {
 
         NltiIntent persistedIntent = repository.save(intent);
         if (persistedIntent == null) {
+            log.warn("Intent repository returned null for sessionId={}, correlationId={}; using in-memory fallback",
+                    sessionId, correlationId);
             persistedIntent = intent;
         }
 
@@ -97,13 +106,22 @@ public class IntentParserServiceImpl implements IntentParserService {
             incrementClarificationCounter();
         }
 
+        log.debug("Parse completed intentId={}, type={}, status={}",
+                persistedIntent.getId(), persistedIntent.getIntentType(), persistedIntent.getStatus());
         return toIntentV1(persistedIntent, slots, questions);
     }
 
     @Override
     public @NonNull IntentV1 resolve(@NonNull UUID intentId, @NonNull ClarificationResponseDTO response) {
-        NltiIntent intent = repository.findById(intentId)
-                .orElseThrow(() -> new NoSuchElementException("Intent not found: " + intentId));
+        boolean hasAnswer = response.userAnswer() != null && !response.userAnswer().isBlank();
+        boolean hasSelection = response.selectedOption() != null && !response.selectedOption().isBlank();
+        log.debug("Resolving intentId={} hasAnswer={} hasSelectedOption={}", intentId, hasAnswer, hasSelection);
+        Optional<NltiIntent> existingIntent = repository.findById(intentId);
+        if (existingIntent.isEmpty()) {
+            log.warn("Resolve failed; intentId={} not found", intentId);
+            throw new NoSuchElementException("Intent not found: " + intentId);
+        }
+        NltiIntent intent = existingIntent.get();
 
         String answer = response.userAnswer();
         String selectedOption = response.selectedOption();
@@ -116,7 +134,8 @@ public class IntentParserServiceImpl implements IntentParserService {
             intent.setClarificationQuestionsJson("[]");
         } else {
             intent.setStatus(NltiIntentStatus.PENDING_CLARIFICATION);
-            intent.setClarificationQuestionsJson(toJson(buildClarificationQuestions(NltiIntentStatus.NEEDS_CLARIFICATION)));
+            intent.setClarificationQuestionsJson(
+                    toJson(buildClarificationQuestions(NltiIntentStatus.NEEDS_CLARIFICATION)));
         }
 
         NltiIntent persistedIntent = repository.save(intent);
@@ -131,6 +150,7 @@ public class IntentParserServiceImpl implements IntentParserService {
                 persistedIntent.getClarificationQuestionsJson(),
                 new TypeReference<>() {
                 });
+        log.debug("Resolve completed intentId={} status={}", persistedIntent.getId(), persistedIntent.getStatus());
         return toIntentV1(persistedIntent, slots, questions);
     }
 
@@ -193,10 +213,13 @@ public class IntentParserServiceImpl implements IntentParserService {
 
     private void appendAuditEvent(NltiAuditEventType eventType, UUID correlationId, UUID sessionId) {
         NltiAuditEvent event = new NltiAuditEvent();
+        event.setId(UUIDv7Generator.generate());
         event.setCorrelationId(correlationId);
         event.setSessionId(sessionId);
         event.setEventType(eventType);
         event.setTimestamp(resolveNow());
+        log.debug("Appending audit event eventId={} eventType={} correlationId={} sessionId={}",
+                event.getId(), eventType, correlationId, sessionId);
         auditLedgerService.append(event);
     }
 
@@ -208,6 +231,8 @@ public class IntentParserServiceImpl implements IntentParserService {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (JsonProcessingException e) {
+            String typeName = (obj != null) ? obj.getClass().getSimpleName() : "null";
+            log.warn("JSON serialization failed for type={}, returning []: {}", typeName, e.getMessage());
             return "[]";
         }
     }
@@ -233,6 +258,9 @@ public class IntentParserServiceImpl implements IntentParserService {
         try {
             return objectMapper.readValue(json, ref);
         } catch (JsonProcessingException e) {
+            int jsonLength = json.length();
+            log.warn("JSON deserialization failed for targetType={} (jsonLength={}), returning empty list: {}",
+                    ref.getType(), jsonLength, e.getMessage());
             return List.of();
         }
     }

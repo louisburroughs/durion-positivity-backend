@@ -120,12 +120,19 @@ class NltiControllerTest {
     @WithMockUser(authorities = "nlti:request:submit")
     @DisplayName("AC-2: POST /v1/nlt/requests without prompt returns 400 Bad Request")
     void submitRequest_withMissingPrompt_returns400WithValidationError() throws Exception {
+        UUID inboundCorrId = UUID.fromString("00000000-0000-7000-8000-000000000120");
         // Issue NLTI-001: @NotBlank on NltiRequestDTO.prompt → Spring MVC 400
         // Requires spring-boot-starter-validation (Hibernate Validator) to be active
         mockMvc.perform(post("/v1/nlt/requests")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
-                .andExpect(status().isBadRequest());
+                .content("{}")
+                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, inboundCorrId.toString()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.correlationId").value(inboundCorrId.toString()))
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse()
+                        .getHeader(NltiCorrelationIdSupport.CORRELATION_ID_HEADER))
+                        .isEqualTo(inboundCorrId.toString()));
     }
 
     // ─── AC-3: X-Correlation-Id inbound header → echoed in response ──────────

@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.mcp.internal.dto.AuditEventResponse;
 import com.positivity.mcp.internal.dto.AuditQuery;
+import com.positivity.mcp.internal.exception.InvalidAuditEventTypeException;
 import com.positivity.mcp.service.AuditLedgerService;
 
 import java.time.Instant;
@@ -139,6 +140,22 @@ class AuditControllerTest {
         ArgumentCaptor<AuditQuery> queryCaptor = ArgumentCaptor.forClass(AuditQuery.class);
         verify(auditLedgerService).query(queryCaptor.capture(), any());
         assertThat(queryCaptor.getValue().eventType()).isEqualTo("REQUEST");
+    }
+
+    @Test
+    @WithMockUser(authorities = "nlti:audit:read")
+    @DisplayName("GET /v1/nlt/audit?eventType=invalid → 400 with clear message")
+    void queryAudit_withInvalidEventType_returns400WithClearMessage() throws Exception {
+        when(auditLedgerService.query(any(), any()))
+                .thenThrow(new InvalidAuditEventTypeException(
+                        "Invalid eventType 'requestx'. Supported values: REQUEST, INTENT"));
+
+        mockMvc.perform(get("/v1/nlt/audit")
+                .param("eventType", "requestx"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value("ERROR"))
+                .andExpect(jsonPath("$.code").value("INVALID_EVENT_TYPE"))
+                .andExpect(jsonPath("$.message").value("Invalid eventType 'requestx'. Supported values: REQUEST, INTENT"));
     }
 
     // ─── ADR-0017: missing authority → 403 ────────────────────────────────────

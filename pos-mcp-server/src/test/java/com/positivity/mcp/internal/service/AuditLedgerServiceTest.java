@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
@@ -15,6 +16,7 @@ import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.mcp.internal.dto.AuditQuery;
 import com.positivity.mcp.internal.entity.NltiAuditEvent;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
+import com.positivity.mcp.internal.exception.InvalidAuditEventTypeException;
 import com.positivity.mcp.internal.repository.NltiAuditEventRepository;
 
 import io.micrometer.core.instrument.Counter;
@@ -248,7 +250,7 @@ class AuditLedgerServiceTest {
      * Issue: NLTI-007 (AC-2, F1 coverage)
      */
     @Test
-    @DisplayName("query by eventType returns filtered results")
+    @DisplayName("query by eventType (trimmed + lower-case) returns filtered results")
     void query_byEventType_returnsFilteredResults() {
         NltiAuditEvent e1 = buildEvent(EVENT_ID_ETYPE_1, NltiAuditEventType.REQUEST);
 
@@ -258,10 +260,21 @@ class AuditLedgerServiceTest {
 
         // Issue NLTI-007: service must delegate to event-type repo method and map to DTOs
         Page<AuditEventResponse> result = service.query(
-                new AuditQuery(null, null, null, "REQUEST"), pageable);
+                new AuditQuery(null, null, null, " request "), pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).eventType()).isEqualTo("REQUEST");
+    }
+
+    @Test
+    @DisplayName("query by invalid eventType throws InvalidAuditEventTypeException")
+    void query_byInvalidEventType_throwsInvalidAuditEventTypeException() {
+        Pageable pageable = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> service.query(new AuditQuery(null, null, null, "requestx"), pageable))
+                .isInstanceOf(InvalidAuditEventTypeException.class)
+                .hasMessageContaining("Invalid eventType")
+                .hasMessageContaining("Supported values");
     }
 
     // ─── Helper ──────────────────────────────────────────────────────────────
