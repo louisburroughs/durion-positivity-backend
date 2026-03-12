@@ -10,11 +10,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies that {@link NltiObservabilityMetricsConfig} registers all 5 metric beans
+ * Verifies that {@link NltiObservabilityMetricsConfig} registers all 5 metric
+ * beans
  * correctly against a MeterRegistry (NLTI-009 observability metrics).
  *
- * <p>Tests use a real {@link SimpleMeterRegistry} — no Spring context required.
- * Each bean factory method is called directly to ensure JaCoCo records instruction
+ * <p>
+ * Tests use a real {@link SimpleMeterRegistry} — no Spring context required.
+ * Each bean factory method is called directly to ensure JaCoCo records
+ * instruction
  * coverage for the config class.
  *
  * Issue: NLTI-009

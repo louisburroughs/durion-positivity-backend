@@ -36,14 +36,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Preferences found and returned
+        "404":
+          description: No preferences found for this vehicle
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "404":
-          description: No preferences found for this vehicle
+        "200":
+          description: Preferences found and returned
           content:
             '*/*':
               schema:
@@ -135,14 +135,14 @@ paths:
               $ref: "#/components/schemas/PreferencesMergeDto"
         required: true
       responses:
-        "200":
-          description: Preferences merged successfully
+        "404":
+          description: No existing preferences to merge into
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "404":
-          description: No existing preferences to merge into
+        "200":
+          description: Preferences merged successfully
           content:
             '*/*':
               schema:
