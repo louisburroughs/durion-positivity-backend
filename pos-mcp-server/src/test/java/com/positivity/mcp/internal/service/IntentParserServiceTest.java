@@ -1,6 +1,8 @@
 package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 
 import com.positivity.mcp.internal.dto.ClarificationResponseDTO;
 import com.positivity.mcp.internal.dto.IntentV1;
@@ -18,6 +20,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -85,7 +88,7 @@ class IntentParserServiceTest {
         existingIntent.setSlotsJson("[]");
         existingIntent.setClarificationQuestionsJson("[]");
         lenient().when(intentRepository.findById(INTENT_ID)).thenReturn(Optional.of(existingIntent));
-        lenient().when(intentRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(intentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // Stub meterRegistry to prevent NPE from lazy counter initialization
         Counter parseCounter = mock(Counter.class);
@@ -210,5 +213,204 @@ class IntentParserServiceTest {
         service.parse("list open invoices", SESSION_ID, CORRELATION_ID);
 
         verify(counter, times(1)).increment();
+    }
+
+    // ─── Counter lazy-init false-branch: counter already set on second call ─
+
+    @Test
+    @DisplayName("parse: reuses cached parse counter on subsequent calls (null-check false branch)")
+    void parse_calledTwice_reusesCachedParseCounter() {
+        Counter counter = mock(Counter.class);
+        when(meterRegistry.counter("nlt.intent.parse.count")).thenReturn(counter);
+
+        service.parse("list items", SESSION_ID, CORRELATION_ID);
+        service.parse("check stock", SESSION_ID, CORRELATION_ID);
+
+        // Counter incremented twice; meterRegistry.counter() should only be called once (null-check
+        // skipped on second call because parseCounter field is already populated)
+        verify(meterRegistry, times(1)).counter("nlt.intent.parse.count");
+        verify(counter, times(2)).increment();
+    }
+
+    @Test
+    @DisplayName("parse: reuses cached clarification counter on subsequent ambiguous calls (null-check false branch)")
+    void parse_calledTwiceAmbiguous_reusesClarificationCounter() {
+        Counter clariCounter = mock(Counter.class);
+        when(meterRegistry.counter("nlt.intent.clarification.count")).thenReturn(clariCounter);
+
+        // Both calls are ambiguous → NEEDS_CLARIFICATION → clarification counter incremented twice
+        service.parse("help me with something", SESSION_ID, CORRELATION_ID);
+        service.parse("help me do stuff", SESSION_ID, CORRELATION_ID);
+
+        verify(meterRegistry, times(1)).counter("nlt.intent.clarification.count");
+        verify(clariCounter, times(2)).increment();
+    }
+
+    // ─── parse: repository.save() returning null ────────────────────────────
+
+    @Test
+    @DisplayName("parse: falls back to local intent copy when repository.save() returns null")
+    void parse_withSaveReturningNull_returnsFallbackIntent() {
+        when(intentRepository.save(any())).thenReturn(null);
+
+        IntentV1 result = service.parse("check tire inventory", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result).isNotNull();
+        assertThat(result.intentType()).isEqualTo("QUERY");
+        assertThat(result.status()).isEqualTo("READY");
+    }
+
+    // ─── toIntentV1: null intentType / status / riskLevel ───────────────────
+
+    @Test
+    @DisplayName("toIntentV1: returns null string fields when intent has null type/status/risk")
+    void toIntentV1_withNullFields_returnsNullStringFields() {
+        // Configure save to return a minimal intent without type, status, or riskLevel set
+        NltiIntent sparseIntent = new NltiIntent();
+        sparseIntent.setId(INTENT_ID);
+        sparseIntent.setSessionId(SESSION_ID);
+        sparseIntent.setCorrelationId(CORRELATION_ID);
+        // intentType, status, riskLevel deliberately left null
+        sparseIntent.setSlotsJson("[]");
+        sparseIntent.setClarificationQuestionsJson("[]");
+        when(intentRepository.save(any())).thenReturn(sparseIntent);
+
+        IntentV1 result = service.parse("check inventory levels", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isNull();
+        assertThat(result.status()).isNull();
+        assertThat(result.riskLevel()).isNull();
+    }
+
+    // ─── resolve: answer == null branch ─────────────────────────────────────
+
+    @Test
+    @DisplayName("resolve: null userAnswer triggers PENDING_CLARIFICATION (answer != null false-branch)")
+    void resolve_withNullUserAnswer_remainsPendingClarification() {
+        // selectedOption=non-null, userAnswer=null → first condition (answer != null) fails immediately
+        var response = new ClarificationResponseDTO(INTENT_ID, "Check inventory", null);
+
+        IntentV1 result = service.resolve(INTENT_ID, response);
+
+        assertThat(result.status()).isEqualTo("PENDING_CLARIFICATION");
+        assertThat(result.clarificationQuestions()).isNotEmpty();
+    }
+
+    // ─── resolve: selectedOption blank branch ────────────────────────────────
+
+    @Test
+    @DisplayName("resolve: blank selectedOption triggers PENDING_CLARIFICATION (!selectedOption.isBlank() false-branch)")
+    void resolve_withBlankSelectedOption_remainsPendingClarification() {
+        // answer=non-blank, selectedOption=blank → fourth condition (!selectedOption.isBlank()) false
+        var response = new ClarificationResponseDTO(INTENT_ID, "  ", "inventory check");
+
+        IntentV1 result = service.resolve(INTENT_ID, response);
+
+        assertThat(result.status()).isEqualTo("PENDING_CLARIFICATION");
+    }
+
+    // ─── resolve: intent not found → NoSuchElementException ─────────────────
+
+    @Test
+    @DisplayName("resolve: unknown intentId throws NoSuchElementException")
+    void resolve_withNonExistentIntentId_throwsNoSuchElementException() {
+        UUID unknownId = UUID.fromString("00000000-0000-7000-8000-000000000399");
+        when(intentRepository.findById(unknownId)).thenReturn(Optional.empty());
+        var response = new ClarificationResponseDTO(unknownId, "Check inventory", "answer");
+
+        assertThrows(NoSuchElementException.class, () -> service.resolve(unknownId, response));
+    }
+
+    // ─── extractSubject: query indicator at end with no following word ───────
+
+    @Test
+    @DisplayName("parse: query indicator with no trailing word extracts subject as 'unknown'")
+    void parse_withQueryIndicatorAloneAtEnd_extractsUnknownSubject() {
+        // "price" is in QUERY_INDICATORS → classifyType returns QUERY → buildSlots calls extractSubject
+        // extractSubject("price"): "price" found, rest = "", words[0] = "" (blank) → continue
+        // No other indicator matches in "price" (no "check", "show", etc.) → return "unknown"
+        IntentV1 result = service.parse("price", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isEqualTo("QUERY");
+        assertThat(result.slots()).isNotEmpty();
+        assertThat(result.slots().get(0).value()).isEqualTo("unknown");
+    }
+
+    // ─── fromJson: corrupted JSON returned from save triggers catch block ────
+
+    @Test
+    @DisplayName("fromJson: corrupted slots/clarification JSON from persisted intent returns empty lists")
+    void fromJson_withCorruptedJsonInPersistedIntent_returnsEmptyLists() {
+        // Configure save (in resolve path) to return an intent with non-parseable JSON arrays
+        NltiIntent corruptedReturn = new NltiIntent();
+        corruptedReturn.setId(INTENT_ID);
+        corruptedReturn.setSessionId(SESSION_ID);
+        corruptedReturn.setCorrelationId(CORRELATION_ID);
+        corruptedReturn.setIntentType(NltiIntentType.UNKNOWN);
+        corruptedReturn.setStatus(NltiIntentStatus.READY);
+        corruptedReturn.setRiskLevel(NltiRiskLevel.LOW);
+        corruptedReturn.setSlotsJson("{not-a-json-array}");
+        corruptedReturn.setClarificationQuestionsJson("{also-not-valid}");
+        when(intentRepository.save(any())).thenReturn(corruptedReturn);
+
+        var response = new ClarificationResponseDTO(INTENT_ID, "inventory", "inventory check");
+        IntentV1 result = service.resolve(INTENT_ID, response);
+
+        // fromJson falls back to empty list on JsonProcessingException
+        assertThat(result.slots()).isEmpty();
+        assertThat(result.clarificationQuestions()).isEmpty();
+    }
+
+    // ─── Constructor: 5-param with null ObjectMapper (null-safe branch) ──────
+
+    @Test
+    @DisplayName("5-param constructor: null ObjectMapper argument is replaced by default ObjectMapper")
+    void constructor_withNullObjectMapper_createsWorkingInstance() {
+        // Passing null for objectMapper → constructor null-safe branch uses new ObjectMapper()
+        var svc = new IntentParserServiceImpl(
+                intentRepository, auditLedgerService, meterRegistry, clock, null);
+
+        IntentV1 result = svc.parse("check tire status", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result).isNotNull();
+        assertThat(result.intentType()).isEqualTo("QUERY");
+    }
+
+    // ─── Constructor: 4-param delegate ───────────────────────────────────────
+
+    @Test
+    @DisplayName("4-param constructor delegates to 5-param constructor with default ObjectMapper")
+    void constructor_fourParam_createsWorkingInstance() {
+        var svc = new IntentParserServiceImpl(
+                intentRepository, auditLedgerService, meterRegistry, clock);
+
+        IntentV1 result = svc.parse("list open workorders", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result).isNotNull();
+        assertThat(result.intentType()).isEqualTo("QUERY");
+    }
+
+    // ─── classifyRisk: bulk prefix → HIGH risk ───────────────────────────────
+
+    @Test
+    @DisplayName("parse: 'bulk ' prefix is classified as HIGH risk ACTION")
+    void parse_withBulkPrefix_returnsHighRiskAction() {
+        IntentV1 result = service.parse("bulk update prices", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.riskLevel()).isEqualTo("HIGH");
+        assertThat(result.intentType()).isEqualTo("ACTION");
+    }
+
+    // ─── resolve: answer blank (answer.isBlank() true, second && short-circuits)
+
+    @Test
+    @DisplayName("resolve: blank userAnswer triggers PENDING_CLARIFICATION (!answer.isBlank() false-branch)")
+    void resolve_withBlankUserAnswer_remainsPendingClarification() {
+        // answer is non-null but blank → second condition (!answer.isBlank()) fails
+        var response = new ClarificationResponseDTO(INTENT_ID, "inventory", "   ");
+
+        IntentV1 result = service.resolve(INTENT_ID, response);
+
+        assertThat(result.status()).isEqualTo("PENDING_CLARIFICATION");
     }
 }
