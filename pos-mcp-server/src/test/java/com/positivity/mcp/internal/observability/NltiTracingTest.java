@@ -6,13 +6,19 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies OTel span attribute constant keys declared in {@link NltiSpanAttributes}.
+ * Verifies OTel span attribute constant keys declared in
+ * {@link NltiSpanAttributes}.
  *
- * <p>Tests AC5 of NLTI-009: the constants {@code correlationId}, {@code requestId},
- * {@code userId}, and {@code sessionId} must be present with the correct dotted-key
+ * <p>
+ * Tests AC5 of NLTI-009: the constants {@code correlationId},
+ * {@code requestId},
+ * {@code userId}, and {@code sessionId} must be present with the correct
+ * dotted-key
  * values so that instrumentation code can reference them without magic strings.
  *
- * <p>These tests pass immediately because the scaffold constants are already in place.
+ * <p>
+ * These tests pass immediately because the scaffold constants are already in
+ * place.
  * They provide regression protection against accidental key renaming.
  *
  * Issue: NLTI-009

@@ -1848,17 +1848,17 @@ paths:
           content:
             '*/*':
               schema: {}
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Refund recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema: {}
   /v1/accounting/audit/price-override:
     post:
       tags:
@@ -1874,12 +1874,6 @@ paths:
               $ref: "#/components/schemas/PriceOverrideRequest"
         required: true
       responses:
-        "201":
-          description: Price override recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "403":
           description: Authorization denied - insufficient privileges for override
             amount
@@ -1901,6 +1895,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Price override recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/cancellation:
     post:
       tags:
@@ -1925,17 +1925,17 @@ paths:
           content:
             '*/*':
               schema: {}
-        "404":
-          description: Source document not found
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Cancellation recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
+        "404":
+          description: Source document not found
+          content:
+            '*/*':
+              schema: {}
   /v1/accounting/ap/payments:
     post:
       tags:
@@ -2222,6 +2222,14 @@ paths:
           format: date
         example: 2024-12-31
       responses:
+        "200":
+          description: Account drilldown successful
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountDrilldownResponse"
         "403":
           description: Forbidden - missing reporting:view:financial-statements
           content:
@@ -2232,14 +2240,6 @@ paths:
                   $ref: "#/components/schemas/AccountDrilldownResponse"
         "400":
           description: Invalid statement line code or date range
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AccountDrilldownResponse"
-        "200":
-          description: Account drilldown successful
           content:
             application/json:
               schema:
@@ -2881,6 +2881,45 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+  /v1/accounting/audit/invoice/{invoiceId}:
+    get:
+      tags:
+      - Audit Trail
+      summary: Get audit trail for invoice
+      description: Retrieves all audit trail entries associated with a specific invoice
+      operationId: getByInvoiceId
+      parameters:
+      - name: invoiceId
+        in: path
+        description: Invoice ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+        "404":
+          description: Invoice not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/order/{orderId}:
     get:
       tags:
@@ -2920,37 +2959,37 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-  /v1/accounting/audit/invoice/{invoiceId}:
+  /v1/accounting/audit/by-order/{orderId}:
     get:
       tags:
       - Audit Trail
-      summary: Get audit trail for invoice
-      description: Retrieves all audit trail entries associated with a specific invoice
-      operationId: getByInvoiceId
+      summary: Get audit trail for order
+      description: Retrieves all audit trail entries associated with a specific order
+      operationId: getByOrderId_1
       parameters:
-      - name: invoiceId
+      - name: orderId
         in: path
-        description: Invoice ID
+        description: Order ID
         required: true
         schema:
           type: string
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
-          description: Invoice not found
+          description: Order not found
           content:
             '*/*':
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -4585,11 +4624,11 @@ components:
           type: number
         adjustedPrice:
           type: number
-        actorId:
-          type: string
         actorRole:
           type: string
         reason:
+          type: string
+        categoryCode:
           type: string
       required:
       - actorRole

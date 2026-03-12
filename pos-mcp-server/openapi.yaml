@@ -6,8 +6,12 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: NLTI Audit
+  description: NLTI Audit Ledger Query
 - name: MCP Chat API
   description: Model Context Protocol (MCP) chatbot endpoint for invoking MCP tools
+- name: NLTI
+  description: Natural Language Task Interface
 paths:
   /v1/prompts/{id}:
     get:
@@ -154,6 +158,31 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SystemPromptResponse"
+  /v1/nlt/requests:
+    post:
+      tags:
+      - NLTI
+      summary: Submit a natural language task request
+      operationId: submitRequest
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NltiRequestDTO"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/NltiResponseV1"
   /v1/mcp/chat:
     post:
       tags:
@@ -167,16 +196,6 @@ paths:
           application/json: {}
         required: true
       responses:
-        "500":
-          description: Tool execution failed
-          content:
-            text/plain:
-              example: "Failed to execute MCP tool: Tool not found"
-        "400":
-          description: Invalid request - missing or empty toolName
-          content:
-            text/plain:
-              example: '''toolName'' is required'
         "200":
           description: Tool execution succeeded
           content:
@@ -188,6 +207,16 @@ paths:
                 - type: text
                   text: Pong from positivity-ping
                 isError: false
+        "400":
+          description: Invalid request - missing or empty toolName
+          content:
+            text/plain:
+              example: '''toolName'' is required'
+        "500":
+          description: Tool execution failed
+          content:
+            text/plain:
+              example: "Failed to execute MCP tool: Tool not found"
   /v1/llm-apis:
     get:
       tags:
@@ -219,6 +248,67 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/LlmApiConfigResponse"
+  /v1/nlt/audit:
+    get:
+      tags:
+      - NLTI Audit
+      summary: Query the NLTI audit ledger
+      operationId: queryAudit
+      parameters:
+      - name: correlationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: eventType
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: Zero-based page index (0..N)
+        required: false
+        schema:
+          default: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: The size of the page to be returned
+        required: false
+        schema:
+          default: 20
+          minimum: 1
+      - name: sort
+        in: query
+        description: "Sorting criteria in the format: property,(asc|desc). Default\
+          \ sort order is ascending. Multiple sort criteria are supported."
+        required: false
+        schema:
+          type: array
+          default:
+          - "timestamp,ASC"
+          items: {}
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageAuditEventResponse"
 components:
   schemas:
     SystemPromptRequest:
@@ -291,3 +381,111 @@ components:
         updatedAt:
           type: string
           format: date-time
+    NltiRequestDTO:
+      type: object
+      properties:
+        prompt:
+          type: string
+        sessionId:
+          type: string
+          format: uuid
+        clientContext:
+          type: object
+          additionalProperties: {}
+      required:
+      - prompt
+    NltiResponseV1:
+      type: object
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        correlationId:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        result: {}
+        meta:
+          type: object
+          additionalProperties: {}
+    AuditEventResponse:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        correlationId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        actorSubjectId:
+          type: string
+        payloadRef:
+          type: string
+    PageAuditEventResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        first:
+          type: boolean
+        last:
+          type: boolean
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEventResponse"
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sortnull"
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
+        empty:
+          type: boolean
+    Pageablenull:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int64
+        sort:
+          $ref: "#/components/schemas/Sortnull"
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        unpaged:
+          type: boolean
+    Sortnull:
+      type: object
+      properties:
+        empty:
+          type: boolean
+        sorted:
+          type: boolean
+        unsorted:
+          type: boolean
