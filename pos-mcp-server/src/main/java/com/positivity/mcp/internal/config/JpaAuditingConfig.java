@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.config;
 
 import java.time.Clock;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -22,6 +22,6 @@ public class JpaAuditingConfig {
 
     @Bean
     public DateTimeProvider auditingDateTimeProvider(Clock clock) {
-        return () -> Optional.of(Instant.now(clock));
+        return () -> Optional.of(OffsetDateTime.now(clock));
     }
 }
