@@ -66,6 +66,12 @@
             <artifactId>reactor-core</artifactId>
         </dependency>
 
+        <!-- OpenTelemetry API for span attribute instrumentation -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+
         <!-- Springdoc OpenAPI Starter WebMVC UI (includes Swagger UI and annotations) -->
         <dependency>
             <groupId>org.springdoc</groupId>

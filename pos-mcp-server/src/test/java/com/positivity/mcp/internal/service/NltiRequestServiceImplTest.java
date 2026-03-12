@@ -5,18 +5,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,7 +28,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -57,12 +59,18 @@ class NltiRequestServiceImplTest {
     @Mock
     private Clock clock;
 
-    @InjectMocks
     private NltiRequestServiceImpl service;
+
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
-        Authentication auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
+        meterRegistry = new SimpleMeterRegistry();
+        service = new NltiRequestServiceImpl(sessionRepository, requestRepository, clock, meterRegistry);
+
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
+        auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));
         SecurityContextHolder.getContext().setAuthentication(auth);
         lenient().when(clock.instant()).thenReturn(Instant.parse("2026-01-01T12:00:00Z"));
         lenient().when(clock.getZone()).thenReturn(ZoneOffset.UTC);

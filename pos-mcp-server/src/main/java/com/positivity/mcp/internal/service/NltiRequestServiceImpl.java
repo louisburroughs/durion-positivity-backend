@@ -6,10 +6,16 @@ import com.positivity.mcp.internal.entity.NltiRequest;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.enums.NltiRequestStatus;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
+import com.positivity.mcp.internal.observability.NltiSpanAttributes;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.service.NltiRequestService;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.opentelemetry.api.trace.Span;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -22,8 +28,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -32,6 +36,10 @@ public class NltiRequestServiceImpl implements NltiRequestService {
     private final NltiSessionRepository sessionRepository;
     private final NltiRequestRepository requestRepository;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
+    private final Counter requestCount;
+    private final Counter errorCount;
+    private final Timer requestLatency;
 
     @Value("${pos.nlti.session.ttl-hours:24}")
     private long sessionTtlHours = 24;
@@ -43,10 +51,15 @@ public class NltiRequestServiceImpl implements NltiRequestService {
 
     public NltiRequestServiceImpl(NltiSessionRepository sessionRepository,
                                    NltiRequestRepository requestRepository,
-                                   Clock clock) {
+                                   @NonNull Clock clock,
+                                   @NonNull MeterRegistry meterRegistry) {
         this.sessionRepository = sessionRepository;
         this.requestRepository = requestRepository;
-        this.clock = (clock != null) ? clock : Clock.systemUTC();
+        this.clock = clock;
+        this.meterRegistry = meterRegistry;
+        this.requestCount = meterRegistry.counter("nlt.request.count");
+        this.errorCount = meterRegistry.counter("nlt.error.count");
+        this.requestLatency = meterRegistry.timer("nlt.request.latency_ms");
     }
 
     @Override
@@ -56,36 +69,45 @@ public class NltiRequestServiceImpl implements NltiRequestService {
 
     @Override
     public @NonNull NltiResponseV1 submit(@NonNull NltiRequestDTO request, @Nullable UUID correlationId) {
-        String subjectId = resolveSubjectId();
-        UUID effectiveCorrelationId = (correlationId != null) ? correlationId : UUIDv7Generator.generate();
-        UUID resolvedSessionId = resolveSession(request.sessionId(), subjectId);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            requestCount.increment();
 
-        AtomicInteger count = sessionRequestCounts.computeIfAbsent(
-                resolvedSessionId.toString(), k -> new AtomicInteger(0));
-        if (count.incrementAndGet() > perSessionRateLimit) {
-            count.decrementAndGet();
-            throw new RateLimitExceededException("Rate limit exceeded for session: " + resolvedSessionId);
+            String subjectId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+            UUID effectiveCorrelationId = (correlationId != null) ? correlationId : UUIDv7Generator.generate();
+            UUID resolvedSessionId = resolveSession(request.sessionId(), subjectId);
+
+            Span currentSpan = Span.current();
+            currentSpan.setAttribute(NltiSpanAttributes.NLT_CORRELATION_ID, effectiveCorrelationId.toString());
+            currentSpan.setAttribute(NltiSpanAttributes.NLT_USER_ID, subjectId);
+
+            AtomicInteger count = sessionRequestCounts.computeIfAbsent(
+                    resolvedSessionId.toString(), k -> new AtomicInteger(0));
+            if (count.incrementAndGet() > perSessionRateLimit) {
+                count.decrementAndGet();
+                throw new RateLimitExceededException("Rate limit exceeded for session: " + resolvedSessionId);
+            }
+
+            String promptHash = hashPrompt(request.prompt());
+            UUID newRequestId = UUIDv7Generator.generate();
+            NltiRequest nltiRequest = new NltiRequest();
+            nltiRequest.setId(newRequestId);
+            nltiRequest.setCorrelationId(effectiveCorrelationId);
+            nltiRequest.setSessionId(resolvedSessionId);
+            nltiRequest.setStatus(NltiRequestStatus.ACCEPTED);
+            nltiRequest.setPromptHash(promptHash);
+            requestRepository.save(nltiRequest);
+
+            currentSpan.setAttribute(NltiSpanAttributes.NLT_REQUEST_ID, newRequestId.toString());
+            currentSpan.setAttribute(NltiSpanAttributes.NLT_SESSION_ID, resolvedSessionId.toString());
+
+            return new NltiResponseV1(newRequestId, effectiveCorrelationId, resolvedSessionId, "ACCEPTED", null, null);
+        } catch (Exception exception) {
+            errorCount.increment();
+            throw exception;
+        } finally {
+            sample.stop(requestLatency);
         }
-
-        String promptHash = hashPrompt(request.prompt());
-        UUID newRequestId = UUIDv7Generator.generate();
-        NltiRequest nltiRequest = new NltiRequest();
-        nltiRequest.setId(newRequestId);
-        nltiRequest.setCorrelationId(effectiveCorrelationId);
-        nltiRequest.setSessionId(resolvedSessionId);
-        nltiRequest.setStatus(NltiRequestStatus.ACCEPTED);
-        nltiRequest.setPromptHash(promptHash);
-        requestRepository.save(nltiRequest);
-
-        return new NltiResponseV1(newRequestId, effectiveCorrelationId, resolvedSessionId, "ACCEPTED", null, null);
-    }
-
-    private String resolveSubjectId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getName() != null) {
-            return auth.getName();
-        }
-        return "system";
     }
 
     private UUID resolveSession(@Nullable UUID providedSessionId, String subjectId) {
