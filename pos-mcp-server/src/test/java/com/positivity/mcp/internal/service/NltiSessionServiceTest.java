@@ -9,6 +9,7 @@ import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -23,11 +24,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import com.positivity.security.common.GatewaySecurityConstants;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
+import java.util.Map;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
@@ -58,13 +59,21 @@ class NltiSessionServiceTest {
 
     @Mock
     private Clock clock;
-    @InjectMocks
+
     private NltiRequestServiceImpl service;
+
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUpSecurityContext() {
-        Authentication auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
+        meterRegistry = new SimpleMeterRegistry();
+        service = new NltiRequestServiceImpl(sessionRepository, requestRepository, clock, meterRegistry);
+
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
+        auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));
         SecurityContextHolder.getContext().setAuthentication(auth);
+
         // Fix ADR-0024: inject deterministic clock; use a base time in the past so "now - 24h" expiry
         // checks work consistently. Tests that need historical data set their own offsets from this base.
         lenient().when(clock.instant()).thenReturn(Instant.parse("2026-01-01T12:00:00Z"));
