@@ -35,7 +35,7 @@ class LlmApiConfigServiceImplTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR-0013
     private static final UUID EXISTING_ID = UUID.fromString("00000000-0000-7000-8000-000000000100");
-    private static final UUID MISSING_ID  = UUID.fromString("00000000-0000-7000-8000-000000000101");
+    private static final UUID MISSING_ID = UUID.fromString("00000000-0000-7000-8000-000000000101");
 
     @Mock
     private LlmApiConfigRepository repository;
