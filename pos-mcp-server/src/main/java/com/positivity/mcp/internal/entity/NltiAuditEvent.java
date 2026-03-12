@@ -14,9 +14,11 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+@Immutable
 @Data
 @NoArgsConstructor
 @Entity

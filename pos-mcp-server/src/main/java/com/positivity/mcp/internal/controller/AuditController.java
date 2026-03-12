@@ -44,10 +44,8 @@ class AuditController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(required = false) String eventType,
             @ParameterObject @PageableDefault(size = 20, sort = "timestamp") Pageable pageable) {
-        // Keep DTO mapping shape visible in scaffold mode.
         var query = new AuditQuery(correlationId, from, to, eventType);
-        auditLedgerService.getClass();
-        query.getClass();
-        throw new UnsupportedOperationException("Not yet implemented");
+        var page = auditLedgerService.query(query, pageable);
+        return ResponseEntity.ok(page);
     }
 }
