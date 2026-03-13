@@ -41,7 +41,6 @@ class GlobalExceptionHandlerTest {
     @Mock
     Clock clock;
 
-    @SuppressWarnings("unchecked")
     @Mock
     ObjectProvider<AuditEventService> auditEventServiceProvider;
 
