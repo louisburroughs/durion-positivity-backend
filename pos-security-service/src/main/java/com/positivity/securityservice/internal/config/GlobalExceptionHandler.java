@@ -24,6 +24,7 @@ import org.springframework.web.context.request.WebRequest;
 import com.positivity.securityservice.internal.dto.ErrorResponse;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
+import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
@@ -56,6 +57,7 @@ import lombok.extern.slf4j.Slf4j;
  * 
  * **Mapped Exceptions:**
  * - IllegalArgumentException → 400 Bad Request
+ * - InvalidRefreshTokenException → 401 Unauthorized
  * - AuthorizationDeniedException → 403 Forbidden
  * - DuplicateRoleNameException → 409 Conflict
  * - IllegalStateException → 409 Conflict (overlapping assignment) or 400 Bad Request
@@ -372,6 +374,33 @@ public class GlobalExceptionHandler {
                                                 "DUPLICATE_ROLE_NAME",
                                                 ex.getMessage(),
                                                 HttpStatus.CONFLICT,
+                                                correlationId));
+        }
+
+        /**
+         * Handles InvalidRefreshTokenException (valid JWT but user no longer exists
+         * or token not refreshable).
+         *
+         * <p>
+         * <b>HTTP Status:</b> 401 Unauthorized
+         *
+         * @param ex      the exception
+         * @param request the web request
+         * @return error response with 401 status and correlation ID
+         */
+        @ExceptionHandler(InvalidRefreshTokenException.class)
+        @ResponseStatus(HttpStatus.UNAUTHORIZED)
+        public ResponseEntity<ErrorResponse> handleInvalidRefreshTokenException(
+                        InvalidRefreshTokenException ex,
+                        WebRequest request) {
+                String correlationId = extractCorrelationId(request);
+                log.warn("Invalid refresh token (correlationId={}): {}", correlationId, ex.getMessage());
+                return ResponseEntity
+                                .status(HttpStatus.UNAUTHORIZED)
+                                .body(errorResponse(
+                                                "INVALID_REFRESH_TOKEN",
+                                                ex.getMessage(),
+                                                HttpStatus.UNAUTHORIZED,
                                                 correlationId));
         }
 

@@ -3,6 +3,8 @@ package com.positivity.securityservice.service;
 import java.util.Set;
 import java.util.UUID;
 
+import org.jspecify.annotations.NonNull;
+
 /**
  * Service for handling JWT token operations such as generation, validation,
  * extraction, and deletion.
@@ -15,31 +17,40 @@ import java.util.UUID;
  * - JWT ID (JTI): Unique identifier for token revocation tracking
  * 
  * **Implementation Notes:**
- * - Authority expansion: Delegated to gateway (authorities claim populated by
- * RoleAuthorityService)
+ * - Permission encoding: Effective permissions are encoded into perm_bits
+ *   (Base64URL BitSet) at token issuance via PermissionBitsetCodec.
  * - Concurrency: JwtToken entity uses @Version for optimistic locking
  * - Graceful Degradation: If Redis unavailable, token validation still succeeds
  * 
  * @since 1.0
  */
 public interface JwtService {
-    /** Claim key for roles in the JWT. */
+   /** Legacy claim key; retained for backward-compatible decoding of old tokens only. New tokens do not include this claim. */
     public static final String ROLES = "roles";
-    /** Claim key for expanded authorities in the JWT. */
+   /** Legacy claim key; retained for backward-compatible decoding of old tokens only. New tokens do not include this claim. */
     public static final String AUTHORITIES = "authorities";
     /** Claim key for stable user identifier used by audit lineage. */
     public static final String USER_ID = "userId";
     /** Claim key for JWT ID (unique identifier for revocation). */
     public static final String JTI = "jti";
+    /** Claim key for compact Base64URL-encoded permission bitset. */
+    public static final String PERM_BITS = "perm_bits";
+    /** Claim key for the catalog version used to encode perm_bits. */
+    public static final String PERM_VER = "perm_ver";
+    /** Claim key for stable user UUID identifier (replaces userId in new tokens). */
+    public static final String UID = "uid";
+    /** Claim key for human-readable display name (mirrors sub for gateway header). */
+    public static final String USERNAME = "username";
 
     /**
      * Generates a JWT token for the given username and roles, stores it in the
      * repository, and returns the token string.
      *
      * **Implementation:**
-     * - Token ID (JTI): Unique UUID v4 identifier for revocation tracking
+        * - Token ID (JTI): Unique UUID v7 identifier for revocation tracking
      * - Expiration: 1 hour (3600 seconds)
-     * - Authorities: Populated by RoleAuthorityService (expanded from roles)
+        * - Permissions: Encoded as perm_bits Base64URL BitSet via
+        *   PermissionBitsetCodec at issuance.
      * - Revocation: Token stored in Redis with 1-hour TTL
      * 
      * @param username the subject for the token
@@ -49,7 +60,7 @@ public interface JwtService {
      * 
      * @throws IllegalArgumentException if username, userId, or roles are invalid
      */
-    String generateToken(String username, UUID userId, Set<String> roles);
+    String generateToken(@NonNull String username, @NonNull UUID userId, @NonNull Set<String> roles);
 
     /**
      * Validates the given JWT token by checking:
@@ -69,7 +80,7 @@ public interface JwtService {
      * @param token the JWT token string to validate
      * @return true if the token is valid, not revoked, and not expired
      */
-    boolean validateToken(String token);
+    boolean validateToken(@NonNull String token);
 
     /**
      * Extracts the username (subject) from the given JWT token.
@@ -77,7 +88,7 @@ public interface JwtService {
      * @param token the JWT token string
      * @return the subject (username) from the token
      */
-    String getUsernameFromToken(String token);
+    String getUsernameFromToken(@NonNull String token);
 
     /**
      * Extracts the stable user identifier from the given JWT token.
@@ -85,7 +96,7 @@ public interface JwtService {
      * @param token the JWT token string
      * @return stable user identifier claim
      */
-    UUID getUserIdFromToken(String token);
+    UUID getUserIdFromToken(@NonNull String token);
 
     /**
      * Extracts the set of roles from the given JWT token.
@@ -93,12 +104,12 @@ public interface JwtService {
      * @param token the JWT token string
      * @return a set of roles, or an empty set if none are found
      */
-    Set<String> getRolesFromToken(String token);
+    Set<String> getRolesFromToken(@NonNull String token);
 
     /**
      * Extracts the set of authorities from the given JWT token.
      */
-    Set<String> getAuthoritiesFromToken(String token);
+    Set<String> getAuthoritiesFromToken(@NonNull String token);
 
     /**
      * Deletes the given JWT token from the repository and marks it as revoked in
@@ -115,7 +126,7 @@ public interface JwtService {
      * @param token the JWT token string to delete
      * @return true if the token was found and deleted, false if it didn't exist
      */
-    boolean deleteToken(String token);
+    boolean deleteToken(@NonNull String token);
 
     /**
      * Revokes a token by its JTI (JWT ID) and removes it from the database.
@@ -125,7 +136,7 @@ public interface JwtService {
      * 
      * @throws IllegalArgumentException if jti is blank or expirationSeconds <= 0
      */
-    void revokeTokenByJti(String jti, long expirationSeconds);
+    void revokeTokenByJti(@NonNull String jti, long expirationSeconds);
 
     /**
      * Record representing a pair of access and refresh tokens.
@@ -147,15 +158,17 @@ public interface JwtService {
      * **JTI (JWT ID):**
      * - Both tokens include a unique JTI for revocation tracking
      * - Each token has separate JTI (not shared)
+    * - Permissions: Encoded as perm_bits Base64URL BitSet via
+    *   PermissionBitsetCodec at issuance.
      * 
      * @param username the subject for the tokens
      * @param userId   stable user identifier for audit lineage
-     * @param roles    the set of roles to include in the access token
+   * @param roles    the set of roles used to derive the permission bitset claim (perm_bits)
      * @return a TokenPair containing the access and refresh tokens
      * 
      * @throws IllegalArgumentException if username, userId, or roles are invalid
      */
-    TokenPair generateTokenPair(String username, UUID userId, Set<String> roles);
+    TokenPair generateTokenPair(@NonNull String username, @NonNull UUID userId, @NonNull Set<String> roles);
 
     /**
      * Validates the given refresh token by checking:
@@ -167,14 +180,14 @@ public interface JwtService {
      * @param refreshToken the refresh token string to validate
      * @return true if the refresh token is valid and not expired, false otherwise
      */
-    boolean validateRefreshToken(String refreshToken);
+    boolean validateRefreshToken(@NonNull String refreshToken);
 
     /**
      * Refreshes the access token using the given refresh token.
      *
      * **Process:**
      * 1. Validates refresh token (signature, expiration, revocation)
-     * 2. Extracts username and roles from refresh token
+        * 2. Extracts uid from refresh token and loads current roles from persistence
      * 3. Invalidates old tokens (marks as revoked in Redis)
      * 4. Generates new token pair with fresh expiration times
      * 
@@ -187,5 +200,5 @@ public interface JwtService {
      * 
      * @throws IllegalArgumentException if the refresh token is invalid or not found
      */
-    TokenPair refreshAccessToken(String refreshToken);
+    TokenPair refreshAccessToken(@NonNull String refreshToken);
 }
