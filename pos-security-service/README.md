@@ -95,29 +95,29 @@ Catalog behavior:
 - Update `Permission` entity in
   `src/main/java/com/positivity/securityservice/internal/entity/Permission.java`.
 
-2. Add bitset codec.
+1. Add bitset codec.
 
 - Create `PermissionBitsetCodec` under `internal/security` or `internal/service`.
 - Encode/decode using `BitSet` + Base64URL without padding.
 
-3. Add effective permission resolver.
+1. Add effective permission resolver.
 
 - Resolve `User -> roles -> permissions` from repositories.
 - Return permission names and bit indexes for token construction.
 
-4. Rewrite token issuance.
+1. Rewrite token issuance.
 
 - Update `JwtService` claim constants to include `perm_bits` and `perm_ver`.
 - In `JwtServiceImpl`, generate `perm_bits` and `perm_ver` claims.
 - Remove legacy token claim generation for `authorities`.
 
-5. Update JWT extraction endpoints.
+1. Update JWT extraction endpoints.
 
 - Remove `/v1/auth/authorities` in `JwtController` for greenfield mode.
 - Keep `/v1/auth/validate`, `/v1/auth/subject`, and `/v1/auth/person-id`.
 - Add `/v1/auth/permissions` only if explicitly needed for admin/debug use.
 
-6. Update gateway integration.
+1. Update gateway integration.
 
 - Gateway should decode `perm_bits` from validated JWTs.
 - Convert decoded permission bits to canonical authority strings for downstream

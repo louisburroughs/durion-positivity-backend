@@ -70,6 +70,12 @@ paths:
               $ref: "#/components/schemas/PreferencesUpsertDto"
         required: true
       responses:
+        "200":
+          description: Preferences updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "201":
           description: Preferences created successfully
           content:
@@ -78,12 +84,6 @@ paths:
                 $ref: "#/components/schemas/VehicleCarePreferenceResponse"
         "400":
           description: Invalid preference data
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleCarePreferenceResponse"
-        "200":
-          description: Preferences updated successfully
           content:
             '*/*':
               schema:
@@ -427,14 +427,14 @@ paths:
           type: boolean
           default: false
       responses:
-        "400":
-          description: Invalid search query
+        "200":
+          description: Search results returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
-        "200":
-          description: Search results returned
+        "400":
+          description: Invalid search query
           content:
             '*/*':
               schema:
@@ -453,14 +453,14 @@ paths:
               $ref: "#/components/schemas/SearchVehiclesRequest"
         required: true
       responses:
-        "400":
-          description: Invalid search query
+        "200":
+          description: Search results returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SearchVehiclesResponse"
-        "200":
-          description: Search results returned
+        "400":
+          description: Invalid search query
           content:
             '*/*':
               schema:
