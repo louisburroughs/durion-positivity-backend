@@ -362,9 +362,6 @@ public class JwtServiceImpl implements JwtService {
 
         JwtToken jwtToken = stored.get();
         UUID userId = getUserIdFromToken(refreshToken);
-        if (userId == null) {
-            throw new IllegalArgumentException("Refresh token missing uid/userId claim");
-        }
         Optional<UserDto> userOpt = userService.getUserById(userId);
         if (userOpt.isEmpty()) {
             throw new InvalidRefreshTokenException("Refresh token references a user that no longer exists");
