@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.Objects;
 
 /**
  * Service for managing the central permission registry.
@@ -63,7 +64,19 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             counters = processPermissionDefinition(request, permDef, errors, counters);
         }
 
-        return buildRegistrationResponse(request, errors, counters);
+        boolean success = errors.isEmpty() || (counters.registered() + counters.updated()) > 0;
+        String message = String.format("Processed %d permissions: %d registered, %d updated, %d skipped",
+                request.getPermissions().size(), counters.registered(), counters.updated(), counters.skipped());
+
+        return PermissionRegistrationResponse.builder()
+                .success(success)
+                .message(message)
+                .totalPermissions(request.getPermissions().size())
+                .registeredPermissions(counters.registered())
+                .updatedPermissions(counters.updated())
+                .skippedPermissions(counters.skipped())
+                .errors(errors)
+                .build();
     }
 
     private void validateRegistrationRequest(PermissionRegistrationRequest request) {
@@ -85,30 +98,35 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             ProcessingCounters counters) {
         try {
             if (!isValidPermissionName(permDef.getName())) {
-                errors.add("Invalid permission name format: " + permDef.getName() +
-                        " (must be lowercase domain:resource:action)");
-                return incrementSkipped(counters);
+                return skipInvalidPermission(permDef, errors, counters);
             }
 
             Optional<Permission> existingOpt = permissionRepository.findByName(permDef.getName());
             if (existingOpt.isPresent()) {
-                return processExistingPermission(request, permDef, existingOpt.get(), counters);
+                return updateExistingPermission(request, permDef, existingOpt.get(), counters);
             }
 
             return registerNewPermission(request, permDef, errors, counters);
         } catch (Exception e) {
-            errors.add("Error processing permission " + permDef.getName() + ": " + e.getMessage());
-            log.error("Error processing permission: {}", permDef.getName(), e);
-            return incrementSkipped(counters);
+            return handlePermissionProcessingError(permDef, errors, counters, e);
         }
     }
 
-    private ProcessingCounters processExistingPermission(
+    private ProcessingCounters skipInvalidPermission(
+            PermissionRegistrationRequest.PermissionDefinition permDef,
+            List<String> errors,
+            ProcessingCounters counters) {
+        errors.add("Invalid permission name format: " + permDef.getName() +
+                " (must match lowercase 'domain:resource:action' or legacy 'domain:action' format; segments may include hyphens)");
+        return incrementSkipped(counters);
+    }
+
+    private ProcessingCounters updateExistingPermission(
             PermissionRegistrationRequest request,
             PermissionRegistrationRequest.PermissionDefinition permDef,
             Permission existing,
             ProcessingCounters counters) {
-        if (!existing.getDescription().equals(permDef.getDescription())) {
+        if (!Objects.equals(existing.getDescription(), permDef.getDescription())) {
             existing.setDescription(permDef.getDescription());
             existing.setRegisteredByService(request.getServiceName());
             permissionRepository.save(existing);
@@ -119,23 +137,55 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
         return incrementSkipped(counters);
     }
 
-    private PermissionRegistrationResponse buildRegistrationResponse(
+    private ProcessingCounters handlePermissionProcessingError(
+            PermissionRegistrationRequest.PermissionDefinition permDef,
+            List<String> errors,
+            ProcessingCounters counters,
+            Exception exception) {
+        errors.add("Error processing permission " + permDef.getName() + ": " + exception.getMessage());
+        log.error("Error processing permission: {}", permDef.getName(), exception);
+        return incrementSkipped(counters);
+    }
+
+    private ProcessingCounters registerNewPermission(
             PermissionRegistrationRequest request,
+            PermissionRegistrationRequest.PermissionDefinition permDef,
             List<String> errors,
             ProcessingCounters counters) {
-        boolean success = errors.isEmpty() || (counters.registered() + counters.updated()) > 0;
-        String message = String.format("Processed %d permissions: %d registered, %d updated, %d skipped",
-                request.getPermissions().size(), counters.registered(), counters.updated(), counters.skipped());
+        // First, handle the case where the permission already exists but may be missing a bitIndex.
+        Optional<Permission> existingOpt = permissionRepository.findByName(permDef.getName());
+        if (existingOpt.isPresent()) {
+            Permission existing = existingOpt.get();
+            boolean changed = false;
 
-        return PermissionRegistrationResponse.builder()
-                .success(success)
-                .message(message)
-                .totalPermissions(request.getPermissions().size())
-                .registeredPermissions(counters.registered())
-                .updatedPermissions(counters.updated())
-                .skippedPermissions(counters.skipped())
-                .errors(errors)
-                .build();
+            if (existing.getBitIndex() == null) {
+                PermissionCode.fromCode(existing.getName())
+                        .ifPresent(pc -> existing.setBitIndex(pc.bitIndex()));
+                changed = existing.getBitIndex() != null;
+            }
+
+            if (changed) {
+                permissionRepository.save(existing);
+                log.debug("Backfilled bitIndex for existing permission: {}", permDef.getName());
+                return incrementUpdated(counters);
+            } else {
+                log.debug("Permission already exists and is up-to-date: {}", permDef.getName());
+                return incrementSkipped(counters);
+            }
+        }
+
+        // No existing permission found: proceed with registering a new one.
+        Permission permission = buildPermission(request, permDef);
+        try {
+            permission.parsePermissionName();
+            PermissionCode.fromCode(permission.getName()).ifPresent(pc -> permission.setBitIndex(pc.bitIndex()));
+            permissionRepository.save(permission);
+            log.debug("Registered new permission: {}", permDef.getName());
+            return incrementRegistered(counters);
+        } catch (IllegalArgumentException e) {
+            errors.add("Failed to parse permission " + permDef.getName() + ": " + e.getMessage());
+            return incrementSkipped(counters);
+        }
     }
 
     private ProcessingCounters incrementRegistered(ProcessingCounters counters) {
@@ -148,24 +198,6 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
 
     private ProcessingCounters incrementSkipped(ProcessingCounters counters) {
         return new ProcessingCounters(counters.registered(), counters.updated(), counters.skipped() + 1);
-    }
-
-    private ProcessingCounters registerNewPermission(
-            PermissionRegistrationRequest request,
-            PermissionRegistrationRequest.PermissionDefinition permDef,
-            List<String> errors,
-            ProcessingCounters counters) {
-        Permission permission = buildPermission(request, permDef);
-        try {
-            permission.parsePermissionName();
-            PermissionCode.fromCode(permission.getName()).ifPresent(pc -> permission.setBitIndex(pc.bitIndex()));
-            permissionRepository.save(permission);
-            log.debug("Registered new permission: {}", permDef.getName());
-            return incrementRegistered(counters);
-        } catch (IllegalArgumentException e) {
-            errors.add("Failed to parse permission " + permDef.getName() + ": " + e.getMessage());
-            return incrementSkipped(counters);
-        }
     }
 
     private Permission buildPermission(

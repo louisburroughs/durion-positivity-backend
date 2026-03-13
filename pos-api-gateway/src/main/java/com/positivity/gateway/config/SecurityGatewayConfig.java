@@ -1,5 +1,19 @@
 package com.positivity.gateway.config;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
@@ -11,17 +25,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import javax.crypto.SecretKey;
-
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -30,43 +42,30 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.config.CorsRegistry;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 import org.springframework.web.server.ServerWebExchange;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.UnsupportedJwtException;
-import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.SignatureException;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import reactor.core.publisher.Mono;
 
 @Configuration
 @EnableConfigurationProperties(GatewayAuthProperties.class)
 public class SecurityGatewayConfig {
     private static final String AUTHORIZATION = "Authorization";
+    private static final String HEADER_X_AUTHORITIES = "X-Authorities";
+    private static final String HEADER_X_ROLES = "X-Roles";
+    private static final String HEADER_X_USER = "X-User";
+    private static final String HEADER_X_USER_ID = "X-User-Id";
     private static final String JWT_HEADER_ALG = "alg";
+    private static final String CLAIM_PERMISSION_VERSION = "perm_ver";
+    private static final String LOG_JWT_AUTH_REJECTED = "JWT auth rejected path={} reason={} jti={}";
+    private static final String METRIC_AUTH_HEADER_STRIP_COUNT = "auth.header.strip.count";
+    private static final String METRIC_AUTH_LEGACY_DECODE_COUNT = "auth.legacy.decode.count";
+    private static final String METRIC_AUTH_PERMISSION_CATALOG_UNKNOWN = "auth.perm.catalog.version.unknown";
+    private static final String METRIC_AUTH_PERMISSION_DECODE_FAILURE = "auth.perm.decode.failure";
+    private static final String METRIC_AUTH_TOKEN_VALIDATION_FAILURE = "auth.token.validation.failure";
+    private static final String METRIC_AUTH_USER_IDENTITY_MISSING = "auth.user.identity.missing";
+    private static final String REJECTION_REASON_TAG = "reason";
     private static final String UNSIGNED_ALG = "NONE";
     private static final String TEST_SIGNATURE_MARKER = "test-signature";
     private static final String HS256 = "HS256";
-    private static final String HEADER_X_USER = "X-User";
-    private static final String HEADER_X_USER_ID = "X-User-Id";
-    private static final String HEADER_X_AUTHORITIES = "X-Authorities";
-    private static final String HEADER_X_ROLES = "X-Roles";
-    private static final String CLAIM_UID = "uid";
-    private static final String CLAIM_AUTHORITIES = "authorities";
-    private static final String CLAIM_PERM_VER = "perm_ver";
-    private static final String CLAIM_PERM_BITS = "perm_bits";
-    private static final String TAG_REASON = "reason";
-    private static final String LOG_JWT_AUTH_REJECTED = "JWT auth rejected path={} reason={} jti={}";
-    private static final String UNKNOWN = "unknown";
-    private static final String COUNTER_AUTH_TOKEN_VALIDATION_FAILURE = "auth.token.validation.failure";
+    private static final String UNKNOWN_JTI = "unknown";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Logger LOG = LoggerFactory.getLogger(SecurityGatewayConfig.class);
 
@@ -125,195 +124,47 @@ public class SecurityGatewayConfig {
 
     @Bean
     public GlobalFilter authFilter() {
-        return (exchange, chain) -> {
-            AuthRequestContext requestContext = createAuthRequestContext(exchange);
-            if (isPublicPath(requestContext.path())) {
-                return chain.filter(requestContext.strippedExchange());
-            }
-
-            Optional<String> token = extractBearerToken(requestContext.strippedRequest());
-            if (token.isEmpty()) {
-                return unauthorized(requestContext.strippedExchange());
-            }
-
-            return authenticateAndForward(requestContext, chain, token.get());
-        };
+        return (exchange, chain) -> authenticateRequest(createAuthRequestContext(exchange), chain);
     }
 
-    private Mono<Void> authenticateAndForward(AuthRequestContext requestContext, GatewayFilterChain chain,
-            String token) {
-        Optional<String> preValidationReason = jwtPreValidationRejectionReason(token);
+    private Mono<Void> authenticateRequest(AuthRequestContext context, GatewayFilterChain chain) {
+        if (isPublicPath(context.path())) {
+            return chain.filter(context.exchange());
+        }
+
+        Optional<String> token = extractBearerToken(context.request());
+        if (token.isEmpty()) {
+            return unauthorized(context.exchange());
+        }
+
+        Optional<String> preValidationReason = jwtPreValidationRejectionReason(token.get());
         if (preValidationReason.isPresent()) {
-            return rejectTokenValidation(requestContext, preValidationReason.get(), UNKNOWN);
+            return rejectAuthentication(
+                    context,
+                    METRIC_AUTH_TOKEN_VALIDATION_FAILURE,
+                    REJECTION_REASON_TAG,
+                    preValidationReason.get(),
+                    preValidationReason.get(),
+                    UNKNOWN_JTI);
         }
 
-        Optional<Claims> claims = parseClaims(token, requestContext);
+        Optional<Claims> claims = parseVerifiedClaims(token.get(), context);
         if (claims.isEmpty()) {
-            return unauthorized(requestContext.strippedExchange());
+            return unauthorized(context.exchange());
         }
 
-        return resolveIdentityAndForward(requestContext, chain, claims.get());
-    }
-
-    private Optional<Claims> parseClaims(String token, AuthRequestContext requestContext) {
-        try {
-            Jws<Claims> jwsClaims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    // Enable issuer/audience requirements when JwtServiceImpl emits iss/aud claims.
-                    // .requireIssuer("pos-security-service").requireAudience("api-gateway")
-                    .build()
-                    .parseSignedClaims(token);
-            return Optional.of(jwsClaims.getPayload());
-        } catch (JwtException ex) {
-            recordTokenValidationFailure(requestContext, tokenValidationReason(ex), UNKNOWN);
-            return Optional.empty();
-        }
-    }
-
-    private Mono<Void> resolveIdentityAndForward(
-            AuthRequestContext requestContext,
-            GatewayFilterChain chain,
-            Claims claims) {
-        String jti = resolveJti(claims);
-        String subject = claims.getSubject();
-        if (!StringUtils.hasText(subject)) {
-            incrementTaggedCounter("auth.user.identity.missing", "claim", "sub");
-            return rejectAuth(requestContext, "missing_sub", jti);
+        Optional<AuthenticatedIdentity> identity = resolveAuthenticatedIdentity(claims.get(), context);
+        if (identity.isEmpty()) {
+            return unauthorized(context.exchange());
         }
 
-        Optional<String> resolvedAuthorities = resolveAuthoritiesHeader(claims, requestContext, jti);
-        if (resolvedAuthorities.isEmpty()) {
-            return unauthorized(requestContext.strippedExchange());
-        }
-
-        AuthenticatedIdentity identity = new AuthenticatedIdentity(
-                subject,
-                claims.get(CLAIM_UID, String.class),
-                resolvedAuthorities.get(),
-                jti);
-
-        return forwardAuthenticatedRequest(requestContext, chain, identity);
-    }
-
-    private Optional<String> resolveAuthoritiesHeader(Claims claims, AuthRequestContext requestContext, String jti) {
-        Integer permVer = claims.get(CLAIM_PERM_VER, Integer.class);
-        if (permVer == null) {
-            Optional<List<String>> legacyAuthorities = extractLegacyAuthorities(claims);
-            if (legacyAuthorities.isPresent()) {
-                incrementCounter("auth.legacy.decode.count");
-                LOG.warn("Legacy token (no perm_ver) - using authorities claim directly; path={} jti={}",
-                        requestContext.path(), jti);
-                return Optional.of(String.join(",", legacyAuthorities.get()));
-            }
-        }
-
-        if (permVer == null || permVer != GatewayPermissionCatalog.CATALOG_VERSION) {
-            String permVerValue = permVer == null ? "null" : String.valueOf(permVer);
-            incrementTaggedCounter("auth.perm.catalog.version.unknown", CLAIM_PERM_VER, permVerValue);
-            logAuthRejected(requestContext, "unknown_perm_ver:" + permVerValue, jti);
-            return Optional.empty();
-        }
-
-        return decodeAuthoritiesFromPermBits(claims, requestContext, jti);
-    }
-
-    private Optional<String> decodeAuthoritiesFromPermBits(
-            Claims claims,
-            AuthRequestContext requestContext,
-            String jti) {
-        String permBits = claims.get(CLAIM_PERM_BITS, String.class);
-        if (!StringUtils.hasText(permBits)) {
-            if (authProperties.isTokenIdentityRequired()) {
-                incrementTaggedCounter("auth.perm.decode.failure", TAG_REASON, "missing_claim");
-                logAuthRejected(requestContext, "missing_perm_bits", jti);
-                return Optional.empty();
-            }
-            permBits = "";
-        }
-
-        BitSet decodedPermissions = decodePermissionBits(permBits, requestContext, jti);
-        if (decodedPermissions == null) {
-            return Optional.empty();
-        }
-
-        List<String> authorities = decodedPermissions.stream()
-                .mapToObj(GatewayPermissionCatalog::authorityForBit)
-                .filter(Objects::nonNull)
-                .toList();
-        return Optional.of(String.join(",", authorities));
-    }
-
-    private BitSet decodePermissionBits(String permBits, AuthRequestContext requestContext, String jti) {
-        try {
-            byte[] decodedBytes = Base64.getUrlDecoder().decode(permBits.isEmpty() ? "" : permBits);
-            return BitSet.valueOf(decodedBytes);
-        } catch (Exception ex) {
-            incrementTaggedCounter("auth.perm.decode.failure", TAG_REASON, "malformed_base64");
-            logAuthRejected(requestContext, "malformed_perm_bits", jti);
-            return null;
-        }
-    }
-
-    private Mono<Void> forwardAuthenticatedRequest(
-            AuthRequestContext requestContext,
-            GatewayFilterChain chain,
-            AuthenticatedIdentity identity) {
-        if (authProperties.isRejectHeaderTokenMismatch()) {
-            boolean mismatch = headerMismatch(requestContext.inboundIdentity().user(), identity.subject())
-                    || headerMismatch(requestContext.inboundIdentity().userId(), identity.userId())
-                    || headerMismatch(requestContext.inboundIdentity().authorities(), identity.authoritiesHeader());
-            if (mismatch) {
-                incrementTaggedCounter(COUNTER_AUTH_TOKEN_VALIDATION_FAILURE, TAG_REASON, "header_token_mismatch");
-                return rejectAuth(requestContext, "header_token_mismatch", identity.jti());
-            }
-        }
-
-        ServerHttpRequest authenticatedRequest = requestContext.strippedRequest().mutate().headers(headers -> {
-            headers.set(HEADER_X_USER, identity.subject());
-            if (StringUtils.hasText(identity.userId())) {
-                headers.set(HEADER_X_USER_ID, identity.userId());
-            }
-            headers.set(HEADER_X_AUTHORITIES, identity.authoritiesHeader());
-        }).build();
-
-        return chain.filter(requestContext.strippedExchange().mutate().request(authenticatedRequest).build());
-    }
-
-    private Mono<Void> rejectTokenValidation(AuthRequestContext requestContext, String reason, String jti) {
-        recordTokenValidationFailure(requestContext, reason, jti);
-        return unauthorized(requestContext.strippedExchange());
-    }
-
-    private void recordTokenValidationFailure(AuthRequestContext requestContext, String reason, String jti) {
-        incrementTaggedCounter(COUNTER_AUTH_TOKEN_VALIDATION_FAILURE, TAG_REASON, reason);
-        logAuthRejected(requestContext, reason, jti);
-    }
-
-    private Mono<Void> rejectAuth(AuthRequestContext requestContext, String reason, String jti) {
-        logAuthRejected(requestContext, reason, jti);
-        return unauthorized(requestContext.strippedExchange());
-    }
-
-    private void logAuthRejected(AuthRequestContext requestContext, String reason, String jti) {
-        LOG.warn(LOG_JWT_AUTH_REJECTED, requestContext.path(), reason, jti);
-    }
-
-    private String resolveJti(Claims claims) {
-        return StringUtils.hasText(claims.getId()) ? claims.getId() : UNKNOWN;
-    }
-
-    private Optional<String> extractBearerToken(ServerHttpRequest request) {
-        String authHeader = request.getHeaders().getFirst(AUTHORIZATION);
-        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
-            return Optional.empty();
-        }
-        return Optional.of(authHeader.substring(7));
+        return forwardAuthenticatedRequest(context, chain, identity.get());
     }
 
     private AuthRequestContext createAuthRequestContext(ServerWebExchange exchange) {
         ServerHttpRequest incomingRequest = exchange.getRequest();
-        String path = incomingRequest.getURI().getPath();
-        InboundIdentity inboundIdentity = new InboundIdentity(
+        URI uri = incomingRequest.getURI();
+        InboundIdentityHeaders inboundHeaders = new InboundIdentityHeaders(
                 incomingRequest.getHeaders().getFirst(HEADER_X_USER),
                 incomingRequest.getHeaders().getFirst(HEADER_X_USER_ID),
                 incomingRequest.getHeaders().getFirst(HEADER_X_AUTHORITIES));
@@ -324,16 +175,204 @@ public class SecurityGatewayConfig {
                 headers.remove(HEADER_X_USER_ID);
                 headers.remove(HEADER_X_AUTHORITIES);
                 headers.remove(HEADER_X_ROLES);
-                incrementCounter("auth.header.strip.count");
+                incrementCounter(METRIC_AUTH_HEADER_STRIP_COUNT);
             }
         }).build();
 
         ServerWebExchange strippedExchange = exchange.mutate().request(strippedRequest).build();
-        return new AuthRequestContext(path, strippedRequest, strippedExchange, inboundIdentity);
+        return new AuthRequestContext(strippedExchange, strippedRequest, uri.getPath(), inboundHeaders);
+    }
+
+    private Optional<String> extractBearerToken(ServerHttpRequest request) {
+        String authHeader = request.getHeaders().getFirst(AUTHORIZATION);
+        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
+            return Optional.empty();
+        }
+        return Optional.of(authHeader.substring(7));
+    }
+
+    private Optional<Claims> parseVerifiedClaims(String token, AuthRequestContext context) {
+        try {
+            Jws<Claims> jwsClaims = Jwts.parser()
+                    .verifyWith(secretKey)
+                    // Issuer and audience validation will be enabled once emitted by the token service.
+                    .build()
+                    .parseSignedClaims(token);
+            return Optional.of(jwsClaims.getPayload());
+        } catch (JwtException ex) {
+            String reason = tokenValidationReason(ex);
+            rejectAuthentication(
+                    context,
+                    METRIC_AUTH_TOKEN_VALIDATION_FAILURE,
+                    REJECTION_REASON_TAG,
+                    reason,
+                    reason,
+                    UNKNOWN_JTI);
+            return Optional.empty();
+        }
+    }
+
+    private Optional<AuthenticatedIdentity> resolveAuthenticatedIdentity(Claims claims, AuthRequestContext context) {
+        String jti = StringUtils.hasText(claims.getId()) ? claims.getId() : UNKNOWN_JTI;
+        String subject = claims.getSubject();
+        if (!StringUtils.hasText(subject)) {
+            rejectAuthentication(context, METRIC_AUTH_USER_IDENTITY_MISSING, "claim", "sub", "missing_sub", jti);
+            return Optional.empty();
+        }
+
+        Optional<String> legacyAuthoritiesHeader = resolveLegacyAuthoritiesHeader(claims, context, jti);
+        if (legacyAuthoritiesHeader.isPresent()) {
+            return Optional.of(new AuthenticatedIdentity(subject, claims.get("uid", String.class),
+                    legacyAuthoritiesHeader.get(), jti));
+        }
+
+        Integer permVer = claims.get(CLAIM_PERMISSION_VERSION, Integer.class);
+        if (permVer == null || permVer != GatewayPermissionCatalog.CATALOG_VERSION) {
+            String permVerValue = permVer == null ? "null" : String.valueOf(permVer);
+            rejectAuthentication(
+                    context,
+                    METRIC_AUTH_PERMISSION_CATALOG_UNKNOWN,
+                    CLAIM_PERMISSION_VERSION,
+                    permVerValue,
+                    "unknown_perm_ver:" + permVerValue,
+                    jti);
+            return Optional.empty();
+        }
+
+        Optional<BitSet> decodedPermissions = decodePermissionBits(claims, context, jti);
+        if (decodedPermissions.isEmpty()) {
+            return Optional.empty();
+        }
+
+        String authoritiesHeader = buildAuthoritiesHeader(decodedPermissions.get());
+        return Optional.of(new AuthenticatedIdentity(subject, claims.get("uid", String.class), authoritiesHeader, jti));
+    }
+
+    private Optional<String> resolveLegacyAuthoritiesHeader(Claims claims, AuthRequestContext context, String jti) {
+        Integer permVer = claims.get(CLAIM_PERMISSION_VERSION, Integer.class);
+        if (permVer != null) {
+            return Optional.empty();
+        }
+
+        Optional<List<String>> legacyAuthorities = extractLegacyAuthorities(claims);
+        if (legacyAuthorities.isEmpty()) {
+            return Optional.empty();
+        }
+
+        incrementCounter(METRIC_AUTH_LEGACY_DECODE_COUNT);
+        LOG.warn("Legacy token (no perm_ver) - using authorities claim directly; path={} jti={}", context.path(), jti);
+        return Optional.of(String.join(",", legacyAuthorities.get()));
+    }
+
+    private Optional<BitSet> decodePermissionBits(Claims claims, AuthRequestContext context, String jti) {
+        String permBits = claims.get("perm_bits", String.class);
+        if (!StringUtils.hasText(permBits)) {
+            if (authProperties.isTokenIdentityRequired()) {
+                rejectAuthentication(
+                        context,
+                        METRIC_AUTH_PERMISSION_DECODE_FAILURE,
+                        REJECTION_REASON_TAG,
+                        "missing_claim",
+                        "missing_perm_bits",
+                        jti);
+                return Optional.empty();
+            }
+            return Optional.of(BitSet.valueOf(Base64.getUrlDecoder().decode("")));
+        }
+
+        try {
+            byte[] decodedBytes = Base64.getUrlDecoder().decode(permBits);
+            return Optional.of(BitSet.valueOf(decodedBytes));
+        } catch (Exception ex) {
+            rejectAuthentication(
+                    context,
+                    METRIC_AUTH_PERMISSION_DECODE_FAILURE,
+                    REJECTION_REASON_TAG,
+                    "malformed_base64",
+                    "malformed_perm_bits",
+                    jti);
+            return Optional.empty();
+        }
+    }
+
+    private String buildAuthoritiesHeader(BitSet decodedPermissions) {
+        List<String> authorities = decodedPermissions.stream()
+                .mapToObj(GatewayPermissionCatalog::authorityForBit)
+                .filter(Objects::nonNull)
+                .toList();
+        return String.join(",", authorities);
+    }
+
+    /**
+     * Compares the X-Authorities header value with the authorities derived from the token
+     * in a way that is insensitive to ordering and extraneous whitespace.
+     */
+    private boolean authoritiesHeaderMismatch(String headerAuthorities, String tokenAuthorities) {
+        if (!StringUtils.hasText(headerAuthorities)) {
+            // Only enforce mismatch checks when the inbound spoofable header is actually present.
+            return false;
+        }
+        if (!StringUtils.hasText(tokenAuthorities)) {
+            return true;
+        }
+
+        Set<String> headerSet = Arrays.stream(headerAuthorities.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        Set<String> tokenSet = Arrays.stream(tokenAuthorities.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        return !headerSet.equals(tokenSet);
+    }
+
+    private Mono<Void> forwardAuthenticatedRequest(
+            AuthRequestContext context,
+            GatewayFilterChain chain,
+            AuthenticatedIdentity identity) {
+        if (authProperties.isRejectHeaderTokenMismatch()) {
+            boolean mismatch = headerMismatch(context.inboundHeaders().user(), identity.subject())
+                    || headerMismatch(context.inboundHeaders().userId(), identity.userId())
+                    || authoritiesHeaderMismatch(context.inboundHeaders().authorities(), identity.authoritiesHeader());
+            if (mismatch) {
+                return rejectAuthentication(
+                        context,
+                        METRIC_AUTH_TOKEN_VALIDATION_FAILURE,
+                        REJECTION_REASON_TAG,
+                        "header_token_mismatch",
+                        "header_token_mismatch",
+                        identity.jti());
+            }
+        }
+
+        ServerHttpRequest authenticatedRequest = context.request().mutate().headers(headers -> {
+            headers.set(HEADER_X_USER, identity.subject());
+            if (StringUtils.hasText(identity.userId())) {
+                headers.set(HEADER_X_USER_ID, identity.userId());
+            }
+            headers.set(HEADER_X_AUTHORITIES, identity.authoritiesHeader());
+        }).build();
+
+        return chain.filter(context.exchange().mutate().request(authenticatedRequest).build());
+    }
+
+    private Mono<Void> rejectAuthentication(
+            AuthRequestContext context,
+            String counterName,
+            String tagKey,
+            String tagValue,
+            String logReason,
+            String jti) {
+        incrementTaggedCounter(counterName, tagKey, tagValue);
+        LOG.warn(LOG_JWT_AUTH_REJECTED, context.path(), logReason, jti);
+        return unauthorized(context.exchange());
     }
 
     private static Optional<List<String>> extractLegacyAuthorities(Claims claims) {
-        Object legacyAuthorities = claims.get(CLAIM_AUTHORITIES);
+        Object legacyAuthorities = claims.get("authorities");
         if (!(legacyAuthorities instanceof List<?> authoritiesList)) {
             return Optional.empty();
         }
@@ -467,16 +506,11 @@ public class SecurityGatewayConfig {
     }
 
     private void incrementCounter(String counterName) {
-        Counter.builder(counterName)
-                .register(meterRegistry)
-                .increment();
+        meterRegistry.counter(counterName).increment();
     }
 
     private void incrementTaggedCounter(String counterName, String tagKey, String tagValue) {
-        Counter.builder(counterName)
-                .tag(tagKey, tagValue)
-                .register(meterRegistry)
-                .increment();
+        meterRegistry.counter(counterName, tagKey, tagValue).increment();
     }
 
     private static boolean headerMismatch(String inboundValue, String expectedValue) {
@@ -489,14 +523,14 @@ public class SecurityGatewayConfig {
         return !inboundValue.equals(expectedValue);
     }
 
-    private record InboundIdentity(String user, String userId, String authorities) {
+    private record InboundIdentityHeaders(String user, String userId, String authorities) {
     }
 
     private record AuthRequestContext(
+            ServerWebExchange exchange,
+            ServerHttpRequest request,
             String path,
-            ServerHttpRequest strippedRequest,
-            ServerWebExchange strippedExchange,
-            InboundIdentity inboundIdentity) {
+            InboundIdentityHeaders inboundHeaders) {
     }
 
     private record AuthenticatedIdentity(String subject, String userId, String authoritiesHeader, String jti) {

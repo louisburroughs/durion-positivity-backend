@@ -140,14 +140,25 @@ public class JwtServiceImpl implements JwtService {
         Claims claims = getClaims(token);
         String uid = claims.get(UID, String.class);
         if (uid != null) {
-            return UUID.fromString(uid);
+            try {
+                return UUID.fromString(uid);
+            } catch (IllegalArgumentException ex) {
+                log.debug("Invalid UUID value in 'uid' claim", ex);
+                return null;
+            }
         }
 
         String legacyUserId = claims.get(USER_ID, String.class);
         if (legacyUserId != null) {
-            return UUID.fromString(legacyUserId);
+            try {
+                return UUID.fromString(legacyUserId);
+            } catch (IllegalArgumentException ex) {
+                log.debug("Invalid UUID value in legacy 'userId' claim", ex);
+                return null;
+            }
         }
 
+        log.debug("JWT token does not contain 'uid' or legacy 'userId' claim");
         return null;
     }
 
@@ -351,9 +362,6 @@ public class JwtServiceImpl implements JwtService {
 
         JwtToken jwtToken = stored.get();
         UUID userId = getUserIdFromToken(refreshToken);
-        if (userId == null) {
-            throw new IllegalArgumentException("Refresh token missing uid/userId claim");
-        }
         Optional<UserDto> userOpt = userService.getUserById(userId);
         if (userOpt.isEmpty()) {
             throw new InvalidRefreshTokenException("Refresh token references a user that no longer exists");
