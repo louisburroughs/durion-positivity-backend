@@ -140,15 +140,26 @@ public class JwtServiceImpl implements JwtService {
         Claims claims = getClaims(token);
         String uid = claims.get(UID, String.class);
         if (uid != null) {
-            return UUID.fromString(uid);
+            try {
+                return UUID.fromString(uid);
+            } catch (IllegalArgumentException ex) {
+                log.debug("Invalid UUID value in 'uid' claim", ex);
+                return null;
+            }
         }
 
         String legacyUserId = claims.get(USER_ID, String.class);
         if (legacyUserId != null) {
-            return UUID.fromString(legacyUserId);
+            try {
+                return UUID.fromString(legacyUserId);
+            } catch (IllegalArgumentException ex) {
+                log.debug("Invalid UUID value in legacy 'userId' claim", ex);
+                return null;
+            }
         }
 
-        throw new IllegalArgumentException("JWT token does not contain required 'uid' or 'userId' claim");
+        log.debug("JWT token does not contain 'uid' or legacy 'userId' claim");
+        return null;
     }
 
     @Override
