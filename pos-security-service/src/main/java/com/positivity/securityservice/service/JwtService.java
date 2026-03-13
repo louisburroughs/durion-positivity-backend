@@ -4,6 +4,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Service for handling JWT token operations such as generation, validation,
@@ -104,8 +105,10 @@ public interface JwtService {
      * Extracts the stable user identifier from the given JWT token.
      *
      * @param token the JWT token string
-     * @return stable user identifier claim
+     * @return stable user identifier claim, or {@code null} if the claim is absent
+     *         or cannot be parsed as a {@link UUID}
      */
+    @Nullable
     UUID getUserIdFromToken(@NonNull String token);
 
     /**
