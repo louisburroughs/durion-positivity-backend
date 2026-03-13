@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -18,11 +19,17 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.jspecify.annotations.NonNull;
 
+import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
+import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.entity.JwtToken;
+import com.positivity.securityservice.internal.enums.PermissionCode;
+import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.RoleAuthorityService;
+import com.positivity.securityservice.service.UserService;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import io.jsonwebtoken.Claims;
@@ -49,6 +56,7 @@ public class JwtServiceImpl implements JwtService {
 
     private final JwtTokenRepository jwtTokenRepository;
     private final RoleAuthorityService roleAuthorityService;
+    private final UserService userService;
     private final TokenRevocationManager tokenRevocationManager;
 
     @Value("${security.jwt.secret}")
@@ -83,12 +91,12 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String generateToken(String username, UUID userId, Set<String> roles) {
+    public String generateToken(@NonNull String username, @NonNull UUID userId, @NonNull Set<String> roles) {
         return generateTokenPair(username, userId, roles).accessToken();
     }
 
     @Override
-    public boolean validateToken(String token) {
+    public boolean validateToken(@NonNull String token) {
         try {
             Jws<Claims> jws = jwtParser().parseSignedClaims(token);
 
@@ -122,33 +130,30 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String getUsernameFromToken(String token) {
-        return jwtParser()
-                .parseSignedClaims(token)
-                .getPayload()
+    public String getUsernameFromToken(@NonNull String token) {
+        return getClaims(token)
                 .getSubject();
     }
 
     @Override
-    public UUID getUserIdFromToken(String token) {
-        Claims claims = jwtParser()
-                .parseSignedClaims(token)
-                .getPayload();
-        String userId = claims.get(USER_ID, String.class);
-        if (userId == null || userId.isBlank()) {
-            throw new IllegalArgumentException("Missing required JWT userId claim");
+    public UUID getUserIdFromToken(@NonNull String token) {
+        Claims claims = getClaims(token);
+        String uid = claims.get(UID, String.class);
+        if (uid != null) {
+            return UUID.fromString(uid);
         }
-        try {
-            return UUID.fromString(userId);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Invalid JWT userId claim. Expected UUID but was: " + userId, ex);
+
+        String legacyUserId = claims.get(USER_ID, String.class);
+        if (legacyUserId != null) {
+            return UUID.fromString(legacyUserId);
         }
+
+        return null;
     }
 
     @Override
-    public Set<String> getRolesFromToken(String token) {
-        Claims claims = jwtParser()
-                .parseSignedClaims(token).getPayload();
+    public Set<String> getRolesFromToken(@NonNull String token) {
+        Claims claims = getClaims(token);
         Object rolesObj = claims.get(ROLES);
         if (rolesObj instanceof List<?> rolesList) {
             Set<String> roles = new HashSet<>();
@@ -163,9 +168,19 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public Set<String> getAuthoritiesFromToken(String token) {
-        Claims claims = jwtParser()
-                .parseSignedClaims(token).getPayload();
+    public Set<String> getAuthoritiesFromToken(@NonNull String token) {
+        Claims claims = getClaims(token);
+
+        String permBitsValue = claims.get(PERM_BITS, String.class);
+        if (permBitsValue != null) {
+            Object permVerRaw = claims.get(PERM_VER);
+            int permVer = (permVerRaw instanceof Number n) ? n.intValue() : PermissionCode.CATALOG_VERSION;
+            return PermissionBitsetCodec.decodeToPermissions(permBitsValue, permVer)
+                    .stream()
+                    .map(PermissionCode::code)
+                    .collect(Collectors.toSet());
+        }
+
         Object authObj = claims.get(AUTHORITIES);
         if (authObj instanceof List<?> list) {
             Set<String> authorities = new HashSet<>();
@@ -181,7 +196,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     @Transactional
-    public boolean deleteToken(String token) {
+    public boolean deleteToken(@NonNull String token) {
         Optional<JwtToken> existingToken = jwtTokenRepository.findByToken(token);
         if (existingToken.isEmpty()) {
             log.debug("Token deletion skipped: token not found in database");
@@ -214,7 +229,7 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public void revokeTokenByJti(String jti, long expirationSeconds) {
+    public void revokeTokenByJti(@NonNull String jti, long expirationSeconds) {
         if (jti == null || jti.isBlank()) {
             throw new IllegalArgumentException("JTI cannot be blank");
         }
@@ -227,7 +242,7 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public TokenPair generateTokenPair(String username, UUID userId, Set<String> roles) {
+    public TokenPair generateTokenPair(@NonNull String username, @NonNull UUID userId, @NonNull Set<String> roles) {
         if (username == null || username.isBlank()) {
             throw new IllegalArgumentException("Username cannot be blank");
         }
@@ -245,14 +260,19 @@ public class JwtServiceImpl implements JwtService {
         String accessJti = UUIDv7Generator.generate().toString();
         String refreshJti = UUIDv7Generator.generate().toString();
 
-        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(roles);
+        Set<String> expandedAuthorities = roleAuthorityService.expandRolesToAuthorities(roles);
+        Set<PermissionCode> permCodes = expandedAuthorities.stream()
+            .flatMap(authority -> PermissionCode.fromCode(authority).stream())
+            .collect(Collectors.toUnmodifiableSet());
+        String permBits = PermissionBitsetCodec.encode(permCodes);
 
         String accessToken = Jwts.builder()
                 .id(accessJti)
                 .subject(username)
-                .claim(USER_ID, userId.toString())
-                .claim(ROLES, roles)
-                .claim(AUTHORITIES, authorities)
+            .claim(UID, userId.toString())
+            .claim(USERNAME, username)
+            .claim(PERM_BITS, permBits)
+            .claim(PERM_VER, PermissionCode.CATALOG_VERSION)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(accessExpiry))
                 .signWith(secretKey)
@@ -261,7 +281,7 @@ public class JwtServiceImpl implements JwtService {
         String refreshToken = Jwts.builder()
                 .id(refreshJti)
                 .subject(username)
-                .claim(USER_ID, userId.toString())
+            .claim(UID, userId.toString())
                 .claim("type", "refresh")
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(refreshExpiry))
@@ -284,7 +304,7 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public boolean validateRefreshToken(String refreshToken) {
+    public boolean validateRefreshToken(@NonNull String refreshToken) {
         try {
             Jws<Claims> jws = jwtParser().parseSignedClaims(refreshToken);
 
@@ -319,7 +339,7 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public TokenPair refreshAccessToken(String refreshToken) {
+    public TokenPair refreshAccessToken(@NonNull String refreshToken) {
         if (!validateRefreshToken(refreshToken)) {
             throw new IllegalArgumentException("Invalid refresh token");
         }
@@ -330,8 +350,20 @@ public class JwtServiceImpl implements JwtService {
         }
 
         JwtToken jwtToken = stored.get();
+        UUID userId = getUserIdFromToken(refreshToken);
+        if (userId == null) {
+            throw new IllegalArgumentException("Refresh token missing uid/userId claim");
+        }
+        Optional<UserDto> userOpt = userService.getUserById(userId);
+        if (userOpt.isEmpty()) {
+            throw new InvalidRefreshTokenException("Refresh token references a user that no longer exists");
+        }
+        UserDto user = userOpt.get();
+        Set<String> roles = user.getRoles() == null ? Collections.<String>emptySet() : user.getRoles();
+        if (roles.isEmpty()) {
+            throw new IllegalArgumentException("User has no roles assigned");
+        }
         String username = jwtToken.getSubject();
-        Set<String> roles = getRolesFromToken(jwtToken.getToken());
 
         try {
             Claims oldAccessClaims = jwtParser().parseSignedClaims(jwtToken.getToken()).getPayload();
@@ -359,7 +391,6 @@ public class JwtServiceImpl implements JwtService {
 
         log.debug("Refreshed token pair: username={}", username);
 
-        UUID userId = getUserIdFromToken(refreshToken);
         return generateTokenPair(username, userId, roles);
     }
 
@@ -368,5 +399,9 @@ public class JwtServiceImpl implements JwtService {
                 .verifyWith(secretKey)
                 .clock(() -> Date.from(Instant.now(clock)))
                 .build();
+    }
+
+    private Claims getClaims(String token) {
+        return jwtParser().parseSignedClaims(token).getPayload();
     }
 }

@@ -14,7 +14,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -39,6 +38,7 @@ import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
+import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -225,18 +225,18 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 // Verify separate JTIs
                 assertThat(accessClaims.getId()).isNotEqualTo(refreshClaims.getId());
 
-                // Verify access token has roles
-                assertThat(accessClaims).containsKey("roles");
-                @SuppressWarnings("unchecked")
-                Collection<String> roles = (Collection<String>) accessClaims.get("roles");
-                assertThat(roles)
-                                .as("Access token roles should be present and not empty")
-                                .isNotNull()
-                                .isNotEmpty()
-                                .containsAll(TEST_ROLES);
+                // Verify compact PERM-004 access token claims.
+                assertThat(accessClaims)
+                                .containsKey(JwtService.PERM_BITS)
+                                .containsEntry(JwtService.PERM_VER, 1)
+                                .containsEntry(JwtService.UID, TEST_USER_ID.toString())
+                                .containsEntry(JwtService.USERNAME, TEST_SUBJECT)
+                                .doesNotContainKeys(JwtService.ROLES, JwtService.AUTHORITIES);
 
                 // Verify refresh token type claim
-                assertThat(refreshClaims).containsEntry("type", "refresh");
+                assertThat(refreshClaims)
+                                .containsEntry("type", "refresh")
+                                .doesNotContainKeys(JwtService.ROLES, JwtService.AUTHORITIES, JwtService.PERM_BITS);
         }
 
         /**
@@ -269,6 +269,20 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 assertThat(response.accessToken()).isNotNull();
                 assertThat(response.refreshToken()).isNotNull();
                 assertThat(response.accessToken()).isNotEqualTo(initialPair.accessToken());
+
+                SecretKeySpec key = new SecretKeySpec(
+                                jwtSecret.getBytes(StandardCharsets.UTF_8),
+                                0,
+                                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
+                                "HmacSHA256");
+
+                Claims refreshedClaims = Jwts.parser().verifyWith(key).build()
+                                .parseSignedClaims(response.accessToken()).getPayload();
+                assertThat(refreshedClaims)
+                                .containsKey(JwtService.PERM_BITS)
+                                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
+                                .containsKey(JwtService.UID)
+                                .doesNotContainKeys("roles", "authorities");
         }
 
         /**
@@ -400,8 +414,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .param("token", token))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$").isArray())
-                                .andExpect(jsonPath("$[*]").value(
-                                                org.hamcrest.Matchers.containsInAnyOrder("SHOP_MGR", "INVENTORY_MGR")));
+                                .andExpect(jsonPath("$").isEmpty());
         }
 
         /**
@@ -485,7 +498,18 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 TokenResponse.class);
 
                 Set<String> extractedRoles = jwtService.getRolesFromToken(response.token());
-                assertThat(extractedRoles).containsAll(multipleRoles);
+                assertThat(extractedRoles).isEmpty();
+
+                SecretKeySpec key = new SecretKeySpec(
+                                jwtSecret.getBytes(StandardCharsets.UTF_8),
+                                0,
+                                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
+                                "HmacSHA256");
+                Claims claims = Jwts.parser().verifyWith(key).build()
+                                .parseSignedClaims(response.token()).getPayload();
+                assertThat(claims)
+                                .containsKey(JwtService.PERM_BITS)
+                                .containsEntry(JwtService.PERM_VER, 1);
         }
 
         /**

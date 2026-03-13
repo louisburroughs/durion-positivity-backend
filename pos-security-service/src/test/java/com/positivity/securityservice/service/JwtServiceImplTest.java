@@ -14,16 +14,29 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
+import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.entity.JwtToken;
+import com.positivity.securityservice.internal.enums.PermissionCode;
+import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.internal.service.JwtServiceImpl;
 import com.positivity.securityservice.internal.service.RoleAuthorityServiceImpl;
 import com.positivity.securityservice.internal.service.TokenRevocationManager;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +60,8 @@ class JwtServiceImplTest {
     @Mock
     private RoleAuthorityServiceImpl roleAuthorityService;
     @Mock
+    private UserService userService;
+    @Mock
     private TokenRevocationManager tokenRevocationManager;
 
     @InjectMocks
@@ -65,6 +80,13 @@ class JwtServiceImplTest {
         org.mockito.Mockito.lenient()
                 .when(jwtTokenRepository.save(any(JwtToken.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        org.mockito.Mockito.lenient()
+            .when(userService.getUserById(any(UUID.class)))
+            .thenReturn(Optional.of(UserDto.builder()
+                .id(TEST_USER_ID)
+                .username("alice")
+                .roles(Set.of("ADMIN"))
+                .build()));
     }
 
     @Test
@@ -104,14 +126,12 @@ class JwtServiceImplTest {
     }
 
     @Test
-    @DisplayName("extractors return username, userId, roles, and authorities")
+    @DisplayName("extractors return username and userId")
     void extractors_returnClaims() {
         String token = sut.generateToken("alice", TEST_USER_ID, Set.of("ADMIN"));
 
         assertThat(sut.getUsernameFromToken(token)).isEqualTo("alice");
         assertThat(sut.getUserIdFromToken(token)).isEqualTo(TEST_USER_ID);
-        assertThat(sut.getRolesFromToken(token)).contains("ADMIN");
-        assertThat(sut.getAuthoritiesFromToken(token)).contains("ROLE_ADMIN");
     }
 
     @Test
@@ -166,7 +186,7 @@ class JwtServiceImplTest {
     @DisplayName("initializeSecretKey: blank secret throws IllegalStateException")
     void initializeSecretKey_blankSecret_throws() {
         JwtServiceImpl fresh = new JwtServiceImpl(
-                TEST_CLOCK, jwtTokenRepository, roleAuthorityService, tokenRevocationManager);
+            TEST_CLOCK, jwtTokenRepository, roleAuthorityService, userService, tokenRevocationManager);
         ReflectionTestUtils.setField(fresh, "jwtSecret", "");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -178,7 +198,7 @@ class JwtServiceImplTest {
     @DisplayName("initializeSecretKey: secret shorter than 32 bytes throws IllegalStateException")
     void initializeSecretKey_tooShortSecret_throws() {
         JwtServiceImpl fresh = new JwtServiceImpl(
-                TEST_CLOCK, jwtTokenRepository, roleAuthorityService, tokenRevocationManager);
+            TEST_CLOCK, jwtTokenRepository, roleAuthorityService, userService, tokenRevocationManager);
         ReflectionTestUtils.setField(fresh, "jwtSecret", "short");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -215,7 +235,8 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("generateTokenPair: blank username throws IllegalArgumentException")
     void generateTokenPair_blankUsername_throws() {
-        assertThatThrownBy(() -> sut.generateTokenPair("", TEST_USER_ID, Set.of("ADMIN")))
+        Set<String> roles = Set.of("ADMIN");
+        assertThatThrownBy(() -> sut.generateTokenPair("", TEST_USER_ID, roles))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Username cannot be blank");
     }
@@ -223,7 +244,8 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("generateTokenPair: null userId throws IllegalArgumentException")
     void generateTokenPair_nullUserId_throws() {
-        assertThatThrownBy(() -> sut.generateTokenPair("alice", null, Set.of("ADMIN")))
+        Set<String> roles = Set.of("ADMIN");
+        assertThatThrownBy(() -> sut.generateTokenPair("alice", null, roles))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("UserId cannot be null");
     }
@@ -231,7 +253,8 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("generateTokenPair: empty roles throws IllegalArgumentException")
     void generateTokenPair_emptyRoles_throws() {
-        assertThatThrownBy(() -> sut.generateTokenPair("alice", TEST_USER_ID, Set.of()))
+        Set<String> roles = Set.of();
+        assertThatThrownBy(() -> sut.generateTokenPair("alice", TEST_USER_ID, roles))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Roles cannot be empty");
     }
@@ -288,4 +311,234 @@ class JwtServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid refresh token");
     }
+
+        @Test
+        @DisplayName("refreshAccessToken throws InvalidRefreshTokenException when user no longer exists")
+        void refreshAccessToken_throwsInvalidRefreshTokenException_whenUserNotFound() {
+        UUID userId = UUID.randomUUID();
+        JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, Set.of("ADMIN"));
+            String refreshToken = tokenPair.refreshToken();
+
+        JwtToken stored = new JwtToken();
+        stored.setToken(tokenPair.accessToken());
+        stored.setRefreshToken(tokenPair.refreshToken());
+        stored.setIssuedAt(Instant.now(TEST_CLOCK));
+        stored.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(600));
+        stored.setRefreshExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(1200));
+        stored.setSubject(userId.toString());
+
+        when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
+        doReturn(Optional.of(stored))
+            .doReturn(Optional.of(stored))
+            .when(jwtTokenRepository)
+            .findByRefreshToken(refreshToken);
+        when(userService.getUserById(userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken))
+            .isInstanceOf(InvalidRefreshTokenException.class)
+            .hasMessageContaining("no longer exists");
+        }
+
+    @Test
+    @DisplayName("getUserIdFromToken falls back correctly to legacy userId claim")
+    void getUserIdFromToken_fallsBackToLegacyUserIdClaim() {
+        UUID legacyUserId = UUID.randomUUID();
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+
+        String legacyToken = Jwts.builder()
+                .subject("alice")
+                .claim(JwtService.USER_ID, legacyUserId.toString())
+                .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
+                .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
+                .signWith(key)
+                .compact();
+
+        assertThat(sut.getUserIdFromToken(legacyToken)).isEqualTo(legacyUserId);
+    }
+
+    // Issue #PERM-004 start: JWT claim structure tests for compact permission bitset encoding
+
+    /**
+     * Verifies that the access token produced by generateTokenPair contains
+     * the {@code perm_bits} Base64URL bitset claim and the {@code perm_ver}
+     * catalog-version integer claim required by the PERM-004 contract.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("generateTokenPair access token must include perm_bits and perm_ver claims")
+    void accessToken_containsPermBitsAndPermVer() {
+        when(roleAuthorityService.expandRolesToAuthorities(any()))
+                .thenReturn(Set.of(
+                        PermissionCode.ACCOUNTING__JE__VIEW.code(),
+                        PermissionCode.ACCOUNTING__JE__CREATE.code()));
+
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("USER"));
+
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        Claims claims = Jwts.parser().verifyWith(key)
+                .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
+                .build()
+                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+
+        assertThat(claims).containsKey(JwtService.PERM_BITS);
+        assertThat(claims.get(JwtService.PERM_VER, Integer.class)).isEqualTo(PermissionCode.CATALOG_VERSION);
+
+        String permBits = claims.get(JwtService.PERM_BITS, String.class);
+        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(permBits, PermissionCode.CATALOG_VERSION);
+        assertThat(decoded).contains(
+                PermissionCode.ACCOUNTING__JE__VIEW,
+                PermissionCode.ACCOUNTING__JE__CREATE);
+    }
+
+    /**
+     * Verifies that the access token produced by generateTokenPair does NOT
+     * contain the legacy {@code roles} or {@code authorities} list claims.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("generateTokenPair access token must NOT include roles or authorities claims")
+    void accessToken_doesNotContainRolesOrAuthorities() {
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("ADMIN"));
+
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        Claims claims = Jwts.parser().verifyWith(key)
+                .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
+                .build()
+                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+
+        assertThat(claims.containsKey(JwtService.ROLES)).isFalse();
+        assertThat(claims.containsKey(JwtService.AUTHORITIES)).isFalse();
+    }
+
+    @Test
+    @DisplayName("generateTokenPair refresh token must NOT include roles or perm_bits claims")
+    void refreshToken_doesNotContainRolesOrPermBits() {
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("ADMIN"));
+
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        Claims claims = Jwts.parser().verifyWith(key)
+                .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
+                .build()
+                .parseSignedClaims(tokenPair.refreshToken()).getPayload();
+
+        assertThat(claims.containsKey(JwtService.ROLES)).isFalse();
+        assertThat(claims.containsKey(JwtService.AUTHORITIES)).isFalse();
+        assertThat(claims.containsKey(JwtService.PERM_BITS)).isFalse();
+        assertThat(claims).containsKey(JwtService.UID).containsEntry("type", "refresh");
+    }
+
+    /**
+     * Verifies that the access token contains the new {@code uid} UUID claim
+     * and the {@code username} display-name claim.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("generateTokenPair access token must include uid and username claims")
+    void accessToken_containsUidAndUsername() {
+        UUID userId = UUID.randomUUID();
+
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", userId, Set.of("ADMIN"));
+
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        Claims claims = Jwts.parser().verifyWith(key)
+                .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
+                .build()
+                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+
+        assertThat(claims.get(JwtService.UID, String.class)).isEqualTo(userId.toString());
+        assertThat(claims.get(JwtService.USERNAME, String.class)).isEqualTo("alice");
+    }
+
+    /**
+     * Verifies that getUserIdFromToken correctly extracts the UUID from a
+     * token generated by the new claim structure.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("getUserIdFromToken returns correct UUID from new uid claim format")
+    void getUserIdFromToken_readsUidClaim() {
+        UUID userId = UUID.randomUUID();
+
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", userId, Set.of("ADMIN"));
+
+        assertThat(sut.getUserIdFromToken(tokenPair.accessToken())).isEqualTo(userId);
+    }
+
+    /**
+     * Verifies that getAuthoritiesFromToken decodes permission codes from
+     * the {@code perm_bits} claim when it is present in the token.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("getAuthoritiesFromToken decodes perm_bits when present in token")
+    void getAuthoritiesFromToken_decodesPermBitsWhenPresent() {
+        when(roleAuthorityService.expandRolesToAuthorities(any()))
+                .thenReturn(Set.of(PermissionCode.ACCOUNTING__JE__VIEW.code()));
+
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("USER"));
+
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        Claims claims = Jwts.parser().verifyWith(key)
+                .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
+                .build()
+                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+        // perm_bits must be present for the decode path to be exercised
+        assertThat(claims).containsKey(JwtService.PERM_BITS);
+
+        Set<String> authorities = sut.getAuthoritiesFromToken(tokenPair.accessToken());
+        assertThat(authorities).contains(PermissionCode.ACCOUNTING__JE__VIEW.code());
+    }
+
+    /**
+     * Verifies backward-compatibility: tokens that carry a legacy
+     * {@code authorities} list claim (but no {@code perm_bits} claim) are
+     * still decoded correctly by getAuthoritiesFromToken.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("getAuthoritiesFromToken falls back to legacy authorities claim for old tokens")
+    void getAuthoritiesFromToken_fallsBackToLegacyClaimForOldTokens() {
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        String legacyToken = Jwts.builder()
+                .subject("alice")
+                .claim(JwtService.AUTHORITIES, List.of(PermissionCode.ACCOUNTING__JE__VIEW.code()))
+                .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
+                .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
+                .signWith(key)
+                .compact();
+
+        Set<String> authorities = sut.getAuthoritiesFromToken(legacyToken);
+
+        assertThat(authorities).contains(PermissionCode.ACCOUNTING__JE__VIEW.code());
+    }
+
+    /**
+     * Verifies that the access token remains compact: for 100 permission codes
+     * encoded as a bitset, the total JWT byte length must stay below 600 bytes.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("access token is less than 600 bytes for 100 permission codes")
+    void accessToken_lessThan600BytesForHundredPermissions() {
+        List<PermissionCode> first100 = Arrays.asList(PermissionCode.values()).subList(0, 100);
+        Set<String> permCodeStrings = first100.stream()
+                .map(PermissionCode::code)
+                .collect(Collectors.toSet());
+
+        when(roleAuthorityService.expandRolesToAuthorities(any())).thenReturn(permCodeStrings);
+
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("USER"));
+
+        assertThat(tokenPair.accessToken().getBytes(StandardCharsets.UTF_8))
+                .hasSizeLessThan(600);
+    }
+
+    // Issue #PERM-004 end
 }
