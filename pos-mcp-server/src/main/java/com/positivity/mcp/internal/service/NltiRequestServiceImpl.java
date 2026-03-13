@@ -19,6 +19,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -27,9 +28,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,16 +58,16 @@ public class NltiRequestServiceImpl implements NltiRequestService {
     @Value("${pos.nlti.rate-limit.max-tracked-sessions:100000}")
     private long maxTrackedSessions = 100_000;
 
-    private volatile Cache<UUID, AtomicInteger> sessionRequestCounts;
+    private final AtomicReference<Cache<UUID, AtomicInteger>> sessionRequestCountsRef = new AtomicReference<>();
     private final Counter rateLimitCounterEvictions;
     private final Counter rateLimitCounterInvalidations;
 
-    public NltiRequestServiceImpl(NltiSessionRepository sessionRepository,
-                                   NltiRequestRepository requestRepository,
+    public NltiRequestServiceImpl(@NonNull NltiSessionRepository sessionRepository,
+                                   @NonNull NltiRequestRepository requestRepository,
                                    @NonNull Clock clock,
                                    @NonNull MeterRegistry meterRegistry) {
-        this.sessionRepository = sessionRepository;
-        this.requestRepository = requestRepository;
+        this.sessionRepository = Objects.requireNonNull(sessionRepository, "sessionRepository must not be null");
+        this.requestRepository = Objects.requireNonNull(requestRepository, "requestRepository must not be null");
         this.clock = clock;
         this.meterRegistry = meterRegistry;
         this.requestCount = meterRegistry.counter("nlt.request.count");
@@ -90,8 +93,18 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             UUID resolvedSessionId = resolveSession(request.sessionId(), subjectId);
 
             Span currentSpan = Span.current();
-            currentSpan.setAttribute(NltiSpanAttributes.NLT_CORRELATION_ID, effectiveCorrelationId.toString());
-            currentSpan.setAttribute(NltiSpanAttributes.NLT_USER_ID, subjectId);
+            AttributeKey<String> correlationIdKey = Objects.requireNonNull(
+                    NltiSpanAttributes.NLT_CORRELATION_ID,
+                    "NLT_CORRELATION_ID must not be null");
+            String correlationIdValue = Objects.requireNonNull(
+                    effectiveCorrelationId.toString(),
+                    "correlationId attribute must not be null");
+            AttributeKey<String> userIdKey = Objects.requireNonNull(
+                    NltiSpanAttributes.NLT_USER_ID,
+                    "NLT_USER_ID must not be null");
+            String userIdValue = Objects.requireNonNull(subjectId, "subjectId must not be null");
+            currentSpan.setAttribute(correlationIdKey, correlationIdValue);
+            currentSpan.setAttribute(userIdKey, userIdValue);
 
             AtomicInteger count = sessionRequestCounts().get(resolvedSessionId, key -> new AtomicInteger(0));
             if (count.incrementAndGet() > perSessionRateLimit) {
@@ -109,8 +122,20 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             nltiRequest.setPromptHash(promptHash);
             requestRepository.save(nltiRequest);
 
-            currentSpan.setAttribute(NltiSpanAttributes.NLT_REQUEST_ID, newRequestId.toString());
-            currentSpan.setAttribute(NltiSpanAttributes.NLT_SESSION_ID, resolvedSessionId.toString());
+            AttributeKey<String> requestIdKey = Objects.requireNonNull(
+                    NltiSpanAttributes.NLT_REQUEST_ID,
+                    "NLT_REQUEST_ID must not be null");
+            String requestIdValue = Objects.requireNonNull(
+                    newRequestId.toString(),
+                    "requestId attribute must not be null");
+            AttributeKey<String> sessionIdKey = Objects.requireNonNull(
+                    NltiSpanAttributes.NLT_SESSION_ID,
+                    "NLT_SESSION_ID must not be null");
+            String sessionIdValue = Objects.requireNonNull(
+                    resolvedSessionId.toString(),
+                    "sessionId attribute must not be null");
+            currentSpan.setAttribute(requestIdKey, requestIdValue);
+            currentSpan.setAttribute(sessionIdKey, sessionIdValue);
 
             return new NltiResponseV1(newRequestId, effectiveCorrelationId, resolvedSessionId, "ACCEPTED", null, null);
         } catch (Exception exception) {
@@ -155,34 +180,38 @@ public class NltiRequestServiceImpl implements NltiRequestService {
         return sessionId;
     }
 
-    private String hashPrompt(String prompt) {
+    private @NonNull String hashPrompt(@NonNull String prompt) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(prompt.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = digest.digest(Objects.requireNonNull(prompt, "prompt must not be null")
+                    .getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
         }
     }
 
-    private Cache<UUID, AtomicInteger> sessionRequestCounts() {
-        Cache<UUID, AtomicInteger> existing = sessionRequestCounts;
+    private @NonNull Cache<UUID, AtomicInteger> sessionRequestCounts() {
+        Cache<UUID, AtomicInteger> existing = sessionRequestCountsRef.get();
         if (existing != null) {
             return existing;
         }
-        synchronized (this) {
-            if (sessionRequestCounts == null) {
-                sessionRequestCounts = Caffeine.newBuilder()
-                        .expireAfterWrite(Duration.ofHours(sessionTtlHours))
-                        .maximumSize(maxTrackedSessions)
-                        .removalListener((UUID sessionId, AtomicInteger value, RemovalCause cause) -> {
-                            if (cause.wasEvicted()) {
-                                rateLimitCounterEvictions.increment();
-                            }
-                        })
-                        .build();
-            }
-            return sessionRequestCounts;
+        Cache<UUID, AtomicInteger> created = Caffeine.newBuilder()
+                .expireAfterWrite(Duration.ofHours(sessionTtlHours))
+                .maximumSize(maxTrackedSessions)
+                .removalListener((UUID sessionId, AtomicInteger value, RemovalCause cause) -> {
+                    if (cause.wasEvicted()) {
+                        rateLimitCounterEvictions.increment();
+                    }
+                })
+                .build();
+        if (sessionRequestCountsRef.compareAndSet(null, created)) {
+            return created;
         }
+        Cache<UUID, AtomicInteger> installed = sessionRequestCountsRef.get();
+        if (installed != null) {
+            return installed;
+        }
+        throw new IllegalStateException("sessionRequestCounts cache was not initialized");
     }
 }

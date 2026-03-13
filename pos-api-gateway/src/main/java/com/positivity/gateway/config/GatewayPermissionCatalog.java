@@ -6,7 +6,7 @@ public final class GatewayPermissionCatalog {
 
     public static final int CATALOG_VERSION = 1;
 
-    public static final String[] AUTHORITY_BY_BIT = {
+    protected static final String[] AUTHORITY_BY_BIT = {
             "PERM_accounting:je:view",
             "PERM_accounting:je:create",
             "PERM_accounting:je:post",
