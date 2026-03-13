@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.Objects;
 
 /**
  * Service for managing the central permission registry.
@@ -125,7 +126,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             PermissionRegistrationRequest.PermissionDefinition permDef,
             Permission existing,
             ProcessingCounters counters) {
-        if (!existing.getDescription().equals(permDef.getDescription())) {
+        if (!Objects.equals(existing.getDescription(), permDef.getDescription())) {
             existing.setDescription(permDef.getDescription());
             existing.setRegisteredByService(request.getServiceName());
             permissionRepository.save(existing);
