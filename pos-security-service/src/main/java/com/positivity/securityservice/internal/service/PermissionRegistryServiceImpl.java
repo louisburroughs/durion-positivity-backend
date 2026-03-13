@@ -51,15 +51,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
     @Override
     @Transactional
     public PermissionRegistrationResponse registerPermissions(@NonNull PermissionRegistrationRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("Request body is required");
-        }
-        if (request.getServiceName() == null || request.getServiceName().isBlank()) {
-            throw new IllegalArgumentException("serviceName is required");
-        }
-        if (request.getPermissions() == null || request.getPermissions().isEmpty()) {
-            throw new IllegalArgumentException("permissions must not be empty");
-        }
+        validateRegistrationRequest(request);
 
         log.info("Registering permissions for domain: {}, service: {}",
                 request.getDomain(), request.getServiceName());
@@ -68,38 +60,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
         ProcessingCounters counters = new ProcessingCounters(0, 0, 0);
 
         for (PermissionRegistrationRequest.PermissionDefinition permDef : request.getPermissions()) {
-            try {
-                if (!isValidPermissionName(permDef.getName())) {
-                    errors.add("Invalid permission name format: " + permDef.getName() +
-                            " (must be lowercase domain:resource:action)");
-                    counters = new ProcessingCounters(counters.registered(), counters.updated(),
-                            counters.skipped() + 1);
-                    continue;
-                }
-
-                Optional<Permission> existingOpt = permissionRepository.findByName(permDef.getName());
-
-                if (existingOpt.isPresent()) {
-                    Permission existing = existingOpt.get();
-                    if (!existing.getDescription().equals(permDef.getDescription())) {
-                        existing.setDescription(permDef.getDescription());
-                        existing.setRegisteredByService(request.getServiceName());
-                        permissionRepository.save(existing);
-                        counters = new ProcessingCounters(counters.registered(), counters.updated() + 1,
-                                counters.skipped());
-                        log.debug("Updated permission: {}", permDef.getName());
-                    } else {
-                        counters = new ProcessingCounters(counters.registered(), counters.updated(),
-                                counters.skipped() + 1);
-                    }
-                } else {
-                    counters = registerNewPermission(request, permDef, errors, counters);
-                }
-            } catch (Exception e) {
-                errors.add("Error processing permission " + permDef.getName() + ": " + e.getMessage());
-                counters = new ProcessingCounters(counters.registered(), counters.updated(), counters.skipped() + 1);
-                log.error("Error processing permission: {}", permDef.getName(), e);
-            }
+            counters = processPermissionDefinition(request, permDef, errors, counters);
         }
 
         boolean success = errors.isEmpty() || (counters.registered() + counters.updated()) > 0;
@@ -115,6 +76,74 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
                 .skippedPermissions(counters.skipped())
                 .errors(errors)
                 .build();
+    }
+
+    private void validateRegistrationRequest(PermissionRegistrationRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        if (request.getServiceName() == null || request.getServiceName().isBlank()) {
+            throw new IllegalArgumentException("serviceName is required");
+        }
+        if (request.getPermissions() == null || request.getPermissions().isEmpty()) {
+            throw new IllegalArgumentException("permissions must not be empty");
+        }
+    }
+
+    private ProcessingCounters processPermissionDefinition(
+            PermissionRegistrationRequest request,
+            PermissionRegistrationRequest.PermissionDefinition permDef,
+            List<String> errors,
+            ProcessingCounters counters) {
+        try {
+            if (!isValidPermissionName(permDef.getName())) {
+                return skipInvalidPermission(permDef, errors, counters);
+            }
+
+            Optional<Permission> existingOpt = permissionRepository.findByName(permDef.getName());
+            if (existingOpt.isPresent()) {
+                return updateExistingPermission(request, permDef, existingOpt.get(), counters);
+            }
+
+            return registerNewPermission(request, permDef, errors, counters);
+        } catch (Exception e) {
+            return handlePermissionProcessingError(permDef, errors, counters, e);
+        }
+    }
+
+    private ProcessingCounters skipInvalidPermission(
+            PermissionRegistrationRequest.PermissionDefinition permDef,
+            List<String> errors,
+            ProcessingCounters counters) {
+        errors.add("Invalid permission name format: " + permDef.getName() +
+                " (must be lowercase domain:resource:action)");
+        return incrementSkipped(counters);
+    }
+
+    private ProcessingCounters updateExistingPermission(
+            PermissionRegistrationRequest request,
+            PermissionRegistrationRequest.PermissionDefinition permDef,
+            Permission existing,
+            ProcessingCounters counters) {
+        if (!existing.getDescription().equals(permDef.getDescription())) {
+            existing.setDescription(permDef.getDescription());
+            existing.setRegisteredByService(request.getServiceName());
+            permissionRepository.save(existing);
+            log.debug("Updated permission: {}", permDef.getName());
+            return incrementUpdated(counters);
+        }
+
+        return incrementSkipped(counters);
+    }
+
+    private ProcessingCounters handlePermissionProcessingError(
+            PermissionRegistrationRequest.PermissionDefinition permDef,
+            List<String> errors,
+            ProcessingCounters counters,
+            Exception exception) {
+        errors.add("Error processing permission " + permDef.getName() + ": " + exception.getMessage());
+        log.error("Error processing permission: {}", permDef.getName(), exception);
+        return incrementSkipped(counters);
     }
 
     private ProcessingCounters registerNewPermission(
@@ -137,10 +166,10 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             if (changed) {
                 permissionRepository.save(existing);
                 log.debug("Backfilled bitIndex for existing permission: {}", permDef.getName());
-                return new ProcessingCounters(counters.registered(), counters.updated() + 1, counters.skipped());
+                return incrementUpdated(counters);
             } else {
                 log.debug("Permission already exists and is up-to-date: {}", permDef.getName());
-                return new ProcessingCounters(counters.registered(), counters.updated(), counters.skipped() + 1);
+                return incrementSkipped(counters);
             }
         }
 
@@ -151,11 +180,23 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             PermissionCode.fromCode(permission.getName()).ifPresent(pc -> permission.setBitIndex(pc.bitIndex()));
             permissionRepository.save(permission);
             log.debug("Registered new permission: {}", permDef.getName());
-            return new ProcessingCounters(counters.registered() + 1, counters.updated(), counters.skipped());
+            return incrementRegistered(counters);
         } catch (IllegalArgumentException e) {
             errors.add("Failed to parse permission " + permDef.getName() + ": " + e.getMessage());
-            return new ProcessingCounters(counters.registered(), counters.updated(), counters.skipped() + 1);
+            return incrementSkipped(counters);
         }
+    }
+
+    private ProcessingCounters incrementRegistered(ProcessingCounters counters) {
+        return new ProcessingCounters(counters.registered() + 1, counters.updated(), counters.skipped());
+    }
+
+    private ProcessingCounters incrementUpdated(ProcessingCounters counters) {
+        return new ProcessingCounters(counters.registered(), counters.updated() + 1, counters.skipped());
+    }
+
+    private ProcessingCounters incrementSkipped(ProcessingCounters counters) {
+        return new ProcessingCounters(counters.registered(), counters.updated(), counters.skipped() + 1);
     }
 
     private Permission buildPermission(
