@@ -15,14 +15,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>
  * Verifies:
  * <ul>
- *   <li>Catalog contains exactly 215 permissions matching {@code scripts/permissions-aggregate.yaml}.</li>
- *   <li>Each bit index in the range [0, 214] is assigned exactly once (no gaps, no reuse).</li>
- *   <li>Each canonical code string is unique across all enum constants.</li>
- *   <li>{@code CATALOG_VERSION = 1} constant is declared and accessible.</li>
- *   <li>{@code fromCode(String)} provides a safe O(1) round-trip lookup.</li>
+ * <li>Catalog contains exactly 215 permissions matching
+ * {@code scripts/permissions-aggregate.yaml}.</li>
+ * <li>Each bit index in the range [0, 214] is assigned exactly once (no gaps,
+ * no reuse).</li>
+ * <li>Each canonical code string is unique across all enum constants.</li>
+ * <li>{@code CATALOG_VERSION = 1} constant is declared and accessible.</li>
+ * <li>{@code fromCode(String)} provides a safe O(1) round-trip lookup.</li>
  * </ul>
  *
- * <p>No Spring context is required; this is a pure JUnit 5 unit test.
+ * <p>
+ * No Spring context is required; this is a pure JUnit 5 unit test.
  *
  * Issue: PERM-001
  */
@@ -123,7 +126,8 @@ class PermissionCodeTest {
     @Test
     @DisplayName("known last permission 'workorder:wip:view_all_locations' has bit index 214")
     void knownLastPermissionHasBitIndex214() {
-        // Issue PERM-001: workorder:wip:view_all_locations must be last entry assigned bit index 214
+        // Issue PERM-001: workorder:wip:view_all_locations must be last entry assigned
+        // bit index 214
         Optional<PermissionCode> perm = PermissionCode.fromCode("workorder:wip:view_all_locations");
         assertThat(perm).isPresent();
         assertThat(perm.get().bitIndex()).isEqualTo(214);

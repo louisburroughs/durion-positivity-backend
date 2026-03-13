@@ -10,7 +10,8 @@ import java.util.stream.Stream;
  * to a permanent bit index for use in JWT perm_bits bitset encoding.
  * <p>
  * Bit indexes are permanent and MUST never be reused or reassigned.
- * To retire a permission, mark it {@code @Deprecated} — never remove or renumber.
+ * To retire a permission, mark it {@code @Deprecated} — never remove or
+ * renumber.
  */
 public enum PermissionCode {
 
@@ -265,12 +266,14 @@ public enum PermissionCode {
     WORKORDER__WIP__VIEW(213, "workorder:wip:view"),
     WORKORDER__WIP__VIEW_ALL_LOCATIONS(214, "workorder:wip:view_all_locations");
 
-    /** Current catalog version. Increment when new permissions are added to a new batch. */
+    /**
+     * Current catalog version. Increment when new permissions are added to a new
+     * batch.
+     */
     public static final int CATALOG_VERSION = 1;
 
-    private static final Map<String, PermissionCode> BY_CODE =
-            Stream.of(values())
-                  .collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
+    private static final Map<String, PermissionCode> BY_CODE = Stream.of(values())
+            .collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
 
     private final int bitIndex;
     private final String code;
@@ -285,7 +288,10 @@ public enum PermissionCode {
         return bitIndex;
     }
 
-    /** Returns the canonical permission code string (e.g., {@code "accounting:je:view"}). */
+    /**
+     * Returns the canonical permission code string (e.g.,
+     * {@code "accounting:je:view"}).
+     */
     public String code() {
         return code;
     }
@@ -294,7 +300,8 @@ public enum PermissionCode {
      * Looks up a {@code PermissionCode} by its canonical code string.
      *
      * @param code the permission code string
-     * @return an {@code Optional} containing the matching constant, or empty if not found
+     * @return an {@code Optional} containing the matching constant, or empty if not
+     *         found
      */
     public static Optional<PermissionCode> fromCode(String code) {
         if (code == null) {
