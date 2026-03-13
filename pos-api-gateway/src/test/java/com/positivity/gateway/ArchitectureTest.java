@@ -120,4 +120,22 @@ public class ArchitectureTest {
                         .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
                         .allowEmptyShould(true)
                         .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
+
+        // Issue PERM-011: SecurityGatewayConfig must not call WebClient for auth —
+        // local JWT validation only
+        @ArchTest
+        static final ArchRule security_gateway_config_should_not_use_webclient_for_auth = noClasses()
+                        .that().haveSimpleName("SecurityGatewayConfig")
+                        .should().dependOnClassesThat()
+                        .haveFullyQualifiedName("org.springframework.web.reactive.function.client.WebClient")
+                        .because("Gateway auth filter must use local JWT validation, not WebClient calls to security service");
+
+        // Issue PERM-011: GatewayPermissionCatalog is a pure static utility — no Spring
+        // dependency allowed
+        @ArchTest
+        static final ArchRule gateway_permission_catalog_should_not_use_spring = noClasses()
+                        .that().haveSimpleName("GatewayPermissionCatalog")
+                        .should().dependOnClassesThat().resideInAPackage("org.springframework..")
+                        .allowEmptyShould(true)
+                        .because("GatewayPermissionCatalog is a pure static utility with no Spring dependency");
 }

@@ -47,13 +47,16 @@ import com.positivity.securityservice.service.PermissionService;
 /**
  * Controller slice tests for {@link PermissionController} PERM-005 endpoints.
  *
- * <p>Verifies the PERM-005 acceptance criteria for catalog-version lookup and
+ * <p>
+ * Verifies the PERM-005 acceptance criteria for catalog-version lookup and
  * permission-bitset decode endpoints:
  * <ul>
- *   <li>AC1 — {@code GET /v1/permissions/catalog-version} returns version + count, no auth required</li>
- *   <li>AC2 — {@code POST /v1/permissions/decode} returns decoded permissions, requires
- *       {@code security:permission:view} authority</li>
- *   <li>AC3 — {@code POST /v1/permissions/decode} carries {@code @EmitEvent}</li>
+ * <li>AC1 — {@code GET /v1/permissions/catalog-version} returns version +
+ * count, no auth required</li>
+ * <li>AC2 — {@code POST /v1/permissions/decode} returns decoded permissions,
+ * requires
+ * {@code security:permission:view} authority</li>
+ * <li>AC3 — {@code POST /v1/permissions/decode} carries {@code @EmitEvent}</li>
  * </ul>
  * Issue: PERM-005
  */
@@ -61,8 +64,7 @@ import com.positivity.securityservice.service.PermissionService;
 @DisplayName("PermissionCatalogControllerTest — PERM-005")
 class PermissionCatalogControllerTest {
 
-    private static final Clock TEST_CLOCK =
-            Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @Autowired
     private MockMvc mockMvc;
@@ -88,7 +90,8 @@ class PermissionCatalogControllerTest {
 
     /**
      * Make the mocked JWT filter a passthrough so it does not swallow requests.
-     * {@code @WithMockUser} directly populates the {@link org.springframework.security.core.context.SecurityContext}
+     * {@code @WithMockUser} directly populates the
+     * {@link org.springframework.security.core.context.SecurityContext}
      * before the filter chain runs, so no real token processing is needed.
      */
     @BeforeEach
@@ -102,7 +105,8 @@ class PermissionCatalogControllerTest {
     // ── AC1a: GET /v1/permissions/catalog-version → 200 ─────────────────────
 
     /**
-     * PERM-005 AC1: GET /v1/permissions/catalog-version returns 200 with version and permissionCount.
+     * PERM-005 AC1: GET /v1/permissions/catalog-version returns 200 with version
+     * and permissionCount.
      */
     @Test
     @WithMockUser(authorities = "security:permission:view")
@@ -120,7 +124,8 @@ class PermissionCatalogControllerTest {
     // ── AC1b: GET /v1/permissions/catalog-version — no auth required ─────────
 
     /**
-     * PERM-005 AC1: GET /v1/permissions/catalog-version must not require authentication.
+     * PERM-005 AC1: GET /v1/permissions/catalog-version must not require
+     * authentication.
      */
     @Test
     @DisplayName("GET /v1/permissions/catalog-version without auth → 200 (no auth required)")
@@ -135,7 +140,8 @@ class PermissionCatalogControllerTest {
     // ── AC2a: POST /v1/permissions/decode → 200 ─────────────────────────────
 
     /**
-     * PERM-005 AC2: POST /v1/permissions/decode with valid body and required authority
+     * PERM-005 AC2: POST /v1/permissions/decode with valid body and required
+     * authority
      * returns 200 with {@code permissions} list.
      */
     @Test
@@ -146,8 +152,8 @@ class PermissionCatalogControllerTest {
                 .thenReturn(List.of("accounting:je:view", "accounting:je:create"));
 
         mockMvc.perform(post("/v1/permissions/decode")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.permissions").isArray());
     }
@@ -163,24 +169,26 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /v1/permissions/decode without security:permission:view authority → 403 Forbidden")
     void decodePermissions_requires_security_permission_view_authority() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"perm_bits\":\"Aw\",\"perm_ver\":1}"))
                 .andExpect(status().isForbidden());
     }
 
     // ── AC2c: POST /v1/permissions/decode — 400 for null perm_bits ───────────
 
     /**
-     * PERM-005 AC2: POST /v1/permissions/decode with null perm_bits returns 400 Bad Request.
-     * Bean Validation ({@code @NotNull}) on {@code PermissionDecodeRequest.permBits} enforces this.
+     * PERM-005 AC2: POST /v1/permissions/decode with null perm_bits returns 400 Bad
+     * Request.
+     * Bean Validation ({@code @NotNull}) on
+     * {@code PermissionDecodeRequest.permBits} enforces this.
      */
     @Test
     @WithMockUser(authorities = "security:permission:view")
     @DisplayName("POST /v1/permissions/decode with null perm_bits → 400 Bad Request")
     void decodePermissions_validates_perm_bits_not_null() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"perm_bits\":null,\"perm_ver\":1}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"perm_bits\":null,\"perm_ver\":1}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -189,8 +197,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /decode with empty perm_bits returns 400 Bad Request")
     void decodePermissions_emptyPermBits_returns400() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"perm_bits\":\"\",\"perm_ver\":1}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"perm_bits\":\"\",\"perm_ver\":1}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -199,8 +207,8 @@ class PermissionCatalogControllerTest {
     @DisplayName("POST /decode with perm_ver <= 0 returns 400 Bad Request")
     void decodePermissions_nonPositivePermVer_returns400() throws Exception {
         mockMvc.perform(post("/v1/permissions/decode")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"perm_bits\":\"Aw==\",\"perm_ver\":0}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"perm_bits\":\"Aw==\",\"perm_ver\":0}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -223,9 +231,12 @@ class PermissionCatalogControllerTest {
     }
 
     /**
-     * Minimal security exception handler for the MVC slice — translates Spring Security
-     * exceptions to 401/403 HTTP status codes. {@code @Order(HIGHEST_PRECEDENCE)} ensures
-     * this advice is consulted before the production {@code GlobalExceptionHandler} which
+     * Minimal security exception handler for the MVC slice — translates Spring
+     * Security
+     * exceptions to 401/403 HTTP status codes. {@code @Order(HIGHEST_PRECEDENCE)}
+     * ensures
+     * this advice is consulted before the production {@code GlobalExceptionHandler}
+     * which
      * has a catch-all that would otherwise return 500 for security exceptions.
      */
     @ControllerAdvice
@@ -245,7 +256,8 @@ class PermissionCatalogControllerTest {
         }
 
         /**
-         * Returns 404 for requests to endpoints that do not yet exist (RED scaffold tests).
+         * Returns 404 for requests to endpoints that do not yet exist (RED scaffold
+         * tests).
          * Without this, Spring's unhandled NoResourceFoundException falls through to
          * GlobalExceptionHandler.handleException(Exception) and returns 500.
          */

@@ -45,8 +45,7 @@ public class PermissionController {
      */
     @GetMapping("/catalog-version")
     @PreAuthorize("permitAll()")
-    @Operation(summary = "Get current permission catalog version",
-            description = "Returns the active catalog version and total permission count. No authentication required.")
+    @Operation(summary = "Get current permission catalog version", description = "Returns the active catalog version and total permission count. No authentication required.")
     public ResponseEntity<CatalogVersionResponse> getCatalogVersion() {
         return ResponseEntity.ok(new CatalogVersionResponse(
                 permissionCatalogVersionService.getCatalogVersion(),
@@ -59,8 +58,7 @@ public class PermissionController {
      */
     @EmitEvent(id = "PERMISSION_DECODE_EXECUTE", apiVersion = "1")
     @PostMapping("/decode")
-    @Operation(summary = "Decode perm_bits for diagnostics",
-            description = "Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.")
+    @Operation(summary = "Decode perm_bits for diagnostics", description = "Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.")
     @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<PermissionDecodeResponse> decodePermissions(
             @RequestBody @Valid @NonNull PermissionDecodeRequest request) {

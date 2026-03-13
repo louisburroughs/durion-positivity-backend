@@ -18,12 +18,14 @@ A lightweight authentication/authorization filter enriches requests with user id
 
 ### Authentication & Authorization
 
-- Validates JWTs issued by `pos-security-service`
-- Enforces required claims (issuer, audience, expiration, subject, token id) per ADR-0011
-- Uses canonical authorities for downstream authorization decisions
+- Validates JWTs locally in the gateway using configured signing secret (`security.jwt.secret`)
+- Decodes `perm_bits` (`Base64URL` bitset) with `perm_ver` catalog version checks
+- Maps decoded bits to canonical `PERM_*` authorities for downstream authorization decisions
+- Strips inbound identity headers (`X-User`, `X-User-Id`, `X-Authorities`, `X-Roles`) and regenerates trusted identity headers from verified token claims
 - Injects headers to downstream services:
-  - `X-Authorities`: comma-separated authorities (e.g., `crm:party:view,crm:vehicle:edit,...`)
+  - `X-Authorities`: comma-separated authorities (e.g., `PERM_crm:party:view,PERM_crm:vehicle:edit,...`)
   - `X-User`: token subject (username)
+  - `X-User-Id`: token `uid` claim when present
   - `X-API-Version`: forwarded from client request (enables per-endpoint versioning)
 - Public paths bypass authentication: `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/swagger-resources/**`, `/eureka/**`
 
@@ -34,8 +36,7 @@ Source:
 
 ## Configuration
 
-- Security service lookup is via Eureka service discovery (`lb://security-service`) in `SecurityGatewayConfig`.
-- Ensure `pos-security-service` is registered in Eureka as `security-service`.
+- Configure local JWT validation via `security.jwt.secret` and gateway auth flags under `auth.*`.
 - Configure JWT validation to trust tokens from `pos-security-service` and audience `api-gateway`.
 
 ## Notes

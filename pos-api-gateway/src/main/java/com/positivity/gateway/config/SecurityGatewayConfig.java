@@ -2,72 +2,86 @@ package com.positivity.gateway.config;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.BitSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import javax.crypto.SecretKey;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cloud.client.loadbalancer.LoadBalanced;
-import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.config.CorsRegistry;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.LinkedHashSet;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.Set;
-import java.util.Arrays;
-import java.util.stream.Collectors;
-
 @Configuration
+@EnableConfigurationProperties(GatewayAuthProperties.class)
 public class SecurityGatewayConfig {
-    private static final String TOKEN2 = "token";
     private static final String AUTHORIZATION = "Authorization";
     private static final String JWT_HEADER_ALG = "alg";
     private static final String UNSIGNED_ALG = "NONE";
     private static final String TEST_SIGNATURE_MARKER = "test-signature";
+    private static final String HS256 = "HS256";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final Logger log = LoggerFactory.getLogger(SecurityGatewayConfig.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SecurityGatewayConfig.class);
+
+    private final SecretKey secretKey;
     private final boolean strictJwtHeaderValidation;
     private final Set<String> allowedJwtAlgorithms;
+    private final GatewayAuthProperties authProperties;
+    private final MeterRegistry meterRegistry;
 
+    @Autowired
     public SecurityGatewayConfig(
+            @Value("${security.jwt.secret}") @NonNull String jwtSecret,
             @Value("${pos.gateway.security.strict-jwt-header-validation:false}") boolean strictJwtHeaderValidation,
-            @Value("${pos.gateway.security.allowed-jwt-algorithms:HS256}") String allowedJwtAlgorithmsCsv) {
-        this.strictJwtHeaderValidation = strictJwtHeaderValidation;
-        this.allowedJwtAlgorithms = parseAllowedJwtAlgorithms(allowedJwtAlgorithmsCsv);
+            @Value("${pos.gateway.security.allowed-jwt-algorithms:HS256}") String allowedJwtAlgorithmsCsv,
+            @NonNull GatewayAuthProperties authProperties,
+            @NonNull MeterRegistry meterRegistry) {
+        this(jwtSecret,
+                strictJwtHeaderValidation,
+                parseAllowedJwtAlgorithms(allowedJwtAlgorithmsCsv),
+                authProperties,
+                meterRegistry);
     }
 
-    SecurityGatewayConfig(boolean strictJwtHeaderValidation, Set<String> allowedJwtAlgorithms) {
+        SecurityGatewayConfig(@NonNull String jwtSecret, boolean strictJwtHeaderValidation,
+            Set<String> allowedJwtAlgorithms,
+            @NonNull GatewayAuthProperties authProperties,
+            @NonNull MeterRegistry meterRegistry) {
+        this.secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
         this.strictJwtHeaderValidation = strictJwtHeaderValidation;
         this.allowedJwtAlgorithms = normalizeAllowedJwtAlgorithms(allowedJwtAlgorithms);
-    }
-
-    /**
-     * Load-balanced WebClient builder for service discovery.
-     * Uses Eureka to resolve "lb://security-service" to actual host:port.
-     */
-    @Bean
-    @LoadBalanced
-    public WebClient.Builder loadBalancedWebClientBuilder() {
-        return WebClient.builder();
-    }
-
-    @Bean
-    public WebClient securityWebClient(WebClient.Builder loadBalancedWebClientBuilder) {
-        // Use Eureka service name - port is dynamic, resolved via service discovery
-        return loadBalancedWebClientBuilder
-                .baseUrl("lb://security-service")
-                .build();
+        this.authProperties = authProperties;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -92,99 +106,199 @@ public class SecurityGatewayConfig {
         };
     }
 
-    /**
-     * Lightweight authentication/authorization filter for the gateway.
-     * - Validates JWT via Security Service
-     * - Retrieves expanded authorities and injects as `X-Authorities` header
-     * - Optionally injects subject as `X-User`
-     * - Forwards original bearer token; downstream services resolve `userId` from JWT claim
-     * - Bypasses public endpoints (actuator, swagger, api-docs)
-     */
     @Bean
-    public GlobalFilter authFilter(WebClient securityWebClient) {
+    public GlobalFilter authFilter() {
         return (exchange, chain) -> {
-            URI uri = exchange.getRequest().getURI();
+            ServerHttpRequest incomingRequest = exchange.getRequest();
+            URI uri = incomingRequest.getURI();
             String path = uri.getPath();
+            String inboundUser = incomingRequest.getHeaders().getFirst("X-User");
+            String inboundUserId = incomingRequest.getHeaders().getFirst("X-User-Id");
+            String inboundAuthorities = incomingRequest.getHeaders().getFirst("X-Authorities");
 
-            // Public paths bypass
-            if (path.startsWith("/actuator") ||
-                    path.contains("/actuator") ||
-                    path.startsWith("/swagger-ui") ||
-                    path.startsWith("/v3/api-docs") ||
-                    path.contains("/v3/api-docs") ||
-                    path.startsWith("/swagger-resources") ||
-                    path.startsWith("/eureka")) {
-                return chain.filter(exchange);
+            ServerHttpRequest strippedRequest = incomingRequest.mutate().headers(headers -> {
+                if (authProperties.isStripInboundIdentityHeaders()) {
+                    headers.remove("X-User");
+                    headers.remove("X-User-Id");
+                    headers.remove("X-Authorities");
+                    headers.remove("X-Roles");
+                    incrementCounter("auth.header.strip.count");
+                }
+            }).build();
+            var strippedExchange = exchange.mutate().request(strippedRequest).build();
+
+            if (isPublicPath(path)) {
+                return chain.filter(strippedExchange);
             }
 
-            String authHeader = exchange.getRequest().getHeaders().getFirst(AUTHORIZATION);
+            String authHeader = strippedRequest.getHeaders().getFirst(AUTHORIZATION);
             if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
-                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-                return exchange.getResponse().setComplete();
+                return unauthorized(strippedExchange);
             }
 
             String token = authHeader.substring(7);
-            Optional<String> preValidationRejectionReason = jwtPreValidationRejectionReason(token);
-            if (preValidationRejectionReason.isPresent()) {
-                log.warn("Rejected bearer token before security-service validation: {}",
-                        preValidationRejectionReason.get());
-                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-                return exchange.getResponse().setComplete();
+            Optional<String> preValidationReason = jwtPreValidationRejectionReason(token);
+            if (preValidationReason.isPresent()) {
+                String reason = preValidationReason.get();
+                incrementTaggedCounter("auth.token.validation.failure", "reason", reason);
+                LOG.warn("JWT auth rejected path={} reason={} jti={}", path, reason, "unknown");
+                return unauthorized(strippedExchange);
             }
 
-            // Validate token
-            return securityWebClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/v1/auth/validate")
-                            .queryParam(TOKEN2, token)
-                            .build())
-                    .header(AUTHORIZATION, authHeader)
-                    .retrieve()
-                    .bodyToMono(new ParameterizedTypeReference<java.util.Map<String, Boolean>>() {
-                    })
-                    .flatMap(validMap -> {
-                        boolean valid = validMap.getOrDefault("valid", false);
-                        if (!valid) {
-                            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-                            return exchange.getResponse().setComplete();
-                        }
-                        // Fetch authorities
-                        Mono<Set<String>> authoritiesMono = securityWebClient.get()
-                                .uri(uriBuilder -> uriBuilder.path("/v1/auth/authorities")
-                                        .queryParam(TOKEN2, token)
-                                        .build())
-                                .header(AUTHORIZATION, authHeader)
-                                .retrieve()
-                                .bodyToMono(new ParameterizedTypeReference<Set<String>>() {
-                                });
+            Claims claims;
+            try {
+                Jws<Claims> jwsClaims = Jwts.parser()
+                        .verifyWith(secretKey)
+                        // TODO: add .requireIssuer("pos-security-service").requireAudience("api-gateway")
+                        // after JwtServiceImpl emits iss/aud claims.
+                        .build()
+                        .parseSignedClaims(token);
+                claims = jwsClaims.getPayload();
+            } catch (JwtException ex) {
+                String reason = tokenValidationReason(ex);
+                incrementTaggedCounter("auth.token.validation.failure", "reason", reason);
+                LOG.warn("JWT auth rejected path={} reason={} jti={}", path, reason, "unknown");
+                return unauthorized(strippedExchange);
+            }
 
-                        // Fetch subject (optional)
-                        Mono<String> subjectMono = securityWebClient.get()
-                                .uri(uriBuilder -> uriBuilder.path("/v1/auth/subject")
-                                        .queryParam(TOKEN2, token)
-                                        .build())
-                                .header(AUTHORIZATION, authHeader)
-                                .retrieve()
-                                .bodyToMono(String.class)
-                                .onErrorReturn("unknown");
+            String jti = StringUtils.hasText(claims.getId()) ? claims.getId() : "unknown";
+            String subject = claims.getSubject();
+            if (!StringUtils.hasText(subject)) {
+                incrementTaggedCounter("auth.user.identity.missing", "claim", "sub");
+                LOG.warn("JWT auth rejected path={} reason={} jti={}", path, "missing_sub", jti);
+                return unauthorized(strippedExchange);
+            }
 
-                        return Mono.zip(authoritiesMono, subjectMono)
-                                .flatMap(tuple -> {
-                                    Set<String> authorities = tuple.getT1();
-                                    String subject = tuple.getT2();
-                                    String authHeaderValue = String.join(",", authorities);
-                                    ServerHttpRequest mutated = exchange.getRequest().mutate()
-                                            .header("X-Authorities", authHeaderValue)
-                                            .header("X-User", subject)
-                                            .build();
-                                    return chain.filter(exchange.mutate().request(mutated).build());
-                                });
-                    })
-                    .onErrorResume(err -> {
-                        log.error("Gateway auth error", err);
-                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-                        return exchange.getResponse().setComplete();
-                    });
+            Integer permVer = claims.get("perm_ver", Integer.class);
+            if (permVer == null) {
+                // TODO: remove after perm_bits rollout complete
+                Optional<List<String>> legacyAuthorities = extractLegacyAuthorities(claims);
+                if (legacyAuthorities.isPresent()) {
+                    incrementCounter("auth.legacy.decode.count");
+                    LOG.warn("Legacy token (no perm_ver) - using authorities claim directly; path={} jti={}", path, jti);
+                    String legacyAuthoritiesHeader = String.join(",", legacyAuthorities.get());
+                    return forwardAuthenticatedRequest(
+                            strippedExchange,
+                            chain,
+                            strippedRequest,
+                            subject,
+                            claims.get("uid", String.class),
+                            inboundUser,
+                            inboundUserId,
+                            inboundAuthorities,
+                            legacyAuthoritiesHeader,
+                            jti,
+                            path);
+                }
+            }
+            if (permVer == null || permVer != GatewayPermissionCatalog.CATALOG_VERSION) {
+                String permVerValue = permVer == null ? "null" : String.valueOf(permVer);
+                incrementTaggedCounter("auth.perm.catalog.version.unknown", "perm_ver", permVerValue);
+                LOG.warn("JWT auth rejected path={} reason={} jti={}", path,
+                        "unknown_perm_ver:" + permVerValue, jti);
+                return unauthorized(strippedExchange);
+            }
+
+            String permBits = claims.get("perm_bits", String.class);
+            if (!StringUtils.hasText(permBits)) {
+                if (authProperties.isTokenIdentityRequired()) {
+                    incrementTaggedCounter("auth.perm.decode.failure", "reason", "missing_claim");
+                    LOG.warn("JWT auth rejected path={} reason={} jti={}", path, "missing_perm_bits", jti);
+                    return unauthorized(strippedExchange);
+                }
+                permBits = "";
+            }
+
+            BitSet decodedPermissions;
+            try {
+                byte[] decodedBytes = Base64.getUrlDecoder().decode(permBits.isEmpty() ? "" : permBits);
+                decodedPermissions = BitSet.valueOf(decodedBytes);
+            } catch (Exception ex) {
+                incrementTaggedCounter("auth.perm.decode.failure", "reason", "malformed_base64");
+                LOG.warn("JWT auth rejected path={} reason={} jti={}", path, "malformed_perm_bits", jti);
+                return unauthorized(strippedExchange);
+            }
+
+            List<String> authorities = decodedPermissions.stream()
+                    .mapToObj(GatewayPermissionCatalog::authorityForBit)
+                    .filter(Objects::nonNull)
+                    .toList();
+            String authoritiesHeader = String.join(",", authorities);
+
+            return forwardAuthenticatedRequest(
+                    strippedExchange,
+                    chain,
+                    strippedRequest,
+                    subject,
+                    claims.get("uid", String.class),
+                    inboundUser,
+                    inboundUserId,
+                    inboundAuthorities,
+                    authoritiesHeader,
+                    jti,
+                    path);
         };
+    }
+
+    private Mono<Void> forwardAuthenticatedRequest(
+            org.springframework.web.server.ServerWebExchange strippedExchange,
+            org.springframework.cloud.gateway.filter.GatewayFilterChain chain,
+            ServerHttpRequest strippedRequest,
+            String subject,
+            String userId,
+            String inboundUser,
+            String inboundUserId,
+            String inboundAuthorities,
+            String authoritiesHeader,
+            String jti,
+            String path) {
+        if (authProperties.isRejectHeaderTokenMismatch()) {
+            boolean mismatch = headerMismatch(inboundUser, subject)
+                    || headerMismatch(inboundUserId, userId)
+                    || headerMismatch(inboundAuthorities, authoritiesHeader);
+            if (mismatch) {
+                incrementTaggedCounter("auth.token.validation.failure", "reason", "header_token_mismatch");
+                LOG.warn("JWT auth rejected path={} reason={} jti={}", path, "header_token_mismatch", jti);
+                return unauthorized(strippedExchange);
+            }
+        }
+
+        ServerHttpRequest authenticatedRequest = strippedRequest.mutate().headers(headers -> {
+            headers.set("X-User", subject);
+            if (StringUtils.hasText(userId)) {
+                headers.set("X-User-Id", userId);
+            }
+            headers.set("X-Authorities", authoritiesHeader);
+        }).build();
+
+        return chain.filter(strippedExchange.mutate().request(authenticatedRequest).build());
+    }
+
+    private static Optional<List<String>> extractLegacyAuthorities(Claims claims) {
+        Object legacyAuthorities = claims.get("authorities");
+        if (!(legacyAuthorities instanceof List<?> authoritiesList)) {
+            return Optional.empty();
+        }
+
+        List<String> normalizedAuthorities = authoritiesList.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .filter(StringUtils::hasText)
+                .toList();
+
+        if (normalizedAuthorities.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(normalizedAuthorities);
+    }
+
+    private static boolean isPublicPath(String path) {
+        return path.startsWith("/actuator")
+                || path.startsWith("/swagger-ui")
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/swagger-resources")
+                || path.startsWith("/eureka");
     }
 
     private Optional<String> jwtPreValidationRejectionReason(String token) {
@@ -239,7 +353,7 @@ public class SecurityGatewayConfig {
 
     private static Set<String> parseAllowedJwtAlgorithms(String allowedJwtAlgorithmsCsv) {
         if (!StringUtils.hasText(allowedJwtAlgorithmsCsv)) {
-            return Set.of("HS256");
+            return Set.of(HS256);
         }
 
         Set<String> normalized = Arrays.stream(allowedJwtAlgorithmsCsv.split(","))
@@ -249,7 +363,7 @@ public class SecurityGatewayConfig {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         if (normalized.isEmpty()) {
-            return Set.of("HS256");
+            return Set.of(HS256);
         }
 
         return Set.copyOf(normalized);
@@ -257,7 +371,7 @@ public class SecurityGatewayConfig {
 
     private static Set<String> normalizeAllowedJwtAlgorithms(Set<String> allowedJwtAlgorithms) {
         if (allowedJwtAlgorithms == null || allowedJwtAlgorithms.isEmpty()) {
-            return Set.of("HS256");
+            return Set.of(HS256);
         }
 
         Set<String> normalized = allowedJwtAlgorithms.stream()
@@ -267,9 +381,53 @@ public class SecurityGatewayConfig {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         if (normalized.isEmpty()) {
-            return Set.of("HS256");
+            return Set.of(HS256);
         }
 
         return Set.copyOf(normalized);
+    }
+
+    private static Mono<Void> unauthorized(org.springframework.web.server.ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+        return exchange.getResponse().setComplete();
+    }
+
+    private String tokenValidationReason(JwtException ex) {
+        if (ex instanceof ExpiredJwtException) {
+            return "expired";
+        }
+        if (ex instanceof SignatureException) {
+            return "invalid_signature";
+        }
+        if (ex instanceof MalformedJwtException) {
+            return "malformed";
+        }
+        if (ex instanceof UnsupportedJwtException) {
+            return "unsupported";
+        }
+        return "invalid_token";
+    }
+
+    private void incrementCounter(String counterName) {
+        Counter.builder(counterName)
+                .register(meterRegistry)
+                .increment();
+    }
+
+    private void incrementTaggedCounter(String counterName, String tagKey, String tagValue) {
+        Counter.builder(counterName)
+                .tag(tagKey, tagValue)
+                .register(meterRegistry)
+                .increment();
+    }
+
+    private static boolean headerMismatch(String inboundValue, String expectedValue) {
+        if (!StringUtils.hasText(inboundValue)) {
+            return false;
+        }
+        if (!StringUtils.hasText(expectedValue)) {
+            return true;
+        }
+        return !inboundValue.equals(expectedValue);
     }
 }

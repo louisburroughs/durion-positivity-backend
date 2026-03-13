@@ -23,11 +23,13 @@ public interface PermissionCatalogVersionService {
     int getPermissionCount();
 
     /**
-     * Decodes a Base64URL perm_bits string into the list of permission code strings.
+     * Decodes a Base64URL perm_bits string into the list of permission code
+     * strings.
      *
      * @param permBits Base64URL-encoded BitSet
      * @param permVer  catalog version used to encode perm_bits
      * @return ordered list of permission code strings decoded from the bitset
      */
-    @NonNull List<String> decodePermissions(@NonNull String permBits, int permVer);
+    @NonNull
+    List<String> decodePermissions(@NonNull String permBits, int permVer);
 }

@@ -27,7 +27,9 @@ import com.positivity.securityservice.service.AuditEventService;
 /**
  * Unit tests for GlobalExceptionHandler PERM-004 changes.
  *
- * <p>Covers the {@code handleInvalidRefreshTokenException} handler added as part of
+ * <p>
+ * Covers the {@code handleInvalidRefreshTokenException} handler added as part
+ * of
  * PERM-004 (compact permission bitset encoding).
  */
 @ExtendWith(MockitoExtension.class)

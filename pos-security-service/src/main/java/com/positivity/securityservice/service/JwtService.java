@@ -18,16 +18,22 @@ import org.jspecify.annotations.NonNull;
  * 
  * **Implementation Notes:**
  * - Permission encoding: Effective permissions are encoded into perm_bits
- *   (Base64URL BitSet) at token issuance via PermissionBitsetCodec.
+ * (Base64URL BitSet) at token issuance via PermissionBitsetCodec.
  * - Concurrency: JwtToken entity uses @Version for optimistic locking
  * - Graceful Degradation: If Redis unavailable, token validation still succeeds
  * 
  * @since 1.0
  */
 public interface JwtService {
-   /** Legacy claim key; retained for backward-compatible decoding of old tokens only. New tokens do not include this claim. */
+    /**
+     * Legacy claim key; retained for backward-compatible decoding of old tokens
+     * only. New tokens do not include this claim.
+     */
     public static final String ROLES = "roles";
-   /** Legacy claim key; retained for backward-compatible decoding of old tokens only. New tokens do not include this claim. */
+    /**
+     * Legacy claim key; retained for backward-compatible decoding of old tokens
+     * only. New tokens do not include this claim.
+     */
     public static final String AUTHORITIES = "authorities";
     /** Claim key for stable user identifier used by audit lineage. */
     public static final String USER_ID = "userId";
@@ -37,9 +43,13 @@ public interface JwtService {
     public static final String PERM_BITS = "perm_bits";
     /** Claim key for the catalog version used to encode perm_bits. */
     public static final String PERM_VER = "perm_ver";
-    /** Claim key for stable user UUID identifier (replaces userId in new tokens). */
+    /**
+     * Claim key for stable user UUID identifier (replaces userId in new tokens).
+     */
     public static final String UID = "uid";
-    /** Claim key for human-readable display name (mirrors sub for gateway header). */
+    /**
+     * Claim key for human-readable display name (mirrors sub for gateway header).
+     */
     public static final String USERNAME = "username";
 
     /**
@@ -47,10 +57,10 @@ public interface JwtService {
      * repository, and returns the token string.
      *
      * **Implementation:**
-        * - Token ID (JTI): Unique UUID v7 identifier for revocation tracking
+     * - Token ID (JTI): Unique UUID v7 identifier for revocation tracking
      * - Expiration: 1 hour (3600 seconds)
-        * - Permissions: Encoded as perm_bits Base64URL BitSet via
-        *   PermissionBitsetCodec at issuance.
+     * - Permissions: Encoded as perm_bits Base64URL BitSet via
+     * PermissionBitsetCodec at issuance.
      * - Revocation: Token stored in Redis with 1-hour TTL
      * 
      * @param username the subject for the token
@@ -158,12 +168,13 @@ public interface JwtService {
      * **JTI (JWT ID):**
      * - Both tokens include a unique JTI for revocation tracking
      * - Each token has separate JTI (not shared)
-    * - Permissions: Encoded as perm_bits Base64URL BitSet via
-    *   PermissionBitsetCodec at issuance.
+     * - Permissions: Encoded as perm_bits Base64URL BitSet via
+     * PermissionBitsetCodec at issuance.
      * 
      * @param username the subject for the tokens
      * @param userId   stable user identifier for audit lineage
-   * @param roles    the set of roles used to derive the permission bitset claim (perm_bits)
+     * @param roles    the set of roles used to derive the permission bitset claim
+     *                 (perm_bits)
      * @return a TokenPair containing the access and refresh tokens
      * 
      * @throws IllegalArgumentException if username, userId, or roles are invalid
@@ -187,7 +198,7 @@ public interface JwtService {
      *
      * **Process:**
      * 1. Validates refresh token (signature, expiration, revocation)
-        * 2. Extracts uid from refresh token and loads current roles from persistence
+     * 2. Extracts uid from refresh token and loads current roles from persistence
      * 3. Invalidates old tokens (marks as revoked in Redis)
      * 4. Generates new token pair with fresh expiration times
      * 
