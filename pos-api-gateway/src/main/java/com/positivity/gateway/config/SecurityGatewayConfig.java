@@ -73,7 +73,7 @@ public class SecurityGatewayConfig {
                 meterRegistry);
     }
 
-        SecurityGatewayConfig(@NonNull String jwtSecret, boolean strictJwtHeaderValidation,
+    SecurityGatewayConfig(@NonNull String jwtSecret, boolean strictJwtHeaderValidation,
             Set<String> allowedJwtAlgorithms,
             @NonNull GatewayAuthProperties authProperties,
             @NonNull MeterRegistry meterRegistry) {
@@ -149,7 +149,8 @@ public class SecurityGatewayConfig {
             try {
                 Jws<Claims> jwsClaims = Jwts.parser()
                         .verifyWith(secretKey)
-                        // TODO: add .requireIssuer("pos-security-service").requireAudience("api-gateway")
+                        // TODO: add
+                        // .requireIssuer("pos-security-service").requireAudience("api-gateway")
                         // after JwtServiceImpl emits iss/aud claims.
                         .build()
                         .parseSignedClaims(token);
@@ -175,7 +176,8 @@ public class SecurityGatewayConfig {
                 Optional<List<String>> legacyAuthorities = extractLegacyAuthorities(claims);
                 if (legacyAuthorities.isPresent()) {
                     incrementCounter("auth.legacy.decode.count");
-                    LOG.warn("Legacy token (no perm_ver) - using authorities claim directly; path={} jti={}", path, jti);
+                    LOG.warn("Legacy token (no perm_ver) - using authorities claim directly; path={} jti={}", path,
+                            jti);
                     String legacyAuthoritiesHeader = String.join(",", legacyAuthorities.get());
                     return forwardAuthenticatedRequest(
                             strippedExchange,
