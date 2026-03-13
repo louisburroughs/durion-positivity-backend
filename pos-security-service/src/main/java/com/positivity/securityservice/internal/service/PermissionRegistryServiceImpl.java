@@ -122,6 +122,29 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             PermissionRegistrationRequest.PermissionDefinition permDef,
             List<String> errors,
             ProcessingCounters counters) {
+        // First, handle the case where the permission already exists but may be missing a bitIndex.
+        Optional<Permission> existingOpt = permissionRepository.findByName(permDef.getName());
+        if (existingOpt.isPresent()) {
+            Permission existing = existingOpt.get();
+            boolean changed = false;
+
+            if (existing.getBitIndex() == null) {
+                PermissionCode.fromCode(existing.getName())
+                        .ifPresent(pc -> existing.setBitIndex(pc.bitIndex()));
+                changed = existing.getBitIndex() != null;
+            }
+
+            if (changed) {
+                permissionRepository.save(existing);
+                log.debug("Backfilled bitIndex for existing permission: {}", permDef.getName());
+                return new ProcessingCounters(counters.registered(), counters.updated() + 1, counters.skipped());
+            } else {
+                log.debug("Permission already exists and is up-to-date: {}", permDef.getName());
+                return new ProcessingCounters(counters.registered(), counters.updated(), counters.skipped() + 1);
+            }
+        }
+
+        // No existing permission found: proceed with registering a new one.
         Permission permission = buildPermission(request, permDef);
         try {
             permission.parsePermissionName();
