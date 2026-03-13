@@ -182,4 +182,62 @@ class PricingSnapshotServiceImplTest {
                                 .isInstanceOf(IllegalArgumentException.class)
                                 .hasMessageContaining("Pricing snapshot not found");
         }
+
+        @Test
+        @DisplayName("createSnapshot throws when finalPrice is null")
+        void createSnapshot_missingFinalPrice_throws() {
+                PricingSnapshotRequest request = new PricingSnapshotRequest(
+                                Map.of("sku", "SKU-1"), null, List.of());
+
+                assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("finalPrice is required");
+        }
+
+        @Test
+        @DisplayName("createSnapshot throws when evaluationSteps list is null")
+        void createSnapshot_missingEvaluationSteps_throws() {
+                PricingSnapshotRequest request = new PricingSnapshotRequest(
+                                Map.of("sku", "SKU-1"), new BigDecimal("10.00"), null);
+
+                assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("evaluationSteps is required");
+        }
+
+        @Test
+        @DisplayName("createSnapshot throws when a step has blank status")
+        void createSnapshot_blankStatus_throws() {
+                PricingSnapshotRequest request = new PricingSnapshotRequest(
+                                Map.of("sku", "SKU-1"), new BigDecimal("10.00"),
+                                List.of(new PricingRuleTraceEntryRequest("RULE-1", "", Map.of(), Map.of())));
+
+                assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("evaluation step status is required");
+        }
+
+        @Test
+        @DisplayName("createSnapshot throws when a step has null inputs")
+        void createSnapshot_nullInputs_throws() {
+                PricingSnapshotRequest request = new PricingSnapshotRequest(
+                                Map.of("sku", "SKU-1"), new BigDecimal("10.00"),
+                                List.of(new PricingRuleTraceEntryRequest("RULE-1", "APPLIED", null, Map.of())));
+
+                assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("evaluation step inputs are required");
+        }
+
+        @Test
+        @DisplayName("createSnapshot throws when a step has null outputs")
+        void createSnapshot_nullOutputs_throws() {
+                PricingSnapshotRequest request = new PricingSnapshotRequest(
+                                Map.of("sku", "SKU-1"), new BigDecimal("10.00"),
+                                List.of(new PricingRuleTraceEntryRequest("RULE-1", "APPLIED", Map.of(), null)));
+
+                assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("evaluation step outputs are required");
+        }
 }
