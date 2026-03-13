@@ -6,11 +6,13 @@ import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Permission;
+import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.service.PermissionRegistryService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,25 +32,25 @@ import java.util.regex.Pattern;
 public class PermissionRegistryServiceImpl implements PermissionRegistryService {
     private final Clock clock;
 
-
     public record ProcessingCounters(int registered, int updated, int skipped) {
     }
 
     private final PermissionRepository permissionRepository;
 
     /**
-     * Pattern for validating permission names: domain:resource:action
-     * All lowercase, alphanumeric with underscores.
+     * Pattern for validating permission names: domain:resource:action (3-segment)
+     * or domain:action (2-segment legacy format).
+     * All lowercase, alphanumeric with underscores and hyphens.
      */
     public static final Pattern PERMISSION_PATTERN = Pattern
-            .compile("^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$");
+            .compile("^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*(:[a-z][a-z0-9_-]*)?$");
 
     /**
      * Register or update permissions from a service manifest.
      */
     @Override
     @Transactional
-    public PermissionRegistrationResponse registerPermissions(PermissionRegistrationRequest request) {
+    public PermissionRegistrationResponse registerPermissions(@NonNull PermissionRegistrationRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
@@ -123,6 +125,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
         Permission permission = buildPermission(request, permDef);
         try {
             permission.parsePermissionName();
+            PermissionCode.fromCode(permission.getName()).ifPresent(pc -> permission.setBitIndex(pc.bitIndex()));
             permissionRepository.save(permission);
             log.debug("Registered new permission: {}", permDef.getName());
             return new ProcessingCounters(counters.registered() + 1, counters.updated(), counters.skipped());
@@ -158,7 +161,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
      * Get all permissions for a domain.
      */
     @Override
-    public List<PermissionDto> getPermissionsByDomain(String domain) {
+    public List<PermissionDto> getPermissionsByDomain(@NonNull String domain) {
         return permissionRepository.findByDomain(domain).stream()
                 .map(this::toDto)
                 .toList();
@@ -178,7 +181,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
      * Check if a permission exists.
      */
     @Override
-    public boolean permissionExists(String permissionName) {
+    public boolean permissionExists(@NonNull String permissionName) {
         return permissionRepository.existsByName(permissionName);
     }
 
@@ -186,7 +189,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
      * Get permission by name.
      */
     @Override
-    public Optional<PermissionDto> getPermissionByName(String name) {
+    public Optional<PermissionDto> getPermissionByName(@NonNull String name) {
         return permissionRepository.findByName(name).map(this::toDto);
     }
 

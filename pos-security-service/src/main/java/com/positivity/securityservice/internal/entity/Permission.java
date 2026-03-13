@@ -15,7 +15,7 @@ import java.util.UUID;
 
 /**
  * Represents a permission in the system following the domain:resource:action
- * naming convention.
+ * or domain:action naming convention.
  * Examples: pricing:price_book:edit, inventory:adjustment:approve
  */
 @Data
@@ -31,7 +31,7 @@ public class Permission {
     private UUID id;
 
     /**
-     * Permission name following format: domain:resource:action
+     * Permission name following format: domain:resource:action or domain:action
      * Must be lowercase, singular nouns, with action verbs
      */
     @Column(unique = true, nullable = false, length = 255)
@@ -93,15 +93,23 @@ public class Permission {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * Bit index from PermissionCode catalog for compact JWT encoding.
+     * Null if this permission is not yet mapped to a PermissionCode entry.
+     */
+    @Column(name = "bit_index")
+    private Integer bitIndex;
+
     @PrePersist
     protected void onCreate() {
         if (registeredAt == null) {
             registeredAt = Instant.now(Clock.systemUTC());
         }
-}
+    }
 
     /**
-     * Parse domain:resource:action format and set individual fields
+     * Parse domain:resource:action format and set individual fields.
+     * Also handles 2-segment domain:action format used by some domains.
      */
     public void parsePermissionName() {
         if (name == null || name.isEmpty()) {
@@ -109,13 +117,17 @@ public class Permission {
         }
 
         String[] parts = name.split(":");
-        if (parts.length != 3) {
+        if (parts.length == 3) {
+            this.domain = parts[0].toLowerCase().trim();
+            this.resource = parts[1].toLowerCase().trim();
+            this.action = parts[2].toLowerCase().trim();
+        } else if (parts.length == 2) {
+            this.domain = parts[0].toLowerCase().trim();
+            this.resource = "";
+            this.action = parts[1].toLowerCase().trim();
+        } else {
             throw new IllegalArgumentException(
-                    "Permission name must follow format domain:resource:action, got: " + name);
+                    "Permission name must follow format domain:resource:action or domain:action, got: " + name);
         }
-
-        this.domain = parts[0].toLowerCase().trim();
-        this.resource = parts[1].toLowerCase().trim();
-        this.action = parts[2].toLowerCase().trim();
     }
 }

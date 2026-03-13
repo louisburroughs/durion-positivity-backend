@@ -5,6 +5,7 @@ import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Service for managing the central permission registry.
@@ -15,7 +16,7 @@ public interface PermissionRegistryService {
     /**
      * Register or update permissions from a service manifest
      */
-    PermissionRegistrationResponse registerPermissions(PermissionRegistrationRequest request);
+    PermissionRegistrationResponse registerPermissions(@NonNull PermissionRegistrationRequest request);
 
     /**
      * Validate permission name format
@@ -25,7 +26,7 @@ public interface PermissionRegistryService {
     /**
      * Get all permissions for a domain
      */
-    List<PermissionDto> getPermissionsByDomain(String domain);
+    List<PermissionDto> getPermissionsByDomain(@NonNull String domain);
 
     /**
      * Get all registered permissions
@@ -35,10 +36,10 @@ public interface PermissionRegistryService {
     /**
      * Check if a permission exists
      */
-    boolean permissionExists(String permissionName);
+    boolean permissionExists(@NonNull String permissionName);
 
     /**
      * Get permission by name
      */
-    Optional<PermissionDto> getPermissionByName(String name);
+    Optional<PermissionDto> getPermissionByName(@NonNull String name);
 }
