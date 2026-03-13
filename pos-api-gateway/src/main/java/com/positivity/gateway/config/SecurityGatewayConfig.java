@@ -303,6 +303,36 @@ public class SecurityGatewayConfig {
         return String.join(",", authorities);
     }
 
+    /**
+     * Compares the X-Authorities header value with the authorities derived from the token
+     * in a way that is insensitive to ordering and extraneous whitespace.
+     */
+    private boolean authoritiesHeaderMismatch(String headerAuthorities, String tokenAuthorities) {
+        boolean headerBlank = !StringUtils.hasText(headerAuthorities);
+        boolean tokenBlank = !StringUtils.hasText(tokenAuthorities);
+
+        if (headerBlank && tokenBlank) {
+            // Neither side has authorities; treat as matching.
+            return false;
+        }
+        if (headerBlank || tokenBlank) {
+            // One side has authorities and the other does not; definitely a mismatch.
+            return true;
+        }
+
+        Set<String> headerSet = Arrays.stream(headerAuthorities.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        Set<String> tokenSet = Arrays.stream(tokenAuthorities.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        return !headerSet.equals(tokenSet);
+    }
+
     private Mono<Void> forwardAuthenticatedRequest(
             AuthRequestContext context,
             GatewayFilterChain chain,
@@ -310,7 +340,7 @@ public class SecurityGatewayConfig {
         if (authProperties.isRejectHeaderTokenMismatch()) {
             boolean mismatch = headerMismatch(context.inboundHeaders().user(), identity.subject())
                     || headerMismatch(context.inboundHeaders().userId(), identity.userId())
-                    || headerMismatch(context.inboundHeaders().authorities(), identity.authoritiesHeader());
+                    || authoritiesHeaderMismatch(context.inboundHeaders().authorities(), identity.authoritiesHeader());
             if (mismatch) {
                 return rejectAuthentication(
                         context,
