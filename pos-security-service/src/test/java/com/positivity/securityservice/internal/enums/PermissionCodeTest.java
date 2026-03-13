@@ -120,7 +120,7 @@ class PermissionCodeTest {
         // Issue PERM-001: accounting:je:view must be first entry assigned bit index 0
         Optional<PermissionCode> perm = PermissionCode.fromCode("accounting:je:view");
         assertThat(perm).isPresent();
-        assertThat(perm.get().bitIndex()).isEqualTo(0);
+        assertThat(perm.get().bitIndex()).isZero();
     }
 
     @Test

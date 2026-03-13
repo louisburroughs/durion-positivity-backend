@@ -308,15 +308,11 @@ public class SecurityGatewayConfig {
      * in a way that is insensitive to ordering and extraneous whitespace.
      */
     private boolean authoritiesHeaderMismatch(String headerAuthorities, String tokenAuthorities) {
-        boolean headerBlank = !StringUtils.hasText(headerAuthorities);
-        boolean tokenBlank = !StringUtils.hasText(tokenAuthorities);
-
-        if (headerBlank && tokenBlank) {
-            // Neither side has authorities; treat as matching.
+        if (!StringUtils.hasText(headerAuthorities)) {
+            // Only enforce mismatch checks when the inbound spoofable header is actually present.
             return false;
         }
-        if (headerBlank || tokenBlank) {
-            // One side has authorities and the other does not; definitely a mismatch.
+        if (!StringUtils.hasText(tokenAuthorities)) {
             return true;
         }
 

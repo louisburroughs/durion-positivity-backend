@@ -39,6 +39,78 @@ Source:
 - Configure local JWT validation via `security.jwt.secret` and gateway auth flags under `auth.*`.
 - Configure JWT validation to trust tokens from `pos-security-service` and audience `api-gateway`.
 
+## Authentication & Authorization
+
+1. Local JWT Validation
+
+   - The gateway validates JWT signatures locally using JJWT and the
+     configured `security.jwt.secret` value. No call to
+     `pos-security-service` is required for token signature validation.
+
+2. Permission Bitset Decode
+
+   - Tokens issued by the security service include a `perm_bits` claim.
+   - `perm_bits` is a Base64URL-encoded BitSet. The gateway decodes it to
+     a `BitSet` and maps set bit indexes to authorities using
+     `GatewayPermissionCatalog.AUTHORITY_BY_BIT[bitIndex]`.
+
+3. Catalog Version
+
+   - Tokens must include `perm_ver`. The gateway requires
+     `perm_ver == GatewayPermissionCatalog.CATALOG_VERSION`.
+   - A mismatched or missing `perm_ver` (when no legacy authorities
+     fallback applies) results in `401 Unauthorized`.
+
+4. Identity Header Hardening
+
+   - Inbound identity headers are stripped before forwarding to
+     downstream services: `X-User`, `X-User-Id`, `X-Authorities`,
+     `X-Roles`.
+   - The gateway injects trusted headers derived from the validated
+     JWT: `X-User` (token `sub`), `X-User-Id` (token `uid` when present),
+     and `X-Authorities` (comma-separated canonical authorities).
+
+5. Feature Flags (under `auth:` prefix)
+
+   - `auth.token-identity-required` (default: `false`)
+     — when `true`, tokens without `perm_bits` are rejected.
+   - `auth.strip-inbound-identity-headers` (default: `true`)
+     — controls stripping of inbound identity headers.
+   - `auth.reject-header-token-mismatch` (default: `false`)
+     — when `true`, requests whose inbound headers conflict with token
+     derived identity are rejected.
+
+6. Observability Counters
+
+   - The gateway increments the following Micrometer counters for auth
+     observability and rollout monitoring:
+     - `auth.token.validation.failure`
+     - `auth.user.identity.missing`
+     - `auth.perm.decode.failure`
+     - `auth.perm.catalog.version.unknown`
+     - `auth.header.strip.count`
+
+7. Legacy Backward-Compat
+
+   - During rollout the gateway supports a temporary fallback: if
+     `perm_ver` is absent but an `authorities` claim exists, the filter
+     will use those legacy authorities. The gateway increments
+     `auth.legacy.decode.count` in this case. This behavior is
+     explicitly timeboxed for the PERM rollout and should be removed
+     after clients have migrated.
+
+Example — gateway decoding `perm_bits` (conceptual):
+
+```java
+// Base64URL decode then BitSet.valueOf(bytes)
+byte[] decoded = Base64.getUrlDecoder().decode(permBits);
+BitSet bits = BitSet.valueOf(decoded);
+List<String> authorities = bits.stream()
+    .mapToObj(GatewayPermissionCatalog::authorityForBit)
+    .filter(Objects::nonNull)
+    .toList();
+```
+
 ## Notes
 
 - **API Versioning is mandatory**: All client requests must include `X-API-Version` with a simple integer (e.g., `1`, `2`). This enables independent versioning of endpoints across the platform.

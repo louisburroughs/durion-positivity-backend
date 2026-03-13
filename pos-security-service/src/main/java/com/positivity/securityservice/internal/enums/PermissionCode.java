@@ -13,6 +13,7 @@ import java.util.stream.Stream;
  * To retire a permission, mark it {@code @Deprecated} — never remove or
  * renumber.
  */
+@SuppressWarnings("java:S115")
 public enum PermissionCode {
 
     // ── Accounting ──────────────────────────────────────────────────────────

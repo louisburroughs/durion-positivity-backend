@@ -610,10 +610,11 @@ class JwtServiceImplTest {
     void refreshAccessToken_userHasNoRoles_throwsIllegalArgumentException() {
         UUID userId = UUID.randomUUID();
         JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, Set.of("ADMIN"));
+        String refreshToken = tokenPair.refreshToken();
 
         JwtToken stored = new JwtToken();
         stored.setToken(tokenPair.accessToken());
-        stored.setRefreshToken(tokenPair.refreshToken());
+        stored.setRefreshToken(refreshToken);
         stored.setIssuedAt(Instant.now(TEST_CLOCK));
         stored.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(600));
         stored.setRefreshExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(1200));
@@ -623,14 +624,14 @@ class JwtServiceImplTest {
         doReturn(Optional.of(stored))
                 .doReturn(Optional.of(stored))
                 .when(jwtTokenRepository)
-                .findByRefreshToken(tokenPair.refreshToken());
+                .findByRefreshToken(refreshToken);
         when(userService.getUserById(userId)).thenReturn(Optional.of(UserDto.builder()
                 .id(userId)
                 .username(userId.toString())
                 .roles(Set.of())
                 .build()));
 
-        assertThatThrownBy(() -> sut.refreshAccessToken(tokenPair.refreshToken()))
+        assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no roles assigned");
     }

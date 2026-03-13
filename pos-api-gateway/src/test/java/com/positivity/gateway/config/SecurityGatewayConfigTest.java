@@ -524,7 +524,9 @@ class SecurityGatewayConfigTest {
 
     // ── CORS configurer bean ──────────────────────────────────────────────────
 
-    /** corsConfigurer bean is non-null and addCorsMappings executes without error. */
+    /**
+     * corsConfigurer bean is non-null and addCorsMappings executes without error.
+     */
     @Test
     void corsConfigurer_addCorsMappings_isCallable() {
         SecurityGatewayConfig config = new SecurityGatewayConfig(
@@ -536,7 +538,10 @@ class SecurityGatewayConfigTest {
 
     // ── PERM-009 — rejectHeaderTokenMismatch feature flag ────────────────────
 
-    /** Inbound X-User conflicts with token subject → 401 when mismatch-rejection is on. */
+    /**
+     * Inbound X-User conflicts with token subject → 401 when mismatch-rejection is
+     * on.
+     */
     @Test
     void rejectHeaderTokenMismatch_conflictingXUser_returns401() {
         String permBits = encodePermBits(116);
@@ -560,7 +565,10 @@ class SecurityGatewayConfigTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
-    /** Inbound X-User matches token subject → forwarded when mismatch-rejection is on. */
+    /**
+     * Inbound X-User matches token subject → forwarded when mismatch-rejection is
+     * on.
+     */
     @Test
     void rejectHeaderTokenMismatch_matchingXUser_returns200() {
         String permBits = encodePermBits(116);
@@ -593,7 +601,9 @@ class SecurityGatewayConfigTest {
 
     // ── PERM-008 — stripInboundIdentityHeaders=false ─────────────────────────
 
-    /** When stripping is disabled, identity headers pass through on public paths. */
+    /**
+     * When stripping is disabled, identity headers pass through on public paths.
+     */
     @Test
     void stripInboundIdentityHeaders_disabled_publicPath_headersPassThrough() {
         GatewayAuthProperties props = new GatewayAuthProperties();
@@ -671,7 +681,10 @@ class SecurityGatewayConfigTest {
 
     // ── PERM-009 — missing perm_bits when tokenIdentityRequired=false ─────────
 
-    /** Missing perm_bits with perm_ver=1 and tokenIdentityRequired=false yields empty authorities. */
+    /**
+     * Missing perm_bits with perm_ver=1 and tokenIdentityRequired=false yields
+     * empty authorities.
+     */
     @Test
     void missingPermBits_whenTokenIdentityNotRequired_returns200_withEmptyAuthorities() {
         String token = buildTokenWithoutPermBits("alice", "u1", 1);
@@ -750,7 +763,9 @@ class SecurityGatewayConfigTest {
 
     // ── PERM-006 — strict JWT pre-validation (strictJwtHeaderValidation=true) ─
 
-    /** Strict validation rejects tokens where alg=none appears in the JWT header. */
+    /**
+     * Strict validation rejects tokens where alg=none appears in the JWT header.
+     */
     @Test
     void strictValidation_algNone_returns401() {
         String header = Base64.getUrlEncoder().withoutPadding()
@@ -775,7 +790,10 @@ class SecurityGatewayConfigTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
-    /** Strict validation rejects tokens whose signature part contains the test-signature marker. */
+    /**
+     * Strict validation rejects tokens whose signature part contains the
+     * test-signature marker.
+     */
     @Test
     void strictValidation_testSignatureMarker_returns401() {
         String realToken = buildToken("alice", "u1", "", 1);
@@ -841,7 +859,10 @@ class SecurityGatewayConfigTest {
         assertThat(downstreamHeaders.get().getFirst("X-Authorities")).contains("PERM_people:employee:view");
     }
 
-    /** Strict validation rejects a token that does not have three dot-separated parts. */
+    /**
+     * Strict validation rejects a token that does not have three dot-separated
+     * parts.
+     */
     @Test
     void strictValidation_insufficientTokenParts_returns401() {
         GlobalFilter filter = new SecurityGatewayConfig(
@@ -858,7 +879,9 @@ class SecurityGatewayConfigTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
-    /** Strict validation rejects a token whose header part is not valid Base64/JSON. */
+    /**
+     * Strict validation rejects a token whose header part is not valid Base64/JSON.
+     */
     @Test
     void strictValidation_malformedJwtHeader_returns401() {
         GlobalFilter filter = new SecurityGatewayConfig(

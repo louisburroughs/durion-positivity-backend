@@ -44,7 +44,7 @@ public class InventoryToolFacade {
 ## Intent Classification Layer
 
 ```text
-"Create PO for Michelin" → ORDER domain
+"Create PO for NAPA" → ORDER domain
 "Check tire stock in Charlotte" → INVENTORY domain
 ```
 

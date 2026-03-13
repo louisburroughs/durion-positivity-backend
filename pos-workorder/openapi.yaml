@@ -825,18 +825,6 @@ paths:
                   quantity: 1
         required: true
       responses:
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts returned successfully
           content:
@@ -852,6 +840,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/parts/returnUnused:
     post:
       tags:
@@ -902,12 +902,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Unused quantity returned successfully
           content:
@@ -923,6 +917,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
   /v1/workorders/{workorderId}/parts/issue:
     post:
       tags:
@@ -972,18 +972,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "400":
-          description: "Invalid request (negative quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts issued successfully
           content:
@@ -999,6 +987,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "400":
+          description: "Invalid request (negative quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/parts/correct:
     post:
       tags:
@@ -2509,16 +2509,6 @@ paths:
       description: Stop active timer entries for the authenticated mechanic
       operationId: stopTimers
       responses:
-        "400":
-          description: Missing or invalid authenticated user id
-          content:
-            '*/*':
-              schema: {}
-        "409":
-          description: Conflict while stopping timers
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Timers stopped successfully
           content:
@@ -2534,6 +2524,16 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: Missing or invalid authenticated user id
+          content:
+            '*/*':
+              schema: {}
+        "409":
+          description: Conflict while stopping timers
+          content:
+            '*/*':
+              schema: {}
   /v1/workexec/time-entries/timer/start:
     post:
       tags:
@@ -2566,13 +2566,8 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "400":
-          description: Missing or invalid authenticated user id
-          content:
-            '*/*':
-              schema: {}
-        "200":
-          description: Idempotent replay returned existing timer
+        "201":
+          description: Timer started successfully
           content:
             '*/*':
               schema:
@@ -2586,8 +2581,13 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "201":
-          description: Timer started successfully
+        "400":
+          description: Missing or invalid authenticated user id
+          content:
+            '*/*':
+              schema: {}
+        "200":
+          description: Idempotent replay returned existing timer
           content:
             '*/*':
               schema:
@@ -3017,6 +3017,14 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "200":
           description: Usage history retrieved successfully
           content:
@@ -3032,14 +3040,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/parts/adjustments:
     get:
       tags:
@@ -3292,6 +3292,14 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: PDF generated successfully
+          content:
+            application/pdf:
+              schema:
+                additionalProperties:
+                  default: "##default"
+                default: "##default"
         "404":
           description: Estimate not found
           content:
@@ -3306,14 +3314,6 @@ paths:
               schema:
                 type: string
                 format: byte
-        "200":
-          description: PDF generated successfully
-          content:
-            application/pdf:
-              schema:
-                additionalProperties:
-                  default: "##default"
-                default: "##default"
   /v1/workorders/estimates/shop/{locationId}:
     get:
       tags:
@@ -3494,6 +3494,11 @@ paths:
       description: Retrieve active timer entries for the authenticated mechanic
       operationId: getActiveTimerEntries
       responses:
+        "400":
+          description: Missing or invalid authenticated user id
+          content:
+            '*/*':
+              schema: {}
         "200":
           description: Active timers returned successfully
           content:
@@ -3509,11 +3514,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Missing or invalid authenticated user id
-          content:
-            '*/*':
-              schema: {}
   /v1/workexec/job-time-totals:
     get:
       tags:

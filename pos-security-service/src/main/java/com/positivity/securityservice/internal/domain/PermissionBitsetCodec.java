@@ -75,16 +75,23 @@ public final class PermissionBitsetCodec {
      * Decodes a Base64URL bitset and maps set bits to {@link PermissionCode}
      * entries.
      * <p>
+     * The provided {@code permVer} must match the local catalog version.
      * Bits at positions not mapped in the current catalog are silently skipped.
      * An empty or blank input returns an empty set.
      * </p>
      *
      * @param encoded the Base64URL-encoded bitset string
-     * @param permVer the catalog version from the token (reserved for future
-     *                version gating)
+     * @param permVer the catalog version from the token
      * @return the set of resolved {@link PermissionCode} values; never null
+     * @throws IllegalArgumentException if {@code permVer} does not match the
+     *                                  local catalog version
      */
     public static Set<PermissionCode> decodeToPermissions(String encoded, int permVer) {
+        if (permVer != PermissionCode.CATALOG_VERSION) {
+            throw new IllegalArgumentException(
+                    "Unsupported permission catalog version: " + permVer
+                            + " (expected " + PermissionCode.CATALOG_VERSION + ")");
+        }
         BitSet bitSet = decode(encoded);
         Set<PermissionCode> result = EnumSet.noneOf(PermissionCode.class);
         for (PermissionCode permission : PermissionCode.values()) {
