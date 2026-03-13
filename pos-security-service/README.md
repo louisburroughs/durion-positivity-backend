@@ -6,23 +6,65 @@ This module is the source of truth for identity, roles, permissions,
 and JWT issuance. Authorization data in access tokens is encoded as a
 compact permission bitset.
 
-### JWT Contract
+### JWT Token Contract
 
-Access tokens must include:
+Access tokens issued by `pos-security-service` include the following
+claims used by the gateway and services:
 
-- `sub`: stable subject identifier
-- `personId`: stable person identifier for audit lineage
+- `sub`: subject / username
+- `uid`: user UUID (preferred user identifier for downstream services)
 - `jti`: token identifier
-- `iat`: issued-at timestamp
-- `exp`: expiration timestamp
-- `perm_bits`: Base64URL-encoded permission bitset
-- `perm_ver`: integer permission catalog version
+- `iat`, `exp`: issued-at and expiry timestamps
+- `perm_bits`: Base64URL-encoded permission BitSet (Base64URL, no padding)
+- `perm_ver`: integer permission catalog version (gateway verifies this)
 
-Optional:
+Optional/legacy claims handled for migration:
 
-- `roles`: informational only, not used for authorization checks
+- `roles`: informational only; not relied on for permission checks
+- legacy `userId` claim is recognised when present for compatibility
 
-Do not include an `authorities` claim in the token for greenfield mode.
+Notes:
+
+- Do not include an `authorities` claim for greenfield PERM mode; the
+  gateway decodes `perm_bits` and maps bit indexes to canonical
+  authority strings.
+
+### PermissionCode & Catalog
+
+- Canonical permission codes and stable bit assignments live in
+  `com.positivity.securityservice.internal.enums.PermissionCode`.
+- The system currently exposes an append-only permission catalog (215
+  permission codes). Bit indexes are stable and must never be reused.
+
+### Catalog & Decode Endpoints
+
+- `GET /v1/permissions/catalog-version` — returns the active catalog
+  version and total permission count. (No auth required.)
+- `POST /v1/permissions/decode` — diagnostic endpoint that decodes a
+  `perm_bits` value for inspection. Requires `security:permission:view`.
+
+### PermissionBitsetCodec
+
+- Encoding/decoding utilities are implemented in
+  `com.positivity.securityservice.internal.domain.PermissionBitsetCodec`.
+  The codec converts a set of `PermissionCode` values to a compact
+  BitSet and serialises it as Base64URL without padding, and provides
+  the reverse decode operation used by `JwtServiceImpl` and admin
+  diagnostics.
+
+Example — token issuance (conceptual):
+
+```java
+Set<PermissionCode> codes = ...; // resolved from roles/assignments
+String permBits = PermissionBitsetCodec.encode(codes);
+Jwts.builder()
+    .subject(username)
+    .claim("uid", userId.toString())
+    .claim("perm_bits", permBits)
+    .claim("perm_ver", PermissionCode.CATALOG_VERSION)
+    .signWith(secretKey)
+    .compact();
+```
 
 ### Greenfield Rules
 
