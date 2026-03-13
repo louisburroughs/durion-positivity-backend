@@ -183,6 +183,21 @@ paths:
               $ref: "#/components/schemas/RejectPriceOverrideRequest"
         required: true
       responses:
+        "200":
+          description: Override rejected
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideDetail"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "400":
           description: Invalid request or override not in pending state
           content:
@@ -201,21 +216,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverrideDetail"
-        "200":
-          description: Override rejected
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideDetail"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
   /v1/orders/price-overrides/{overrideId}/approve:
     post:
       tags:

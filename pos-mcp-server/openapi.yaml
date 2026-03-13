@@ -207,16 +207,16 @@ paths:
                 - type: text
                   text: Pong from positivity-ping
                 isError: false
-        "400":
-          description: Invalid request - missing or empty toolName
-          content:
-            text/plain:
-              example: '''toolName'' is required'
         "500":
           description: Tool execution failed
           content:
             text/plain:
               example: "Failed to execute MCP tool: Tool not found"
+        "400":
+          description: Invalid request - missing or empty toolName
+          content:
+            text/plain:
+              example: '''toolName'' is required'
   /v1/llm-apis:
     get:
       tags:
