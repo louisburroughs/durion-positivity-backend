@@ -411,16 +411,11 @@ public class SecurityGatewayConfig {
     }
 
     private void incrementCounter(String counterName) {
-        Counter.builder(counterName)
-                .register(meterRegistry)
-                .increment();
+        meterRegistry.counter(counterName).increment();
     }
 
     private void incrementTaggedCounter(String counterName, String tagKey, String tagValue) {
-        Counter.builder(counterName)
-                .tag(tagKey, tagValue)
-                .register(meterRegistry)
-                .increment();
+        meterRegistry.counter(counterName, tagKey, tagValue).increment();
     }
 
     private static boolean headerMismatch(String inboundValue, String expectedValue) {
