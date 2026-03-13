@@ -162,6 +162,23 @@ class PermissionBitIndexTest {
                     .contains("custom:unknown:action")
                     .contains("not in the PermissionCode catalog");
         }
+
+        @Test
+        @DisplayName("logs WARN when catalog permission has a mismatched bitIndex")
+        void permissionBitIndexValidatorLogsWarnForMismatchedBitIndex(CapturedOutput output) {
+            // ACCOUNTING__JE__VIEW has bitIndex=0 in the catalog; supply 999 to trigger the
+            // else-if mismatch branch in PermissionBitIndexValidator.run()
+            Permission mismatch = buildPermission("accounting:je:view", 999);
+            when(mockPermissionRepository.findAll()).thenReturn(List.of(mismatch));
+
+            PermissionBitIndexValidator validator = new PermissionBitIndexValidator(mockPermissionRepository);
+            validator.run(mock(ApplicationArguments.class));
+
+            assertThat(output.toString())
+                    .contains("WARN")
+                    .contains("accounting:je:view")
+                    .contains("catalog expects");
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
