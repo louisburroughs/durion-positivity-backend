@@ -146,7 +146,7 @@ class PermissionBitsetCodecTest {
         // (215 / 8 = 26, 215 % 8 = 7 → bit 7 of byte 26 → 0x80)
         // Also set bit 0 (accounting:je:view) to have a known valid permission present.
         byte[] bytes = new byte[27]; // 27 bytes covers bits 0..215
-        bytes[0] = (byte) 0x01;  // bit 0
+        bytes[0] = (byte) 0x01; // bit 0
         bytes[26] = (byte) 0x80; // bit 215 (beyond catalog, should be ignored)
         String encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 

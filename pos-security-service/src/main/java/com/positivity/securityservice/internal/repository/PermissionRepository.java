@@ -14,6 +14,8 @@ import java.util.UUID;
 public interface PermissionRepository extends JpaRepository<Permission, UUID> {
     Optional<Permission> findByName(String name);
 
+    Optional<Permission> findByBitIndex(int bitIndex);
+
     boolean existsByName(String name);
 
     List<Permission> findByDomain(String domain);
