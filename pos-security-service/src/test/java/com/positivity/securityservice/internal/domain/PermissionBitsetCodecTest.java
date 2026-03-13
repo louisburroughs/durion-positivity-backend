@@ -157,22 +157,21 @@ class PermissionBitsetCodecTest {
     }
 
     // -------------------------------------------------------------------------
-    // AC-3 (edge case): decodeToPermissions — version mismatch still uses catalog
+    // AC-3 (edge case): decodeToPermissions — catalog version mismatch rejected
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("decodeToPermissions with future perm_ver still resolves current catalog bits")
-    void decodeToPermissionsWithFutureVersionResolvesCurrentCatalogBits() {
-        // Issue PERM-003: current catalog is version 1; a higher permVer in the token
-        // must not crash — unknown future bits may be ignored but current bits must
-        // resolve
+    @DisplayName("decodeToPermissions with unsupported perm_ver throws IllegalArgumentException")
+    void decodeToPermissionsWithFutureVersionThrows() {
+        // Issue PERM-003: decode must be version-gated to the local catalog version.
         Set<PermissionCode> perms = EnumSet.of(
                 PermissionCode.ACCOUNTING__JE__VIEW, // bit 0
                 PermissionCode.CATALOG__PRODUCT__VIEW // bit 11
         );
         String encoded = PermissionBitsetCodec.encode(perms);
-        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(encoded, 99);
-        assertThat(decoded).containsExactlyInAnyOrderElementsOf(perms);
+        assertThatThrownBy(() -> PermissionBitsetCodec.decodeToPermissions(encoded, 99))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported permission catalog version");
     }
 
     // -------------------------------------------------------------------------
