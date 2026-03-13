@@ -34,6 +34,8 @@ public final class SecurityEventTypes {
                                 // PermissionController - 1 event
                                 EventTypeRegistration.write("SECURITY_PERMISSION_REGISTER",
                                                 "Register permissions from a service").build(),
+                                EventTypeRegistration.fastRead("PERMISSION_DECODE_EXECUTE",
+                                                "Decode a perm_bits claim for diagnostics").build(),
 
                                 // RoleController - 4 events
                                 EventTypeRegistration.write("SECURITY_ROLE_CREATE",

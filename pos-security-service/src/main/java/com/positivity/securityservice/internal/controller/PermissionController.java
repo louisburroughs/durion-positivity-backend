@@ -1,18 +1,24 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.dto.CatalogVersionResponse;
+import com.positivity.securityservice.internal.dto.PermissionDecodeRequest;
+import com.positivity.securityservice.internal.dto.PermissionDecodeResponse;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
+import com.positivity.securityservice.service.PermissionCatalogVersionService;
 import com.positivity.securityservice.service.PermissionService;
 import com.positivity.securityservice.service.PermissionRegistryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -31,6 +37,42 @@ public class PermissionController {
 
     private final PermissionRegistryService permissionRegistryService;
     private final PermissionService permissionService;
+    private final PermissionCatalogVersionService permissionCatalogVersionService;
+
+    /**
+     * Returns the current permission catalog version and total permission count.
+     * No authentication required — informational endpoint.
+     */
+    @GetMapping("/catalog-version")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Get current permission catalog version",
+            description = "Returns the active catalog version and total permission count. No authentication required.")
+    public ResponseEntity<CatalogVersionResponse> getCatalogVersion() {
+        return ResponseEntity.ok(new CatalogVersionResponse(
+                permissionCatalogVersionService.getCatalogVersion(),
+                permissionCatalogVersionService.getPermissionCount()));
+    }
+
+    /**
+     * Decodes a perm_bits claim for diagnostic purposes.
+     * Requires security:permission:view authority.
+     */
+    @EmitEvent(id = "PERMISSION_DECODE_EXECUTE", apiVersion = "1")
+    @PostMapping("/decode")
+    @Operation(summary = "Decode perm_bits for diagnostics",
+            description = "Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.")
+    @PreAuthorize("hasAuthority('security:permission:view')")
+    public ResponseEntity<PermissionDecodeResponse> decodePermissions(
+            @RequestBody @Valid @NonNull PermissionDecodeRequest request) {
+        if (!StringUtils.hasText(request.permBits())) {
+            throw new IllegalArgumentException("perm_bits must be provided");
+        }
+        if (request.permVer() <= 0) {
+            throw new IllegalArgumentException("perm_ver must be greater than 0");
+        }
+        return ResponseEntity.ok(new PermissionDecodeResponse(
+                permissionCatalogVersionService.decodePermissions(request.permBits(), request.permVer())));
+    }
 
     /**
      * Issue #42: Idempotent bulk permission registration endpoint for user RBAC
