@@ -116,7 +116,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             List<String> errors,
             ProcessingCounters counters) {
         errors.add("Invalid permission name format: " + permDef.getName() +
-                " (must be lowercase domain:resource:action)");
+                " (must match lowercase 'domain:resource:action' or legacy 'domain:action' format; segments may include hyphens)");
         return incrementSkipped(counters);
     }
 
