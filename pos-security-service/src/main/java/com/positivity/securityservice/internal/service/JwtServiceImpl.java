@@ -148,7 +148,7 @@ public class JwtServiceImpl implements JwtService {
             return UUID.fromString(legacyUserId);
         }
 
-        return null;
+        throw new IllegalArgumentException("JWT token does not contain required 'uid' or 'userId' claim");
     }
 
     @Override
