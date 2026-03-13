@@ -403,6 +403,7 @@ public class GlobalExceptionHandler {
                                                 "INVALID_REFRESH_TOKEN",
                                                 ex.getMessage(),
                                                 HttpStatus.UNAUTHORIZED,
+
                                                 correlationId));
         }
 
