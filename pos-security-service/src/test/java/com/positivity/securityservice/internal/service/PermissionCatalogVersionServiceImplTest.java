@@ -17,7 +17,8 @@ import com.positivity.securityservice.internal.enums.PermissionCode;
 /**
  * Unit tests for {@link PermissionCatalogVersionServiceImpl}.
  *
- * <p>Verifies PERM-005 acceptance criteria: catalog version reporting,
+ * <p>
+ * Verifies PERM-005 acceptance criteria: catalog version reporting,
  * permission count, and permission bitset decode behavior including
  * round-trip fidelity, empty-set handling, and sorted result ordering.
  *
@@ -33,7 +34,8 @@ class PermissionCatalogVersionServiceImplTest {
     // ── getCatalogVersion() ──────────────────────────────────────────────────
 
     /**
-     * PERM-005 AC4: getCatalogVersion() delegates to PermissionCode.CATALOG_VERSION.
+     * PERM-005 AC4: getCatalogVersion() delegates to
+     * PermissionCode.CATALOG_VERSION.
      */
     @Test
     @DisplayName("getCatalogVersion() returns PermissionCode.CATALOG_VERSION")
@@ -46,7 +48,8 @@ class PermissionCatalogVersionServiceImplTest {
     // ── getPermissionCount() ─────────────────────────────────────────────────
 
     /**
-     * PERM-005 AC5: getPermissionCount() returns PermissionCode.values().length (215).
+     * PERM-005 AC5: getPermissionCount() returns PermissionCode.values().length
+     * (215).
      */
     @Test
     @DisplayName("getPermissionCount() returns PermissionCode.values().length")
@@ -60,7 +63,8 @@ class PermissionCatalogVersionServiceImplTest {
     // ── decodePermissions() ──────────────────────────────────────────────────
 
     /**
-     * PERM-005 AC6: decodePermissions() delegates to PermissionBitsetCodec and returns
+     * PERM-005 AC6: decodePermissions() delegates to PermissionBitsetCodec and
+     * returns
      * the correct permission code strings for the encoded bitset.
      */
     @Test
@@ -88,12 +92,14 @@ class PermissionCatalogVersionServiceImplTest {
     }
 
     /**
-     * PERM-005 AC6: The result list is sorted alphabetically by permission code string.
+     * PERM-005 AC6: The result list is sorted alphabetically by permission code
+     * string.
      */
     @Test
     @DisplayName("decodePermissions() returns result sorted alphabetically")
     void decodePermissions_returnsListSortedAlphabetically() {
-        // Issue PERM-005: encode three permissions whose codes are not naturally ordered
+        // Issue PERM-005: encode three permissions whose codes are not naturally
+        // ordered
         // by enum declaration — result must still be alphabetically sorted.
         String encoded = PermissionBitsetCodec.encode(
                 Set.of(

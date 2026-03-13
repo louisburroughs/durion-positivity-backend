@@ -262,17 +262,17 @@ public class JwtServiceImpl implements JwtService {
 
         Set<String> expandedAuthorities = roleAuthorityService.expandRolesToAuthorities(roles);
         Set<PermissionCode> permCodes = expandedAuthorities.stream()
-            .flatMap(authority -> PermissionCode.fromCode(authority).stream())
-            .collect(Collectors.toUnmodifiableSet());
+                .flatMap(authority -> PermissionCode.fromCode(authority).stream())
+                .collect(Collectors.toUnmodifiableSet());
         String permBits = PermissionBitsetCodec.encode(permCodes);
 
         String accessToken = Jwts.builder()
                 .id(accessJti)
                 .subject(username)
-            .claim(UID, userId.toString())
-            .claim(USERNAME, username)
-            .claim(PERM_BITS, permBits)
-            .claim(PERM_VER, PermissionCode.CATALOG_VERSION)
+                .claim(UID, userId.toString())
+                .claim(USERNAME, username)
+                .claim(PERM_BITS, permBits)
+                .claim(PERM_VER, PermissionCode.CATALOG_VERSION)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(accessExpiry))
                 .signWith(secretKey)
@@ -281,7 +281,7 @@ public class JwtServiceImpl implements JwtService {
         String refreshToken = Jwts.builder()
                 .id(refreshJti)
                 .subject(username)
-            .claim(UID, userId.toString())
+                .claim(UID, userId.toString())
                 .claim("type", "refresh")
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(refreshExpiry))

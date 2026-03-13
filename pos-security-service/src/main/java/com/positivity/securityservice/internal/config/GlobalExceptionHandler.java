@@ -60,8 +60,10 @@ import lombok.extern.slf4j.Slf4j;
  * - InvalidRefreshTokenException → 401 Unauthorized
  * - AuthorizationDeniedException → 403 Forbidden
  * - DuplicateRoleNameException → 409 Conflict
- * - IllegalStateException → 409 Conflict (overlapping assignment) or 400 Bad Request
- * - Request-binding exceptions (MethodArgumentNotValidException, etc.) → 400 Bad Request
+ * - IllegalStateException → 409 Conflict (overlapping assignment) or 400 Bad
+ * Request
+ * - Request-binding exceptions (MethodArgumentNotValidException, etc.) → 400
+ * Bad Request
  * - RoleNotFoundException, UserNotFoundException,
  * RoleAssignmentNotFoundException, PermissionNotFoundException → 404 Not Found
  * - ObjectOptimisticLockingFailureException → 409 Conflict (retry needed)
@@ -257,19 +259,19 @@ public class GlobalExceptionHandler {
                                         : null;
                         if (auditEventService != null) {
                                 auditEventService.createEvent(new AuditLogEventRequest(
-                                        "PermissionDenied",
-                                        actorId,
-                                        resourceUri,
-                                        "Authorization",
-                                        "",
-                                        "",
-                                        Map.of(
-                                                        "message",
-                                                        deniedPermissions,
-                                                        "requestUri",
-                                                        resourceUri,
-                                                        "deniedPermissions",
-                                                        deniedPermissions)));
+                                                "PermissionDenied",
+                                                actorId,
+                                                resourceUri,
+                                                "Authorization",
+                                                "",
+                                                "",
+                                                Map.of(
+                                                                "message",
+                                                                deniedPermissions,
+                                                                "requestUri",
+                                                                resourceUri,
+                                                                "deniedPermissions",
+                                                                deniedPermissions)));
                         }
                 } catch (Exception auditException) {
                         log.warn("Failed to persist PermissionDenied audit event (correlationId={}): {}",

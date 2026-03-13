@@ -153,6 +153,15 @@ pos:
       # Allowed JWT 'alg' values when strict header validation is enabled.
       allowed-jwt-algorithms: HS256
 
+# Auth feature flags - rollout controls for PERM bitset migration
+auth:
+  # Reject tokens that lack perm_bits claim. Enable after all clients emit bitset tokens.
+  token-identity-required: false
+  # Strip inbound X-User/X-User-Id/X-Authorities/X-Roles headers. Keep true in production.
+  strip-inbound-identity-headers: true
+  # Reject requests that arrive with inbound identity headers (strict mode). Enable after strip is stable.
+  reject-header-token-mismatch: false
+
 springdoc:
   api-docs:
     enabled: true

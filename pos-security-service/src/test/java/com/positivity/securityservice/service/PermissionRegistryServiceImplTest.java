@@ -94,7 +94,8 @@ class PermissionRegistryServiceImplTest {
         void registerPermissions_nullServiceName_throws() {
                 PermissionRegistrationRequest request = new PermissionRegistrationRequest(
                                 "pricing", null,
-                                List.of(new PermissionRegistrationRequest.PermissionDefinition("pricing:p:view", "desc")),
+                                List.of(new PermissionRegistrationRequest.PermissionDefinition("pricing:p:view",
+                                                "desc")),
                                 "1.0");
 
                 org.assertj.core.api.Assertions.assertThatThrownBy(

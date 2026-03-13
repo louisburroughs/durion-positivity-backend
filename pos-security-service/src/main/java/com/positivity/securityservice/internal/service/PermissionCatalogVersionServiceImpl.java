@@ -27,9 +27,9 @@ public class PermissionCatalogVersionServiceImpl implements PermissionCatalogVer
     @Override
     public @NonNull List<String> decodePermissions(@NonNull String permBits, int permVer) {
         return PermissionBitsetCodec.decodeToPermissions(permBits, permVer)
-            .stream()
-            .map(PermissionCode::code)
-            .sorted()
-            .toList();
+                .stream()
+                .map(PermissionCode::code)
+                .sorted()
+                .toList();
     }
 }

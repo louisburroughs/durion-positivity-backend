@@ -81,12 +81,12 @@ class JwtServiceImplTest {
                 .when(jwtTokenRepository.save(any(JwtToken.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         org.mockito.Mockito.lenient()
-            .when(userService.getUserById(any(UUID.class)))
-            .thenReturn(Optional.of(UserDto.builder()
-                .id(TEST_USER_ID)
-                .username("alice")
-                .roles(Set.of("ADMIN"))
-                .build()));
+                .when(userService.getUserById(any(UUID.class)))
+                .thenReturn(Optional.of(UserDto.builder()
+                        .id(TEST_USER_ID)
+                        .username("alice")
+                        .roles(Set.of("ADMIN"))
+                        .build()));
     }
 
     @Test
@@ -186,7 +186,7 @@ class JwtServiceImplTest {
     @DisplayName("initializeSecretKey: blank secret throws IllegalStateException")
     void initializeSecretKey_blankSecret_throws() {
         JwtServiceImpl fresh = new JwtServiceImpl(
-            TEST_CLOCK, jwtTokenRepository, roleAuthorityService, userService, tokenRevocationManager);
+                TEST_CLOCK, jwtTokenRepository, roleAuthorityService, userService, tokenRevocationManager);
         ReflectionTestUtils.setField(fresh, "jwtSecret", "");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -198,7 +198,7 @@ class JwtServiceImplTest {
     @DisplayName("initializeSecretKey: secret shorter than 32 bytes throws IllegalStateException")
     void initializeSecretKey_tooShortSecret_throws() {
         JwtServiceImpl fresh = new JwtServiceImpl(
-            TEST_CLOCK, jwtTokenRepository, roleAuthorityService, userService, tokenRevocationManager);
+                TEST_CLOCK, jwtTokenRepository, roleAuthorityService, userService, tokenRevocationManager);
         ReflectionTestUtils.setField(fresh, "jwtSecret", "short");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -312,12 +312,12 @@ class JwtServiceImplTest {
                 .hasMessageContaining("Invalid refresh token");
     }
 
-        @Test
-        @DisplayName("refreshAccessToken throws InvalidRefreshTokenException when user no longer exists")
-        void refreshAccessToken_throwsInvalidRefreshTokenException_whenUserNotFound() {
+    @Test
+    @DisplayName("refreshAccessToken throws InvalidRefreshTokenException when user no longer exists")
+    void refreshAccessToken_throwsInvalidRefreshTokenException_whenUserNotFound() {
         UUID userId = UUID.randomUUID();
         JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, Set.of("ADMIN"));
-            String refreshToken = tokenPair.refreshToken();
+        String refreshToken = tokenPair.refreshToken();
 
         JwtToken stored = new JwtToken();
         stored.setToken(tokenPair.accessToken());
@@ -329,15 +329,15 @@ class JwtServiceImplTest {
 
         when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
         doReturn(Optional.of(stored))
-            .doReturn(Optional.of(stored))
-            .when(jwtTokenRepository)
-            .findByRefreshToken(refreshToken);
+                .doReturn(Optional.of(stored))
+                .when(jwtTokenRepository)
+                .findByRefreshToken(refreshToken);
         when(userService.getUserById(userId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken))
-            .isInstanceOf(InvalidRefreshTokenException.class)
-            .hasMessageContaining("no longer exists");
-        }
+                .isInstanceOf(InvalidRefreshTokenException.class)
+                .hasMessageContaining("no longer exists");
+    }
 
     @Test
     @DisplayName("getUserIdFromToken falls back correctly to legacy userId claim")
@@ -356,7 +356,8 @@ class JwtServiceImplTest {
         assertThat(sut.getUserIdFromToken(legacyToken)).isEqualTo(legacyUserId);
     }
 
-    // Issue #PERM-004 start: JWT claim structure tests for compact permission bitset encoding
+    // Issue #PERM-004 start: JWT claim structure tests for compact permission
+    // bitset encoding
 
     /**
      * Verifies that the access token produced by generateTokenPair contains
@@ -385,7 +386,8 @@ class JwtServiceImplTest {
         assertThat(claims.get(JwtService.PERM_VER, Integer.class)).isEqualTo(PermissionCode.CATALOG_VERSION);
 
         String permBits = claims.get(JwtService.PERM_BITS, String.class);
-        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(permBits, PermissionCode.CATALOG_VERSION);
+        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(permBits,
+                PermissionCode.CATALOG_VERSION);
         assertThat(decoded).contains(
                 PermissionCode.ACCOUNTING__JE__VIEW,
                 PermissionCode.ACCOUNTING__JE__CREATE);
@@ -543,7 +545,7 @@ class JwtServiceImplTest {
     /**
      * Verifies that getAuthoritiesFromToken falls through to Tier 3 (role-expansion
      * via roleAuthorityService) when the token contains neither {@code perm_bits}
-     * nor {@code authorities} claims.  Also exercises getRolesFromToken's loop that
+     * nor {@code authorities} claims. Also exercises getRolesFromToken's loop that
      * builds a Set from a {@code roles} list claim.
      *
      * Issue: PERM-004
@@ -572,7 +574,7 @@ class JwtServiceImplTest {
     /**
      * Verifies that getAuthoritiesFromToken falls back to {@code CATALOG_VERSION}
      * when the {@code perm_ver} claim is present but is not a Number (e.g., a
-     * String).  The bitset must still decode correctly using the default version.
+     * String). The bitset must still decode correctly using the default version.
      *
      * Issue: PERM-004
      */
