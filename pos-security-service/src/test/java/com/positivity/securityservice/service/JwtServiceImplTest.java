@@ -540,5 +540,118 @@ class JwtServiceImplTest {
                 .hasSizeLessThan(600);
     }
 
+    /**
+     * Verifies that getAuthoritiesFromToken falls through to Tier 3 (role-expansion
+     * via roleAuthorityService) when the token contains neither {@code perm_bits}
+     * nor {@code authorities} claims.  Also exercises getRolesFromToken's loop that
+     * builds a Set from a {@code roles} list claim.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("getAuthoritiesFromToken tier-3: no perm_bits or authorities → expands roles via service")
+    void getAuthoritiesFromToken_tier3_noPermBitsNoAuthorities_usesRoleExpansion() {
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        String legacyToken = Jwts.builder()
+                .subject("alice")
+                .claim(JwtService.ROLES, List.of("ADMIN"))
+                .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
+                .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
+                .signWith(key)
+                .compact();
+
+        when(roleAuthorityService.expandRolesToAuthorities(Set.of("ADMIN")))
+                .thenReturn(Set.of("ORDER:VIEW"));
+
+        Set<String> authorities = sut.getAuthoritiesFromToken(legacyToken);
+
+        assertThat(authorities).containsExactly("ORDER:VIEW");
+        verify(roleAuthorityService).expandRolesToAuthorities(Set.of("ADMIN"));
+    }
+
+    /**
+     * Verifies that getAuthoritiesFromToken falls back to {@code CATALOG_VERSION}
+     * when the {@code perm_ver} claim is present but is not a Number (e.g., a
+     * String).  The bitset must still decode correctly using the default version.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("getAuthoritiesFromToken: non-Number perm_ver falls back to CATALOG_VERSION default")
+    void getAuthoritiesFromToken_nonNumberPermVer_usesDefaultCatalogVersion() {
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        Set<PermissionCode> permCodes = Set.of(PermissionCode.ACCOUNTING__JE__VIEW);
+        String permBits = PermissionBitsetCodec.encode(permCodes);
+
+        String tokenWithStringPermVer = Jwts.builder()
+                .subject("alice")
+                .claim(JwtService.PERM_BITS, permBits)
+                .claim(JwtService.PERM_VER, "unknown-version")
+                .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
+                .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
+                .signWith(key)
+                .compact();
+
+        Set<String> authorities = sut.getAuthoritiesFromToken(tokenWithStringPermVer);
+
+        assertThat(authorities).contains(PermissionCode.ACCOUNTING__JE__VIEW.code());
+    }
+
+    /**
+     * Verifies that refreshAccessToken throws IllegalArgumentException when the
+     * user referenced by the refresh token exists but has no roles assigned.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("refreshAccessToken throws IllegalArgumentException when user has no roles assigned")
+    void refreshAccessToken_userHasNoRoles_throwsIllegalArgumentException() {
+        UUID userId = UUID.randomUUID();
+        JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, Set.of("ADMIN"));
+
+        JwtToken stored = new JwtToken();
+        stored.setToken(tokenPair.accessToken());
+        stored.setRefreshToken(tokenPair.refreshToken());
+        stored.setIssuedAt(Instant.now(TEST_CLOCK));
+        stored.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(600));
+        stored.setRefreshExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(1200));
+        stored.setSubject(userId.toString());
+
+        when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
+        doReturn(Optional.of(stored))
+                .doReturn(Optional.of(stored))
+                .when(jwtTokenRepository)
+                .findByRefreshToken(tokenPair.refreshToken());
+        when(userService.getUserById(userId)).thenReturn(Optional.of(UserDto.builder()
+                .id(userId)
+                .username(userId.toString())
+                .roles(Set.of())
+                .build()));
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(tokenPair.refreshToken()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no roles assigned");
+    }
+
+    /**
+     * Verifies that getUserIdFromToken returns null when neither the {@code uid}
+     * nor the legacy {@code userId} claim is present in the token.
+     *
+     * Issue: PERM-004
+     */
+    @Test
+    @DisplayName("getUserIdFromToken returns null when neither uid nor userId claim is present")
+    void getUserIdFromToken_returnsNullWhenNoUidOrUserIdClaim() {
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        String tokenWithoutUid = Jwts.builder()
+                .subject("alice")
+                .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
+                .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
+                .signWith(key)
+                .compact();
+
+        assertThat(sut.getUserIdFromToken(tokenWithoutUid)).isNull();
+    }
+
     // Issue #PERM-004 end
 }
