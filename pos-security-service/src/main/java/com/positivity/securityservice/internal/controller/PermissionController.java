@@ -56,7 +56,7 @@ public class PermissionController {
      * Decodes a perm_bits claim for diagnostic purposes.
      * Requires security:permission:view authority.
      */
-    @EmitEvent(id = "PERMISSION_DECODE_EXECUTE", apiVersion = "1")
+    @EmitEvent(id = "SECURITY_PERMISSION_DECODE_EXECUTE", apiVersion = "1")
     @PostMapping("/decode")
     @Operation(summary = "Decode perm_bits for diagnostics", description = "Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.")
     @PreAuthorize("hasAuthority('security:permission:view')")

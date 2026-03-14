@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -36,6 +37,8 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.JwtService.TokenPair;
 import com.positivity.securityservice.service.LockoutService;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import org.springframework.security.authentication.LockedException;
 
@@ -110,6 +113,14 @@ class AuthenticationServiceImplTest {
      */
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    /**
+     * Real {@code SimpleMeterRegistry} so the {@code AuthenticationServiceImpl}
+     * constructor can initialize its cached Counters without NPE.
+     * Declared as {@code @Spy} so Mockito's {@code @InjectMocks} machinery injects it.
+     */
+    @Spy
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @InjectMocks
     private AuthenticationServiceImpl sut;

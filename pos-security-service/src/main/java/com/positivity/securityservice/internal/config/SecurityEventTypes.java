@@ -17,7 +17,7 @@ public final class SecurityEventTypes {
 
         /**
          * All event type registrations for the security module.
-         * Total: 28 event types.
+         * Total: 29 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -38,24 +38,30 @@ public final class SecurityEventTypes {
                                 // PermissionController - 2 events
                                 EventTypeRegistration.write("SECURITY_PERMISSION_REGISTER",
                                                 "Register permissions from a service").build(),
-                                EventTypeRegistration.fastRead("PERMISSION_DECODE_EXECUTE",
+                                EventTypeRegistration.fastRead("SECURITY_PERMISSION_DECODE_EXECUTE",
                                                 "Decode a perm_bits claim for diagnostics").build(),
 
-                                // RoleController - 7 events
+                                // PrincipalRoleController - 1 event
+                                EventTypeRegistration.write("SECURITY_PRINCIPAL_ROLE_ASSIGN",
+                                                "Assign a principal to a role").build(),
+
+                                // RoleController - 8 events
                                 EventTypeRegistration.write("SECURITY_ROLE_CREATE",
                                                 "Create a new role").build(),
+                                EventTypeRegistration.write("SECURITY_ROLE_PERMISSION_GRANT",
+                                                "Grant a permission to a role").build(),
+                                EventTypeRegistration.write("SECURITY_ROLE_PERMISSION_REVOKE",
+                                                "Revoke a permission from a role").build(),
+                                EventTypeRegistration.write("SECURITY_ROLE_PERMISSION_ASSIGN",
+                                                "Assign a permission to a role").build(),
                                 EventTypeRegistration.write("SECURITY_ROLE_PERMISSIONS_UPDATE",
                                                 "Update permissions assigned to a role").build(),
                                 EventTypeRegistration.write("SECURITY_ROLE_ASSIGNMENT_CREATE",
                                                 "Create a role assignment for a user").build(),
                                 EventTypeRegistration.write("SECURITY_ROLE_ASSIGNMENT_REVOKE",
                                                 "Revoke a role assignment by setting its end date").build(),
-                                EventTypeRegistration.write("SECURITY_ROLE_ASSIGNED",
-                                                "Persist audit record when a role is assigned to a user").build(),
-                                EventTypeRegistration.write("SECURITY_ROLE_REVOKED",
-                                                "Persist audit record when a role is revoked from a user").build(),
-                                EventTypeRegistration.write("SECURITY_PERMISSION_DENIED",
-                                                "Persist audit record when authorization is denied").build(),
+                                EventTypeRegistration.write("SECURITY_ROLE_DELETE",
+                                                "Delete a role").build(),
 
                                 // UserRoleController - 2 events
                                 EventTypeRegistration.write("SECURITY_USER_ROLE_ASSIGN",
@@ -69,11 +75,9 @@ public final class SecurityEventTypes {
                                 EventTypeRegistration.write("SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE",
                                                 "Create a pricing snapshot for audit purposes").build(),
 
-                                // UserController - 5 events
+                                // UserController - 4 events
                                 EventTypeRegistration.write("SECURITY_USER_CREATE",
                                                 "Create a new user account").build(),
-                                EventTypeRegistration.write("SECURITY_USER_LOGIN",
-                                                "User login via username and password").build(),
                                 EventTypeRegistration.write("SECURITY_USER_UPDATE",
                                                 "Update an existing user account").build(),
                                 EventTypeRegistration.write("SECURITY_USER_DELETE",
