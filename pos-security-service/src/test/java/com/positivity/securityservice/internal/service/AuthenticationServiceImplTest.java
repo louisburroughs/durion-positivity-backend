@@ -338,4 +338,60 @@ class AuthenticationServiceImplTest {
             verify(lockoutService).recordFailedAttempt(userId);
         }
     }
+
+    // =========================================================
+    // T13-T14 — Role stripping in TokenPairResponse (AUTH-003 coverage)
+    // =========================================================
+
+    @Nested
+    @DisplayName("T13-T14: role-prefix stripping in generateTokenPair call")
+    class RoleStripping {
+
+        @Test
+        @DisplayName("T13 — ROLE_-prefixed authority is stripped before passing to JwtService")
+        void t13_rolePrefixIsStripped() {
+            UUID roleUserId = UUID.randomUUID();
+            org.springframework.security.core.GrantedAuthority roleAuthority =
+                    () -> "ROLE_ADMIN";
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("charlie");
+            when(successAuth.getPrincipal()).thenReturn(
+                    new CustomUserDetailsService.SecurityUserPrincipal(roleUserId,
+                            new User("charlie", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(roleAuthority));
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(jwtService.generateTokenPair(any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
+
+            sut.login(new LoginRequest("charlie", "pass"));
+
+            verify(jwtService).generateTokenPair(
+                    any(),
+                    any(UUID.class),
+                    argThat(roles -> roles.contains("ADMIN") && !roles.contains("ROLE_ADMIN")));
+        }
+
+        @Test
+        @DisplayName("T14 — authority without ROLE_ prefix passes through unchanged")
+        void t14_authorityWithoutPrefixPassesThrough() {
+            UUID roleUserId = UUID.randomUUID();
+            org.springframework.security.core.GrantedAuthority plainAuthority = () -> "MANAGER";
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("dave");
+            when(successAuth.getPrincipal()).thenReturn(
+                    new CustomUserDetailsService.SecurityUserPrincipal(roleUserId,
+                            new User("dave", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(plainAuthority));
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(jwtService.generateTokenPair(any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
+
+            sut.login(new LoginRequest("dave", "pass"));
+
+            verify(jwtService).generateTokenPair(
+                    any(),
+                    any(UUID.class),
+                    argThat(roles -> roles.contains("MANAGER")));
+        }
+    }
 }

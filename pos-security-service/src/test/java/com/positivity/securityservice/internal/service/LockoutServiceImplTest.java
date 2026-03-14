@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -260,6 +261,123 @@ class LockoutServiceImplTest {
 
             assertThat(result).isFalse();
             verify(userRepository, never()).save(user);
+        }
+
+        @Test
+        @DisplayName("T10x — returns false without save when admin-set lock (lockedUntil=null)")
+        void t10x_returnsFalseWhenAdminLockWithNullLockedUntil() {
+            UUID userId = UUID.randomUUID();
+            User user = freshUser();
+            user.setAccountNonLocked(false);
+            user.setLockedUntil(null); // admin-set permanent lock — no expiry
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            boolean result = lockoutService.unlockIfCooldownExpired(userId);
+
+            assertThat(result).isFalse();
+            verify(userRepository, never()).save(user);
+        }
+    }
+
+    @Nested
+    @DisplayName("isLockedOut — edge cases")
+    class IsLockedOutEdgeCases {
+
+        @Test
+        @DisplayName("T11x — returns true when locked with null lockedUntil (admin indefinite lock)")
+        void t11x_returnsTrueWhenAdminIndefiniteLock() {
+            UUID userId = UUID.randomUUID();
+            User user = freshUser();
+            user.setAccountNonLocked(false);
+            user.setLockedUntil(null); // no expiry → lock is permanent until manually cleared
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            boolean result = lockoutService.isLockedOut(userId);
+
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        @DisplayName("T12x — returns false when locked but lockedUntil is in the past (expired, not yet auto-unlocked)")
+        void t12x_returnsFalseWhenLockWindowExpired() {
+            UUID userId = UUID.randomUUID();
+            User user = freshUser();
+            user.setAccountNonLocked(false);
+            user.setLockedUntil(Instant.now().minusSeconds(1)); // expired
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            boolean result = lockoutService.isLockedOut(userId);
+
+            assertThat(result).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("recordFailedAttempt — outside window")
+    class RecordFailedAttemptOutsideWindow {
+
+        @Test
+        @DisplayName("T13x — no lock when attempts >= maxAttempts but last failure is outside the window")
+        void t13x_noLockWhenAttemptsAtThresholdButWindowExpired() {
+            UUID userId = UUID.randomUUID();
+            User user = freshUser();
+            user.setFailedLoginAttempts(MAX_ATTEMPTS - 1);
+            // Last failure is older than the window → withinWindow = false
+            user.setLastFailedLoginAt(Instant.now().minus(WINDOW).minusSeconds(60));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubPolicy();
+
+            lockoutService.recordFailedAttempt(userId);
+
+            verify(userRepository).save(argThat(u ->
+                    u.isAccountNonLocked()
+                            && u.getLockedAt() == null
+                            && u.getLockedUntil() == null));
+        }
+    }
+
+    @Nested
+    @DisplayName("UsernameNotFoundException propagation")
+    class UsernameNotFoundPropagation {
+
+        @Test
+        @DisplayName("T14x — recordFailedAttempt throws when userId not found")
+        void t14x_recordFailedAttemptThrowsWhenUserNotFound() {
+            UUID userId = UUID.randomUUID();
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> lockoutService.recordFailedAttempt(userId))
+                    .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("T15x — recordSuccessfulLogin throws when userId not found")
+        void t15x_recordSuccessfulLoginThrowsWhenUserNotFound() {
+            UUID userId = UUID.randomUUID();
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> lockoutService.recordSuccessfulLogin(userId))
+                    .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("T16x — isLockedOut throws when userId not found")
+        void t16x_isLockedOutThrowsWhenUserNotFound() {
+            UUID userId = UUID.randomUUID();
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> lockoutService.isLockedOut(userId))
+                    .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("T17x — unlockIfCooldownExpired throws when userId not found")
+        void t17x_unlockIfCooldownExpiredThrowsWhenUserNotFound() {
+            UUID userId = UUID.randomUUID();
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> lockoutService.unlockIfCooldownExpired(userId))
+                    .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
         }
     }
 }
