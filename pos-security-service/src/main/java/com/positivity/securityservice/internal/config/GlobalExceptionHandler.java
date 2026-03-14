@@ -25,6 +25,7 @@ import com.positivity.securityservice.internal.dto.ErrorResponse;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import org.springframework.security.authentication.BadCredentialsException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
@@ -404,6 +405,22 @@ public class GlobalExceptionHandler {
                                                 ex.getMessage(),
                                                 HttpStatus.UNAUTHORIZED,
 
+                                                correlationId));
+        }
+
+        @ExceptionHandler(BadCredentialsException.class)
+        @ResponseStatus(HttpStatus.UNAUTHORIZED)
+        public ResponseEntity<ErrorResponse> handleBadCredentialsException(
+                        BadCredentialsException ex,
+                        WebRequest request) {
+                String correlationId = extractCorrelationId(request);
+                log.warn("Authentication failed (correlationId={}): invalid credentials", correlationId);
+                return ResponseEntity
+                                .status(HttpStatus.UNAUTHORIZED)
+                                .body(errorResponse(
+                                                "INVALID_CREDENTIALS",
+                                                "Invalid username or password",
+                                                HttpStatus.UNAUTHORIZED,
                                                 correlationId));
         }
 

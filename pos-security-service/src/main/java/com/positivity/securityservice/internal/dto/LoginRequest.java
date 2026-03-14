@@ -2,33 +2,27 @@ package com.positivity.securityservice.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.util.Set;
+import jakarta.validation.constraints.NotBlank;
 
 /**
- * Request DTO for internal JWT token issuance.
- * 
- * Used by POST /v1/auth/internal/token endpoint.
- * Implements BACKEND_CONTRACT_GUIDE.md requirements:
- * - camelCase field naming
- * - Validation: subject required, roles optional
- * 
+ * Request DTO for user-facing authentication at POST /v1/auth/login.
+ *
  * @since 1.0
- * @see com.positivity.securityservice.internal.controller.JwtController#issueInternalToken
+ * @see com.positivity.securityservice.internal.controller.AuthController#login
  */
-@Schema(description = "Request to generate a single JWT token for user authentication")
+@Schema(description = "Request to authenticate a user with username and password")
 public record LoginRequest(
-        @JsonProperty("subject") @Schema(description = "User identifier (subject claim)", example = "user123", requiredMode = Schema.RequiredMode.REQUIRED) String subject,
+        @JsonProperty("username")
+        @NotBlank
+        @Schema(
+                description = "The user's login username",
+                example = "jane.doe",
+                requiredMode = Schema.RequiredMode.REQUIRED)
+        String username,
 
-        @JsonProperty("roles") @Schema(description = "Optional set of role names to include in token", example = "[\"SHOP_MGR\", \"ACCOUNTING_CLERK\"]") Set<String> roles) {
-
-    /**
-     * Validates request constraints.
-     * 
-     * @throws IllegalArgumentException if subject is null or blank
-     */
-    public void validate() {
-        if (subject == null || subject.isBlank()) {
-            throw new IllegalArgumentException("subject is required and cannot be blank");
-        }
-    }
-}
+        @JsonProperty("password")
+        @NotBlank
+        @Schema(
+                description = "The user's login password",
+                requiredMode = Schema.RequiredMode.REQUIRED)
+        String password) {}

@@ -22,7 +22,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
-    private static final String V1_USERS_LOGIN = "/v1/users/login";
+    private static final String V1_AUTH_LOGIN = "/v1/auth/login";
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomUserDetailsService userDetailsService;
 
@@ -38,12 +38,12 @@ public class SecurityConfig {
             GatewayHeaderAuthenticationFilter gatewayHeaderAuthenticationFilter) {
         try {
             http
-                    .securityMatcher("/v1/auth/**", V1_USERS_LOGIN)
-                    .csrf(csrf -> csrf.ignoringRequestMatchers("/v1/auth/**", V1_USERS_LOGIN))
+                    .securityMatcher("/v1/auth/**")
+                    .csrf(csrf -> csrf.ignoringRequestMatchers("/v1/auth/**"))
                     .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .authorizeHttpRequests(auth -> auth
                             .requestMatchers("/v1/auth/token-pair",
-                                    "/v1/auth/refresh", "/v1/auth/validate", V1_USERS_LOGIN)
+                                    "/v1/auth/refresh", "/v1/auth/validate", V1_AUTH_LOGIN)
                             .permitAll()
                             .anyRequest().authenticated())
                     .userDetailsService(userDetailsService)
