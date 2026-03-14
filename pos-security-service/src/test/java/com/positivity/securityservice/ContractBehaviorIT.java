@@ -33,7 +33,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.positivity.securityservice.internal.dto.LoginRequest;
+import com.positivity.securityservice.internal.dto.InternalTokenRequest;
 import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
@@ -138,7 +138,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T1: Internal token endpoint issues valid access token")
         void testLoginIssuesValidAccessToken() throws Exception {
                 // Arrange
-                LoginRequest request = new LoginRequest(TEST_SUBJECT, TEST_ROLES);
+                InternalTokenRequest request = new InternalTokenRequest(TEST_SUBJECT, TEST_ROLES);
 
                 // Act
                 MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
@@ -345,7 +345,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T6: Login rejects blank username with 400 error")
         void testLoginRejectsBlankUsername() throws Exception {
                 // Arrange
-                LoginRequest request = new LoginRequest("", TEST_ROLES);
+                InternalTokenRequest request = new InternalTokenRequest("", TEST_ROLES);
 
                 // Act & Assert
                 mockMvc.perform(post("/v1/auth/internal/token")
@@ -461,7 +461,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T12: Error responses include correlation ID")
         void testCorrelationIdInErrorResponse() throws Exception {
                 // Arrange
-                LoginRequest request = new LoginRequest("", TEST_ROLES);
+                InternalTokenRequest request = new InternalTokenRequest("", TEST_ROLES);
 
                 // Act & Assert
                 mockMvc.perform(post("/v1/auth/internal/token")
@@ -483,7 +483,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testMultipleRoleSupport() throws Exception {
                 // Arrange
                 Set<String> multipleRoles = Set.of("ROLE1", "ROLE2", "ROLE3");
-                LoginRequest request = new LoginRequest(TEST_SUBJECT, multipleRoles);
+                InternalTokenRequest request = new InternalTokenRequest(TEST_SUBJECT, multipleRoles);
 
                 // Act
                 MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")
@@ -950,7 +950,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("E2: Error responses follow contract format")
         void testErrorResponseFormat() throws Exception {
                 // Arrange - Invalid login to trigger error
-                LoginRequest request = new LoginRequest("", TEST_ROLES);
+                InternalTokenRequest request = new InternalTokenRequest("", TEST_ROLES);
 
                 // Act & Assert
                 MvcResult result = mockMvc.perform(post("/v1/auth/internal/token")

@@ -10,7 +10,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,9 +27,51 @@ public class CustomUserDetailsService implements UserDetailsService {
                 Set<GrantedAuthority> authorities = user.getRoles().stream()
                                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
                                 .collect(Collectors.toSet());
-                return new org.springframework.security.core.userdetails.User(
+                var delegate = new org.springframework.security.core.userdetails.User(
                                 user.getUsername(),
                                 user.getPassword(),
                                 authorities);
+                return new SecurityUserPrincipal(user.getId(), delegate);
+        }
+
+        public record SecurityUserPrincipal(
+                        UUID userId,
+                        org.springframework.security.core.userdetails.User delegate)
+                        implements UserDetails {
+
+                @Override
+                public Collection<? extends GrantedAuthority> getAuthorities() {
+                        return delegate.getAuthorities();
+                }
+
+                @Override
+                public String getPassword() {
+                        return delegate.getPassword();
+                }
+
+                @Override
+                public String getUsername() {
+                        return delegate.getUsername();
+                }
+
+                @Override
+                public boolean isAccountNonExpired() {
+                        return delegate.isAccountNonExpired();
+                }
+
+                @Override
+                public boolean isAccountNonLocked() {
+                        return delegate.isAccountNonLocked();
+                }
+
+                @Override
+                public boolean isCredentialsNonExpired() {
+                        return delegate.isCredentialsNonExpired();
+                }
+
+                @Override
+                public boolean isEnabled() {
+                        return delegate.isEnabled();
+                }
         }
 }

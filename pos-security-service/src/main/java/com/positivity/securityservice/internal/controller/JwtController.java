@@ -2,7 +2,7 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.ErrorResponse;
-import com.positivity.securityservice.internal.dto.LoginRequest;
+import com.positivity.securityservice.internal.dto.InternalTokenRequest;
 import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
@@ -60,7 +60,7 @@ public class JwtController {
      * Issues a single JWT access token for internal trusted callers.
      * 
      * **Contract:**
-     * - Request: POST /v1/auth/internal/token with LoginRequest body
+     * - Request: POST /v1/auth/internal/token with InternalTokenRequest body
      * - Response: TokenResponse (single accessToken field)
      * - Success: 200 OK
      * - Errors: 400 (invalid request), 403 (forbidden), 500 (server error)
@@ -82,7 +82,7 @@ public class JwtController {
     @EmitEvent(id = "SECURITY_AUTH_INTERNAL_TOKEN_ISSUE", apiVersion = "1")
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/internal/token")
-    public ResponseEntity<TokenResponse> issueInternalToken(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<TokenResponse> issueInternalToken(@Valid @RequestBody InternalTokenRequest request) {
         log.info("Internal token issuance request received: subject={}, rolesCount={}",
                 request.subject(), request.roles() != null ? request.roles().size() : 0);
 

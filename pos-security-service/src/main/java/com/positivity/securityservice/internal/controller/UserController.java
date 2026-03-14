@@ -1,10 +1,8 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.securityservice.internal.dto.UserAuthContext;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
-import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,8 +29,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
-    private final JwtService jwtService;
-    private final PasswordEncoder passwordEncoder;
 
     @Operation(summary = "Create a new user", description = "Creates a new user with username, password, and roles.")
     @ApiResponse(responseCode = "201", description = "User created successfully.")
@@ -49,31 +44,6 @@ public class UserController {
                 .collect(Collectors.toSet());
         UserDto user = userService.createUser(username, password, roles);
         return ResponseEntity.status(201).body(user);
-    }
-
-    @Operation(summary = "User login", description = "Authenticates a user and returns a JWT token.")
-    @EmitEvent(id = "SECURITY_USER_LOGIN", apiVersion = "1")
-    @PreAuthorize("permitAll()")
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@RequestBody Map<String, String> payload) {
-        String username = payload.get("username");
-        String password = payload.get("password");
-        Optional<UserAuthContext> userOpt = userService.getUserByUsername(username);
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(401)
-                    .body(Map.of("code", "INVALID_CREDENTIALS", "message", "Invalid credentials"));
-        }
-        UserAuthContext user = userOpt.get();
-        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            return ResponseEntity.status(401)
-                    .body(Map.of("code", "INVALID_CREDENTIALS", "message", "Invalid credentials"));
-        }
-        if (user.getId() == null) {
-            throw new IllegalStateException("User exists but id is missing for username: " + username);
-        }
-        Set<String> roles = user.getRoles();
-        String token = jwtService.generateToken(username, user.getId(), roles);
-        return ResponseEntity.ok(Map.of("token", token));
     }
 
     @Operation(summary = "Get all users", description = "Retrieve a list of all users.")
