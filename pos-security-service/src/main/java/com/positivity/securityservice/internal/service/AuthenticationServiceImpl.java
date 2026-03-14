@@ -10,6 +10,7 @@ import com.positivity.securityservice.service.LockoutService;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -52,7 +53,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.username(), request.password()));
         } catch (AuthenticationException ex) {
-            if (userIdForLockout != null) {
+            if (userIdForLockout != null && ex instanceof BadCredentialsException) {
                 lockoutService.recordFailedAttempt(userIdForLockout);
             }
             throw ex;
