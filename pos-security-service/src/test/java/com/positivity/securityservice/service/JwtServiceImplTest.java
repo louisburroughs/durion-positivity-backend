@@ -697,5 +697,55 @@ class JwtServiceImplTest {
             UUID extractedFromRefresh = sut.getPersonIdFromToken(pair.refreshToken());
             assertThat(extractedFromRefresh).isNull();
         }
+
+        @Test
+        @DisplayName("getPersonIdFromToken returns null when personId claim contains a malformed UUID")
+        void getPersonIdFromToken_malformedUuid_returnsNull() {
+            SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+            String tokenWithMalformedPersonId = Jwts.builder()
+                    .subject("alice")
+                    .claim(JwtService.PERSON_ID, "not-a-valid-uuid")
+                    .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
+                    .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
+                    .signWith(key)
+                    .compact();
+
+            UUID personId = sut.getPersonIdFromToken(tokenWithMalformedPersonId);
+            assertThat(personId).isNull();
+        }
+
+        @Test
+        @DisplayName("refreshAccessToken forwards personId from user record into the new access token")
+        void refreshAccessToken_forwardsPersonIdFromUser_intoNewAccessToken() {
+            UUID personId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+            UUID userId = UUID.randomUUID();
+            JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, null, Set.of("ADMIN"));
+            String refreshToken = tokenPair.refreshToken();
+
+            JwtToken stored = new JwtToken();
+            stored.setToken(tokenPair.accessToken());
+            stored.setRefreshToken(refreshToken);
+            stored.setIssuedAt(Instant.now(TEST_CLOCK));
+            stored.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(600));
+            stored.setRefreshExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(1200));
+            stored.setSubject(userId.toString());
+
+            when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
+            doReturn(Optional.of(stored))
+                    .doReturn(Optional.of(stored))
+                    .when(jwtTokenRepository)
+                    .findByRefreshToken(refreshToken);
+            when(userService.getUserById(userId)).thenReturn(Optional.of(UserDto.builder()
+                    .id(userId)
+                    .username(userId.toString())
+                    .roles(Set.of("ADMIN"))
+                    .personId(personId)
+                    .build()));
+
+            JwtService.TokenPair refreshed = sut.refreshAccessToken(refreshToken);
+
+            UUID extractedPersonId = sut.getPersonIdFromToken(refreshed.accessToken());
+            assertThat(extractedPersonId).isEqualTo(personId);
+        }
     }
 }

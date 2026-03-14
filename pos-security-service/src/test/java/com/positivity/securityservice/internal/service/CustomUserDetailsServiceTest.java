@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -190,6 +191,69 @@ class CustomUserDetailsServiceTest {
             assertThatThrownBy(() -> sut.loadUserByUsername("ghost"))
                     .isInstanceOf(UsernameNotFoundException.class)
                     .hasMessageContaining("ghost");
+        }
+    }
+
+    // =========================================================
+    // AUTH-005: SecurityUserPrincipal record accessors
+    // Covers userId(), personId(), getUsername(), getPassword(), getAuthorities()
+    // =========================================================
+
+    @Nested
+    @DisplayName("AUTH-005: SecurityUserPrincipal record accessor coverage")
+    class SecurityUserPrincipalAccessors {
+
+        @Test
+        @DisplayName("T15: userId() returns the UUID from the User entity")
+        void t15_userId_returnsEntityId() {
+            UUID expectedId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+            User entity = entityWithDefaults("useridtest");
+            entity.setId(expectedId);
+            when(userRepository.findByUsername("useridtest")).thenReturn(Optional.of(entity));
+
+            var principal = (CustomUserDetailsService.SecurityUserPrincipal)
+                    sut.loadUserByUsername("useridtest");
+
+            assertThat(principal.userId()).isEqualTo(expectedId);
+        }
+
+        @Test
+        @DisplayName("T16: personId() returns null when entity has no personId")
+        void t16_personId_returnsNull_whenNotSet() {
+            User entity = entityWithDefaults("nopersonid");
+            when(userRepository.findByUsername("nopersonid")).thenReturn(Optional.of(entity));
+
+            var principal = (CustomUserDetailsService.SecurityUserPrincipal)
+                    sut.loadUserByUsername("nopersonid");
+
+            assertThat(principal.personId()).isNull();
+        }
+
+        @Test
+        @DisplayName("T16b: personId() returns the UUID when entity has personId set")
+        void t16b_personId_returnsUuid_whenSet() {
+            UUID expectedPersonId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+            User entity = entityWithDefaults("withpersonid");
+            entity.setPersonId(expectedPersonId);
+            when(userRepository.findByUsername("withpersonid")).thenReturn(Optional.of(entity));
+
+            var principal = (CustomUserDetailsService.SecurityUserPrincipal)
+                    sut.loadUserByUsername("withpersonid");
+
+            assertThat(principal.personId()).isEqualTo(expectedPersonId);
+        }
+
+        @Test
+        @DisplayName("T18: getUsername(), getPassword(), getAuthorities() delegate through the record")
+        void t18_getUsername_getPassword_getAuthorities_delegateCorrectly() {
+            User entity = entityWithDefaults("delegatetest");
+            when(userRepository.findByUsername("delegatetest")).thenReturn(Optional.of(entity));
+
+            UserDetails principal = sut.loadUserByUsername("delegatetest");
+
+            assertThat(principal.getUsername()).isEqualTo("delegatetest");
+            assertThat(principal.getPassword()).isEqualTo("{noop}password");
+            assertThat(principal.getAuthorities()).isEmpty();
         }
     }
 
