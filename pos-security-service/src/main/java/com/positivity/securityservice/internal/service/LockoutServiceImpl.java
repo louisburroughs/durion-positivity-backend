@@ -17,7 +17,8 @@ import java.util.UUID;
 /**
  * Production implementation of {@link LockoutService} for AUTH-003.
  *
- * <p>Applies progressive backoff lockout policy defined in
+ * <p>
+ * Applies progressive backoff lockout policy defined in
  * {@code pos.security.lockout.*} configuration properties.
  *
  * @since AUTH-003
@@ -26,6 +27,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LockoutServiceImpl implements LockoutService {
 
+    private static final String USER_NOT_FOUND = "User not found: ";
     private final UserRepository userRepository;
     private final LockoutPolicy lockoutPolicy;
 
@@ -33,7 +35,7 @@ public class LockoutServiceImpl implements LockoutService {
     @Transactional
     public void recordFailedAttempt(@NonNull UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userId));
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         Instant now = Instant.now();
         Instant priorLastFailedAt = user.getLastFailedLoginAt();
@@ -65,7 +67,7 @@ public class LockoutServiceImpl implements LockoutService {
     @Transactional
     public void recordSuccessfulLogin(@NonNull UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userId));
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         user.setFailedLoginAttempts(0);
         user.setLastSuccessfulLoginAt(Instant.now());
@@ -79,7 +81,7 @@ public class LockoutServiceImpl implements LockoutService {
     @Override
     public boolean isLockedOut(@NonNull UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userId));
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         return !user.isAccountNonLocked()
                 && (user.getLockedUntil() == null || user.getLockedUntil().isAfter(Instant.now()));
@@ -89,7 +91,7 @@ public class LockoutServiceImpl implements LockoutService {
     @Transactional
     public boolean unlockIfCooldownExpired(@NonNull UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userId));
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         if (user.isAccountNonLocked()) {
             return false;
