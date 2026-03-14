@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
@@ -13,6 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -61,7 +63,7 @@ class CustomUserDetailsServiceTest {
                 .isTrue();
         assertThat(user.getFailedLoginAttempts())
                 .as("failedLoginAttempts defaults to 0")
-                .isEqualTo(0);
+                .isZero();
     }
 
     // =========================================================
@@ -165,6 +167,26 @@ class CustomUserDetailsServiceTest {
                     .as("principal.isCredentialsNonExpired() must reflect entity.credentialsNonExpired == false; "
                             + "fails RED because 3-arg constructor defaults to true")
                     .isFalse();
+        }
+    }
+
+    // =========================================================
+    // T17 — loadUserByUsername must throw UsernameNotFoundException when user not found
+    // Expected: PASS
+    // =========================================================
+
+    @Nested
+    @DisplayName("T17: loadUserByUsername throws UsernameNotFoundException for unknown user")
+    class UserNotFoundPath {
+
+        @Test
+        @DisplayName("T17: throws UsernameNotFoundException with username in message when not found")
+        void t17_loadUserByUsername_throwsUsernameNotFoundException_whenUserNotFound() {
+            when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> sut.loadUserByUsername("ghost"))
+                    .isInstanceOf(UsernameNotFoundException.class)
+                    .hasMessageContaining("ghost");
         }
     }
 
