@@ -1,6 +1,8 @@
 package com.positivity.securityservice.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -8,31 +10,45 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 
+import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.context.request.WebRequest;
 
 import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.service.AuditEventService;
 
 /**
- * Unit tests for GlobalExceptionHandler PERM-004 changes.
- *
- * <p>
- * Covers the {@code handleInvalidRefreshTokenException} handler added as part
- * of
- * PERM-004 (compact permission bitset encoding).
+ * Unit tests for GlobalExceptionHandler — covers PERM-004 and AUTH-003 handlers.
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class GlobalExceptionHandlerTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -50,16 +66,40 @@ class GlobalExceptionHandlerTest {
     @BeforeEach
     void setUp() {
         when(clock.instant()).thenReturn(TEST_CLOCK.instant());
-        org.mockito.Mockito.lenient().when(clock.getZone()).thenReturn(TEST_CLOCK.getZone());
+        when(clock.getZone()).thenReturn(TEST_CLOCK.getZone());
     }
 
-    /**
-     * Verifies that {@code handleInvalidRefreshTokenException} maps
-     * {@link InvalidRefreshTokenException} to 401 Unauthorized with the
-     * {@code INVALID_REFRESH_TOKEN} error code.
-     *
-     * Issue: PERM-004
-     */
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    // ---------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------
+
+    private WebRequest requestWithHeader() {
+        WebRequest req = mock(WebRequest.class);
+        when(req.getHeader("X-Correlation-Id")).thenReturn(CORRELATION_ID);
+        return req;
+    }
+
+    private WebRequest requestWithoutHeader() {
+        WebRequest req = mock(WebRequest.class);
+        when(req.getHeader("X-Correlation-Id")).thenReturn(null);
+        return req;
+    }
+
+    private WebRequest requestWithBlankHeader() {
+        WebRequest req = mock(WebRequest.class);
+        when(req.getHeader("X-Correlation-Id")).thenReturn("   ");
+        return req;
+    }
+
+    // ---------------------------------------------------------------
+    // Existing PERM-004 tests (preserved)
+    // ---------------------------------------------------------------
+
     @Test
     @DisplayName("handleInvalidRefreshTokenException returns 401 Unauthorized with INVALID_REFRESH_TOKEN code")
     void handleInvalidRefreshTokenException_returns401WithCorrectErrorCode() {
@@ -79,12 +119,6 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
     }
 
-    /**
-     * Verifies that {@code handleInvalidRefreshTokenException} generates a
-     * correlation ID when no {@code X-Correlation-Id} header is present.
-     *
-     * Issue: PERM-004
-     */
     @Test
     @DisplayName("handleInvalidRefreshTokenException generates correlation ID when header is absent")
     void handleInvalidRefreshTokenException_generatesCorrelationIdWhenHeaderAbsent() {
@@ -99,4 +133,492 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().code()).isEqualTo("INVALID_REFRESH_TOKEN");
         assertThat(response.getBody().correlationId()).isNotBlank();
     }
+
+    // ---------------------------------------------------------------
+    // AUTH-003: handleLockedException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleLockedException")
+    class HandleLockedException {
+
+        @Test
+        @DisplayName("returns 401 ACCOUNT_LOCKED with correlation ID from header")
+        void returns401WithCorrelationIdFromHeader() {
+            LockedException ex = new LockedException("Account locked");
+
+            ResponseEntity<ErrorResponse> response = sut.handleLockedException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("ACCOUNT_LOCKED");
+            assertThat(response.getBody().status()).isEqualTo(401);
+            assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
+        }
+
+        @Test
+        @DisplayName("generates correlation ID when header is absent")
+        void generatesCorrelationIdWhenHeaderAbsent() {
+            LockedException ex = new LockedException("Account locked");
+
+            ResponseEntity<ErrorResponse> response = sut.handleLockedException(ex, requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("ACCOUNT_LOCKED");
+            assertThat(response.getBody().correlationId()).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("generates correlation ID when header is blank")
+        void generatesCorrelationIdWhenHeaderIsBlank() {
+            LockedException ex = new LockedException("Account locked");
+
+            ResponseEntity<ErrorResponse> response = sut.handleLockedException(ex, requestWithBlankHeader());
+
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().correlationId()).isNotBlank();
+            assertThat(response.getBody().correlationId()).isNotEqualTo("   ");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleBadCredentialsException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleBadCredentialsException")
+    class HandleBadCredentialsException {
+
+        @Test
+        @DisplayName("returns 401 INVALID_CREDENTIALS")
+        void returns401InvalidCredentials() {
+            BadCredentialsException ex = new BadCredentialsException("bad password");
+
+            ResponseEntity<ErrorResponse> response = sut.handleBadCredentialsException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INVALID_CREDENTIALS");
+            assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleRoleNotFoundException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleRoleNotFoundException")
+    class HandleRoleNotFoundException {
+
+        @Test
+        @DisplayName("returns 404 ROLE_NOT_FOUND")
+        void returns404RoleNotFound() {
+            RoleNotFoundException ex = new RoleNotFoundException("Role not found: ADMIN");
+
+            ResponseEntity<ErrorResponse> response = sut.handleRoleNotFoundException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("ROLE_NOT_FOUND");
+            assertThat(response.getBody().message()).isEqualTo("Role not found: ADMIN");
+            assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleUserNotFoundException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleUserNotFoundException")
+    class HandleUserNotFoundException {
+
+        @Test
+        @DisplayName("returns 404 USER_NOT_FOUND")
+        void returns404UserNotFound() {
+            UserNotFoundException ex = new UserNotFoundException("User not found");
+
+            ResponseEntity<ErrorResponse> response = sut.handleUserNotFoundException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("USER_NOT_FOUND");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleRoleAssignmentNotFoundException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleRoleAssignmentNotFoundException")
+    class HandleRoleAssignmentNotFoundException {
+
+        @Test
+        @DisplayName("returns 404 ROLE_ASSIGNMENT_NOT_FOUND")
+        void returns404RoleAssignmentNotFound() {
+            RoleAssignmentNotFoundException ex = new RoleAssignmentNotFoundException("Assignment not found");
+
+            ResponseEntity<ErrorResponse> response = sut.handleRoleAssignmentNotFoundException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("ROLE_ASSIGNMENT_NOT_FOUND");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handlePermissionNotFoundException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handlePermissionNotFoundException")
+    class HandlePermissionNotFoundException {
+
+        @Test
+        @DisplayName("returns 404 PERMISSION_NOT_FOUND")
+        void returns404PermissionNotFound() {
+            PermissionNotFoundException ex = new PermissionNotFoundException("Permission not found");
+
+            ResponseEntity<ErrorResponse> response = sut.handlePermissionNotFoundException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("PERMISSION_NOT_FOUND");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleIllegalArgumentException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleIllegalArgumentException")
+    class HandleIllegalArgumentException {
+
+        @Test
+        @DisplayName("returns 400 INVALID_REQUEST with message when present")
+        void returns400WithMessage() {
+            IllegalArgumentException ex = new IllegalArgumentException("bad param");
+
+            ResponseEntity<ErrorResponse> response = sut.handleIllegalArgumentException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
+            assertThat(response.getBody().message()).isEqualTo("bad param");
+        }
+
+        @Test
+        @DisplayName("returns 400 INVALID_REQUEST with default message when null")
+        void returns400WithDefaultMessageWhenNull() {
+            IllegalArgumentException ex = new IllegalArgumentException((String) null);
+
+            ResponseEntity<ErrorResponse> response = sut.handleIllegalArgumentException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
+            assertThat(response.getBody().message()).isEqualTo("Invalid request parameters");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleBadRequestExceptions
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleBadRequestExceptions")
+    class HandleBadRequestExceptions {
+
+        @Test
+        @DisplayName("returns 400 INVALID_REQUEST for HttpMessageNotReadableException")
+        void returns400ForHttpMessageNotReadable() {
+            HttpMessageNotReadableException ex = mock(HttpMessageNotReadableException.class);
+            when(ex.getMessage()).thenReturn("JSON parse error");
+
+            ResponseEntity<ErrorResponse> response = sut.handleBadRequestExceptions(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
+            assertThat(response.getBody().message()).isEqualTo("Invalid request parameters");
+        }
+
+        @Test
+        @DisplayName("returns 400 INVALID_REQUEST for MissingServletRequestParameterException")
+        void returns400ForMissingParameter() {
+            MissingServletRequestParameterException ex = new MissingServletRequestParameterException("id", "String");
+
+            ResponseEntity<ErrorResponse> response = sut.handleBadRequestExceptions(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleAuthorizationDeniedException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleAuthorizationDeniedException")
+    class HandleAuthorizationDeniedException {
+
+        @Test
+        @DisplayName("returns 403 FORBIDDEN when audit service is unavailable")
+        void returns403WithNullAuditService() {
+            AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
+            HttpServletRequest httpReq = mock(HttpServletRequest.class);
+            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
+
+            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+                    ex, requestWithHeader(), httpReq);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("FORBIDDEN");
+        }
+
+        @Test
+        @DisplayName("returns 403 FORBIDDEN and emits audit event when service is available")
+        void returns403AndEmitsAuditEventWhenServiceAvailable() {
+            AuthorizationDeniedException ex = new AuthorizationDeniedException("access denied to resource");
+            HttpServletRequest httpReq = mock(HttpServletRequest.class);
+            when(httpReq.getRequestURI()).thenReturn("/api/orders");
+            AuditEventService auditService = mock(AuditEventService.class);
+            when(auditEventServiceProvider.getIfAvailable()).thenReturn(auditService);
+
+            Authentication auth = mock(Authentication.class);
+            when(auth.isAuthenticated()).thenReturn(true);
+            when(auth.getName()).thenReturn("alice");
+            SecurityContextHolder.getContext().setAuthentication(auth);
+
+            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+                    ex, requestWithHeader(), httpReq);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("FORBIDDEN");
+        }
+
+        @Test
+        @DisplayName("returns 403 FORBIDDEN and logs warning when audit event creation throws")
+        void returns403WhenAuditEventThrows() {
+            AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
+            HttpServletRequest httpReq = mock(HttpServletRequest.class);
+            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            AuditEventService auditService = mock(AuditEventService.class);
+            when(auditEventServiceProvider.getIfAvailable()).thenReturn(auditService);
+            doThrow(new RuntimeException("Audit DB unavailable")).when(auditService).createEvent(any());
+
+            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+                    ex, requestWithHeader(), httpReq);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("FORBIDDEN");
+        }
+
+        @Test
+        @DisplayName("returns 403 FORBIDDEN with null httpServletRequest (falls back to 'unknown' URI)")
+        void returns403WithNullHttpServletRequest() {
+            AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
+            when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
+
+            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+                    ex, requestWithHeader(), null);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+
+        @Test
+        @DisplayName("returns 403 FORBIDDEN with null exception message (falls back to 'unknown')")
+        void returns403WhenExceptionMessageIsNull() {
+            AuthorizationDeniedException ex = mock(AuthorizationDeniedException.class);
+            when(ex.getMessage()).thenReturn(null);
+            HttpServletRequest httpReq = mock(HttpServletRequest.class);
+            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
+
+            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+                    ex, requestWithHeader(), httpReq);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleIllegalStateException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleIllegalStateException")
+    class HandleIllegalStateException {
+
+        @Test
+        @DisplayName("returns 409 ROLE_ASSIGNMENT_CONFLICT when message contains 'Overlapping role assignment'")
+        void returns409ForOverlappingRoleAssignment() {
+            IllegalStateException ex = new IllegalStateException("Overlapping role assignment detected");
+
+            ResponseEntity<ErrorResponse> response = sut.handleIllegalStateException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("ROLE_ASSIGNMENT_CONFLICT");
+        }
+
+        @Test
+        @DisplayName("returns 400 INVALID_STATE for non-overlap illegal state")
+        void returns400ForOtherIllegalState() {
+            IllegalStateException ex = new IllegalStateException("Some other invalid state");
+
+            ResponseEntity<ErrorResponse> response = sut.handleIllegalStateException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INVALID_STATE");
+            assertThat(response.getBody().message()).isEqualTo("Some other invalid state");
+        }
+
+        @Test
+        @DisplayName("returns 400 INVALID_STATE with default message when exception message is null")
+        void returns400WithDefaultMessageWhenNull() {
+            IllegalStateException ex = new IllegalStateException((String) null);
+
+            ResponseEntity<ErrorResponse> response = sut.handleIllegalStateException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INVALID_STATE");
+            assertThat(response.getBody().message()).isEqualTo("Invalid state");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleOptimisticLockingFailure
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleOptimisticLockingFailure")
+    class HandleOptimisticLockingFailure {
+
+        @Test
+        @DisplayName("returns 409 CONCURRENCY_CONFLICT")
+        void returns409ConcurrencyConflict() {
+            ObjectOptimisticLockingFailureException ex = new ObjectOptimisticLockingFailureException(
+                    Object.class, "id-123");
+
+            ResponseEntity<ErrorResponse> response = sut.handleOptimisticLockingFailure(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("CONCURRENCY_CONFLICT");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleDuplicateRoleNameException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleDuplicateRoleNameException")
+    class HandleDuplicateRoleNameException {
+
+        @Test
+        @DisplayName("returns 409 DUPLICATE_ROLE_NAME")
+        void returns409DuplicateRoleName() {
+            DuplicateRoleNameException ex = new DuplicateRoleNameException("Role 'ADMIN' already exists");
+
+            ResponseEntity<ErrorResponse> response = sut.handleDuplicateRoleNameException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("DUPLICATE_ROLE_NAME");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleGenericException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleGenericException")
+    class HandleGenericException {
+
+        @Test
+        @DisplayName("returns 500 INTERNAL_SERVER_ERROR for unhandled exceptions")
+        void returns500InternalServerError() {
+            Exception ex = new RuntimeException("unexpected failure");
+
+            ResponseEntity<ErrorResponse> response = sut.handleGenericException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INTERNAL_SERVER_ERROR");
+            assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
+        }
+
+        @Test
+        @DisplayName("returns 500 and generates correlation ID when header is absent")
+        void returns500WithGeneratedCorrelationId() {
+            Exception ex = new RuntimeException("unexpected");
+
+            ResponseEntity<ErrorResponse> response = sut.handleGenericException(ex, requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().correlationId()).isNotBlank();
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // getCurrentUsername — via handleAuthorizationDeniedException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("getCurrentUsername — via SecurityContextHolder")
+    class GetCurrentUsername {
+
+        @Test
+        @DisplayName("returns authenticated username when security context has an authenticated principal")
+        void returnsUsernameWhenAuthenticated() {
+            Authentication auth = mock(Authentication.class);
+            when(auth.isAuthenticated()).thenReturn(true);
+            when(auth.getName()).thenReturn("bob");
+            SecurityContextHolder.getContext().setAuthentication(auth);
+
+            AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
+            HttpServletRequest httpReq = mock(HttpServletRequest.class);
+            when(httpReq.getRequestURI()).thenReturn("/api/thing");
+            when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
+
+            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+                    ex, requestWithHeader(), httpReq);
+
+            // Handler completed successfully — username was resolved from context
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+
+        @Test
+        @DisplayName("returns 'system' fallback when security context has no authentication")
+        void returnsSystemWhenNoAuthentication() {
+            SecurityContextHolder.clearContext(); // ensure no auth
+
+            AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
+            HttpServletRequest httpReq = mock(HttpServletRequest.class);
+            when(httpReq.getRequestURI()).thenReturn("/api/thing");
+            when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
+
+            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+                    ex, requestWithHeader(), httpReq);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
 }
+
