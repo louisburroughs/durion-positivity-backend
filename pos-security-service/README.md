@@ -8,26 +8,69 @@ compact permission bitset.
 
 ### JWT Token Contract
 
-Access tokens issued by `pos-security-service` include the following
-claims used by the gateway and services:
+Access tokens issued by `pos-security-service` include the following required claims used by the gateway and services:
 
 - `sub`: subject / username
-- `uid`: user UUID (preferred user identifier for downstream services)
+- `personId`: user/person UUID (canonical subject identifier for downstream services)
 - `jti`: token identifier
 - `iat`, `exp`: issued-at and expiry timestamps
 - `perm_bits`: Base64URL-encoded permission BitSet (Base64URL, no padding)
 - `perm_ver`: integer permission catalog version (gateway verifies this)
 
-Optional/legacy claims handled for migration:
-
-- `roles`: informational only; not relied on for permission checks
-- legacy `userId` claim is recognised when present for compatibility
-
 Notes:
 
-- Do not include an `authorities` claim for greenfield PERM mode; the
-  gateway decodes `perm_bits` and maps bit indexes to canonical
-  authority strings.
+- The token contract is explicit: `perm_bits` and `perm_ver` are required in greenfield PERM mode. `authorities` is not issued by `JwtService` in greenfield mode and should not be relied upon.
+- `roles` or legacy `userId` may be accepted for migration only where explicitly configured, but they are informational and not used for permission resolution.
+
+### Authentication Flow
+
+- Login uses Spring Security's `AuthenticationManager` + a `UserDetailsService` implementation. Credentials are verified by the configured `AuthenticationProvider` and `UserDetailsService` loads user details and account-state flags.
+- On successful authentication `JwtService` issues a token containing the required claims above.
+
+### Account State Flags
+
+- The `User` entity now includes typed account-state flags: `enabled`, `accountNonLocked`, `accountNonExpired`, `credentialsNonExpired` and metadata: `failedAttempts`, `lockedAt`, `lastSuccessfulLogin`.
+- Semantics:
+  - `enabled`: user allowed to authenticate (admin can enable/disable)
+  - `accountNonLocked`: false when the account is locked due to failed logins
+  - `accountNonExpired`: false when account is administratively or automatically expired
+  - `credentialsNonExpired`: false when password/credentials are expired
+- These flags are enforced by Spring Security during authentication and reflected in the token issuance flow.
+
+### Lockout Policy
+
+- A `LockoutService` implements configurable lockout behaviour: failure threshold, rolling window, progressive backoff, automatic cooldown unlock, and admin unlock.
+- Configuration keys (example): `security.lockout.threshold`, `security.lockout.windowMinutes`, `security.lockout.cooldownMinutes`, `security.lockout.backoffMultiplier`.
+- On lockout the `accountNonLocked` flag is set and `lockedAt` recorded; automatic unlock clears the flag after cooldown; admins may unlock via the admin API.
+
+### Admin Account-State API
+
+- Admin endpoints (secured with `@PreAuthorize("hasRole('ADMIN')")`):
+  - `POST /v1/users/{id}/unlock` — unlock account (200 OK)
+  - `POST /v1/users/{id}/enable` — enable account (200 OK)
+  - `POST /v1/users/{id}/disable` — disable account (200 OK)
+  - `POST /v1/users/{id}/expire-account` — mark account expired (200 OK)
+  - `POST /v1/users/{id}/expire-credentials` — expire credentials (200 OK)
+- Endpoints follow the platform error envelope and HTTP status guidelines from ADR-0017 (e.g., `403` for unauthorized, `404` when user not found).
+
+### Flyway Migrations
+
+- Flyway migrations add the new columns to the `users` table with safe defaults; see `src/main/resources/db/migration/` for migration scripts that backfill existing rows.
+
+### Metrics
+
+- Micrometer counters added for authentication observability:
+  - `auth.login.success` — increments on successful login
+  - `auth.login.failure` — tagged by `reason` (e.g., `BAD_CREDENTIALS`, `LOCKED`, `DISABLED`, `EXPIRED_CREDENTIALS`)
+
+### Events
+
+- All state-changing operations are annotated with `@EmitEvent` and the service registers `SecurityEventTypes` at startup. The registry contains 29 event types covering login, lockout, admin state changes, and token lifecycle events.
+
+### Exception Handling
+
+- `GlobalExceptionHandler` maps authentication/account state exceptions to typed error codes and standard error envelopes. Handled exceptions include `LockedException`, `DisabledException`, `AccountExpiredException`, `CredentialsExpiredException`, `BadCredentialsException`, and `AuthorizationDeniedException`.
+- `JsonAuthenticationEntryPoint` and `JsonAccessDeniedHandler` produce JSON error responses for authentication/authorization failures and are wired into `SecurityConfig.exceptionHandling()`.
 
 ### PermissionCode & Catalog
 
