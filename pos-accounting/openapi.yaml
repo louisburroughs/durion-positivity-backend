@@ -1885,17 +1885,17 @@ paths:
           content:
             '*/*':
               schema: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema: {}
         "201":
           description: Price override recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
         "422":
           description: Policy validation failed
           content:
@@ -1915,12 +1915,6 @@ paths:
               $ref: "#/components/schemas/CancellationRequest"
         required: true
       responses:
-        "201":
-          description: Cancellation recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "400":
           description: Invalid request parameters
           content:
@@ -1936,6 +1930,12 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Cancellation recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/ap/payments:
     post:
       tags:
@@ -2164,16 +2164,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "400":
-          description: Invalid account ID or date range
+        "200":
+          description: Journal line drilldown successful
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "200":
-          description: Journal line drilldown successful
+        "400":
+          description: Invalid account ID or date range
           content:
             application/json:
               schema:
@@ -2274,6 +2274,12 @@ paths:
           format: date
         example: 2024-12-31
       responses:
+        "200":
+          description: Balance sheet generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceSheetReport"
         "403":
           description: Forbidden - missing reporting:view:financial-statements
           content:
@@ -2282,12 +2288,6 @@ paths:
                 $ref: "#/components/schemas/BalanceSheetReport"
         "400":
           description: Invalid date
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BalanceSheetReport"
-        "200":
-          description: Balance sheet generated successfully
           content:
             application/json:
               schema:
@@ -2937,6 +2937,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Order not found
           content:
@@ -2945,12 +2951,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2976,6 +2976,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Order not found
           content:
@@ -2984,12 +2990,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
