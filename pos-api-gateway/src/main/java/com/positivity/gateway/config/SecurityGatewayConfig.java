@@ -1,18 +1,5 @@
 package com.positivity.gateway.config;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.UnsupportedJwtException;
-import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.SignatureException;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -25,15 +12,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import javax.crypto.SecretKey;
+
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -42,6 +31,20 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.config.CorsRegistry;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 import org.springframework.web.server.ServerWebExchange;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
+import io.micrometer.core.instrument.MeterRegistry;
 import reactor.core.publisher.Mono;
 
 @Configuration
@@ -195,7 +198,8 @@ public class SecurityGatewayConfig {
         try {
             Jws<Claims> jwsClaims = Jwts.parser()
                     .verifyWith(secretKey)
-                    // Issuer and audience validation will be enabled once emitted by the token service.
+                    // Issuer and audience validation will be enabled once emitted by the token
+                    // service.
                     .build()
                     .parseSignedClaims(token);
             return Optional.of(jwsClaims.getPayload());
@@ -304,12 +308,14 @@ public class SecurityGatewayConfig {
     }
 
     /**
-     * Compares the X-Authorities header value with the authorities derived from the token
+     * Compares the X-Authorities header value with the authorities derived from the
+     * token
      * in a way that is insensitive to ordering and extraneous whitespace.
      */
     private boolean authoritiesHeaderMismatch(String headerAuthorities, String tokenAuthorities) {
         if (!StringUtils.hasText(headerAuthorities)) {
-            // Only enforce mismatch checks when the inbound spoofable header is actually present.
+            // Only enforce mismatch checks when the inbound spoofable header is actually
+            // present.
             return false;
         }
         if (!StringUtils.hasText(tokenAuthorities)) {
