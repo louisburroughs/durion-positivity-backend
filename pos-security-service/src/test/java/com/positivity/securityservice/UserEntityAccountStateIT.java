@@ -19,14 +19,21 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 
 /**
- * Integration tests for {@link User} entity account-state field persistence — AUTH-002.
+ * Integration tests for {@link User} entity account-state field persistence —
+ * AUTH-002.
  *
- * <p>T15 verifies that account-state columns added by {@code V6__add_account_state_columns.sql}
- * are correctly mapped in the JPA entity and that values written to H2 are read back
- * accurately after flushing and clearing the persistence context.  These tests exercise
+ * <p>
+ * T15 verifies that account-state columns added by
+ * {@code V6__add_account_state_columns.sql}
+ * are correctly mapped in the JPA entity and that values written to H2 are read
+ * back
+ * accurately after flushing and clearing the persistence context. These tests
+ * exercise
  * only the entity/repository layer and are expected to PASS immediately.
  *
- * <p>Uses {@code @SpringBootTest(webEnvironment = NONE)} with the {@code test} profile
+ * <p>
+ * Uses {@code @SpringBootTest(webEnvironment = NONE)} with the {@code test}
+ * profile
  * to match the pattern established in {@code PermissionBitIndexTest}.
  *
  * Issue: AUTH-002
@@ -74,7 +81,8 @@ class UserEntityAccountStateIT {
                 .as("accountNonLocked must be persisted and retrieved as false")
                 .isFalse();
 
-        // Verify the remaining flags retain their entity defaults after a full round-trip
+        // Verify the remaining flags retain their entity defaults after a full
+        // round-trip
         assertThat(fetched.isAccountNonExpired())
                 .as("accountNonExpired default (true) must survive round-trip")
                 .isTrue();

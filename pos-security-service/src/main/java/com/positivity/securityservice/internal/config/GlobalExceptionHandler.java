@@ -26,6 +26,7 @@ import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
@@ -405,6 +406,22 @@ public class GlobalExceptionHandler {
                                                 ex.getMessage(),
                                                 HttpStatus.UNAUTHORIZED,
 
+                                                correlationId));
+        }
+
+        @ExceptionHandler(LockedException.class)
+        @ResponseStatus(HttpStatus.UNAUTHORIZED)
+        public ResponseEntity<ErrorResponse> handleLockedException(
+                        LockedException ex,
+                        WebRequest request) {
+                String correlationId = extractCorrelationId(request);
+                log.warn("Authentication denied (correlationId={}): account is locked", correlationId);
+                return ResponseEntity
+                                .status(HttpStatus.UNAUTHORIZED)
+                                .body(errorResponse(
+                                                "ACCOUNT_LOCKED",
+                                                "Account is temporarily locked due to repeated failed login attempts",
+                                                HttpStatus.UNAUTHORIZED,
                                                 correlationId));
         }
 

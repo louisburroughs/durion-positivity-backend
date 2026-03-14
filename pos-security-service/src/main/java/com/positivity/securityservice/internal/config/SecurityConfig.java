@@ -1,9 +1,10 @@
 package com.positivity.securityservice.internal.config;
 
-import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.security.GatewayHeaderAuthenticationFilter;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -20,11 +21,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@EnableConfigurationProperties(LockoutPolicy.class)
 @RequiredArgsConstructor
 public class SecurityConfig {
     private static final String V1_AUTH_LOGIN = "/v1/auth/login";
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final CustomUserDetailsService userDetailsService;
+    private final UserDetailsService userDetailsService;
 
     @Bean
     public GatewayHeaderAuthenticationFilter gatewayHeaderAuthenticationFilter() {

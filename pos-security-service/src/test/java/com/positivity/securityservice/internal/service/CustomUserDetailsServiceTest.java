@@ -22,11 +22,13 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 /**
  * Unit tests for {@link CustomUserDetailsService#loadUserByUsername(String)}.
  *
- * <p>Verifies that account-state flags from the {@code User} entity are correctly
+ * <p>
+ * Verifies that account-state flags from the {@code User} entity are correctly
  * propagated through the 7-arg Spring Security {@code User} constructor to the
  * returned {@code SecurityUserPrincipal} (via delegate).
  *
- * <p>T10: entity defaults (enabled=true, etc.) are correct at construction time.
+ * <p>
+ * T10: entity defaults (enabled=true, etc.) are correct at construction time.
  * T11-T14: false entity flags produce false principal account-state flags.
  */
 @ExtendWith(MockitoExtension.class)
@@ -171,7 +173,8 @@ class CustomUserDetailsServiceTest {
     }
 
     // =========================================================
-    // T17 — loadUserByUsername must throw UsernameNotFoundException when user not found
+    // T17 — loadUserByUsername must throw UsernameNotFoundException when user not
+    // found
     // Expected: PASS
     // =========================================================
 

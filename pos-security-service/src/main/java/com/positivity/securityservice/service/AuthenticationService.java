@@ -23,7 +23,9 @@ public interface AuthenticationService {
      *
      * @param request login credentials (username + password)
      * @return a {@link TokenPairResponse} containing access and refresh tokens
-     * @throws org.springframework.security.core.AuthenticationException if credentials are invalid
+     * @throws org.springframework.security.core.AuthenticationException if
+     *                                                                   credentials
+     *                                                                   are invalid
      */
     @NonNull
     TokenPairResponse login(@NonNull LoginRequest request);
