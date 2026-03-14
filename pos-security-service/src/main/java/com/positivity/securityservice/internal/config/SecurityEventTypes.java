@@ -17,7 +17,7 @@ public final class SecurityEventTypes {
 
         /**
          * All event type registrations for the security module.
-         * Total: 22 event types.
+         * Total: 28 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -35,13 +35,13 @@ public final class SecurityEventTypes {
                                 EventTypeRegistration.write("SECURITY_AUTH_REVOKE",
                                                 "Revoke JWT token immediately").build(),
 
-                                // PermissionController - 1 event
+                                // PermissionController - 2 events
                                 EventTypeRegistration.write("SECURITY_PERMISSION_REGISTER",
                                                 "Register permissions from a service").build(),
                                 EventTypeRegistration.fastRead("PERMISSION_DECODE_EXECUTE",
                                                 "Decode a perm_bits claim for diagnostics").build(),
 
-                                // RoleController - 4 events
+                                // RoleController - 7 events
                                 EventTypeRegistration.write("SECURITY_ROLE_CREATE",
                                                 "Create a new role").build(),
                                 EventTypeRegistration.write("SECURITY_ROLE_PERMISSIONS_UPDATE",
@@ -79,6 +79,18 @@ public final class SecurityEventTypes {
                                 EventTypeRegistration.write("SECURITY_USER_DELETE",
                                                 "Delete a user account").build(),
                                 EventTypeRegistration.write("SECURITY_USER_ASSIGN_ROLES",
-                                                "Assign roles to a user").build());
+                                                "Assign roles to a user").build(),
+
+                                // AdminAccountStateController - 5 events
+                                EventTypeRegistration.write("SECURITY_USER_UNLOCK",
+                                                "Unlock a user account").build(),
+                                EventTypeRegistration.write("SECURITY_USER_ENABLE",
+                                                "Enable a user account").build(),
+                                EventTypeRegistration.write("SECURITY_USER_DISABLE",
+                                                "Disable a user account").build(),
+                                EventTypeRegistration.write("SECURITY_USER_EXPIRE_ACCOUNT",
+                                                "Expire a user account").build(),
+                                EventTypeRegistration.write("SECURITY_USER_EXPIRE_CREDENTIALS",
+                                                "Expire user credentials").build());
         }
 }
