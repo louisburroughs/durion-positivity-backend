@@ -190,6 +190,26 @@ class AdminAccountStateServiceTest {
             assertThatThrownBy(() -> service.disable(USER_ID))
                     .isInstanceOf(UserNotFoundException.class);
         }
+
+        @Test
+        @DisplayName("disable() falls back to 'system' actor when no authentication in security context")
+        void disable_withNoSecurityContext_recordsSystemActor() {
+            User active = new User();
+            active.setId(USER_ID);
+            active.setEnabled(true);
+
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(active));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            // No authentication set in SecurityContextHolder — actor must default to "system"
+            SecurityContextHolder.clearContext();
+
+            service.disable(USER_ID);
+
+            assertThat(active.isEnabled()).isFalse();
+            assertThat(active.getDisabledBy()).isEqualTo("system");
+            assertThat(active.getDisabledAt()).isEqualTo(TEST_CLOCK.instant());
+        }
     }
 
     // ── ExpireAccount ─────────────────────────────────────────────────────────
