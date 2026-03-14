@@ -60,7 +60,7 @@ Durion-Processing.md
 **/Durion-Processing.md
 
 /logs/
-/logs/*.log
+/logs/*
 
 # Agent-local temporary output (avoid /tmp approval prompts)
 .agent-tmp/*

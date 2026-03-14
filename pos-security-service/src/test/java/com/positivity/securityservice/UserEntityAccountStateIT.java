@@ -2,6 +2,8 @@ package com.positivity.securityservice;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
@@ -81,6 +83,51 @@ class UserEntityAccountStateIT {
                 .isTrue();
         assertThat(fetched.getFailedLoginAttempts())
                 .as("failedLoginAttempts default (0) must survive round-trip")
-                .isEqualTo(0);
+                .isZero();
+    }
+
+    // =========================================================
+    // T16 — nullable audit-trail fields round-trip through JPA / H2
+    // Expected: PASS (entity mapping + migration are correct)
+    // =========================================================
+
+    @Test
+    @DisplayName("T16: User entity persists all nullable audit-trail fields correctly")
+    void t16_auditTrailFields_roundTripThroughRepository() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+        User user = new User();
+        user.setUsername("audit-it-" + UUID.randomUUID());
+        user.setPassword("{noop}password");
+        user.setLastFailedLoginAt(now);
+        user.setLastSuccessfulLoginAt(now);
+        user.setLockedAt(now);
+        user.setLockedUntil(now.plusSeconds(3600));
+        user.setDisabledAt(now);
+        user.setDisabledBy("admin@example.com");
+        user.setAccountExpiresAt(now.plusSeconds(7200));
+        user.setCredentialsExpireAt(now.plusSeconds(86400));
+        user.setLastLoginIp("192.168.1.100");
+        user.setLastLoginUserAgent("Mozilla/5.0 (Test)");
+
+        User saved = userRepository.saveAndFlush(user);
+        entityManager.clear();
+
+        User fetched = userRepository.findById(saved.getId())
+                .orElseThrow(() -> new AssertionError("User not found after saveAndFlush — ID: " + saved.getId()));
+
+        assertThat(fetched.getLastFailedLoginAt()).isNotNull();
+        assertThat(fetched.getLastSuccessfulLoginAt()).isNotNull();
+        assertThat(fetched.getLockedAt()).isNotNull();
+        assertThat(fetched.getLockedUntil()).isAfter(now);
+        assertThat(fetched.getDisabledAt()).isNotNull();
+        assertThat(fetched.getDisabledBy()).isEqualTo("admin@example.com");
+        assertThat(fetched.getAccountExpiresAt()).isAfter(now);
+        assertThat(fetched.getCredentialsExpireAt()).isAfter(now);
+        assertThat(fetched.getLastLoginIp()).isEqualTo("192.168.1.100");
+        assertThat(fetched.getLastLoginUserAgent()).isEqualTo("Mozilla/5.0 (Test)");
+        // Spring Data auditing must populate these on first save
+        assertThat(fetched.getCreatedAt()).isNotNull();
+        assertThat(fetched.getUpdatedAt()).isNotNull();
     }
 }
