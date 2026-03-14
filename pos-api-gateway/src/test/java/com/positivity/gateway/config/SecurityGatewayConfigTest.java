@@ -10,6 +10,7 @@ import java.util.BitSet;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.crypto.SecretKey;
 import org.junit.jupiter.api.Nested;
@@ -29,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Regression tests for gateway JWT validation, permission decoding, and
  * header trust-boundary behavior.
  *
- * Issue: PERM-006, PERM-007, PERM-008, PERM-009, PERM-010, PERM-011.
+ * Issue: PERM-006, PERM-007, PERM-008, PERM-009, PERM-010, PERM-011, AUTH-007.
  */
 class SecurityGatewayConfigTest {
 
@@ -113,6 +114,32 @@ class SecurityGatewayConfigTest {
                 .expiration(new Date(System.currentTimeMillis() + 3_600_000))
                 .signWith(TEST_KEY)
                 .compact();
+    }
+
+    /**
+     * Builds a canonical AUTH-005 access token with the full claim set emitted by
+     * {@code JwtServiceImpl.generateTokenPair()}: {@code jti}, {@code sub},
+     * {@code uid}, {@code username}, {@code perm_bits}, {@code perm_ver}, {@code iat},
+     * and optionally {@code personId}.
+     *
+     * <p>Does NOT include the legacy {@code authorities} claim.
+     */
+    private static String buildCanonicalToken(
+            String sub, String uid, String personId, String permBits, int permVer) {
+        var builder = Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(sub)
+                .claim("uid", uid)
+                .claim("username", sub)
+                .claim("perm_bits", permBits)
+                .claim("perm_ver", permVer)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 3_600_000))
+                .signWith(TEST_KEY);
+        if (personId != null) {
+            builder = builder.claim("personId", personId);
+        }
+        return builder.compact();
     }
 
     // ── PERM-006 / PERM-007 — local JWT validation & bitset decode ───────────
@@ -936,6 +963,255 @@ class SecurityGatewayConfigTest {
         @Test
         void authorityForBit_outOfRange_returnsNull() {
             assertThat(GatewayPermissionCatalog.authorityForBit(215)).isNull();
+        }
+    }
+
+    // ── AUTH-007 — Gateway canonical claim enforcement alignment ─────────────
+
+    /**
+     * Verifies that pos-api-gateway JWT enforcement remains aligned with the
+     * canonical AUTH-005 token claims contract ({@code perm_bits}, {@code perm_ver},
+     * {@code sub}, {@code uid}, {@code jti}, {@code personId}).
+     *
+     * <p>These tests document and pin the alignment between pos-security-service
+     * token issuance and pos-api-gateway token enforcement.
+     *
+     * <p>Issue: AUTH-007
+     */
+    @Nested
+    class Auth007GatewayAlignmentTests {
+
+        /**
+         * A canonical AUTH-005 token (jti, sub, uid, username, perm_bits, perm_ver=1,
+         * personId) is accepted by the gateway and the downstream context headers
+         * are populated from the token claims.
+         */
+        @Test
+        void canonicalToken_withFullAuth005Claims_isForwarded_withCorrectDownstreamHeaders() {
+            String uid = UUID.randomUUID().toString();
+            String personId = UUID.randomUUID().toString();
+            // bits 116 = people:employee:view, 117 = people:employee:create
+            String permBits = encodePermBits(116, 117);
+            String token = buildCanonicalToken("alice", uid, personId, permBits, 1);
+
+            GatewayAuthProperties props = new GatewayAuthProperties();
+            props.setStripInboundIdentityHeaders(true);
+            GlobalFilter filter = new SecurityGatewayConfig(
+                    TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                    .authFilter();
+            AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+            GatewayFilterChain chain = exchange -> {
+                downstreamHeaders.set(exchange.getRequest().getHeaders());
+                return Mono.empty();
+            };
+
+            var exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.get("/people/v1/employees")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .build());
+
+            filter.filter(exchange, chain).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+            assertThat(downstreamHeaders.get()).isNotNull();
+            assertThat(downstreamHeaders.get().getFirst("X-User")).isEqualTo("alice");
+            assertThat(downstreamHeaders.get().getFirst("X-User-Id")).isEqualTo(uid);
+            assertThat(downstreamHeaders.get().getFirst("X-Authorities"))
+                    .contains("PERM_people:employee:view")
+                    .contains("PERM_people:employee:create");
+        }
+
+        /**
+         * A canonical token without the optional {@code personId} claim is accepted.
+         * The {@code personId} is optional per the AUTH-005 contract.
+         */
+        @Test
+        void canonicalToken_withoutPersonId_isAccepted() {
+            String uid = UUID.randomUUID().toString();
+            String permBits = encodePermBits(116);
+            String token = buildCanonicalToken("alice", uid, null, permBits, 1);
+
+            GlobalFilter filter = new SecurityGatewayConfig(
+                    TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(),
+                    new SimpleMeterRegistry())
+                    .authFilter();
+            AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+            GatewayFilterChain chain = exchange -> {
+                downstreamHeaders.set(exchange.getRequest().getHeaders());
+                return Mono.empty();
+            };
+
+            var exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.get("/people/v1/employees")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .build());
+
+            filter.filter(exchange, chain).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+            assertThat(downstreamHeaders.get()).isNotNull();
+            assertThat(downstreamHeaders.get().getFirst("X-User")).isEqualTo("alice");
+            assertThat(downstreamHeaders.get().getFirst("X-User-Id")).isEqualTo(uid);
+        }
+
+        /**
+         * A canonical token that does NOT include the legacy {@code authorities} claim
+         * is resolved via the {@code perm_bits} decode path, not the legacy fallback.
+         *
+         * <p>Ensures the gateway never relies on an {@code authorities} claim when a
+         * canonical token is presented.
+         */
+        @Test
+        void canonicalToken_withNoAuthoritiesClaim_usesPermBitsPath_notLegacyFallback() {
+            String uid = UUID.randomUUID().toString();
+            // bit 0 = accounting:je:view
+            String permBits = encodePermBits(0);
+            // buildCanonicalToken never adds an 'authorities' claim
+            String token = buildCanonicalToken("alice", uid, null, permBits, 1);
+
+            GlobalFilter filter = new SecurityGatewayConfig(
+                    TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(),
+                    new SimpleMeterRegistry())
+                    .authFilter();
+            AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+            GatewayFilterChain chain = exchange -> {
+                downstreamHeaders.set(exchange.getRequest().getHeaders());
+                return Mono.empty();
+            };
+
+            var exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.get("/accounting/v1/journal-entries")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .build());
+
+            filter.filter(exchange, chain).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+            assertThat(downstreamHeaders.get()).isNotNull();
+            String authorities = downstreamHeaders.get().getFirst("X-Authorities");
+            assertThat(authorities)
+                    .contains("PERM_accounting:je:view")
+                    .doesNotContain("ROLE_");
+        }
+
+        /**
+         * A spoofed {@code X-Authorities} header in the inbound request is stripped
+         * and replaced with the token-derived perm_bits value.
+         *
+         * <p>Verifies the gateway trust boundary is enforced: callers cannot inject
+         * authority claims via headers when presenting a canonical token.
+         */
+        @Test
+        void canonicalToken_spoofedXAuthoritiesHeader_isStrippedAndReplacedByPermBitsValue() {
+            String uid = UUID.randomUUID().toString();
+            // bit 116 = people:employee:view only
+            String permBits = encodePermBits(116);
+            String token = buildCanonicalToken("alice", uid, null, permBits, 1);
+
+            GatewayAuthProperties props = new GatewayAuthProperties();
+            props.setStripInboundIdentityHeaders(true);
+            GlobalFilter filter = new SecurityGatewayConfig(
+                    TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                    .authFilter();
+            AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+            GatewayFilterChain chain = exchange -> {
+                downstreamHeaders.set(exchange.getRequest().getHeaders());
+                return Mono.empty();
+            };
+
+            var exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.get("/people/v1/employees")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .header("X-Authorities", "ROLE_SUPER_ADMIN,PERM_all:access:grant")
+                            .build());
+
+            filter.filter(exchange, chain).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+            assertThat(downstreamHeaders.get()).isNotNull();
+            String downstreamAuthorities = downstreamHeaders.get().getFirst("X-Authorities");
+            assertThat(downstreamAuthorities)
+                    .doesNotContain("ROLE_SUPER_ADMIN")
+                    .doesNotContain("PERM_all:access:grant")
+                    .contains("PERM_people:employee:view");
+        }
+
+        /**
+         * A spoofed {@code X-User} header in the inbound request is stripped and
+         * replaced with the token {@code sub} claim value.
+         *
+         * <p>Verifies that callers cannot override the authenticated identity via
+         * the X-User header when a canonical token is presented.
+         */
+        @Test
+        void canonicalToken_inboundXUserHeader_isStrippedAndReplacedByTokenSubject() {
+            String uid = UUID.randomUUID().toString();
+            String permBits = encodePermBits(116);
+            String token = buildCanonicalToken("alice", uid, null, permBits, 1);
+
+            GatewayAuthProperties props = new GatewayAuthProperties();
+            props.setStripInboundIdentityHeaders(true);
+            GlobalFilter filter = new SecurityGatewayConfig(
+                    TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                    .authFilter();
+            AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+            GatewayFilterChain chain = exchange -> {
+                downstreamHeaders.set(exchange.getRequest().getHeaders());
+                return Mono.empty();
+            };
+
+            var exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.get("/people/v1/employees")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .header("X-User", "mallory-injected-identity")
+                            .build());
+
+            filter.filter(exchange, chain).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+            assertThat(downstreamHeaders.get()).isNotNull();
+            assertThat(downstreamHeaders.get().getFirst("X-User"))
+                    .isEqualTo("alice")
+                    .isNotEqualTo("mallory-injected-identity");
+        }
+
+        /**
+         * Spoofed inbound {@code X-User-Id} header is stripped and replaced with
+         * the {@code uid} claim value from the token.
+         *
+         * <p>Verifies that callers cannot override the authenticated user identity via
+         * the X-User-Id header when a canonical token is presented.
+         */
+        @Test
+        void canonicalToken_spoofedXUserIdHeader_isStrippedAndReplacedByTokenUid() {
+            String uid = UUID.randomUUID().toString();
+            String permBits = encodePermBits(116);
+            String token = buildCanonicalToken("alice", uid, null, permBits, 1);
+
+            GatewayAuthProperties props = new GatewayAuthProperties();
+            props.setStripInboundIdentityHeaders(true);
+            GlobalFilter filter = new SecurityGatewayConfig(
+                    TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                    .authFilter();
+            AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+            GatewayFilterChain chain = exchange -> {
+                downstreamHeaders.set(exchange.getRequest().getHeaders());
+                return Mono.empty();
+            };
+
+            var exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.get("/people/v1/employees")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .header("X-User-Id", "spoofed-user-id-injected-by-caller")
+                            .build());
+
+            filter.filter(exchange, chain).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+            assertThat(downstreamHeaders.get()).isNotNull();
+            assertThat(downstreamHeaders.get().getFirst("X-User-Id"))
+                    .isEqualTo(uid)
+                    .isNotEqualTo("spoofed-user-id-injected-by-caller");
         }
     }
 }
