@@ -4,6 +4,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
+import org.jspecify.annotations.Nullable;
 
 @Value
 @Builder
@@ -11,5 +12,6 @@ public class UserDto {
     UUID id;
     String username;
     Set<String> roles;
+    @Nullable UUID personId;
 }
 

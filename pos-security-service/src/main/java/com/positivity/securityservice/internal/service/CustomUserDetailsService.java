@@ -4,6 +4,7 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -36,11 +37,12 @@ public class CustomUserDetailsService implements UserDetailsService {
                                 user.isCredentialsNonExpired(),
                                 user.isAccountNonLocked(),
                                 authorities);
-                return new SecurityUserPrincipal(user.getId(), delegate);
+                return new SecurityUserPrincipal(user.getId(), user.getPersonId(), delegate);
         }
 
         public record SecurityUserPrincipal(
                         @NonNull UUID userId,
+                        @Nullable UUID personId,
                         org.springframework.security.core.userdetails.@NonNull User delegate)
                         implements UserDetails {
 

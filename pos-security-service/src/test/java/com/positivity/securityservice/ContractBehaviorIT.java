@@ -250,7 +250,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("T3: Refresh endpoint exchanges refresh token for new pair")
         void testRefreshTokenExchangeFlow() throws Exception {
                 // Arrange: Issue initial token pair
-                JwtService.TokenPair initialPair = jwtService.generateTokenPair(TEST_SUBJECT, TEST_USER_ID, TEST_ROLES);
+                JwtService.TokenPair initialPair = jwtService.generateTokenPair(TEST_SUBJECT, TEST_USER_ID, null, TEST_ROLES);
 
                 RefreshTokenRequest request = new RefreshTokenRequest(initialPair.refreshToken());
 

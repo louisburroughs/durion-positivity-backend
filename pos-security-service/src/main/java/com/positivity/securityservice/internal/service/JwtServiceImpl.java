@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
 import com.positivity.securityservice.internal.dto.UserDto;
@@ -92,7 +93,7 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public String generateToken(@NonNull String username, @NonNull UUID userId, @NonNull Set<String> roles) {
-        return generateTokenPair(username, userId, roles).accessToken();
+        return generateTokenPair(username, userId, null, roles).accessToken();
     }
 
     @Override
@@ -253,7 +254,7 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public TokenPair generateTokenPair(@NonNull String username, @NonNull UUID userId, @NonNull Set<String> roles) {
+    public TokenPair generateTokenPair(@NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles) {
         if (username == null || username.isBlank()) {
             throw new IllegalArgumentException("Username cannot be blank");
         }
@@ -277,7 +278,7 @@ public class JwtServiceImpl implements JwtService {
                 .collect(Collectors.toUnmodifiableSet());
         String permBits = PermissionBitsetCodec.encode(permCodes);
 
-        String accessToken = Jwts.builder()
+        var accessBuilder = Jwts.builder()
                 .id(accessJti)
                 .subject(username)
                 .claim(UID, userId.toString())
@@ -286,8 +287,13 @@ public class JwtServiceImpl implements JwtService {
                 .claim(PERM_VER, PermissionCode.CATALOG_VERSION)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(accessExpiry))
-                .signWith(secretKey)
-                .compact();
+                .signWith(secretKey);
+
+        if (personId != null) {
+            accessBuilder = accessBuilder.claim(PERSON_ID, personId.toString());
+        }
+
+        String accessToken = accessBuilder.compact();
 
         String refreshToken = Jwts.builder()
                 .id(refreshJti)
@@ -399,7 +405,22 @@ public class JwtServiceImpl implements JwtService {
 
         log.debug("Refreshed token pair: username={}", username);
 
-        return generateTokenPair(username, userId, roles);
+        return generateTokenPair(username, userId, user.getPersonId(), roles);
+    }
+
+    @Override
+    public @Nullable UUID getPersonIdFromToken(@NonNull String token) {
+        Claims claims = getClaims(token);
+        String raw = claims.get(PERSON_ID, String.class);
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException ex) {
+            log.debug("Invalid UUID value in 'personId' claim", ex);
+            return null;
+        }
     }
 
     private JwtParser jwtParser() {

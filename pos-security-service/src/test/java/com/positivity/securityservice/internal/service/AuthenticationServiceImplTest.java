@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -141,10 +143,10 @@ class AuthenticationServiceImplTest {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("testuser");
             when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(UUID.randomUUID(),
+                    new CustomUserDetailsService.SecurityUserPrincipal(UUID.randomUUID(), null,
                             new User("testuser", "password", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
 
             // GREEN: completes; verify PasswordEncoder.matches() was never called.
@@ -169,10 +171,10 @@ class AuthenticationServiceImplTest {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("alice");
             when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(UUID.randomUUID(),
+                    new CustomUserDetailsService.SecurityUserPrincipal(UUID.randomUUID(), null,
                             new User("alice", "secret", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
 
             // GREEN: delegates to authManager, completes normally.
@@ -237,13 +239,13 @@ class AuthenticationServiceImplTest {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("bob");
             when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(UUID.randomUUID(),
+                    new CustomUserDetailsService.SecurityUserPrincipal(UUID.randomUUID(), null,
                             new User("bob", "pass", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
 
             String fakeAccess = "access.token.stub";
             String fakeRefresh = "refresh.token.stub";
-            when(jwtService.generateTokenPair(any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair(fakeAccess, fakeRefresh));
 
             // reached.
@@ -259,6 +261,7 @@ class AuthenticationServiceImplTest {
             verify(jwtService).generateTokenPair(
                     argThat("bob"::equals),
                     any(UUID.class),
+                    isNull(),
                     any());
         }
     }
@@ -313,11 +316,11 @@ class AuthenticationServiceImplTest {
             when(successAuth.getName()).thenReturn("alice");
             when(successAuth.getPrincipal()).thenReturn(
                     new CustomUserDetailsService.SecurityUserPrincipal(
-                            userId,
+                            userId, null,
                             new org.springframework.security.core.userdetails.User(
                                     "alice", "pass", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("alice", "pass"));
@@ -359,11 +362,11 @@ class AuthenticationServiceImplTest {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("charlie");
             when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(roleUserId,
+                    new CustomUserDetailsService.SecurityUserPrincipal(roleUserId, null,
                             new User("charlie", "pass", List.of())));
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(roleAuthority));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("charlie", "pass"));
@@ -371,6 +374,7 @@ class AuthenticationServiceImplTest {
             verify(jwtService).generateTokenPair(
                     any(),
                     any(UUID.class),
+                    isNull(),
                     argThat(roles -> roles.contains("ADMIN") && !roles.contains("ROLE_ADMIN")));
         }
 
@@ -382,11 +386,11 @@ class AuthenticationServiceImplTest {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("dave");
             when(successAuth.getPrincipal()).thenReturn(
-                    new CustomUserDetailsService.SecurityUserPrincipal(roleUserId,
+                    new CustomUserDetailsService.SecurityUserPrincipal(roleUserId, null,
                             new User("dave", "pass", List.of())));
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(plainAuthority));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("dave", "pass"));
@@ -394,6 +398,7 @@ class AuthenticationServiceImplTest {
             verify(jwtService).generateTokenPair(
                     any(),
                     any(UUID.class),
+                    isNull(),
                     argThat(roles -> roles.contains("MANAGER")));
         }
     }
@@ -458,6 +463,43 @@ class AuthenticationServiceImplTest {
                     .isInstanceOf(CredentialsExpiredException.class);
 
             verify(lockoutService, never()).recordFailedAttempt(any());
+        }
+    }
+
+    // =========================================================
+    // T18 — personId from SecurityUserPrincipal passed to JwtService (AUTH-005)
+    // =========================================================
+
+    @Nested
+    @DisplayName("T18: personId from principal is forwarded to JwtService.generateTokenPair — AUTH-005")
+    class PersonIdPropagation {
+
+        @Test
+        @DisplayName("T18 — generateTokenPair receives personId from SecurityUserPrincipal")
+        void t18_personIdFromPrincipalPassedToJwtService() {
+            UUID t18UserId = UUID.randomUUID();
+            UUID t18PersonId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("alice");
+            // SecurityUserPrincipal must be constructed with (userId, personId, delegate)
+            when(successAuth.getPrincipal()).thenReturn(
+                    new CustomUserDetailsService.SecurityUserPrincipal(
+                            t18UserId, t18PersonId,
+                            new org.springframework.security.core.userdetails.User(
+                                    "alice", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of());
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(jwtService.generateTokenPair(any(), any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
+
+            sut.login(new LoginRequest("alice", "pass"));
+
+            verify(jwtService).generateTokenPair(
+                    eq("alice"),
+                    eq(t18UserId),
+                    eq(t18PersonId),
+                    any());
         }
     }
 }

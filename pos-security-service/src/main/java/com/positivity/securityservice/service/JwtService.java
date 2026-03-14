@@ -52,6 +52,8 @@ public interface JwtService {
      * Claim key for human-readable display name (mirrors sub for gateway header).
      */
     public static final String USERNAME = "username";
+    /** Claim key for optional CRM person identifier linked to this user. */
+    public static final String PERSON_ID = "personId";
 
     /**
      * Generates a JWT token for the given username and roles, stores it in the
@@ -110,6 +112,15 @@ public interface JwtService {
      */
     @Nullable
     UUID getUserIdFromToken(@NonNull String token);
+
+    /**
+     * Extracts the {@code personId} claim from the given JWT access token.
+     *
+     * @param token the JWT token string
+     * @return the person UUID, or {@code null} if the claim is absent or unparsable
+     */
+    @Nullable
+    UUID getPersonIdFromToken(@NonNull String token);
 
     /**
      * Extracts the set of roles from the given JWT token.
@@ -176,13 +187,15 @@ public interface JwtService {
      * 
      * @param username the subject for the tokens
      * @param userId   stable user identifier for audit lineage
+     * @param personId optional CRM person identifier; when non-null, included as
+     *                 {@code personId} claim in the access token only
      * @param roles    the set of roles used to derive the permission bitset claim
      *                 (perm_bits)
      * @return a TokenPair containing the access and refresh tokens
      * 
      * @throws IllegalArgumentException if username, userId, or roles are invalid
      */
-    TokenPair generateTokenPair(@NonNull String username, @NonNull UUID userId, @NonNull Set<String> roles);
+    TokenPair generateTokenPair(@NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles);
 
     /**
      * Validates the given refresh token by checking:
