@@ -7,10 +7,12 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.service.AuthenticationService;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.LockoutService;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -24,13 +26,39 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class AuthenticationServiceImpl implements AuthenticationService {
+
+    private static final String COUNTER_AUTH_SUCCESS = "auth.login.success";
+    private static final String COUNTER_AUTH_FAILURE = "auth.login.failure";
+    private static final String TAG_REASON = "reason";
+    private static final String REASON_BAD_CREDENTIALS = "bad_credentials";
+    private static final String REASON_ACCOUNT_LOCKED = "account_locked";
+    private static final String REASON_ACCOUNT_DISABLED = "account_disabled";
 
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final LockoutService lockoutService;
     private final UserRepository userRepository;
+    private final Counter authSuccessCounter;
+    private final Counter badCredentialsCounter;
+    private final Counter accountLockedCounter;
+    private final Counter accountDisabledCounter;
+
+    public AuthenticationServiceImpl(
+            AuthenticationManager authenticationManager,
+            JwtService jwtService,
+            LockoutService lockoutService,
+            UserRepository userRepository,
+            MeterRegistry meterRegistry) {
+        this.authenticationManager = authenticationManager;
+        this.jwtService = jwtService;
+        this.lockoutService = lockoutService;
+        this.userRepository = userRepository;
+        this.authSuccessCounter = Counter.builder(COUNTER_AUTH_SUCCESS).register(meterRegistry);
+        this.badCredentialsCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_BAD_CREDENTIALS).register(meterRegistry);
+        this.accountLockedCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_LOCKED).register(meterRegistry);
+        this.accountDisabledCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_DISABLED).register(meterRegistry);
+    }
 
     @Override
     @NonNull
@@ -44,6 +72,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         if (userIdForLockout != null) {
             lockoutService.unlockIfCooldownExpired(userIdForLockout);
             if (lockoutService.isLockedOut(userIdForLockout)) {
+                incrementFailureCounter(REASON_ACCOUNT_LOCKED);
                 throw new LockedException("Account is locked");
             }
         }
@@ -55,6 +84,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         } catch (AuthenticationException ex) {
             if (userIdForLockout != null && ex instanceof BadCredentialsException) {
                 lockoutService.recordFailedAttempt(userIdForLockout);
+                incrementFailureCounter(REASON_BAD_CREDENTIALS);
+            }
+            if (ex instanceof DisabledException) {
+                incrementFailureCounter(REASON_ACCOUNT_DISABLED);
             }
             throw ex;
         }
@@ -70,9 +103,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
         UUID userId = p.userId();
 
-        // Use userId from the authenticated principal (authoritative source post-authentication);
-        // this is always consistent with userIdForLockout but avoids relying on the pre-flight
-        // Optional path for post-authentication bookkeeping.
+        // Post-auth bookkeeping should use the authenticated principal as source of truth.
         lockoutService.recordSuccessfulLogin(userId);
 
         Set<String> roleNames = authentication.getAuthorities().stream()
@@ -81,6 +112,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .collect(Collectors.toSet());
 
         JwtService.TokenPair pair = jwtService.generateTokenPair(username, userId, p.personId(), roleNames);
+        incrementSuccessCounter();
         return TokenPairResponse.of(pair.accessToken(), pair.refreshToken());
+    }
+
+    private void incrementSuccessCounter() {
+        authSuccessCounter.increment();
+    }
+
+    private void incrementFailureCounter(@NonNull String reason) {
+        switch (reason) {
+            case REASON_BAD_CREDENTIALS -> badCredentialsCounter.increment();
+            case REASON_ACCOUNT_LOCKED -> accountLockedCounter.increment();
+            case REASON_ACCOUNT_DISABLED -> accountDisabledCounter.increment();
+            default -> { /* no-op for unmapped reason */ }
+        }
     }
 }
