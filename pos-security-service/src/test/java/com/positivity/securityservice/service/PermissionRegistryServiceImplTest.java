@@ -140,4 +140,109 @@ class PermissionRegistryServiceImplTest {
         void isValidPermissionName_emptyString_returnsFalse() {
                 assertThat(permissionRegistryService.isValidPermissionName("")).isFalse();
         }
+
+        @Test
+        void isValidPermissionName_null_returnsFalse() {
+                assertThat(permissionRegistryService.isValidPermissionName(null)).isFalse();
+        }
+
+        // =========================================================
+        // registerNewPermission: second findByName backfill paths
+        // =========================================================
+
+        @Test
+        void registerNewPermission_backfillsBitIndex_whenSecondFindReturnsExistingWithNullBitIndex() {
+                // "accounting:je:view" maps to PermissionCode.ACCOUNTING__JE__VIEW (bitIndex 0)
+                Permission existing = new Permission();
+                existing.setName("accounting:je:view");
+                existing.setDescription("desc");
+                // bitIndex is null → should be backfilled
+
+                PermissionRegistrationRequest request = new PermissionRegistrationRequest(
+                                "accounting", "pos-accounting",
+                                List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                                                "accounting:je:view", "desc")),
+                                "1.0");
+
+                // First call (processPermissionDefinition) → empty; second call (registerNewPermission) → existing
+                when(permissionRepository.findByName("accounting:je:view"))
+                                .thenReturn(Optional.empty())
+                                .thenReturn(Optional.of(existing));
+                when(permissionRepository.save(any(Permission.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                PermissionRegistrationResponse response = permissionRegistryService.registerPermissions(request);
+
+                assertThat(response.getUpdatedPermissions()).isEqualTo(1);
+                assertThat(response.getRegisteredPermissions()).isZero();
+        }
+
+        @Test
+        void registerNewPermission_skipsExisting_whenSecondFindReturnsPresentWithBitIndexAlreadySet() {
+                Permission existing = new Permission();
+                existing.setName("accounting:je:view");
+                existing.setDescription("desc");
+                existing.setBitIndex(0); // already backfilled
+
+                PermissionRegistrationRequest request = new PermissionRegistrationRequest(
+                                "accounting", "pos-accounting",
+                                List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                                                "accounting:je:view", "desc")),
+                                "1.0");
+
+                when(permissionRepository.findByName("accounting:je:view"))
+                                .thenReturn(Optional.empty())
+                                .thenReturn(Optional.of(existing));
+
+                PermissionRegistrationResponse response = permissionRegistryService.registerPermissions(request);
+
+                assertThat(response.getSkippedPermissions()).isEqualTo(1);
+                assertThat(response.getUpdatedPermissions()).isZero();
+        }
+
+        @Test
+        void registerNewPermission_skipsExisting_whenSecondFindReturnsPresentWithNullBitIndexAndUnknownCode() {
+                // "pricing:unknown:perm" passes isValidPermissionName but is NOT in PermissionCode → changed stays false
+                Permission existing = new Permission();
+                existing.setName("pricing:unknown:perm");
+                existing.setDescription("desc");
+                // bitIndex is null and no PermissionCode match → changed=false → skip
+
+                PermissionRegistrationRequest request = new PermissionRegistrationRequest(
+                                "pricing", "pos-price",
+                                List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                                                "pricing:unknown:perm", "desc")),
+                                "1.0");
+
+                when(permissionRepository.findByName("pricing:unknown:perm"))
+                                .thenReturn(Optional.empty())
+                                .thenReturn(Optional.of(existing));
+
+                PermissionRegistrationResponse response = permissionRegistryService.registerPermissions(request);
+
+                assertThat(response.getSkippedPermissions()).isEqualTo(1);
+                assertThat(response.getUpdatedPermissions()).isZero();
+        }
+
+        @Test
+        void registerNewPermission_saveThrows_addsErrorAndSkips() {
+                // save() throws IllegalArgumentException → caught in registerNewPermission's inner try/catch
+                PermissionRegistrationRequest request = new PermissionRegistrationRequest(
+                                "accounting", "pos-accounting",
+                                List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                                                "accounting:je:view", "desc")),
+                                "1.0");
+
+                when(permissionRepository.findByName("accounting:je:view"))
+                                .thenReturn(Optional.empty())
+                                .thenReturn(Optional.empty());
+                when(permissionRepository.save(any(Permission.class)))
+                                .thenThrow(new IllegalArgumentException("forced error during save"));
+
+                PermissionRegistrationResponse response = permissionRegistryService.registerPermissions(request);
+
+                assertThat(response.getErrors()).isNotEmpty();
+                assertThat(response.getSkippedPermissions()).isEqualTo(1);
+                assertThat(response.getRegisteredPermissions()).isZero();
+        }
 }
