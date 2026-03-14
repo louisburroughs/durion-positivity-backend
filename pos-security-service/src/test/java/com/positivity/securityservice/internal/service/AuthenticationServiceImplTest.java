@@ -19,8 +19,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.CredentialsExpiredException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.User;
@@ -392,6 +395,69 @@ class AuthenticationServiceImplTest {
                     any(),
                     any(UUID.class),
                     argThat(roles -> roles.contains("MANAGER")));
+        }
+    }
+
+    // =========================================================
+    // T15-T17 — Account-state denials must NOT record failed attempt (AUTH-004)
+    // =========================================================
+
+    @Nested
+    @DisplayName("T15-T17: account-state denials do not trigger lockout bookkeeping — AUTH-004")
+    class AccountStateDenialNoLockout {
+
+        private final UUID userId = UUID.randomUUID();
+
+        private com.positivity.securityservice.internal.entity.User userEntity() {
+            com.positivity.securityservice.internal.entity.User u =
+                    new com.positivity.securityservice.internal.entity.User();
+            u.setId(userId);
+            u.setUsername("alice");
+            u.setAccountNonLocked(true);
+            u.setEnabled(true);
+            u.setAccountNonExpired(true);
+            u.setCredentialsNonExpired(true);
+            u.setFailedLoginAttempts(0);
+            return u;
+        }
+
+        @Test
+        @DisplayName("T15 — DisabledException is re-thrown and does NOT call recordFailedAttempt")
+        void t15_disabledExceptionDoesNotRecordFailedAttempt() {
+            when(userRepository.findByUsername("alice")).thenReturn(java.util.Optional.of(userEntity()));
+            when(lockoutService.isLockedOut(userId)).thenReturn(false);
+            when(authenticationManager.authenticate(any())).thenThrow(new DisabledException("disabled"));
+
+            assertThatThrownBy(() -> sut.login(new LoginRequest("alice", "pass")))
+                    .isInstanceOf(DisabledException.class);
+
+            verify(lockoutService, never()).recordFailedAttempt(any());
+        }
+
+        @Test
+        @DisplayName("T16 — AccountExpiredException is re-thrown and does NOT call recordFailedAttempt")
+        void t16_accountExpiredExceptionDoesNotRecordFailedAttempt() {
+            when(userRepository.findByUsername("alice")).thenReturn(java.util.Optional.of(userEntity()));
+            when(lockoutService.isLockedOut(userId)).thenReturn(false);
+            when(authenticationManager.authenticate(any())).thenThrow(new AccountExpiredException("expired"));
+
+            assertThatThrownBy(() -> sut.login(new LoginRequest("alice", "pass")))
+                    .isInstanceOf(AccountExpiredException.class);
+
+            verify(lockoutService, never()).recordFailedAttempt(any());
+        }
+
+        @Test
+        @DisplayName("T17 — CredentialsExpiredException is re-thrown and does NOT call recordFailedAttempt")
+        void t17_credentialsExpiredExceptionDoesNotRecordFailedAttempt() {
+            when(userRepository.findByUsername("alice")).thenReturn(java.util.Optional.of(userEntity()));
+            when(lockoutService.isLockedOut(userId)).thenReturn(false);
+            when(authenticationManager.authenticate(any())).thenThrow(new CredentialsExpiredException("creds expired"));
+
+            assertThatThrownBy(() -> sut.login(new LoginRequest("alice", "pass")))
+                    .isInstanceOf(CredentialsExpiredException.class);
+
+            verify(lockoutService, never()).recordFailedAttempt(any());
         }
     }
 }

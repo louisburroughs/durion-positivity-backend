@@ -10,6 +10,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.authentication.AccountExpiredException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.CredentialsExpiredException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,12 +26,10 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.context.request.WebRequest;
 
-import com.positivity.securityservice.internal.dto.ErrorResponse;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
+import com.positivity.securityservice.internal.dto.ErrorResponse;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.LockedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
@@ -421,6 +424,51 @@ public class GlobalExceptionHandler {
                                 .body(errorResponse(
                                                 "ACCOUNT_LOCKED",
                                                 "Account is temporarily locked due to repeated failed login attempts",
+                                                HttpStatus.UNAUTHORIZED,
+                                                correlationId));
+        }
+
+        @ExceptionHandler(DisabledException.class)
+        public ResponseEntity<ErrorResponse> handleDisabledException(
+                        DisabledException ex,
+                        WebRequest request) {
+                String correlationId = extractCorrelationId(request);
+                log.warn("Authentication denied (correlationId={}): account is disabled", correlationId);
+                return ResponseEntity
+                                .status(HttpStatus.UNAUTHORIZED)
+                                .body(errorResponse(
+                                                "ACCOUNT_DISABLED",
+                                                "Account is disabled",
+                                                HttpStatus.UNAUTHORIZED,
+                                                correlationId));
+        }
+
+        @ExceptionHandler(AccountExpiredException.class)
+        public ResponseEntity<ErrorResponse> handleAccountExpiredException(
+                        AccountExpiredException ex,
+                        WebRequest request) {
+                String correlationId = extractCorrelationId(request);
+                log.warn("Authentication denied (correlationId={}): account has expired", correlationId);
+                return ResponseEntity
+                                .status(HttpStatus.UNAUTHORIZED)
+                                .body(errorResponse(
+                                                "ACCOUNT_EXPIRED",
+                                                "Account has expired",
+                                                HttpStatus.UNAUTHORIZED,
+                                                correlationId));
+        }
+
+        @ExceptionHandler(CredentialsExpiredException.class)
+        public ResponseEntity<ErrorResponse> handleCredentialsExpiredException(
+                        CredentialsExpiredException ex,
+                        WebRequest request) {
+                String correlationId = extractCorrelationId(request);
+                log.warn("Authentication denied (correlationId={}): credentials have expired", correlationId);
+                return ResponseEntity
+                                .status(HttpStatus.UNAUTHORIZED)
+                                .body(errorResponse(
+                                                "CREDENTIALS_EXPIRED",
+                                                "Credentials have expired",
                                                 HttpStatus.UNAUTHORIZED,
                                                 correlationId));
         }

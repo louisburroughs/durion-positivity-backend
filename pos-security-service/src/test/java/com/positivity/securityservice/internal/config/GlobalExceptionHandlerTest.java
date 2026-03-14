@@ -27,7 +27,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.CredentialsExpiredException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.Authentication;
@@ -45,7 +48,7 @@ import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.service.AuditEventService;
 
 /**
- * Unit tests for GlobalExceptionHandler — covers PERM-004 and AUTH-003 handlers.
+ * Unit tests for GlobalExceptionHandler — covers PERM-004, AUTH-003, and AUTH-004 handlers.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -618,6 +621,97 @@ class GlobalExceptionHandlerTest {
                     ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // AUTH-004: account-state denial mappings
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleDisabledException — AUTH-004")
+    class HandleDisabledException {
+
+        @Test
+        @DisplayName("returns 401 ACCOUNT_DISABLED with correlation ID from header")
+        void returns401WithCorrelationIdFromHeader() {
+            DisabledException ex = new DisabledException("Account is disabled");
+
+            ResponseEntity<ErrorResponse> response = sut.handleDisabledException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody().code()).isEqualTo("ACCOUNT_DISABLED");
+            assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
+        }
+
+        @Test
+        @DisplayName("generates correlation ID when header is absent")
+        void generatesCorrelationIdWhenHeaderAbsent() {
+            DisabledException ex = new DisabledException("Account is disabled");
+
+            ResponseEntity<ErrorResponse> response = sut.handleDisabledException(ex, requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody().code()).isEqualTo("ACCOUNT_DISABLED");
+            assertThat(response.getBody().correlationId()).isNotBlank();
+        }
+    }
+
+    @Nested
+    @DisplayName("handleAccountExpiredException — AUTH-004")
+    class HandleAccountExpiredException {
+
+        @Test
+        @DisplayName("returns 401 ACCOUNT_EXPIRED with correlation ID from header")
+        void returns401WithCorrelationIdFromHeader() {
+            AccountExpiredException ex = new AccountExpiredException("Account has expired");
+
+            ResponseEntity<ErrorResponse> response = sut.handleAccountExpiredException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody().code()).isEqualTo("ACCOUNT_EXPIRED");
+            assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
+        }
+
+        @Test
+        @DisplayName("generates correlation ID when header is absent")
+        void generatesCorrelationIdWhenHeaderAbsent() {
+            AccountExpiredException ex = new AccountExpiredException("Account has expired");
+
+            ResponseEntity<ErrorResponse> response = sut.handleAccountExpiredException(ex, requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody().code()).isEqualTo("ACCOUNT_EXPIRED");
+            assertThat(response.getBody().correlationId()).isNotBlank();
+        }
+    }
+
+    @Nested
+    @DisplayName("handleCredentialsExpiredException — AUTH-004")
+    class HandleCredentialsExpiredException {
+
+        @Test
+        @DisplayName("returns 401 CREDENTIALS_EXPIRED with correlation ID from header")
+        void returns401WithCorrelationIdFromHeader() {
+            CredentialsExpiredException ex = new CredentialsExpiredException("Credentials have expired");
+
+            ResponseEntity<ErrorResponse> response = sut.handleCredentialsExpiredException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody().code()).isEqualTo("CREDENTIALS_EXPIRED");
+            assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
+        }
+
+        @Test
+        @DisplayName("generates correlation ID when header is absent")
+        void generatesCorrelationIdWhenHeaderAbsent() {
+            CredentialsExpiredException ex = new CredentialsExpiredException("Credentials have expired");
+
+            ResponseEntity<ErrorResponse> response = sut.handleCredentialsExpiredException(ex, requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody().code()).isEqualTo("CREDENTIALS_EXPIRED");
+            assertThat(response.getBody().correlationId()).isNotBlank();
         }
     }
 }
