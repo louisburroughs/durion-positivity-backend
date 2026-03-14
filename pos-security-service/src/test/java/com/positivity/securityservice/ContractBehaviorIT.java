@@ -662,11 +662,11 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 }
                                 """;
 
-                mockMvc.perform(post("/v1/users/login")
+                mockMvc.perform(post("/v1/auth/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(loginPayload))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.token").isNotEmpty());
+                                .andExpect(jsonPath("$.accessToken").isNotEmpty());
         }
 
         /**
@@ -687,7 +687,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 """;
 
                 // Act & Assert
-                mockMvc.perform(post("/v1/users/login")
+                mockMvc.perform(post("/v1/auth/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(loginPayload))
                                 .andExpect(status().isUnauthorized())

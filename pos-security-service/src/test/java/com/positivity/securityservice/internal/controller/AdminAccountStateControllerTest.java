@@ -30,22 +30,14 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.test.context.NestedTestConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.http.HttpStatus;
 
 /**
  * Controller slice tests for {@link AdminAccountStateController} — AUTH-006.
@@ -340,31 +332,5 @@ class AdminAccountStateControllerTest {
             return http.build();
         }
 
-        @Bean
-        SecurityExceptionControllerAdvice securityExceptionControllerAdvice() {
-            return new SecurityExceptionControllerAdvice();
-        }
-    }
-
-    /**
-     * Minimal security exception handler for the MVC slice — translates Spring Security
-     * exceptions to 401/403 HTTP status codes. {@code @Order(HIGHEST_PRECEDENCE)} ensures
-     * this advice is consulted before the production GlobalExceptionHandler catch-all.
-     */
-    @ControllerAdvice
-    @Order(Ordered.HIGHEST_PRECEDENCE)
-    static class SecurityExceptionControllerAdvice {
-
-        @ExceptionHandler(AuthenticationException.class)
-        @ResponseStatus(HttpStatus.UNAUTHORIZED)
-        void handleAuthenticationException(AuthenticationException ex) {
-            // Status mapping is fully expressed via @ResponseStatus.
-        }
-
-        @ExceptionHandler(AccessDeniedException.class)
-        @ResponseStatus(HttpStatus.FORBIDDEN)
-        void handleAccessDeniedException(AccessDeniedException ex) {
-            // Status mapping is fully expressed via @ResponseStatus.
-        }
     }
 }

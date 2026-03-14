@@ -27,6 +27,8 @@ public class SecurityConfig {
     private static final String V1_AUTH_LOGIN = "/v1/auth/login";
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
+    private final JsonAuthenticationEntryPoint jsonAuthenticationEntryPoint;
+    private final JsonAccessDeniedHandler jsonAccessDeniedHandler;
 
     @Bean
     public GatewayHeaderAuthenticationFilter gatewayHeaderAuthenticationFilter() {
@@ -50,7 +52,10 @@ public class SecurityConfig {
                             .anyRequest().authenticated())
                     .userDetailsService(userDetailsService)
                     .addFilterBefore(gatewayHeaderAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                    .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                    .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                    .exceptionHandling(ex -> ex
+                            .authenticationEntryPoint(jsonAuthenticationEntryPoint)
+                            .accessDeniedHandler(jsonAccessDeniedHandler));
 
             return http.build();
         } catch (Exception e) {
@@ -81,7 +86,10 @@ public class SecurityConfig {
                             .requestMatchers("/actuator/health").permitAll()
                             .requestMatchers(HttpMethod.GET, "/v1/permissions/catalog-version").permitAll()
                             .anyRequest().authenticated())
-                    .addFilterBefore(gatewayHeaderAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                    .addFilterBefore(gatewayHeaderAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                    .exceptionHandling(ex -> ex
+                            .authenticationEntryPoint(jsonAuthenticationEntryPoint)
+                            .accessDeniedHandler(jsonAccessDeniedHandler));
 
             return http.build();
         } catch (Exception e) {
