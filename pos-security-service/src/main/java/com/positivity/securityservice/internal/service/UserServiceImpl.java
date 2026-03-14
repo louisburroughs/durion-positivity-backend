@@ -112,6 +112,7 @@ public class UserServiceImpl implements UserService {
                 .id(user.getId())
                 .username(user.getUsername())
                 .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .personId(user.getPersonId())
                 .build();
     }
 

@@ -74,6 +74,9 @@ public class User {
     @Column(name = "credentials_expire_at")
     private Instant credentialsExpireAt;
 
+    @Column(name = "person_id")
+    private UUID personId;
+
     @Column(name = "last_login_ip", length = 255)
     private String lastLoginIp;
 

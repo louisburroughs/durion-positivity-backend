@@ -158,7 +158,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("token pair flow validates and refreshes")
     void tokenPair_validateAndRefresh_success() {
-        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", TEST_USER_ID, Set.of("ADMIN"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN"));
 
         JwtToken stored = new JwtToken();
         stored.setToken(tokenPair.accessToken());
@@ -236,7 +236,7 @@ class JwtServiceImplTest {
     @DisplayName("generateTokenPair: blank username throws IllegalArgumentException")
     void generateTokenPair_blankUsername_throws() {
         Set<String> roles = Set.of("ADMIN");
-        assertThatThrownBy(() -> sut.generateTokenPair("", TEST_USER_ID, roles))
+        assertThatThrownBy(() -> sut.generateTokenPair("", TEST_USER_ID, null, roles))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Username cannot be blank");
     }
@@ -245,7 +245,7 @@ class JwtServiceImplTest {
     @DisplayName("generateTokenPair: null userId throws IllegalArgumentException")
     void generateTokenPair_nullUserId_throws() {
         Set<String> roles = Set.of("ADMIN");
-        assertThatThrownBy(() -> sut.generateTokenPair("alice", null, roles))
+        assertThatThrownBy(() -> sut.generateTokenPair("alice", null, null, roles))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("UserId cannot be null");
     }
@@ -254,7 +254,7 @@ class JwtServiceImplTest {
     @DisplayName("generateTokenPair: empty roles throws IllegalArgumentException")
     void generateTokenPair_emptyRoles_throws() {
         Set<String> roles = Set.of();
-        assertThatThrownBy(() -> sut.generateTokenPair("alice", TEST_USER_ID, roles))
+        assertThatThrownBy(() -> sut.generateTokenPair("alice", TEST_USER_ID, null, roles))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Roles cannot be empty");
     }
@@ -288,7 +288,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("validateRefreshToken: returns false when not found in database")
     void validateRefreshToken_notFoundInDb_returnsFalse() {
-        JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, Set.of("ADMIN"));
+        JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN"));
         when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
         when(jwtTokenRepository.findByRefreshToken(pair.refreshToken())).thenReturn(Optional.empty());
 
@@ -298,7 +298,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("validateRefreshToken: returns false when revoked")
     void validateRefreshToken_revoked_returnsFalse() {
-        JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, Set.of("ADMIN"));
+        JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN"));
         when(tokenRevocationManager.isRevoked(anyString())).thenReturn(true);
 
         assertThat(sut.validateRefreshToken(pair.refreshToken())).isFalse();
@@ -316,7 +316,7 @@ class JwtServiceImplTest {
     @DisplayName("refreshAccessToken throws InvalidRefreshTokenException when user no longer exists")
     void refreshAccessToken_throwsInvalidRefreshTokenException_whenUserNotFound() {
         UUID userId = UUID.randomUUID();
-        JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, Set.of("ADMIN"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, null, Set.of("ADMIN"));
         String refreshToken = tokenPair.refreshToken();
 
         JwtToken stored = new JwtToken();
@@ -374,7 +374,7 @@ class JwtServiceImplTest {
                         PermissionCode.ACCOUNTING__JE__VIEW.code(),
                         PermissionCode.ACCOUNTING__JE__CREATE.code()));
 
-        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("USER"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("USER"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
         Claims claims = Jwts.parser().verifyWith(key)
@@ -402,7 +402,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("generateTokenPair access token must NOT include roles or authorities claims")
     void accessToken_doesNotContainRolesOrAuthorities() {
-        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("ADMIN"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("ADMIN"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
         Claims claims = Jwts.parser().verifyWith(key)
@@ -417,7 +417,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("generateTokenPair refresh token must NOT include roles or perm_bits claims")
     void refreshToken_doesNotContainRolesOrPermBits() {
-        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("ADMIN"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("ADMIN"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
         Claims claims = Jwts.parser().verifyWith(key)
@@ -442,7 +442,7 @@ class JwtServiceImplTest {
     void accessToken_containsUidAndUsername() {
         UUID userId = UUID.randomUUID();
 
-        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", userId, Set.of("ADMIN"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", userId, null, Set.of("ADMIN"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
         Claims claims = Jwts.parser().verifyWith(key)
@@ -465,7 +465,7 @@ class JwtServiceImplTest {
     void getUserIdFromToken_readsUidClaim() {
         UUID userId = UUID.randomUUID();
 
-        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", userId, Set.of("ADMIN"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", userId, null, Set.of("ADMIN"));
 
         assertThat(sut.getUserIdFromToken(tokenPair.accessToken())).isEqualTo(userId);
     }
@@ -482,7 +482,7 @@ class JwtServiceImplTest {
         when(roleAuthorityService.expandRolesToAuthorities(any()))
                 .thenReturn(Set.of(PermissionCode.ACCOUNTING__JE__VIEW.code()));
 
-        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("USER"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("USER"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
         Claims claims = Jwts.parser().verifyWith(key)
@@ -536,7 +536,7 @@ class JwtServiceImplTest {
 
         when(roleAuthorityService.expandRolesToAuthorities(any())).thenReturn(permCodeStrings);
 
-        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), Set.of("USER"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("USER"));
 
         assertThat(tokenPair.accessToken().getBytes(StandardCharsets.UTF_8))
                 .hasSizeLessThan(600);
@@ -609,7 +609,7 @@ class JwtServiceImplTest {
     @DisplayName("refreshAccessToken throws IllegalArgumentException when user has no roles assigned")
     void refreshAccessToken_userHasNoRoles_throwsIllegalArgumentException() {
         UUID userId = UUID.randomUUID();
-        JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, Set.of("ADMIN"));
+        JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, null, Set.of("ADMIN"));
         String refreshToken = tokenPair.refreshToken();
 
         JwtToken stored = new JwtToken();
@@ -657,4 +657,45 @@ class JwtServiceImplTest {
     }
 
     // Issue #PERM-004 end
+
+    // =========================================================
+    // AUTH-005: personId claim in access token
+    // =========================================================
+
+    @org.junit.jupiter.api.Nested
+    @DisplayName("AUTH-005: personId claim contract")
+    class PersonIdClaim {
+
+        @Test
+        @DisplayName("access token contains personId claim when personId is non-null")
+        void accessToken_containsPersonIdClaim_whenNonNull() {
+            UUID personId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+
+            // generateTokenPair must accept personId as 3rd parameter (UUID, nullable)
+            JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, personId, Set.of("ADMIN"));
+
+            UUID extractedPersonId = sut.getPersonIdFromToken(pair.accessToken());
+            assertThat(extractedPersonId).isEqualTo(personId);
+        }
+
+        @Test
+        @DisplayName("access token omits personId claim when personId is null")
+        void accessToken_omitsPersonIdClaim_whenNull() {
+            JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN"));
+
+            UUID extractedPersonId = sut.getPersonIdFromToken(pair.accessToken());
+            assertThat(extractedPersonId).isNull();
+        }
+
+        @Test
+        @DisplayName("refresh token never contains personId claim even when personId is non-null")
+        void refreshToken_neverContainsPersonIdClaim() {
+            UUID personId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+
+            JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, personId, Set.of("ADMIN"));
+
+            UUID extractedFromRefresh = sut.getPersonIdFromToken(pair.refreshToken());
+            assertThat(extractedFromRefresh).isNull();
+        }
+    }
 }

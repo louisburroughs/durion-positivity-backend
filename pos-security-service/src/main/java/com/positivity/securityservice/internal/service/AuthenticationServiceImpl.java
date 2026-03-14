@@ -80,7 +80,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .map(a -> a.startsWith("ROLE_") ? a.substring(5) : a)
                 .collect(Collectors.toSet());
 
-        JwtService.TokenPair pair = jwtService.generateTokenPair(username, userId, roleNames);
+        JwtService.TokenPair pair = jwtService.generateTokenPair(username, userId, p.personId(), roleNames);
         return TokenPairResponse.of(pair.accessToken(), pair.refreshToken());
     }
 }

@@ -144,6 +144,7 @@ public class JwtController {
         JwtService.TokenPair tokenPair = jwtService.generateTokenPair(
                 request.subject(),
                 user.getId(),
+                null,
                 request.roles() != null ? request.roles() : Set.of());
 
         return ResponseEntity.ok(TokenPairResponse.of(tokenPair.accessToken(), tokenPair.refreshToken()));
