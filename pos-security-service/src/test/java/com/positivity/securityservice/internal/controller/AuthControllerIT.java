@@ -39,40 +39,75 @@ import io.jsonwebtoken.Jwts;
  *
  * <h3>ADR Compliance</h3>
  * <ul>
- *   <li><strong>ADR-0017</strong>: HTTP status codes — 200 success, 401 bad
- *       credentials, 400 validation failure.</li>
- *   <li><strong>ADR-0011 / ADR-0014</strong>: Login endpoint is permit-all;
- *       no upstream gateway auth token required for this endpoint.</li>
+ * <li><strong>ADR-0017</strong>: HTTP status codes — 200 success, 401 bad
+ * credentials, 400 validation failure.</li>
+ * <li><strong>ADR-0011 / ADR-0014</strong>: Login endpoint is permit-all;
+ * no upstream gateway auth token required for this endpoint.</li>
  * </ul>
  *
  * <h3>Test-to-Acceptance Criterion mapping</h3>
  * <table>
- *   <tr><th>Test</th><th>AC</th><th>RED?</th><th>Failure reason in RED phase</th></tr>
- *   <tr><td>T1</td><td>AC1, AC3, AC6, AC7 (no deprecated endpoint check)</td><td>YES</td>
- *       <td>Stub throws UnsupportedOperationException → HTTP 500, expects 200</td></tr>
- *   <tr><td>T2</td><td>AC4</td><td>YES</td>
- *       <td>Stub throws UnsupportedOperationException → HTTP 500, expects 401</td></tr>
- *   <tr><td>T3</td><td>AC4</td><td>YES</td>
- *       <td>Stub throws UnsupportedOperationException → HTTP 500, expects 401</td></tr>
- *   <tr><td>T4</td><td>AC5</td><td>YES</td>
- *       <td>pos-security-service pom.xml lacks spring-boot-starter-validation;
- *           Hibernate Validator is absent so @NotBlank does not fire, stub is reached
- *           and throws UnsupportedOperationException → 500.  GREEN requires adding the
- *           dependency AND the working implementation.</td></tr>
- *   <tr><td>T5</td><td>AC5</td><td>YES</td><td>Same as T4</td></tr>
- *   <tr><td>T6</td><td>AC5</td><td>NO (GREEN immediately)</td>
- *       <td>HttpMessageNotReadableException fired by Jackson (no validator needed) →
- *           GlobalExceptionHandler → 400; stub never reached.</td></tr>
+ * <tr>
+ * <th>Test</th>
+ * <th>AC</th>
+ * <th>RED?</th>
+ * <th>Failure reason in RED phase</th>
+ * </tr>
+ * <tr>
+ * <td>T1</td>
+ * <td>AC1, AC3, AC6, AC7 (no deprecated endpoint check)</td>
+ * <td>YES</td>
+ * <td>Stub throws UnsupportedOperationException → HTTP 500, expects 200</td>
+ * </tr>
+ * <tr>
+ * <td>T2</td>
+ * <td>AC4</td>
+ * <td>YES</td>
+ * <td>Stub throws UnsupportedOperationException → HTTP 500, expects 401</td>
+ * </tr>
+ * <tr>
+ * <td>T3</td>
+ * <td>AC4</td>
+ * <td>YES</td>
+ * <td>Stub throws UnsupportedOperationException → HTTP 500, expects 401</td>
+ * </tr>
+ * <tr>
+ * <td>T4</td>
+ * <td>AC5</td>
+ * <td>YES</td>
+ * <td>pos-security-service pom.xml lacks spring-boot-starter-validation;
+ * Hibernate Validator is absent so @NotBlank does not fire, stub is reached
+ * and throws UnsupportedOperationException → 500. GREEN requires adding the
+ * dependency AND the working implementation.</td>
+ * </tr>
+ * <tr>
+ * <td>T5</td>
+ * <td>AC5</td>
+ * <td>YES</td>
+ * <td>Same as T4</td>
+ * </tr>
+ * <tr>
+ * <td>T6</td>
+ * <td>AC5</td>
+ * <td>NO (GREEN immediately)</td>
+ * <td>HttpMessageNotReadableException fired by Jackson (no validator needed) →
+ * GlobalExceptionHandler → 400; stub never reached.</td>
+ * </tr>
  * </table>
  *
- * <p><strong>Note on T4/T5</strong>: These are RED because
+ * <p>
+ * <strong>Note on T4/T5</strong>: These are RED because
  * {@code spring-boot-starter-validation} is not yet declared in
- * {@code pos-security-service/pom.xml}.  Adding it (alongside the GREEN implementation)
- * is required for Bean Validation ({@code @NotBlank}) to fire before the controller method.
+ * {@code pos-security-service/pom.xml}. Adding it (alongside the GREEN
+ * implementation)
+ * is required for Bean Validation ({@code @NotBlank}) to fire before the
+ * controller method.
  *
- * <p><strong>T7 (no raw BCrypt)</strong>: Covered by
+ * <p>
+ * <strong>T7 (no raw BCrypt)</strong>: Covered by
  * {@code AuthenticationServiceImplTest#login_doesNotUsePasswordEncoderDirectly}
- * as a unit test — verifying that {@code PasswordEncoder} is not a dependency of
+ * as a unit test — verifying that {@code PasswordEncoder} is not a dependency
+ * of
  * {@code AuthenticationServiceImpl}.
  *
  * @see AuthenticationServiceImplTest
@@ -137,9 +172,9 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         // RED: stub throws UnsupportedOperationException → HTTP 500
         // GREEN: returns 200 with TokenPairResponse
         MvcResult result = mockMvc.perform(post(LOGIN_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isOk())   // FAILS in RED (500 ≠ 200)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isOk()) // FAILS in RED (500 ≠ 200)
                 .andReturn();
 
         // Reached only in GREEN phase:
@@ -154,7 +189,8 @@ class AuthControllerIT extends BaseContractIntegrationTest {
                 .as("refreshToken must not be blank")
                 .isNotBlank();
 
-        // Verify JWT claims: perm_bits present, authorities absent (AC6 / PERM contract)
+        // Verify JWT claims: perm_bits present, authorities absent (AC6 / PERM
+        // contract)
         SecretKeySpec key = new SecretKeySpec(
                 jwtSecret.getBytes(StandardCharsets.UTF_8),
                 0,
@@ -188,9 +224,9 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         // RED: stub throws UnsupportedOperationException → HTTP 500
         // GREEN: AuthenticationManager throws BadCredentialsException → 401
         mockMvc.perform(post(LOGIN_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isUnauthorized())          // FAILS in RED (500 ≠ 401)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isUnauthorized()) // FAILS in RED (500 ≠ 401)
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
 
@@ -207,9 +243,9 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         // RED: stub throws UnsupportedOperationException → HTTP 500
         // GREEN: same 401 response as wrong-password — prevents user enumeration
         mockMvc.perform(post(LOGIN_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isUnauthorized())          // FAILS in RED (500 ≠ 401)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isUnauthorized()) // FAILS in RED (500 ≠ 401)
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
 
@@ -232,8 +268,8 @@ class AuthControllerIT extends BaseContractIntegrationTest {
             // GREEN requires: (1) add spring-boot-starter-validation to pom.xml,
             // (2) working implementation so validation fires before reaching service.
             mockMvc.perform(post(LOGIN_PATH)
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(body))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
                     .andExpect(status().isBadRequest());
         }
 
@@ -244,18 +280,19 @@ class AuthControllerIT extends BaseContractIntegrationTest {
 
             // RED: same root cause as T4.
             mockMvc.perform(post(LOGIN_PATH)
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(body))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
                     .andExpect(status().isBadRequest());
         }
 
         @Test
         @DisplayName("T6 [GREEN immediately]: missing request body → HTTP 400")
         void login_missingBody_returns400() throws Exception {
-            // Jackson throws HttpMessageNotReadableException (no Hibernate Validator needed)
+            // Jackson throws HttpMessageNotReadableException (no Hibernate Validator
+            // needed)
             // → GlobalExceptionHandler → 400; stub never reached.
             mockMvc.perform(post(LOGIN_PATH)
-                            .contentType(MediaType.APPLICATION_JSON))
+                    .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isBadRequest());
         }
     }

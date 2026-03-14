@@ -27,57 +27,80 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.positivity.securityservice.internal.dto.LoginRequest;
+import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.JwtService.TokenPair;
+import com.positivity.securityservice.service.LockoutService;
+
+import org.springframework.security.authentication.LockedException;
 
 /**
- * AUTH-001 RED unit tests for {@link AuthenticationServiceImpl}.
+ * Unit tests for {@link AuthenticationServiceImpl} covering AUTH-001 and AUTH-003.
  *
  * <h3>ADR Compliance</h3>
  * <ul>
- *   <li><strong>ADR-0017</strong>: 401 for invalid credentials, 200 on success.</li>
- *   <li><strong>ADR-0018</strong>: Actor identity comes from the security context
- *       (populated by AuthenticationManager), not raw request parameters.</li>
+ * <li><strong>ADR-0017</strong>: 401 for invalid credentials and locked accounts, 200 on
+ * success.</li>
+ * <li><strong>ADR-0018</strong>: Actor identity comes from the security context
+ * (populated by AuthenticationManager), not raw request parameters.</li>
  * </ul>
  *
  * <h3>Test-to-Acceptance Criterion mapping</h3>
  * <table>
- *   <tr><th>Test</th><th>AC</th><th>RED?</th><th>Failure reason in RED phase</th></tr>
- *   <tr><td>T7</td><td>AC2</td><td>YES</td>
- *       <td>Stub throws UnsupportedOperationException; PasswordEncoder field absence
- *           assertion is architectural (passes) but the behavioural assertion on the
- *           returned value fails.</td></tr>
- *   <tr><td>T8</td><td>AC2, AC6</td><td>YES</td>
- *       <td>Stub throws UnsupportedOperationException; verify() on authenticationManager
- *           is never reached.</td></tr>
- *   <tr><td>T9</td><td>AC3, AC6</td><td>YES</td>
- *       <td>Stub throws UnsupportedOperationException; verify() on jwtService is
- *           never reached.</td></tr>
+ * <tr>
+ * <th>Test</th>
+ * <th>AC</th>
+ * </tr>
+ * <tr>
+ * <td>T7</td>
+ * <td>AUTH-001 AC2: no direct PasswordEncoder usage</td>
+ * </tr>
+ * <tr>
+ * <td>T8</td>
+ * <td>AUTH-001 AC2, AC6: delegates to AuthenticationManager</td>
+ * </tr>
+ * <tr>
+ * <td>T9</td>
+ * <td>AUTH-001 AC3, AC6: calls jwtService.generateTokenPair on success</td>
+ * </tr>
+ * <tr>
+ * <td>T10-T12</td>
+ * <td>AUTH-003 AC3, AC4: lockout integration (pre-check, success bookkeeping, failure bookkeeping)</td>
+ * </tr>
  * </table>
  *
  * @since AUTH-001
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("AuthenticationServiceImplTest — AUTH-001")
+@DisplayName("AuthenticationServiceImplTest — AUTH-001 / AUTH-003")
 class AuthenticationServiceImplTest {
 
     @Mock
     private AuthenticationManager authenticationManager;
 
     /**
-     * JwtService mock.
-     *
-     * <p>In RED phase, {@code AuthenticationServiceImpl} does not yet declare
-     * a {@code JwtService} field, so {@code @InjectMocks} will not wire this
-     * mock into the stub.  Once GREEN implementation adds the field, Mockito's
-     * constructor injection will wire it automatically.
+     * LockoutService mock — wired into sut via @InjectMocks once GREEN adds the
+     * field. T10-T12 verify lockout pre-check and bookkeeping behavior.
+     */
+    @Mock
+    private LockoutService lockoutService;
+
+    /**
+     * UserRepository mock — required by T12 so userId can be resolved before
+     * authenticate() is called.
+     */
+    @Mock
+    private UserRepository userRepository;
+
+    /**
+     * JwtService mock — wired via constructor injection into AuthenticationServiceImpl.
      */
     @Mock
     private JwtService jwtService;
 
     /**
      * PasswordEncoder mock — intentionally declared to support T7's
-     * "never called" verification.  It is NOT expected to be injected into
+     * "never called" verification. It is NOT expected to be injected into
      * {@code AuthenticationServiceImpl}; the impl must NOT depend on it.
      */
     @Mock
@@ -88,7 +111,6 @@ class AuthenticationServiceImplTest {
 
     // =========================================================
     // T7 — login() must NOT use PasswordEncoder directly (AC2)
-    // RED: stub throws UnsupportedOperationException
     // =========================================================
 
     @Nested
@@ -101,7 +123,7 @@ class AuthenticationServiceImplTest {
             // This architectural assertion holds in BOTH RED and GREEN phases:
             // the impl must never own a PasswordEncoder dependency.
             boolean hasPasswordEncoderField = java.util.Arrays.stream(
-                            AuthenticationServiceImpl.class.getDeclaredFields())
+                    AuthenticationServiceImpl.class.getDeclaredFields())
                     .anyMatch(f -> f.getType().equals(PasswordEncoder.class));
 
             assertThat(hasPasswordEncoderField)
@@ -132,7 +154,6 @@ class AuthenticationServiceImplTest {
 
     // =========================================================
     // T8 — login() delegates to AuthenticationManager (AC2)
-    // RED: stub throws UnsupportedOperationException
     // =========================================================
 
     @Nested
@@ -155,20 +176,21 @@ class AuthenticationServiceImplTest {
             sut.login(new LoginRequest("alice", "secret"));
 
             // Verify the correct token type was used.
-            verify(authenticationManager).authenticate(argThat(token ->
-                    token instanceof UsernamePasswordAuthenticationToken upat
+            verify(authenticationManager)
+                    .authenticate(argThat(token -> token instanceof UsernamePasswordAuthenticationToken upat
                             && "alice".equals(upat.getName())
                             && "secret".equals(upat.getCredentials())));
         }
 
         @Test
-        @DisplayName("T8b [RED]: login() propagates BadCredentialsException from AuthenticationManager")
+        @DisplayName("T8b : login() propagates BadCredentialsException from AuthenticationManager")
         void login_propagatesBadCredentialsException() {
             when(authenticationManager.authenticate(any()))
                     .thenThrow(new BadCredentialsException("Invalid credentials"));
 
-            // RED: stub throws UnsupportedOperationException → isInstanceOf(AuthenticationException) fails.
-            // GREEN: impl delegates to authManager → BadCredentialsException propagates → passes.
+            // isInstanceOf(AuthenticationException) fails.
+            // GREEN: impl delegates to authManager → BadCredentialsException propagates →
+            // passes.
             assertThatThrownBy(() -> sut.login(new LoginRequest("alice", "badpassword")))
                     .isInstanceOf(org.springframework.security.core.AuthenticationException.class);
         }
@@ -200,7 +222,6 @@ class AuthenticationServiceImplTest {
 
     // =========================================================
     // T9 — login() calls JwtService.generateTokenPair() on success (AC3, AC6)
-    // RED: stub throws UnsupportedOperationException
     // =========================================================
 
     @Nested
@@ -208,7 +229,7 @@ class AuthenticationServiceImplTest {
     class DelegatesToJwtService {
 
         @Test
-        @DisplayName("T9 [RED]: login() calls jwtService.generateTokenPair() and returns TokenPairResponse")
+        @DisplayName("T9 : login() calls jwtService.generateTokenPair() and returns TokenPairResponse")
         void login_callsJwtServiceGenerateTokenPairOnSuccess() {
             Authentication successAuth = mock(Authentication.class);
             when(successAuth.getName()).thenReturn("bob");
@@ -222,7 +243,7 @@ class AuthenticationServiceImplTest {
             when(jwtService.generateTokenPair(any(), any(), any()))
                     .thenReturn(new TokenPair(fakeAccess, fakeRefresh));
 
-            // RED: stub throws UnsupportedOperationException  — none of the lines below are reached.
+            // reached.
             var response = sut.login(new LoginRequest("bob", "pass"));
 
             assertThat(response.accessToken())
@@ -236,6 +257,85 @@ class AuthenticationServiceImplTest {
                     argThat("bob"::equals),
                     any(UUID.class),
                     any());
+        }
+    }
+
+    // =========================================================
+    // T10-T12 — Lockout integration in AuthenticationServiceImpl (AUTH-003)
+    // fail with NullPointerException or because lockout pre-check is absent.
+    // =========================================================
+
+    @Nested
+    @DisplayName("T10-T12: lockout integration (AUTH-003 AC3, AC4)")
+    class LockoutIntegration {
+
+        private final UUID userId = UUID.randomUUID();
+
+        private com.positivity.securityservice.internal.entity.User userEntity() {
+            com.positivity.securityservice.internal.entity.User u =
+                    new com.positivity.securityservice.internal.entity.User();
+            u.setId(userId);
+            u.setUsername("alice");
+            u.setAccountNonLocked(true);
+            u.setEnabled(true);
+            u.setAccountNonExpired(true);
+            u.setCredentialsNonExpired(true);
+            u.setFailedLoginAttempts(0);
+            return u;
+        }
+
+        @Test
+        @DisplayName("T10 — throws LockedException before authenticate() when isLockedOut=true")
+        void t10_throwsLockedExceptionWhenIsLockedOut() {
+            when(userRepository.findByUsername("alice")).thenReturn(
+                    java.util.Optional.of(userEntity()));
+            when(lockoutService.unlockIfCooldownExpired(userId)).thenReturn(false);
+            when(lockoutService.isLockedOut(userId)).thenReturn(true);
+
+            assertThatThrownBy(() -> sut.login(new LoginRequest("alice", "pass")))
+                    .isInstanceOf(LockedException.class);
+
+            verify(authenticationManager, never()).authenticate(any());
+        }
+
+        @Test
+        @DisplayName("T11 — calls recordSuccessfulLogin after successful authenticate")
+        void t11_callsRecordSuccessfulLoginOnSuccess() {
+            when(userRepository.findByUsername("alice")).thenReturn(
+                    java.util.Optional.of(userEntity()));
+            when(lockoutService.unlockIfCooldownExpired(userId)).thenReturn(false);
+            when(lockoutService.isLockedOut(userId)).thenReturn(false);
+
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("alice");
+            when(successAuth.getPrincipal()).thenReturn(
+                    new CustomUserDetailsService.SecurityUserPrincipal(
+                            userId,
+                            new org.springframework.security.core.userdetails.User(
+                                    "alice", "pass", List.of())));
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(jwtService.generateTokenPair(any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
+
+            sut.login(new LoginRequest("alice", "pass"));
+
+            verify(lockoutService).recordSuccessfulLogin(userId);
+        }
+
+        @Test
+        @DisplayName("T12 — calls recordFailedAttempt and rethrows BadCredentials")
+        void t12_callsRecordFailedAttemptOnBadCredentials() {
+            when(userRepository.findByUsername("alice")).thenReturn(
+                    java.util.Optional.of(userEntity()));
+            when(lockoutService.unlockIfCooldownExpired(userId)).thenReturn(false);
+            when(lockoutService.isLockedOut(userId)).thenReturn(false);
+            when(authenticationManager.authenticate(any()))
+                    .thenThrow(new BadCredentialsException("bad"));
+
+            assertThatThrownBy(() -> sut.login(new LoginRequest("alice", "pass")))
+                    .isInstanceOf(BadCredentialsException.class);
+
+            verify(lockoutService).recordFailedAttempt(userId);
         }
     }
 }

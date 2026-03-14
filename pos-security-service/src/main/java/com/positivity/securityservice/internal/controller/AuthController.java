@@ -22,7 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
  * User-facing authentication controller.
  *
  * Handles credential-based login and token-refresh requests,
- * delegating to {@link com.positivity.securityservice.service.AuthenticationService}.
+ * delegating to
+ * {@link com.positivity.securityservice.service.AuthenticationService}.
  *
  * @since 1.0
  */
@@ -34,11 +35,8 @@ public class AuthController {
 
     private final AuthenticationService authenticationService;
 
-    @Operation(
-            summary = "User login",
-            description = "Authenticates a user with username and password and returns a JWT token pair.")
-    @ApiResponse(responseCode = "200", description = "Authentication successful",
-            content = @Content(schema = @Schema(implementation = TokenPairResponse.class)))
+    @Operation(summary = "User login", description = "Authenticates a user with username and password and returns a JWT token pair.")
+    @ApiResponse(responseCode = "200", description = "Authentication successful", content = @Content(schema = @Schema(implementation = TokenPairResponse.class)))
     @ApiResponse(responseCode = "400", description = "Missing or blank username/password")
     @ApiResponse(responseCode = "401", description = "Invalid credentials")
     @ApiResponse(responseCode = "500", description = "Internal server error")
