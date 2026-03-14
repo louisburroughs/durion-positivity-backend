@@ -625,6 +625,63 @@ class GlobalExceptionHandlerTest {
     }
 
     // ---------------------------------------------------------------
+    // getCurrentUsername — additional branch: authenticated=false
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("getCurrentUsername — non-authenticated principal")
+    class GetCurrentUsernameNotAuthenticated {
+
+        @Test
+        @DisplayName("returns 'system' when authentication is present but isAuthenticated() is false")
+        void returnsSystemWhenNotAuthenticated() {
+            Authentication auth = mock(Authentication.class);
+            when(auth.isAuthenticated()).thenReturn(false);
+            SecurityContextHolder.getContext().setAuthentication(auth);
+
+            AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
+            HttpServletRequest httpReq = mock(HttpServletRequest.class);
+            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
+
+            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+                    ex, requestWithHeader(), httpReq);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleAuthorizationDeniedException — null provider branch
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleAuthorizationDeniedException — null ObjectProvider")
+    class HandleAuthorizationDeniedNullProvider {
+
+        @Test
+        @DisplayName("returns 403 FORBIDDEN when ObjectProvider itself is null (direct instantiation)")
+        void returns403WhenObjectProviderIsNull() {
+            GlobalExceptionHandler handlerWithNullProvider = new GlobalExceptionHandler(
+                    Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC),
+                    null);
+
+            AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
+            HttpServletRequest httpReq = mock(HttpServletRequest.class);
+            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            WebRequest req = mock(WebRequest.class);
+            when(req.getHeader("X-Correlation-Id")).thenReturn(CORRELATION_ID);
+
+            ResponseEntity<ErrorResponse> response = handlerWithNullProvider.handleAuthorizationDeniedException(
+                    ex, req, httpReq);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("FORBIDDEN");
+        }
+    }
+
+    // ---------------------------------------------------------------
     // AUTH-004: account-state denial mappings
     // ---------------------------------------------------------------
 
