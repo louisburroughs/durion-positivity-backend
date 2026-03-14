@@ -175,6 +175,30 @@ class AuthenticationServiceImplTest {
     }
 
     // =========================================================
+    // T8c — login() throws IllegalStateException for unexpected principal type
+    // =========================================================
+
+    @Nested
+    @DisplayName("T8c: login() throws IllegalStateException when principal is not SecurityUserPrincipal")
+    class UnexpectedPrincipalType {
+
+        @Test
+        @DisplayName("T8c: login() throws IllegalStateException when AuthenticationManager returns non-SecurityUserPrincipal")
+        void login_throwsIllegalStateException_whenPrincipalIsNotSecurityUserPrincipal() {
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("testuser");
+            // Return a plain String as principal — not a SecurityUserPrincipal
+            when(successAuth.getPrincipal()).thenReturn("unexpected-string-principal");
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+
+            assertThatThrownBy(() -> sut.login(new LoginRequest("testuser", "password")))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Unexpected principal type")
+                    .hasMessageContaining("java.lang.String");
+        }
+    }
+
+    // =========================================================
     // T9 — login() calls JwtService.generateTokenPair() on success (AC3, AC6)
     // RED: stub throws UnsupportedOperationException
     // =========================================================
