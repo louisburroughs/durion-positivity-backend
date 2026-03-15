@@ -61,11 +61,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         this.lockoutService = lockoutService;
         this.userRepository = userRepository;
         this.authSuccessCounter = Counter.builder(COUNTER_AUTH_SUCCESS).register(meterRegistry);
-        this.badCredentialsCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_BAD_CREDENTIALS).register(meterRegistry);
-        this.accountLockedCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_LOCKED).register(meterRegistry);
-        this.accountDisabledCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_DISABLED).register(meterRegistry);
-        this.accountExpiredCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_EXPIRED).register(meterRegistry);
-        this.credentialsExpiredCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_CREDENTIALS_EXPIRED).register(meterRegistry);
+        this.badCredentialsCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_BAD_CREDENTIALS)
+                .register(meterRegistry);
+        this.accountLockedCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_LOCKED)
+                .register(meterRegistry);
+        this.accountDisabledCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_DISABLED)
+                .register(meterRegistry);
+        this.accountExpiredCounter = Counter.builder(COUNTER_AUTH_FAILURE).tag(TAG_REASON, REASON_ACCOUNT_EXPIRED)
+                .register(meterRegistry);
+        this.credentialsExpiredCounter = Counter.builder(COUNTER_AUTH_FAILURE)
+                .tag(TAG_REASON, REASON_CREDENTIALS_EXPIRED).register(meterRegistry);
     }
 
     @Override
@@ -98,14 +103,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         // Extract userId from principal. CustomUserDetailsService always returns
         // SecurityUserPrincipal. Any other principal type is a programming error —
-        // fail fast rather than silently issuing a token bound to an untrackable identity.
+        // fail fast rather than silently issuing a token bound to an untrackable
+        // identity.
         if (!(authentication.getPrincipal() instanceof CustomUserDetailsService.SecurityUserPrincipal p)) {
             throw new IllegalStateException(
                     "Unexpected principal type: " + authentication.getPrincipal().getClass().getName());
         }
         UUID userId = p.userId();
 
-        // Post-auth bookkeeping should use the authenticated principal as source of truth.
+        // Post-auth bookkeeping should use the authenticated principal as source of
+        // truth.
         lockoutService.recordSuccessfulLogin(userId);
 
         Set<String> roleNames = authentication.getAuthorities().stream()
@@ -127,6 +134,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             lockoutService.recordFailedAttempt(userIdForLockout);
             incrementFailureCounter(REASON_BAD_CREDENTIALS);
         }
+        if (ex instanceof LockedException) {
+            incrementFailureCounter(REASON_ACCOUNT_LOCKED);
+        }
         if (ex instanceof DisabledException) {
             incrementFailureCounter(REASON_ACCOUNT_DISABLED);
         }
@@ -145,7 +155,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             case REASON_ACCOUNT_DISABLED -> accountDisabledCounter.increment();
             case REASON_ACCOUNT_EXPIRED -> accountExpiredCounter.increment();
             case REASON_CREDENTIALS_EXPIRED -> credentialsExpiredCounter.increment();
-            default -> { /* no-op for unmapped reason */ }
+            default -> {
+                /* no-op for unmapped reason */ }
         }
     }
 }

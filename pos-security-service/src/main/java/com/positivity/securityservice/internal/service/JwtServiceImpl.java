@@ -333,6 +333,8 @@ public class JwtServiceImpl implements JwtService {
         String refreshToken = Jwts.builder()
                 .id(refreshJti)
                 .subject(username)
+                .issuer(ISSUER)
+                .audience().add(AUDIENCE).and()
                 .claim(UID, userId.toString())
                 .claim("type", "refresh")
                 .issuedAt(Date.from(now))
@@ -461,8 +463,8 @@ public class JwtServiceImpl implements JwtService {
     private JwtParser jwtParser() {
         return Jwts.parser()
                 .verifyWith(secretKey)
-                // TODO(ADR-0011): enable .requireIssuer(ISSUER).requireAudience(AUDIENCE)
-                // after existing refresh tokens expire.
+                .requireIssuer(ISSUER)
+                .requireAudience(AUDIENCE)
                 .clock(() -> Date.from(Instant.now(clock)))
                 .build();
     }
