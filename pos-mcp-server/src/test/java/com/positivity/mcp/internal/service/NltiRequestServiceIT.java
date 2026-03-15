@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
+import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.service.NltiRequestService;
@@ -86,7 +87,14 @@ class NltiRequestServiceIT {
     @Test
     @DisplayName("AC-5: two submits with same sessionId reuse the existing session")
     void submit_withSameSessionId_reusesExistingSession() {
-        // Arrange — Issue NLTI-001: both requests carry the same session UUID
+        // Arrange — Issue NLTI-001: seed an existing session owned by "system"
+        // (the service fallback subject when no authentication context is present).
+        NltiSession seededSession = new NltiSession();
+        seededSession.setId(FIXED_SESSION_ID);
+        seededSession.setSubjectId("system");
+        nltiSessionRepository.saveAndFlush(seededSession);
+
+        // Both requests carry the same existing session UUID.
         NltiRequestDTO first = new NltiRequestDTO("close workorder 123", FIXED_SESSION_ID, null);
         NltiRequestDTO second = new NltiRequestDTO("reopen workorder 123", FIXED_SESSION_ID, null);
 

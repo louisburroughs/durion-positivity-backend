@@ -28,24 +28,24 @@ class NltiTracingTest {
     @Test
     @DisplayName("NltiSpanAttributes.NLT_CORRELATION_ID == 'nlt.correlationId'")
     void nltiSpanAttributes_hasCorrelationIdKey() {
-        assertThat(NltiSpanAttributes.NLT_CORRELATION_ID).isEqualTo("nlt.correlationId");
+        assertThat(NltiSpanAttributes.NLT_CORRELATION_ID.getKey()).isEqualTo("nlt.correlationId");
     }
 
     @Test
     @DisplayName("NltiSpanAttributes.NLT_REQUEST_ID == 'nlt.requestId'")
     void nltiSpanAttributes_hasRequestIdKey() {
-        assertThat(NltiSpanAttributes.NLT_REQUEST_ID).isEqualTo("nlt.requestId");
+        assertThat(NltiSpanAttributes.NLT_REQUEST_ID.getKey()).isEqualTo("nlt.requestId");
     }
 
     @Test
     @DisplayName("NltiSpanAttributes.NLT_USER_ID == 'nlt.userId'")
     void nltiSpanAttributes_hasUserIdKey() {
-        assertThat(NltiSpanAttributes.NLT_USER_ID).isEqualTo("nlt.userId");
+        assertThat(NltiSpanAttributes.NLT_USER_ID.getKey()).isEqualTo("nlt.userId");
     }
 
     @Test
     @DisplayName("NltiSpanAttributes.NLT_SESSION_ID == 'nlt.sessionId'")
     void nltiSpanAttributes_hasSessionIdKey() {
-        assertThat(NltiSpanAttributes.NLT_SESSION_ID).isEqualTo("nlt.sessionId");
+        assertThat(NltiSpanAttributes.NLT_SESSION_ID.getKey()).isEqualTo("nlt.sessionId");
     }
 }
