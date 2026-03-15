@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -283,6 +284,52 @@ class JwtServiceImplTest {
         sut.revokeTokenByJti("some-jti", 3600);
 
         verify(tokenRevocationManager).revokeToken("some-jti", 3600);
+    }
+
+    @Test
+    @DisplayName("revokeAllTokensForUser revokes active access and refresh tokens then deletes them")
+    void revokeAllTokensForUser_revokesAndDeletesAll() {
+        JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN"));
+        JwtToken stored = new JwtToken();
+        stored.setToken(pair.accessToken());
+        stored.setRefreshToken(pair.refreshToken());
+        stored.setSubject("alice");
+        List<JwtToken> tokens = List.of(stored);
+
+        when(jwtTokenRepository.findAllBySubject("alice")).thenReturn(tokens);
+
+        sut.revokeAllTokensForUser("alice");
+
+        verify(tokenRevocationManager, times(2)).revokeToken(anyString(), anyLong());
+        verify(jwtTokenRepository).deleteAll(tokens);
+    }
+
+    @Test
+    @DisplayName("revokeAllTokensForUser does nothing when user has no tokens")
+    void revokeAllTokensForUser_noTokens_noRevocationOrDelete() {
+        when(jwtTokenRepository.findAllBySubject("alice")).thenReturn(List.of());
+
+        sut.revokeAllTokensForUser("alice");
+
+        verify(tokenRevocationManager, never()).revokeToken(anyString(), anyLong());
+        verify(jwtTokenRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    @DisplayName("revokeAllTokensForUser tolerates malformed tokens and still deletes DB rows")
+    void revokeAllTokensForUser_malformedTokens_stillDeletes() {
+        JwtToken malformed = new JwtToken();
+        malformed.setToken("not.a.jwt.access");
+        malformed.setRefreshToken("not.a.jwt.refresh");
+        malformed.setSubject("alice");
+        List<JwtToken> tokens = List.of(malformed);
+
+        when(jwtTokenRepository.findAllBySubject("alice")).thenReturn(tokens);
+
+        sut.revokeAllTokensForUser("alice");
+
+        verify(tokenRevocationManager, never()).revokeToken(anyString(), anyLong());
+        verify(jwtTokenRepository).deleteAll(tokens);
     }
 
     @Test
