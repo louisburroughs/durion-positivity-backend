@@ -305,6 +305,59 @@ class JwtServiceImplTest {
     }
 
     @Test
+    @DisplayName("refresh token includes expected issuer and audience claims")
+    void refreshToken_containsExpectedIssuerAndAudience() {
+        JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN"));
+
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        Claims claims = Jwts.parser().verifyWith(key)
+                .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
+                .build()
+                .parseSignedClaims(pair.refreshToken())
+                .getPayload();
+
+        assertThat(claims.getIssuer()).isEqualTo("pos-security-service");
+        assertThat(claims.getAudience()).containsExactly("api-gateway");
+    }
+
+    @Test
+    @DisplayName("validateRefreshToken: returns false when issuer claim is incorrect")
+    void validateRefreshToken_wrongIssuer_returnsFalse() {
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        String refreshTokenWithWrongIssuer = Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject("alice")
+                .issuer("wrong-issuer")
+                .audience().add("api-gateway").and()
+                .claim(JwtService.UID, TEST_USER_ID.toString())
+                .claim("type", "refresh")
+                .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
+                .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
+                .signWith(key)
+                .compact();
+
+        assertThat(sut.validateRefreshToken(refreshTokenWithWrongIssuer)).isFalse();
+    }
+
+    @Test
+    @DisplayName("validateRefreshToken: returns false when audience claim is missing")
+    void validateRefreshToken_missingAudience_returnsFalse() {
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        String refreshTokenWithMissingAudience = Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject("alice")
+                .issuer("pos-security-service")
+                .claim(JwtService.UID, TEST_USER_ID.toString())
+                .claim("type", "refresh")
+                .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
+                .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
+                .signWith(key)
+                .compact();
+
+        assertThat(sut.validateRefreshToken(refreshTokenWithMissingAudience)).isFalse();
+    }
+
+    @Test
     @DisplayName("refreshAccessToken: invalid refresh token throws IllegalArgumentException")
     void refreshAccessToken_invalidRefreshToken_throws() {
         assertThatThrownBy(() -> sut.refreshAccessToken("not.a.real.token"))
@@ -347,6 +400,8 @@ class JwtServiceImplTest {
 
         String legacyToken = Jwts.builder()
                 .subject("alice")
+                .issuer("pos-security-service")
+                .audience().add("api-gateway").and()
                 .claim(JwtService.USER_ID, legacyUserId.toString())
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                 .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
@@ -509,6 +564,8 @@ class JwtServiceImplTest {
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
         String legacyToken = Jwts.builder()
                 .subject("alice")
+                .issuer("pos-security-service")
+                .audience().add("api-gateway").and()
                 .claim(JwtService.AUTHORITIES, List.of(PermissionCode.ACCOUNTING__JE__VIEW.code()))
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                 .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
@@ -556,6 +613,8 @@ class JwtServiceImplTest {
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
         String legacyToken = Jwts.builder()
                 .subject("alice")
+                .issuer("pos-security-service")
+                .audience().add("api-gateway").and()
                 .claim(JwtService.ROLES, List.of("ADMIN"))
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                 .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
@@ -587,6 +646,8 @@ class JwtServiceImplTest {
 
         String tokenWithStringPermVer = Jwts.builder()
                 .subject("alice")
+                .issuer("pos-security-service")
+                .audience().add("api-gateway").and()
                 .claim(JwtService.PERM_BITS, permBits)
                 .claim(JwtService.PERM_VER, "unknown-version")
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
@@ -648,6 +709,8 @@ class JwtServiceImplTest {
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
         String tokenWithoutUid = Jwts.builder()
                 .subject("alice")
+                .issuer("pos-security-service")
+                .audience().add("api-gateway").and()
                 .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                 .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
                 .signWith(key)
@@ -704,6 +767,8 @@ class JwtServiceImplTest {
             SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
             String tokenWithMalformedPersonId = Jwts.builder()
                     .subject("alice")
+                    .issuer("pos-security-service")
+                    .audience().add("api-gateway").and()
                     .claim(JwtService.PERSON_ID, "not-a-valid-uuid")
                     .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
                     .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(3600)))
