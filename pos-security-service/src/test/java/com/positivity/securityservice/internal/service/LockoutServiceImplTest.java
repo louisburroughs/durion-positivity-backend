@@ -7,8 +7,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -65,12 +67,16 @@ class LockoutServiceImplTest {
     private static final Duration WINDOW = Duration.ofMinutes(10);
     private static final int BACKOFF_MULTIPLIER = 2;
     private static final Duration MAX_BACKOFF = Duration.ofMinutes(30);
+    private static final Instant NOW = Instant.parse("2026-03-14T12:00:00Z");
 
     @Mock
     private UserRepository userRepository;
 
     @Mock
     private LockoutPolicy lockoutPolicy;
+
+    @Mock
+    private Clock clock;
 
     @InjectMocks
     private LockoutServiceImpl lockoutService;
@@ -80,6 +86,11 @@ class LockoutServiceImplTest {
         when(lockoutPolicy.window()).thenReturn(WINDOW);
         when(lockoutPolicy.backoffMultiplier()).thenReturn(BACKOFF_MULTIPLIER);
         when(lockoutPolicy.maxBackoffWindow()).thenReturn(MAX_BACKOFF);
+    }
+
+    private void stubClock() {
+        when(clock.instant()).thenReturn(NOW);
+        when(clock.getZone()).thenReturn(ZoneOffset.UTC);
     }
 
     private User freshUser() {
@@ -103,6 +114,7 @@ class LockoutServiceImplTest {
             User user = freshUser();
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             stubPolicy();
+            stubClock();
 
             lockoutService.recordFailedAttempt(userId);
 
@@ -117,9 +129,10 @@ class LockoutServiceImplTest {
             UUID userId = UUID.randomUUID();
             User user = freshUser();
             user.setFailedLoginAttempts(MAX_ATTEMPTS - 1);
-            user.setLastFailedLoginAt(Instant.now().minusSeconds(60));
+            user.setLastFailedLoginAt(NOW.minusSeconds(60));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             stubPolicy();
+            stubClock();
 
             lockoutService.recordFailedAttempt(userId);
 
@@ -127,7 +140,7 @@ class LockoutServiceImplTest {
                     !u.isAccountNonLocked()
                             && u.getLockedAt() != null
                             && u.getLockedUntil() != null
-                            && u.getLockedUntil().isAfter(Instant.now())));
+                            && u.getLockedUntil().isAfter(NOW)));
         }
 
         @Test
@@ -137,14 +150,15 @@ class LockoutServiceImplTest {
             User user = freshUser();
             user.setFailedLoginAttempts(2 * MAX_ATTEMPTS - 1);
             user.setAccountNonLocked(true); // was auto-unlocked
-            user.setLastFailedLoginAt(Instant.now().minusSeconds(30));
+            user.setLastFailedLoginAt(NOW.minusSeconds(30));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             stubPolicy();
+            stubClock();
 
             lockoutService.recordFailedAttempt(userId);
 
             // lockedUntil must be > window (doubled) and <= maxBackoff from now
-            Instant minLockedUntil = Instant.now().plus(WINDOW.multipliedBy(BACKOFF_MULTIPLIER)).minusSeconds(5);
+            Instant minLockedUntil = NOW.plus(WINDOW.multipliedBy(BACKOFF_MULTIPLIER)).minusSeconds(5);
             verify(userRepository).save(argThat(u ->
                     !u.isAccountNonLocked()
                             && u.getLockedUntil() != null
@@ -163,9 +177,10 @@ class LockoutServiceImplTest {
             User user = freshUser();
             user.setFailedLoginAttempts(3);
             user.setAccountNonLocked(false);
-            user.setLockedAt(Instant.now().minusSeconds(300));
-            user.setLockedUntil(Instant.now().plusSeconds(300));
+            user.setLockedAt(NOW.minusSeconds(300));
+            user.setLockedUntil(NOW.plusSeconds(300));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubClock();
 
             lockoutService.recordSuccessfulLogin(userId);
 
@@ -188,8 +203,9 @@ class LockoutServiceImplTest {
             UUID userId = UUID.randomUUID();
             User user = freshUser();
             user.setAccountNonLocked(false);
-            user.setLockedUntil(Instant.now().plusSeconds(300));
+            user.setLockedUntil(NOW.plusSeconds(300));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubClock();
 
             boolean result = lockoutService.isLockedOut(userId);
 
@@ -203,6 +219,7 @@ class LockoutServiceImplTest {
             User user = freshUser();
             user.setAccountNonLocked(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubClock();
 
             boolean result = lockoutService.isLockedOut(userId);
 
@@ -220,9 +237,10 @@ class LockoutServiceImplTest {
             UUID userId = UUID.randomUUID();
             User user = freshUser();
             user.setAccountNonLocked(false);
-            user.setLockedAt(Instant.now().minusSeconds(700));
-            user.setLockedUntil(Instant.now().minusSeconds(60));
+            user.setLockedAt(NOW.minusSeconds(700));
+            user.setLockedUntil(NOW.minusSeconds(60));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubClock();
 
             boolean result = lockoutService.unlockIfCooldownExpired(userId);
 
@@ -240,8 +258,9 @@ class LockoutServiceImplTest {
             UUID userId = UUID.randomUUID();
             User user = freshUser();
             user.setAccountNonLocked(false);
-            user.setLockedUntil(Instant.now().plusSeconds(300));
+            user.setLockedUntil(NOW.plusSeconds(300));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubClock();
 
             boolean result = lockoutService.unlockIfCooldownExpired(userId);
 
@@ -256,6 +275,7 @@ class LockoutServiceImplTest {
             User user = freshUser();
             user.setAccountNonLocked(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubClock();
 
             boolean result = lockoutService.unlockIfCooldownExpired(userId);
 
@@ -271,6 +291,7 @@ class LockoutServiceImplTest {
             user.setAccountNonLocked(false);
             user.setLockedUntil(null); // admin-set permanent lock — no expiry
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubClock();
 
             boolean result = lockoutService.unlockIfCooldownExpired(userId);
 
@@ -291,6 +312,7 @@ class LockoutServiceImplTest {
             user.setAccountNonLocked(false);
             user.setLockedUntil(null); // no expiry → lock is permanent until manually cleared
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubClock();
 
             boolean result = lockoutService.isLockedOut(userId);
 
@@ -303,8 +325,9 @@ class LockoutServiceImplTest {
             UUID userId = UUID.randomUUID();
             User user = freshUser();
             user.setAccountNonLocked(false);
-            user.setLockedUntil(Instant.now().minusSeconds(1)); // expired
+            user.setLockedUntil(NOW.minusSeconds(1)); // expired
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            stubClock();
 
             boolean result = lockoutService.isLockedOut(userId);
 
@@ -323,9 +346,10 @@ class LockoutServiceImplTest {
             User user = freshUser();
             user.setFailedLoginAttempts(MAX_ATTEMPTS - 1);
             // Last failure is older than the window → withinWindow = false
-            user.setLastFailedLoginAt(Instant.now().minus(WINDOW).minusSeconds(60));
+            user.setLastFailedLoginAt(NOW.minus(WINDOW).minusSeconds(60));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             stubPolicy();
+            stubClock();
 
             lockoutService.recordFailedAttempt(userId);
 
@@ -345,6 +369,8 @@ class LockoutServiceImplTest {
         void t14x_recordFailedAttemptThrowsWhenUserNotFound() {
             UUID userId = UUID.randomUUID();
             when(userRepository.findById(userId)).thenReturn(Optional.empty());
+            stubClock();
+            stubPolicy();
 
             assertThatThrownBy(() -> lockoutService.recordFailedAttempt(userId))
                     .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
@@ -355,6 +381,7 @@ class LockoutServiceImplTest {
         void t15x_recordSuccessfulLoginThrowsWhenUserNotFound() {
             UUID userId = UUID.randomUUID();
             when(userRepository.findById(userId)).thenReturn(Optional.empty());
+            stubClock();
 
             assertThatThrownBy(() -> lockoutService.recordSuccessfulLogin(userId))
                     .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
@@ -365,6 +392,7 @@ class LockoutServiceImplTest {
         void t16x_isLockedOutThrowsWhenUserNotFound() {
             UUID userId = UUID.randomUUID();
             when(userRepository.findById(userId)).thenReturn(Optional.empty());
+            stubClock();
 
             assertThatThrownBy(() -> lockoutService.isLockedOut(userId))
                     .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
@@ -375,6 +403,7 @@ class LockoutServiceImplTest {
         void t17x_unlockIfCooldownExpiredThrowsWhenUserNotFound() {
             UUID userId = UUID.randomUUID();
             when(userRepository.findById(userId)).thenReturn(Optional.empty());
+            stubClock();
 
             assertThatThrownBy(() -> lockoutService.unlockIfCooldownExpired(userId))
                     .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);

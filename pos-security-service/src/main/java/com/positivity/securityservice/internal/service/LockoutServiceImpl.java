@@ -10,6 +10,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -30,6 +31,7 @@ public class LockoutServiceImpl implements LockoutService {
     private static final String USER_NOT_FOUND = "User not found: ";
     private final UserRepository userRepository;
     private final LockoutPolicy lockoutPolicy;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -37,7 +39,7 @@ public class LockoutServiceImpl implements LockoutService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         Instant priorLastFailedAt = user.getLastFailedLoginAt();
 
         user.setFailedLoginAttempts(user.getFailedLoginAttempts() + 1);
@@ -63,6 +65,11 @@ public class LockoutServiceImpl implements LockoutService {
         userRepository.save(user);
     }
 
+    /**
+     * Resets lockout-related state on successful authentication.
+     *
+     * @param userId persistent user identifier
+     */
     @Override
     @Transactional
     public void recordSuccessfulLogin(@NonNull UUID userId) {
@@ -70,7 +77,7 @@ public class LockoutServiceImpl implements LockoutService {
                 .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         user.setFailedLoginAttempts(0);
-        user.setLastSuccessfulLoginAt(Instant.now());
+        user.setLastSuccessfulLoginAt(Instant.now(clock));
         user.setAccountNonLocked(true);
         user.setLockedAt(null);
         user.setLockedUntil(null);
@@ -78,15 +85,27 @@ public class LockoutServiceImpl implements LockoutService {
         userRepository.save(user);
     }
 
+    /**
+     * Returns whether the user is currently locked out.
+     *
+     * @param userId persistent user identifier
+     * @return {@code true} when locked with no expiry or a future expiry
+     */
     @Override
     public boolean isLockedOut(@NonNull UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND + userId));
 
         return !user.isAccountNonLocked()
-                && (user.getLockedUntil() == null || user.getLockedUntil().isAfter(Instant.now()));
+                && (user.getLockedUntil() == null || user.getLockedUntil().isAfter(Instant.now(clock)));
     }
 
+    /**
+     * Unlocks a user only when a timed lockout has expired.
+     *
+     * @param userId persistent user identifier
+     * @return {@code true} when an expired lock was cleared and saved
+     */
     @Override
     @Transactional
     public boolean unlockIfCooldownExpired(@NonNull UUID userId) {
@@ -100,7 +119,7 @@ public class LockoutServiceImpl implements LockoutService {
             // Admin-set lock with no expiry — no auto-unlock
             return false;
         }
-        if (user.getLockedUntil().isBefore(Instant.now())) {
+        if (user.getLockedUntil().isBefore(Instant.now(clock))) {
             user.setAccountNonLocked(true);
             user.setLockedAt(null);
             user.setLockedUntil(null);

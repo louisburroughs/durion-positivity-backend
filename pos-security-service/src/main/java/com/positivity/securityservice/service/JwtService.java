@@ -163,6 +163,18 @@ public interface JwtService {
     void revokeTokenByJti(@NonNull String jti, long expirationSeconds);
 
     /**
+     * Revokes all active access and refresh tokens for the given user.
+     *
+     * <p>Deletes all {@code JwtToken} records for the subject and marks each
+     * token's JTI as revoked in the Redis cache. Called during account-state
+     * transitions (disable, expireAccount, expireCredentials) to ensure no
+     * active token survives an account deactivation.
+     *
+     * @param username the subject (username) of the user whose tokens should be revoked
+     */
+    void revokeAllTokensForUser(@NonNull String username);
+
+    /**
      * Record representing a pair of access and refresh tokens.
      *
      * @param accessToken  the access token
@@ -184,11 +196,19 @@ public interface JwtService {
      * - Each token has separate JTI (not shared)
      * - Permissions: Encoded as perm_bits Base64URL BitSet via
      * PermissionBitsetCodec at issuance.
+    *
+    * @implNote Access token claims: {@code sub}, {@code uid}, {@code username},
+    *           {@code iss} ("pos-security-service"), {@code aud} ("api-gateway"),
+    *           {@code perm_bits}, {@code perm_ver}, {@code iat}, {@code exp}, {@code jti}.
+    *           Refresh token claims: {@code sub}, {@code uid}, {@code type}="refresh",
+    *           {@code iat}, {@code exp}, {@code jti}.
      * 
      * @param username the subject for the tokens
      * @param userId   stable user identifier for audit lineage
      * @param personId optional CRM person identifier; when non-null, included as
-     *                 {@code personId} claim in the access token only
+    *                 {@code personId} claim in the access token only. When null,
+    *                 the claim is omitted (expected for users not yet linked to a
+    *                 person record).
      * @param roles    the set of roles used to derive the permission bitset claim
      *                 (perm_bits)
      * @return a TokenPair containing the access and refresh tokens

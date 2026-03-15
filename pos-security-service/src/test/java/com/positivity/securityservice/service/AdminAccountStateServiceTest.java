@@ -57,6 +57,9 @@ class AdminAccountStateServiceTest {
     @Mock
     UserRepository userRepository;
 
+    @Mock
+    JwtService jwtService;
+
     @InjectMocks
     AdminAccountStateServiceImpl service;
 
@@ -164,6 +167,7 @@ class AdminAccountStateServiceTest {
             User active = new User();
             active.setId(USER_ID);
             active.setEnabled(true);
+            active.setUsername("active-user");
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(active));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -177,6 +181,7 @@ class AdminAccountStateServiceTest {
             service.disable(USER_ID);
 
             verify(userRepository).save(any(User.class));
+            verify(jwtService).revokeAllTokensForUser(active.getUsername());
             assertThat(active.isEnabled()).isFalse();
             assertThat(active.getDisabledBy()).isEqualTo("admin-user");
             assertThat(active.getDisabledAt()).isEqualTo(TEST_CLOCK.instant());
@@ -197,6 +202,7 @@ class AdminAccountStateServiceTest {
             User active = new User();
             active.setId(USER_ID);
             active.setEnabled(true);
+            active.setUsername("active-user");
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(active));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -206,6 +212,7 @@ class AdminAccountStateServiceTest {
 
             service.disable(USER_ID);
 
+            verify(jwtService).revokeAllTokensForUser(active.getUsername());
             assertThat(active.isEnabled()).isFalse();
             assertThat(active.getDisabledBy()).isEqualTo("system");
             assertThat(active.getDisabledAt()).isEqualTo(TEST_CLOCK.instant());
@@ -228,6 +235,7 @@ class AdminAccountStateServiceTest {
             User user = new User();
             user.setId(USER_ID);
             user.setAccountNonExpired(true);
+            user.setUsername("expire-account-user");
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -235,6 +243,7 @@ class AdminAccountStateServiceTest {
             service.expireAccount(USER_ID);
 
             verify(userRepository).save(any(User.class));
+            verify(jwtService).revokeAllTokensForUser(user.getUsername());
             assertThat(user.isAccountNonExpired()).isFalse();
             assertThat(user.getAccountExpiresAt()).isEqualTo(TEST_CLOCK.instant());
         }
@@ -265,6 +274,7 @@ class AdminAccountStateServiceTest {
             User user = new User();
             user.setId(USER_ID);
             user.setCredentialsNonExpired(true);
+            user.setUsername("expire-credentials-user");
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -272,6 +282,7 @@ class AdminAccountStateServiceTest {
             service.expireCredentials(USER_ID);
 
             verify(userRepository).save(any(User.class));
+            verify(jwtService).revokeAllTokensForUser(user.getUsername());
             assertThat(user.isCredentialsNonExpired()).isFalse();
             assertThat(user.getCredentialsExpireAt()).isEqualTo(TEST_CLOCK.instant());
         }
