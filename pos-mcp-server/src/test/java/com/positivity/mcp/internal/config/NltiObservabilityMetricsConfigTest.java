@@ -52,29 +52,29 @@ class NltiObservabilityMetricsConfigTest {
     }
 
     @Test
-    @DisplayName("nltRequestLatencyMs bean registers nlt.request.latency_ms timer")
+    @DisplayName("nltRequestLatencyMs bean registers nlt.request.latency timer")
     void nltRequestLatencyMs_registersTimer() {
         Timer timer = config.nltRequestLatencyMs(registry);
 
         assertThat(timer).isNotNull();
-        assertThat(registry.timer("nlt.request.latency_ms")).isSameAs(timer);
+        assertThat(registry.timer("nlt.request.latency")).isSameAs(timer);
     }
 
     @Test
-    @DisplayName("nltPlanningLatencyMs bean registers nlt.planning.latency_ms timer")
+    @DisplayName("nltPlanningLatencyMs bean registers nlt.planning.latency timer")
     void nltPlanningLatencyMs_registersTimer() {
         Timer timer = config.nltPlanningLatencyMs(registry);
 
         assertThat(timer).isNotNull();
-        assertThat(registry.timer("nlt.planning.latency_ms")).isSameAs(timer);
+        assertThat(registry.timer("nlt.planning.latency")).isSameAs(timer);
     }
 
     @Test
-    @DisplayName("nltExecutionLatencyMs bean registers nlt.execution.latency_ms timer")
+    @DisplayName("nltExecutionLatencyMs bean registers nlt.execution.latency timer")
     void nltExecutionLatencyMs_registersTimer() {
         Timer timer = config.nltExecutionLatencyMs(registry);
 
         assertThat(timer).isNotNull();
-        assertThat(registry.timer("nlt.execution.latency_ms")).isSameAs(timer);
+        assertThat(registry.timer("nlt.execution.latency")).isSameAs(timer);
     }
 }
