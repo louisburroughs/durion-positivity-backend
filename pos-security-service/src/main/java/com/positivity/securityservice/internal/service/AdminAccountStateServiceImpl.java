@@ -5,6 +5,7 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.service.AdminAccountStateService;
+import com.positivity.securityservice.service.JwtService;
 import java.time.Clock;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
 
     private final UserRepository userRepository;
     private final Clock clock;
+    private final JwtService jwtService;
 
     @Override
     @Transactional
@@ -48,6 +50,7 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
         user.setDisabledBy(resolveActor());
         user.setDisabledAt(clock.instant());
         userRepository.save(user);
+        jwtService.revokeAllTokensForUser(user.getUsername());
     }
 
     @Override
@@ -57,6 +60,7 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
         user.setAccountNonExpired(false);
         user.setAccountExpiresAt(clock.instant());
         userRepository.save(user);
+        jwtService.revokeAllTokensForUser(user.getUsername());
     }
 
     @Override
@@ -66,6 +70,7 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(clock.instant());
         userRepository.save(user);
+        jwtService.revokeAllTokensForUser(user.getUsername());
     }
 
     @Override

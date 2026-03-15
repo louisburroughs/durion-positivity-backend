@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/auth")
 @RequiredArgsConstructor
+@PreAuthorize("permitAll()")
 public class AuthController {
 
     private final AuthenticationService authenticationService;
@@ -41,7 +42,6 @@ public class AuthController {
     @ApiResponse(responseCode = "401", description = "Invalid credentials")
     @ApiResponse(responseCode = "500", description = "Internal server error")
     @EmitEvent(id = "SECURITY_AUTH_LOGIN", apiVersion = "1")
-    @PreAuthorize("permitAll()")
     @PostMapping("/login")
     public ResponseEntity<TokenPairResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authenticationService.login(request));

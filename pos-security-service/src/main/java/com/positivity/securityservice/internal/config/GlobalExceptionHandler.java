@@ -63,6 +63,11 @@ import lombok.extern.slf4j.Slf4j;
  * **Mapped Exceptions:**
  * - IllegalArgumentException → 400 Bad Request
  * - InvalidRefreshTokenException → 401 Unauthorized
+ * - LockedException → 401 Unauthorized
+ * - DisabledException → 401 Unauthorized
+ * - AccountExpiredException → 401 Unauthorized
+ * - CredentialsExpiredException → 401 Unauthorized
+ * - BadCredentialsException → 401 Unauthorized
  * - AuthorizationDeniedException → 403 Forbidden
  * - DuplicateRoleNameException → 409 Conflict
  * - IllegalStateException → 409 Conflict (overlapping assignment) or 400 Bad
@@ -429,6 +434,7 @@ public class GlobalExceptionHandler {
         }
 
         @ExceptionHandler(DisabledException.class)
+        @ResponseStatus(HttpStatus.UNAUTHORIZED)
         public ResponseEntity<ErrorResponse> handleDisabledException(
                         DisabledException ex,
                         WebRequest request) {
@@ -444,6 +450,7 @@ public class GlobalExceptionHandler {
         }
 
         @ExceptionHandler(AccountExpiredException.class)
+        @ResponseStatus(HttpStatus.UNAUTHORIZED)
         public ResponseEntity<ErrorResponse> handleAccountExpiredException(
                         AccountExpiredException ex,
                         WebRequest request) {
@@ -459,6 +466,7 @@ public class GlobalExceptionHandler {
         }
 
         @ExceptionHandler(CredentialsExpiredException.class)
+        @ResponseStatus(HttpStatus.UNAUTHORIZED)
         public ResponseEntity<ErrorResponse> handleCredentialsExpiredException(
                         CredentialsExpiredException ex,
                         WebRequest request) {

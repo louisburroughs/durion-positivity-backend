@@ -74,17 +74,14 @@ import io.jsonwebtoken.Jwts;
  * <tr>
  * <td>T4</td>
  * <td>AC5</td>
- * <td>YES</td>
- * <td>pos-security-service pom.xml lacks spring-boot-starter-validation;
- * Hibernate Validator is absent so @NotBlank does not fire, stub is reached
- * and throws UnsupportedOperationException → 500. GREEN requires adding the
- * dependency AND the working implementation.</td>
+ * <td>NO</td>
+ * <td>Blank username is rejected by request validation, returning HTTP 400.</td>
  * </tr>
  * <tr>
  * <td>T5</td>
  * <td>AC5</td>
- * <td>YES</td>
- * <td>Same as T4</td>
+ * <td>NO</td>
+ * <td>Blank password is rejected by request validation, returning HTTP 400.</td>
  * </tr>
  * <tr>
  * <td>T6</td>
@@ -94,14 +91,6 @@ import io.jsonwebtoken.Jwts;
  * GlobalExceptionHandler → 400; stub never reached.</td>
  * </tr>
  * </table>
- *
- * <p>
- * <strong>Note on T4/T5</strong>: These are RED because
- * {@code spring-boot-starter-validation} is not yet declared in
- * {@code pos-security-service/pom.xml}. Adding it (alongside the GREEN
- * implementation)
- * is required for Bean Validation ({@code @NotBlank}) to fire before the
- * controller method.
  *
  * <p>
  * <strong>T7 (no raw BCrypt)</strong>: Covered by
@@ -259,14 +248,11 @@ class AuthControllerIT extends BaseContractIntegrationTest {
     class ValidationTests {
 
         @Test
-        @DisplayName("T4 [RED]: blank username → HTTP 400 — RED until spring-boot-starter-validation added to pom.xml")
+                @DisplayName("T4: blank username → HTTP 400")
         void login_blankUsername_returns400() throws Exception {
             String body = objectMapper.writeValueAsString(new LoginRequest("", "somepassword"));
 
-            // RED: spring-boot-starter-validation absent → @NotBlank does NOT fire →
-            // stub is reached → UnsupportedOperationException → 500.
-            // GREEN requires: (1) add spring-boot-starter-validation to pom.xml,
-            // (2) working implementation so validation fires before reaching service.
+                        // Validation rejects blank username and the API returns INVALID_REQUEST/400.
             mockMvc.perform(post(LOGIN_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body))
@@ -274,11 +260,11 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         }
 
         @Test
-        @DisplayName("T5 [RED]: blank password → HTTP 400 — RED until spring-boot-starter-validation added to pom.xml")
+                @DisplayName("T5: blank password → HTTP 400")
         void login_blankPassword_returns400() throws Exception {
             String body = objectMapper.writeValueAsString(new LoginRequest(TEST_USERNAME, ""));
 
-            // RED: same root cause as T4.
+                        // Validation rejects blank password and the API returns INVALID_REQUEST/400.
             mockMvc.perform(post(LOGIN_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body))

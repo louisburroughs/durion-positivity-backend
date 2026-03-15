@@ -54,6 +54,8 @@ public class JwtServiceImpl implements JwtService {
 
     private static final long ACCESS_TOKEN_EXPIRATION_SECONDS = 3600L;
     private static final long REFRESH_TOKEN_EXPIRATION_SECONDS = 604800L;
+    private static final String ISSUER = "pos-security-service";
+    private static final String AUDIENCE = "api-gateway";
 
     private final JwtTokenRepository jwtTokenRepository;
     private final RoleAuthorityService roleAuthorityService;
@@ -254,6 +256,37 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
+    @Transactional
+    public void revokeAllTokensForUser(@NonNull String username) {
+        List<JwtToken> tokens = jwtTokenRepository.findAllBySubject(username);
+        for (JwtToken jwtToken : tokens) {
+            revokeJtiIfTokenActive(jwtToken.getToken(), "access");
+            revokeJtiIfTokenActive(jwtToken.getRefreshToken(), "refresh");
+        }
+        if (!tokens.isEmpty()) {
+            jwtTokenRepository.deleteAll(tokens);
+            log.debug("Revoked all tokens for user: username={}, count={}", username, tokens.size());
+        }
+    }
+
+    private void revokeJtiIfTokenActive(@NonNull String token, @NonNull String tokenType) {
+        try {
+            Claims claims = jwtParser().parseSignedClaims(token).getPayload();
+            String jti = claims.getId();
+            if (jti == null) {
+                return;
+            }
+
+            long secondsLeft = ChronoUnit.SECONDS.between(Instant.now(clock), claims.getExpiration().toInstant());
+            if (secondsLeft > 0) {
+                tokenRevocationManager.revokeToken(jti, secondsLeft);
+            }
+        } catch (JwtException e) {
+            log.debug("Failed to revoke {} token JTI: error={}", tokenType, e.getClass().getSimpleName());
+        }
+    }
+
+    @Override
     public TokenPair generateTokenPair(@NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles) {
         if (username == null || username.isBlank()) {
             throw new IllegalArgumentException("Username cannot be blank");
@@ -281,6 +314,8 @@ public class JwtServiceImpl implements JwtService {
         var accessBuilder = Jwts.builder()
                 .id(accessJti)
                 .subject(username)
+            .issuer(ISSUER)
+            .audience().add(AUDIENCE).and()
                 .claim(UID, userId.toString())
                 .claim(USERNAME, username)
                 .claim(PERM_BITS, permBits)
@@ -426,6 +461,8 @@ public class JwtServiceImpl implements JwtService {
     private JwtParser jwtParser() {
         return Jwts.parser()
                 .verifyWith(secretKey)
+                // TODO(ADR-0011): enable .requireIssuer(ISSUER).requireAudience(AUDIENCE)
+                // after existing refresh tokens expire.
                 .clock(() -> Date.from(Instant.now(clock)))
                 .build();
     }

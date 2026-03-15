@@ -198,8 +198,12 @@ public class SecurityGatewayConfig {
         try {
             Jws<Claims> jwsClaims = Jwts.parser()
                     .verifyWith(secretKey)
-                    // Issuer and audience validation will be enabled once emitted by the token
-                    // service.
+                    // iss/aud claims are now emitted by pos-security-service (since
+                    // AUTH-HARDENING review).
+                    // TODO(ADR-0011): Add .requireIssuer("pos-security-service")
+                    // .requireAudience("api-gateway")
+                    // to the parser once gateway integration tests are updated for the
+                    // new claims.
                     .build()
                     .parseSignedClaims(token);
             return Optional.of(jwsClaims.getPayload());
