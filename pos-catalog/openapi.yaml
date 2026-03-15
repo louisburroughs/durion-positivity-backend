@@ -43,12 +43,6 @@ paths:
         schema:
           default: "##default"
       responses:
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "200":
           description: Successfully retrieved product
           content:
@@ -64,6 +58,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Product not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
     put:
       tags:
       - Products API
@@ -90,6 +90,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDto"
+        "409":
+          description: Business conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
         "200":
           description: Product updated
           content:
@@ -105,12 +111,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "409":
-          description: Business conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "404":
           description: Product not found
           content:
@@ -148,6 +148,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+        "404":
+          description: MSRP record not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
         "200":
           description: MSRP updated
           content:
@@ -163,12 +169,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: MSRP record not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "403":
           description: Forbidden
           content:
@@ -196,6 +196,12 @@ paths:
         schema:
           default: "##default"
       responses:
+        "404":
+          description: Product not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
         "200":
           description: Successfully retrieved lifecycle state
           content:
@@ -211,12 +217,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
     put:
       tags:
       - Products API
@@ -238,21 +238,6 @@ paths:
               $ref: "#/components/schemas/ProductLifecycleUpdateRequest"
         required: true
       responses:
-        "200":
-          description: Lifecycle state updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "400":
           description: Validation error
           content:
@@ -271,6 +256,21 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
+        "200":
+          description: Lifecycle state updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "409":
           description: Lifecycle business rule conflict
           content:
@@ -393,6 +393,12 @@ paths:
         schema:
           default: "##default"
       responses:
+        "404":
+          description: Not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
         "200":
           description: Found
           content:
@@ -408,12 +414,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
     put:
       tags:
       - Supplier Item Cost API
@@ -432,12 +432,6 @@ paths:
               $ref: "#/components/schemas/SupplierItemCostUpdateRequestDto"
         required: true
       responses:
-        "404":
-          description: Not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
         "200":
           description: Updated
           content:
@@ -453,6 +447,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
     delete:
       tags:
       - Supplier Item Cost API
@@ -630,6 +630,12 @@ paths:
               $ref: "#/components/schemas/UpdateStandardCostRequestDto"
         required: true
       responses:
+        "400":
+          description: Invalid payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ItemCostsDto"
         "200":
           description: Updated
           content:
@@ -645,12 +651,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ItemCostsDto"
   /v1/catalogs/{catalogId}:
     get:
       tags:
@@ -717,6 +717,12 @@ paths:
                 default: "##default"
         required: true
       responses:
+        "400":
+          description: Invalid request body
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogDto"
         "200":
           description: Catalog updated successfully
           content:
@@ -732,12 +738,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid request body
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogDto"
         "404":
           description: Catalog not found
           content:
@@ -995,18 +995,6 @@ paths:
               $ref: "#/components/schemas/CreateMsrpRequestDto"
         required: true
       responses:
-        "409":
-          description: Temporal overlap conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
-        "400":
-          description: Invalid payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
         "201":
           description: MSRP created
           content:
@@ -1022,6 +1010,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Temporal overlap conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "400":
+          description: Invalid payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
         "403":
           description: Forbidden
           content:
@@ -1108,12 +1108,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/SupplierItemCostDto"
-        "409":
-          description: Duplicate supplier and item combination
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/SupplierItemCostDto"
         "201":
           description: Created
           content:
@@ -1129,6 +1123,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Duplicate supplier and item combination
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SupplierItemCostDto"
   /v1/products/pricing/location-overrides:
     post:
       tags:
@@ -1193,12 +1193,6 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
-        "404":
-          description: Override or approval request not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "200":
           description: Override rejected
           content:
@@ -1214,6 +1208,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Override or approval request not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "400":
           description: Invalid rejection request
           content:
@@ -1248,6 +1248,12 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
         required: true
       responses:
+        "404":
+          description: Override or approval request not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "200":
           description: Override approved
           content:
@@ -1263,12 +1269,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Override or approval request not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "409":
           description: Version conflict
           content:
@@ -1331,6 +1331,12 @@ paths:
               $ref: "#/components/schemas/PriceBookCreateRequestDto"
         required: true
       responses:
+        "400":
+          description: Invalid payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceBookDto"
         "201":
           description: Price book created
           content:
@@ -1346,12 +1352,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid payload
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookDto"
   /v1/products/price-books/{priceBookId}/rules:
     get:
       tags:
@@ -1400,12 +1400,6 @@ paths:
               $ref: "#/components/schemas/PriceBookRuleCreateRequestDto"
         required: true
       responses:
-        "409":
-          description: Rule conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookRuleDto"
         "201":
           description: Price book rule created
           content:
@@ -1421,6 +1415,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Rule conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceBookRuleDto"
   /v1/products/price-books/resolve-price:
     post:
       tags:
@@ -1646,12 +1646,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductDetailView"
-        "404":
-          description: Product not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDetailView"
         "200":
           description: Successfully retrieved product details (may be partial if some
             services unavailable)
@@ -1668,6 +1662,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Product not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDetailView"
         "500":
           description: Unexpected server error while retrieving product details
           content:
