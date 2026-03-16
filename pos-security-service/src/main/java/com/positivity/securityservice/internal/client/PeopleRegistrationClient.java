@@ -69,4 +69,17 @@ public class PeopleRegistrationClient {
         }
         return response;
     }
+
+    public void deletePerson(@NonNull UUID personId) {
+        restClient.delete()
+                .uri("/v1/people/{personId}", personId)
+                .retrieve()
+                .onStatus(statusCode -> statusCode.value() == 404, (req, res) -> {
+                    throw new IllegalStateException("Created person no longer exists for compensation");
+                })
+                .onStatus(HttpStatusCode::isError, (req, res) -> {
+                    throw new IllegalStateException("People delete request failed with status " + res.getStatusCode().value());
+                })
+                .toBodilessEntity();
+    }
 }

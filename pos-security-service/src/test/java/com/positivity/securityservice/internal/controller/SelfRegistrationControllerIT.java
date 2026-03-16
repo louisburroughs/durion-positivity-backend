@@ -57,7 +57,17 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
     void selfRegister_success_returnsCreated() throws Exception {
         UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", "+15551234567"))
-                .thenReturn(List.of(new CustomerPersonSearchResponse(personId, "Jane", "Smith", "Jane Smith", List.of(), null, null)));
+                .thenReturn(List.of(new CustomerPersonSearchResponse(
+                        personId,
+                        "Jane",
+                        "Smith",
+                        "Jane Smith",
+                        List.of(),
+                        true,
+                        true,
+                        2,
+                        null,
+                        null)));
         when(peopleRegistrationClient.resolvePerson(any()))
                 .thenReturn(new PeopleResolvePersonResponse(personId, true, 60, 30, List.of("EMAIL"), "Jane", "Smith", "jane@example.com", List.of("+15551234567")));
         when(peopleRegistrationClient.getLinkedUserIds(personId)).thenReturn(List.of());
@@ -110,7 +120,9 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("USER_ALREADY_EXISTS"));
+                .andExpect(jsonPath("$.code").value("USER_ALREADY_EXISTS"))
+                .andExpect(jsonPath("$.nextAction").value("Sign in with the existing account or use password recovery instead of registering again."))
+                .andExpect(jsonPath("$.supportAction").value("Confirm that the submitted username or derived email username already maps to an active user in pos-security-service. Preserve the existing account."));
     }
 
     @Test
@@ -136,6 +148,56 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
                                 """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("USER_PERSON_LINK_CONFLICT"));
+
+        assertThat(userRepository.findByUsername("jane")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("POST /v1/auth/self-register returns 409 when CRM shows a conflicting existing identity")
+    void selfRegister_crmConflict_returnsConflict() throws Exception {
+        UUID createdPersonId = UUID.fromString("00000000-0000-0000-0000-000000000203");
+        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
+                .thenReturn(List.of(new CustomerPersonSearchResponse(
+                        UUID.fromString("00000000-0000-0000-0000-000000000204"),
+                        "Jane",
+                        "Smith",
+                        "Jane Smith",
+                        List.of(new CustomerPersonSearchResponse.ContactPointDto(
+                                UUID.fromString("00000000-0000-0000-0000-000000000205"),
+                                "EMAIL",
+                                "jane@example.com",
+                                true)),
+                        true,
+                        true,
+                        1,
+                        null,
+                        null)));
+        when(peopleRegistrationClient.resolvePerson(any()))
+                .thenReturn(new PeopleResolvePersonResponse(
+                        createdPersonId,
+                        false,
+                        0,
+                        30,
+                        List.of("CREATED"),
+                        "Jane",
+                        "Smith",
+                        "jane@example.com",
+                        List.of()));
+
+        mockMvc.perform(post("/v1/auth/self-register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "jane@example.com",
+                                  "password": "Sup3rS3cret!",
+                                  "firstName": "Jane",
+                                  "lastName": "Smith"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CRM_PERSON_CONFLICT"))
+                .andExpect(jsonPath("$.nextAction").value("Do not retry self-registration. Contact support to review the existing customer or contact identity."))
+                .andExpect(jsonPath("$.supportAction").value("Review CRM person matches, people resolution output, and linked users before creating or linking any account."));
 
         assertThat(userRepository.findByUsername("jane")).isEmpty();
     }

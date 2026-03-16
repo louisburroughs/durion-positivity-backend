@@ -8,4 +8,11 @@ import lombok.Value;
 public class CrmMatchSummaryDto {
     int candidateCount;
     boolean anyMatches;
+    int individualCustomerCandidateCount;
+    int commercialContactCandidateCount;
+    int sharedIdentityCandidateCount;
+    boolean exactEmailMatch;
+    boolean exactPhoneMatch;
+    boolean exactNameMatch;
+    boolean reviewRequired;
 }

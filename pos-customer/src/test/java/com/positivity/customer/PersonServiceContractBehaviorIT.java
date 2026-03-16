@@ -21,9 +21,13 @@ import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PersonParty;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ContactRepository;
 import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -57,12 +61,20 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         private ContactPointRepository contactPointRepository;
 
         @Autowired
+        private ContactRepository contactRepository;
+
+        @Autowired
+        private CommercialPartyRepository commercialPartyRepository;
+
+        @Autowired
         private PartyRelationshipRepository partyRelationshipRepository;
 
         @BeforeEach
         void setUp() {
                 // Clean up before each test
                 partyRelationshipRepository.deleteAll();
+                contactRepository.deleteAll();
+                commercialPartyRepository.deleteAll();
                 contactPointRepository.deleteAll();
                 personRepository.deleteAll();
         }
@@ -326,5 +338,47 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .findByPersonPartyId(personParty.getPersonPartyId());
                 assertThat(contacts).hasSize(1);
                 assertThat(contacts.get(0).getValue()).isEqualTo("test.user@example.com");
+        }
+
+        @Test
+        @Order(9)
+        void searchPersons_includesCommercialIdentitySummary() {
+                CreatePersonRequest request = CreatePersonRequest.builder()
+                                .firstName("Jane")
+                                .lastName("Smith")
+                                .preferredContactMethod(PreferredContactMethod.EMAIL)
+                                .emails(List.of(
+                                                CreatePersonRequest.EmailInput.builder()
+                                                                .value("jane@example.com")
+                                                                .isPrimary(true)
+                                                                .build()))
+                                .build();
+                CreatePersonResponse created = personService.createPerson(
+                                request,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+
+                CommercialParty party = new CommercialParty();
+                party.setCustomerNumber("CUST-2001");
+                party.setPartyNumber("PARTY-2001");
+                party.setLegalName("Acme Logistics");
+                party.setDisplayName("Acme Logistics");
+
+                Contact contact = new Contact();
+                contact.setPersonId(created.getPersonId());
+                contact.setFirstName("Jane");
+                contact.setLastName("Smith");
+                contact.setEmail("jane@example.com");
+                contact.setActive(true);
+                contact.setCommercialParty(party);
+                party.getContacts().add(contact);
+                commercialPartyRepository.save(party);
+
+                List<GetPersonResponse> results = personService.searchPersons(null, "jane@example.com", null, 20, 0);
+
+                assertThat(results).hasSize(1);
+                GetPersonResponse result = results.getFirst();
+                assertThat(result.isIndividualCustomer()).isTrue();
+                assertThat(result.isCommercialContact()).isTrue();
+                assertThat(result.getCommercialAccountCount()).isEqualTo(1);
         }
 }

@@ -68,7 +68,7 @@ Current delivery status as of `2026-03-16`:
 - Successful self-registration requires a follow-up login and does not issue tokens immediately.
 - A dedicated low-privilege role, `SELF_SERVICE_CUSTOMER`, is assigned during self-registration.
 - Focused unit and controller integration tests are in place for the Phase 1 flow.
-- Phase 2 and Phase 3 items in this PRD remain pending.
+- Phase 2 is complete; Phase 3 items in this PRD remain pending.
 
 ## User Experience & Functionality
 
@@ -498,6 +498,11 @@ Recommended error codes:
 - `USER_PERSON_LINK_CONFLICT`
 - `CRM_PERSON_CONFLICT`
 
+For blocked self-registration responses, the API should also return:
+
+- `nextAction`: caller-facing remediation guidance
+- `supportAction`: support/admin investigation guidance keyed to the conflict code
+
 ## Security, Audit, and Observability
 
 - Self-registration endpoint must be `permitAll`.
@@ -559,11 +564,11 @@ Status: Completed in `pos-security-service` on `2026-03-16`
 
 ### Phase 2
 
-Status: Pending
+Status: Completed
 
-- [ ] Integrate `pos-customer` lookup into richer duplicate-detection decisioning beyond supplemental match visibility
-- [ ] Add CRM identity summary to person search
-- [ ] Add support/admin guidance for blocked registration cases
+- [x] Integrate `pos-customer` lookup into richer duplicate-detection decisioning beyond supplemental match visibility
+- [x] Add CRM identity summary to person search
+- [x] Add support/admin guidance for blocked registration cases
 
 ### Phase 3
 

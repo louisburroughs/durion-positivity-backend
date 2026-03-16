@@ -44,6 +44,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     public @NonNull SelfRegistrationResponse selfRegister(@NonNull SelfRegistrationRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
         String normalizedPhone = normalizePhone(request.phone());
+        String normalizedFirstName = normalizeName(request.firstName());
+        String normalizedLastName = normalizeName(request.lastName());
         String explicitUsername = normalizeUsername(request.username());
         String derivedUsername = deriveUsernameFromEmail(normalizedEmail);
         String chosenUsername = explicitUsername != null ? explicitUsername : derivedUsername;
@@ -51,16 +53,23 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         ensureUserDoesNotAlreadyExist(chosenUsername, derivedUsername);
 
         List<CustomerPersonSearchResponse> crmMatches = customerRegistrationClient.searchPersons(
-                buildFullName(request.firstName(), request.lastName()),
+                buildFullName(normalizedFirstName, normalizedLastName),
                 normalizedEmail,
                 normalizedPhone);
+        CrmSignalAssessment crmSignalAssessment = assessCrmMatches(
+                crmMatches,
+                normalizedEmail,
+                normalizedPhone,
+                normalizedFirstName,
+                normalizedLastName);
 
         PeopleResolvePersonResponse resolvedPerson = peopleRegistrationClient.resolvePerson(PeopleResolvePersonRequest.builder()
                 .email(normalizedEmail)
                 .phone(normalizedPhone)
-                .firstName(normalizeName(request.firstName()))
-                .lastName(normalizeName(request.lastName()))
+                .firstName(normalizedFirstName)
+                .lastName(normalizedLastName)
                 .build());
+        enforceCrmConflictRules(resolvedPerson, crmSignalAssessment);
 
         enforceLinkedUserRules(resolvedPerson.personId());
 
@@ -85,10 +94,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 .username(createdUser.getUsername())
                 .linkStatus("LINKED")
                 .matchedExistingPerson(resolvedPerson.matchedExisting())
-                .crmMatchSummary(CrmMatchSummaryDto.builder()
-                        .candidateCount(crmMatches.size())
-                        .anyMatches(!crmMatches.isEmpty())
-                        .build())
+                .crmMatchSummary(crmSignalAssessment.summary())
                 .issuedTokens(false)
                 .build();
     }
@@ -135,6 +141,100 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         }
     }
 
+    private void enforceCrmConflictRules(
+            PeopleResolvePersonResponse resolvedPerson,
+            CrmSignalAssessment crmSignalAssessment) {
+        if (resolvedPerson.matchedExisting() || !crmSignalAssessment.reviewRequired()) {
+            return;
+        }
+        peopleRegistrationClient.deletePerson(resolvedPerson.personId());
+        throw new SelfRegistrationConflictException(
+                "CRM_PERSON_CONFLICT",
+                buildCrmConflictMessage(crmSignalAssessment.summary()));
+    }
+
+    private CrmSignalAssessment assessCrmMatches(
+            List<CustomerPersonSearchResponse> crmMatches,
+            String normalizedEmail,
+            String normalizedPhone,
+            String normalizedFirstName,
+            String normalizedLastName) {
+        boolean exactEmailMatch = crmMatches.stream()
+                .anyMatch(match -> hasMatchingEmail(match, normalizedEmail));
+        boolean exactPhoneMatch = normalizedPhone != null && crmMatches.stream()
+                .anyMatch(match -> hasMatchingPhone(match, normalizedPhone));
+        boolean exactNameMatch = crmMatches.stream()
+                .anyMatch(match -> hasMatchingName(match, normalizedFirstName, normalizedLastName));
+
+        int individualCustomerCandidateCount = (int) crmMatches.stream()
+                .filter(CustomerPersonSearchResponse::individualCustomer)
+                .count();
+        int commercialContactCandidateCount = (int) crmMatches.stream()
+                .filter(CustomerPersonSearchResponse::commercialContact)
+                .count();
+        int sharedIdentityCandidateCount = (int) crmMatches.stream()
+                .filter(match -> match.individualCustomer() && match.commercialContact())
+                .count();
+
+        boolean reviewRequired = !crmMatches.isEmpty()
+                && (exactEmailMatch || (exactPhoneMatch && exactNameMatch) || sharedIdentityCandidateCount > 0);
+
+        CrmMatchSummaryDto summary = CrmMatchSummaryDto.builder()
+                .candidateCount(crmMatches.size())
+                .anyMatches(!crmMatches.isEmpty())
+                .individualCustomerCandidateCount(individualCustomerCandidateCount)
+                .commercialContactCandidateCount(commercialContactCandidateCount)
+                .sharedIdentityCandidateCount(sharedIdentityCandidateCount)
+                .exactEmailMatch(exactEmailMatch)
+                .exactPhoneMatch(exactPhoneMatch)
+                .exactNameMatch(exactNameMatch)
+                .reviewRequired(reviewRequired)
+                .build();
+        return new CrmSignalAssessment(summary);
+    }
+
+    private boolean hasMatchingEmail(CustomerPersonSearchResponse match, String normalizedEmail) {
+        return match.contactPoints().stream()
+                .filter(contactPoint -> "EMAIL".equalsIgnoreCase(contactPoint.contactType()))
+                .map(contactPoint -> normalizeContactValue(contactPoint.value(), false))
+                .anyMatch(normalizedEmail::equals);
+    }
+
+    private boolean hasMatchingPhone(CustomerPersonSearchResponse match, String normalizedPhone) {
+        return match.contactPoints().stream()
+                .filter(contactPoint -> contactPoint.contactType() != null
+                        && contactPoint.contactType().toUpperCase(Locale.ROOT).startsWith("PHONE"))
+                .map(contactPoint -> normalizeContactValue(contactPoint.value(), true))
+                .anyMatch(normalizedPhone::equals);
+    }
+
+    private boolean hasMatchingName(
+            CustomerPersonSearchResponse match,
+            String normalizedFirstName,
+            String normalizedLastName) {
+        String matchFirstName = normalizeOptionalText(match.firstName());
+        String matchLastName = normalizeOptionalText(match.lastName());
+        if (normalizedFirstName.equals(matchFirstName) && normalizedLastName.equals(matchLastName)) {
+            return true;
+        }
+        String matchDisplayName = normalizeOptionalText(match.displayName());
+        return matchDisplayName != null
+                && matchDisplayName.equals((normalizedFirstName + " " + normalizedLastName).trim());
+    }
+
+    private String buildCrmConflictMessage(CrmMatchSummaryDto summary) {
+        String identityContext;
+        if (summary.getSharedIdentityCandidateCount() > 0) {
+            identityContext = "matching CRM records show the person is both an individual customer and a commercial contact";
+        } else if (summary.getCommercialContactCandidateCount() > 0) {
+            identityContext = "matching CRM records show the person is already a commercial contact";
+        } else {
+            identityContext = "matching CRM records indicate an existing customer identity";
+        }
+        return "Registration was blocked because " + identityContext
+                + ". Please use account recovery or contact support for review.";
+    }
+
     private User createUser(String username, String password, UUID personId) {
         Role defaultRole = roleRepository.findByName(DEFAULT_SELF_REGISTRATION_ROLE)
                 .orElseThrow(() -> new IllegalStateException(
@@ -161,6 +261,13 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
 
     private String normalizeName(String value) {
         return normalizeRequired(value, "name");
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim().toLowerCase(Locale.ROOT);
     }
 
     private String normalizeRequired(String value, String fieldName) {
@@ -197,7 +304,17 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         return trimmed.startsWith("+") ? "+" + digits : digits;
     }
 
+    private String normalizeContactValue(String value, boolean phone) {
+        return phone ? normalizePhone(value) : normalizeOptionalText(value);
+    }
+
     private String buildFullName(String firstName, String lastName) {
-        return (normalizeName(firstName) + " " + normalizeName(lastName)).trim();
+        return (firstName + " " + lastName).trim();
+    }
+
+    private record CrmSignalAssessment(CrmMatchSummaryDto summary) {
+        private boolean reviewRequired() {
+            return summary.isReviewRequired();
+        }
     }
 }

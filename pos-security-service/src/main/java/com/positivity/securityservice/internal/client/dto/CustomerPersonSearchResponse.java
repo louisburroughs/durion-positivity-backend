@@ -10,6 +10,9 @@ public record CustomerPersonSearchResponse(
         String lastName,
         String displayName,
         List<ContactPointDto> contactPoints,
+        boolean individualCustomer,
+        boolean commercialContact,
+        int commercialAccountCount,
         Instant createdAt,
         Instant updatedAt) {
 
