@@ -79,7 +79,7 @@ public class PermissionController {
     @EmitEvent(id = "SECURITY_PERMISSION_REGISTER", apiVersion = "1")
     @PostMapping("/registerPermissions")
     @Operation(summary = "Register permissions (RBAC contract endpoint)")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('security:permission:register')")
+    @PreAuthorize("hasAuthority('security:permission:register')")
     public ResponseEntity<List<PermissionDto>> registerPermissionsContract(
             @RequestBody @NonNull PermissionRegistrationRequest request) {
         return ResponseEntity.ok(permissionService.registerPermissions(request));
@@ -90,7 +90,7 @@ public class PermissionController {
      */
     @GetMapping("/{id}")
     @Operation(summary = "Get permission by identifier")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<PermissionDto> getPermissionById(@PathVariable @NonNull UUID id) {
         return ResponseEntity.ok(permissionService.getPermission(id));
     }
@@ -100,7 +100,7 @@ public class PermissionController {
      */
     @GetMapping(params = "domain")
     @Operation(summary = "Query permissions by domain")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<List<PermissionDto>> getPermissionsByDomainQuery(@RequestParam @NonNull String domain) {
         return ResponseEntity.ok(permissionService.getByDomain(domain));
     }
@@ -111,7 +111,7 @@ public class PermissionController {
     @EmitEvent(id = "SECURITY_PERMISSION_REGISTER", apiVersion = "1")
     @PostMapping("/register")
     @Operation(summary = "Register permissions from a service", description = "Services call this endpoint to register their available permissions")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('security:permission:register')")
+    @PreAuthorize("hasAuthority('security:permission:register')")
     public ResponseEntity<PermissionRegistrationResponse> registerPermissions(
             @RequestBody PermissionRegistrationRequest request) {
 
@@ -130,7 +130,7 @@ public class PermissionController {
      * Get all registered permissions
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:permission:view')")
     @Operation(summary = "Get all registered permissions", description = "Returns all permissions in the registry")
     public ResponseEntity<List<PermissionDto>> getAllPermissions() {
         return ResponseEntity.ok(permissionRegistryService.getAllPermissions());
@@ -140,7 +140,7 @@ public class PermissionController {
      * Get permissions for a specific domain
      */
     @GetMapping("/domain/{domain}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:permission:view')")
     @Operation(summary = "Get permissions by domain", description = "Returns all permissions for a specific domain/service")
     public ResponseEntity<List<PermissionDto>> getPermissionsByDomain(@PathVariable String domain) {
         return ResponseEntity.ok(permissionRegistryService.getPermissionsByDomain(domain));
@@ -151,7 +151,7 @@ public class PermissionController {
      */
     @GetMapping("/validate/{permissionName}")
     @Operation(summary = "Validate permission name format", description = "Checks if a permission name follows the domain:resource:action format")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<Boolean> validatePermissionName(@PathVariable String permissionName) {
         boolean isValid = permissionRegistryService.isValidPermissionName(permissionName);
         return ResponseEntity.ok(isValid);
@@ -162,7 +162,7 @@ public class PermissionController {
      */
     @GetMapping("/exists/{permissionName}")
     @Operation(summary = "Check if permission exists", description = "Returns true if the permission is registered")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<Boolean> permissionExists(@PathVariable String permissionName) {
         boolean exists = permissionRegistryService.permissionExists(permissionName);
         return ResponseEntity.ok(exists);

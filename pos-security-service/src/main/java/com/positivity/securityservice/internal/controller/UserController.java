@@ -33,7 +33,7 @@ public class UserController {
     @Operation(summary = "Create a new user", description = "Creates a new user with username, password, and roles.")
     @ApiResponse(responseCode = "201", description = "User created successfully.")
     @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:user:create')")
     @PostMapping
     public ResponseEntity<UserDto> createUser(@RequestBody Map<String, Object> payload) {
         String username = (String) payload.get("username");
@@ -48,7 +48,7 @@ public class UserController {
 
     @Operation(summary = "Get all users", description = "Retrieve a list of all users.")
     @ApiResponse(responseCode = "200", description = "List of users returned successfully.")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:user:view')")
     @GetMapping
     public List<UserDto> getAllUsers() {
         return userService.getAllUsers();
@@ -57,7 +57,7 @@ public class UserController {
     @Operation(summary = "Get user by ID", description = "Retrieve a user by their unique ID.")
     @ApiResponse(responseCode = "200", description = "User found and returned.")
     @ApiResponse(responseCode = "404", description = "User not found.")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:user:view')")
     @GetMapping("/{id}")
     public ResponseEntity<UserDto> getUserById(
             @Parameter(description = "ID of the user to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
@@ -69,7 +69,7 @@ public class UserController {
     @ApiResponse(responseCode = "200", description = "User updated successfully.")
     @ApiResponse(responseCode = "404", description = "User not found.")
     @EmitEvent(id = "SECURITY_USER_UPDATE", apiVersion = "1")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:user:edit')")
     @PutMapping("/{id}")
     public ResponseEntity<UserDto> updateUser(
             @Parameter(description = "ID of the user to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id,
@@ -82,7 +82,7 @@ public class UserController {
     @ApiResponse(responseCode = "204", description = "User deleted successfully.")
     @ApiResponse(responseCode = "404", description = "User not found.")
     @EmitEvent(id = "SECURITY_USER_DELETE", apiVersion = "1")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:user:delete')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(
             @Parameter(description = "ID of the user to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
@@ -91,7 +91,7 @@ public class UserController {
     }
 
     @EmitEvent(id = "SECURITY_USER_ASSIGN_ROLES", apiVersion = "1")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:role:assign')")
     @PutMapping("/{username}/roles")
     public ResponseEntity<UserDto> assignRoles(@PathVariable String username,
             @RequestBody Map<String, Object> payload) {

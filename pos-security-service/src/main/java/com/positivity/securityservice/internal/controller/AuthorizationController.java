@@ -28,10 +28,10 @@ public class AuthorizationController {
     private final AuthorizationService authorizationService;
 
     @GetMapping("/authorization/decision")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:authorization:decide')")
     @Operation(summary = "Get authorization decision", description = "Returns allow or deny for a principal and permission key")
     @ApiResponse(responseCode = "200", description = "Authorization decision returned")
-    @ApiResponse(responseCode = "403", description = "Forbidden: admin role required")
+    @ApiResponse(responseCode = "403", description = "Forbidden: authorization decision permission required")
     public ResponseEntity<AuthorizationDecisionResponse> getDecision(
             @Parameter(description = "Principal identifier to evaluate", example = "userA") @RequestParam String principalId,
             @Parameter(description = "Permission key to evaluate", example = "pricing:msrp:edit") @RequestParam(name = "permission") String permission) {

@@ -43,7 +43,7 @@ public class AuditController {
 
     @EmitEvent(id = "SECURITY_AUDIT_EVENT_CREATE", apiVersion = "1")
     @PostMapping("/events")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:audit:create')")
     public ResponseEntity<AuditEventCreatedResponse> createEvent(@RequestBody @NonNull AuditLogEventRequest request) {
         AuditLogEventDto created = auditEventService.createEvent(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -54,13 +54,13 @@ public class AuditController {
     }
 
     @GetMapping("/events/{eventId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:audit:view')")
     public ResponseEntity<AuditLogEventDto> getEvent(@PathVariable @NonNull UUID eventId) {
         return ResponseEntity.ok(auditEventService.getEvent(eventId));
     }
 
     @GetMapping("/events")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:audit:view')")
     public ResponseEntity<List<AuditLogEventDto>> searchEvents(
             @RequestParam(required = false) String entityId,
             @RequestParam(required = false) String entityType,
@@ -83,20 +83,20 @@ public class AuditController {
     }
 
     @DeleteMapping("/events/**")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:audit:create')")
     public ResponseEntity<Void> deleteNotAllowed() {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
     }
 
     @PutMapping("/events/**")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:audit:create')")
     public ResponseEntity<Void> updateNotAllowed() {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
     }
 
     @EmitEvent(id = "SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE", apiVersion = "1")
     @PostMapping("/pricing-snapshots")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:audit:create')")
     public ResponseEntity<PricingSnapshotCreatedResponse> createPricingSnapshot(
             @RequestBody @NonNull PricingSnapshotRequest request) {
         PricingSnapshotDto created = pricingSnapshotService.createSnapshot(request);
@@ -105,7 +105,7 @@ public class AuditController {
     }
 
     @GetMapping("/pricing-snapshots/{snapshotId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:audit:view')")
     public ResponseEntity<PricingSnapshotDto> getPricingSnapshot(@PathVariable @NonNull UUID snapshotId) {
         return ResponseEntity.ok(pricingSnapshotService.getSnapshot(snapshotId));
     }

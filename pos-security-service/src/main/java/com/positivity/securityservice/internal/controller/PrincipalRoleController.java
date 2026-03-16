@@ -25,7 +25,7 @@ public class PrincipalRoleController {
 
     @EmitEvent(id = "SECURITY_PRINCIPAL_ROLE_ASSIGN", apiVersion = "1")
     @PostMapping("/{principalId}/roles/{roleId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:role:assign')")
     public ResponseEntity<Void> assignRoleToPrincipal(
             @PathVariable String principalId,
             @PathVariable UUID roleId) {

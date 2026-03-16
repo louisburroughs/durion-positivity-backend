@@ -45,6 +45,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
             switch (normalized) {
                 // CRM roles
                 case ROLE_ADMIN -> authorities.addAll(adminAuthorities());
+                case ROLE_GENERAL_MANAGER -> authorities.addAll(generalManagerAuthorities());
+                case ROLE_MANAGER -> authorities.addAll(managerAuthorities());
                 case ROLE_FLEET_MANAGER -> authorities.addAll(fleetManagerAuthorities());
                 case ROLE_CSR -> authorities.addAll(csrAuthorities());
                 // Accounting roles
@@ -112,7 +114,40 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "crm:party:merge"));
         // Accounting admin (all permissions)
         set.addAll(controllerAuthorities());
+        set.addAll(adminSecurityAuthorities());
         return set;
+    }
+
+    private Set<String> generalManagerAuthorities() {
+        return new HashSet<>(managerAuthorities());
+    }
+
+    private Set<String> managerAuthorities() {
+        return new HashSet<>(List.of(
+                "security:role:view",
+                "security:role:assign",
+                "security:permission:view"));
+    }
+
+    private Set<String> adminSecurityAuthorities() {
+        return new HashSet<>(List.of(
+                "security:role:view",
+                "security:role:create",
+                "security:role:edit",
+                "security:role:delete",
+                "security:role:assign",
+                "security:permission:view",
+                "security:permission:register",
+                "security:user:view",
+                "security:user:create",
+                "security:user:edit",
+                "security:user:delete",
+                "security:user_account_state:view",
+                "security:user_account_state:manage",
+                "security:audit:view",
+                "security:audit:create",
+                "security:authorization:decide",
+                "security:token:issue_internal"));
     }
 
     // ============================================================================

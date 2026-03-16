@@ -24,3 +24,15 @@ permissions:
     description: Edit user information
   - name: security:user:delete
     description: Delete users
+  - name: security:user_account_state:view
+    description: View user account state and lockout metadata
+  - name: security:user_account_state:manage
+    description: Manage user account state such as lock, disable, or expiration
+  - name: security:audit:view
+    description: View audit events and pricing snapshots
+  - name: security:audit:create
+    description: Create audit events and pricing snapshots
+  - name: security:authorization:decide
+    description: Evaluate authorization decisions for principals
+  - name: security:token:issue_internal
+    description: Issue internal JWT access tokens for trusted callers
