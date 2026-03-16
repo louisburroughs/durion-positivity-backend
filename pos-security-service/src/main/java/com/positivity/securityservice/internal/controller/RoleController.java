@@ -226,9 +226,9 @@ public class RoleController {
     }
 
     /**
-     * Get role by name (legacy path: /v1/roles/{name})
+     * Get role by name.
      */
-    @GetMapping("/{name:[A-Za-z_][A-Za-z0-9_-]*}")
+    @GetMapping("/by-name/{name}")
     @PreAuthorize("hasAuthority('security:role:view')")
     @Operation(summary = "Get role by name", description = "Returns a specific role by its name")
     @ApiResponse(responseCode = "200", description = "Role returned successfully")
@@ -240,7 +240,7 @@ public class RoleController {
     /**
      * Story #62: Get role by UUID.
      */
-    @GetMapping("/{id:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}}")
+    @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('security:role:view')")
     @Operation(summary = "Get role by ID", description = "Returns a specific role by its UUID")
     @ApiResponse(responseCode = "200", description = "Role returned successfully")
@@ -255,7 +255,7 @@ public class RoleController {
      * Story #62: Delete a role and cascade-remove all associations.
      */
     @EmitEvent(id = "SECURITY_ROLE_DELETE", apiVersion = "1")
-    @DeleteMapping("/{id:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}}")
+    @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('security:role:delete')")
     @Operation(summary = "Delete a role", description = "Deletes a role by UUID and removes its associations")
     @ApiResponse(responseCode = "204", description = "Role deleted")

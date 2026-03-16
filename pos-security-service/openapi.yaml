@@ -10,6 +10,8 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: Principal Role Management
+  description: Assign roles to principals for RBAC matrix operations
 - name: JWT API
   description: Endpoints for JWT authentication and token management per ADR-0011
 - name: Role Management
@@ -26,15 +28,22 @@ tags:
   description: User-facing authentication endpoints
 - name: Admin Account-State API
   description: Administrative endpoints for user account state management
+- name: Audit
+  description: Audit event and pricing snapshot endpoints with immutable write-once
+    behavior
 paths:
   /v1/users/{username}/roles:
     put:
       tags:
       - User API
+      summary: Assign roles to a user
+      description: Replaces or applies the requested role set for the specified user
+        by username.
       operationId: assignRoles
       parameters:
       - name: username
         in: path
+        description: Username of the user whose roles are being assigned
         required: true
         schema:
           type: string
@@ -44,10 +53,11 @@ paths:
             schema:
               type: object
               additionalProperties: {}
+              description: Payload containing the roles to assign
         required: true
       responses:
         "404":
-          description: Not Found
+          description: User not found.
           content:
             '*/*':
               schema:
@@ -83,7 +93,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "200":
-          description: OK
+          description: User roles updated successfully.
           content:
             '*/*':
               schema:
@@ -93,6 +103,8 @@ paths:
       tags:
       - User Role Management
       summary: Assign a role to a user
+      description: Creates an effective role assignment linking the specified user
+        to the specified role.
       operationId: assignRoleToUser
       parameters:
       - name: userId
@@ -150,6 +162,8 @@ paths:
       tags:
       - User Role Management
       summary: Revoke a role from a user
+      description: Removes the effective assignment of the specified role from the
+        specified user.
       operationId: revokeRoleFromUser
       parameters:
       - name: userId
@@ -965,6 +979,8 @@ paths:
       tags:
       - Admin Account-State API
       summary: Unlock a user account
+      description: Removes the locked state from the specified user account so the
+        user can authenticate again.
       operationId: unlock
       parameters:
       - name: id
@@ -1017,6 +1033,8 @@ paths:
       tags:
       - Admin Account-State API
       summary: Expire user credentials
+      description: Expires the specified user's credentials so a credential reset
+        or update is required before reuse.
       operationId: expireCredentials
       parameters:
       - name: id
@@ -1069,6 +1087,8 @@ paths:
       tags:
       - Admin Account-State API
       summary: Expire a user account
+      description: Expires the specified user account so it is no longer considered
+        valid for authentication.
       operationId: expireAccount
       parameters:
       - name: id
@@ -1121,6 +1141,8 @@ paths:
       tags:
       - Admin Account-State API
       summary: Enable a user account
+      description: Marks the specified user account as enabled so it can be used for
+        sign-in and access checks.
       operationId: enable
       parameters:
       - name: id
@@ -1173,6 +1195,8 @@ paths:
       tags:
       - Admin Account-State API
       summary: Disable a user account
+      description: Marks the specified user account as disabled to prevent further
+        use until it is re-enabled.
       operationId: disable
       parameters:
       - name: id
@@ -1553,23 +1577,28 @@ paths:
   /v1/users/principals/{principalId}/roles/{roleId}:
     post:
       tags:
-      - principal-role-controller
+      - Principal Role Management
+      summary: Assign a role to a principal
+      description: Assigns the specified role to the specified principal identifier
+        for RBAC matrix authorization.
       operationId: assignRoleToPrincipal
       parameters:
       - name: principalId
         in: path
+        description: Principal identifier receiving the role assignment
         required: true
         schema:
           type: string
       - name: roleId
         in: path
+        description: Role identifier to assign to the principal
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "404":
-          description: Not Found
+          description: Principal or role not found
           content:
             '*/*':
               schema:
@@ -1605,12 +1634,14 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "200":
-          description: OK
+          description: Role assigned to principal successfully
   /v1/permissions/registerPermissions:
     post:
       tags:
       - Permission Registry
       summary: Register permissions (RBAC contract endpoint)
+      description: Registers or updates permissions using the RBAC contract payload
+        and returns the resulting permission set.
       operationId: registerPermissionsContract
       requestBody:
         content:
@@ -1668,6 +1699,8 @@ paths:
       tags:
       - Permission Registry
       summary: Register permissions (RBAC contract endpoint)
+      description: Registers or updates permissions using the RBAC contract payload
+        and returns the resulting permission set.
       operationId: registerPermissionsContract_1
       requestBody:
         content:
@@ -2179,7 +2212,10 @@ paths:
   /v1/audit/pricing-snapshots:
     post:
       tags:
-      - audit-controller
+      - Audit
+      summary: Create pricing snapshot
+      description: Creates an immutable pricing snapshot record for later audit and
+        traceability.
       operationId: createPricingSnapshot
       requestBody:
         content:
@@ -2195,7 +2231,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "400":
-          description: Bad Request
+          description: Invalid pricing snapshot payload
           content:
             '*/*':
               schema:
@@ -2224,8 +2260,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "200":
-          description: OK
+        "201":
+          description: Pricing snapshot created
           content:
             '*/*':
               schema:
@@ -2233,36 +2269,46 @@ paths:
   /v1/audit/events:
     get:
       tags:
-      - audit-controller
+      - Audit
+      summary: Search audit events
+      description: Searches audit events by event type alone or by entity identity
+        with an optional time range.
       operationId: searchEvents
       parameters:
       - name: entityId
         in: query
+        description: Entity identifier to match. Must be supplied together with entityType.
         required: false
         schema:
           type: string
       - name: entityType
         in: query
+        description: Entity type to match. Must be supplied together with entityId.
         required: false
         schema:
           type: string
       - name: eventType
         in: query
+        description: Event type code to search by when not searching by entity.
         required: false
         schema:
           type: string
       - name: from
         in: query
+        description: Inclusive start timestamp for the audit search window.
         required: false
         schema:
           type: string
           format: date-time
+        example: 2026-01-01T00:00:00Z
       - name: to
         in: query
+        description: Inclusive end timestamp for the audit search window.
         required: false
         schema:
           type: string
           format: date-time
+        example: 2026-01-31T23:59:59Z
       responses:
         "404":
           description: Not Found
@@ -2271,7 +2317,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "400":
-          description: Bad Request
+          description: Invalid audit search criteria
           content:
             '*/*':
               schema:
@@ -2301,7 +2347,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "200":
-          description: OK
+          description: Audit events returned successfully
           content:
             '*/*':
               schema:
@@ -2310,7 +2356,10 @@ paths:
                   $ref: "#/components/schemas/AuditLogEventDto"
     post:
       tags:
-      - audit-controller
+      - Audit
+      summary: Create audit event
+      description: Creates an immutable audit event record and returns the generated
+        event identifier.
       operationId: createEvent
       requestBody:
         content:
@@ -2326,7 +2375,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "400":
-          description: Bad Request
+          description: Invalid audit event payload
           content:
             '*/*':
               schema:
@@ -2355,8 +2404,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "200":
-          description: OK
+        "201":
+          description: Audit event created
           content:
             '*/*':
               schema:
@@ -2426,6 +2475,8 @@ paths:
       tags:
       - Admin Account-State API
       summary: Get user account state
+      description: Returns the current administrative account-state flags for the
+        specified user.
       operationId: getAccountState
       parameters:
       - name: id
@@ -2477,119 +2528,7 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AccountStateResponse"
-  /v1/roles/{name}:
-    get:
-      tags:
-      - Role Management
-      summary: Get role by name
-      description: Returns a specific role by its name
-      operationId: getRoleByName
-      parameters:
-      - name: name
-        in: path
-        required: true
-        schema:
-          type: string
-      responses:
-        "404":
-          description: Role not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "400":
-          description: Bad Request
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "200":
-          description: Role returned successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/RoleDto"
-  /v1/users/roles/{name}:
-    get:
-      tags:
-      - Role Management
-      summary: Get role by name
-      description: Returns a specific role by its name
-      operationId: getRoleByName_1
-      parameters:
-      - name: name
-        in: path
-        required: true
-        schema:
-          type: string
-      responses:
-        "404":
-          description: Role not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "400":
-          description: Bad Request
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "200":
-          description: Role returned successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/RoleDto"
-  /v1/users/roles/{id}:
+  /v1/roles/{id}:
     get:
       tags:
       - Role Management
@@ -2698,7 +2637,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "204":
           description: Role deleted
-  /v1/roles/{id}:
+  /v1/users/roles/{id}:
     get:
       tags:
       - Role Management
@@ -3061,6 +3000,118 @@ paths:
             '*/*':
               schema:
                 type: boolean
+  /v1/users/roles/by-name/{name}:
+    get:
+      tags:
+      - Role Management
+      summary: Get role by name
+      description: Returns a specific role by its name
+      operationId: getRoleByName
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "404":
+          description: Role not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "200":
+          description: Role returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RoleDto"
+  /v1/roles/by-name/{name}:
+    get:
+      tags:
+      - Role Management
+      summary: Get role by name
+      description: Returns a specific role by its name
+      operationId: getRoleByName_1
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "404":
+          description: Role not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "200":
+          description: Role returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RoleDto"
   /v1/roles/assignments/user/{userId}:
     get:
       tags:
@@ -3206,6 +3257,7 @@ paths:
       tags:
       - Permission Registry
       summary: Get permission by identifier
+      description: Returns a single registered permission by its UUID identifier.
       operationId: getPermissionById
       parameters:
       - name: id
@@ -3262,6 +3314,7 @@ paths:
       tags:
       - Permission Registry
       summary: Get permission by identifier
+      description: Returns a single registered permission by its UUID identifier.
       operationId: getPermissionById_1
       parameters:
       - name: id
@@ -3762,7 +3815,8 @@ paths:
       tags:
       - Permission Registry
       summary: Query permissions by domain
-      description: Returns all permissions in the registry
+      description: Returns all registered permissions for the requested domain using
+        the domain query parameter.
       operationId: getAllPermissions
       parameters:
       - name: domain
@@ -3820,7 +3874,8 @@ paths:
       tags:
       - Permission Registry
       summary: Query permissions by domain
-      description: Returns all permissions in the registry
+      description: Returns all registered permissions for the requested domain using
+        the domain query parameter.
       operationId: getAllPermissions_1
       parameters:
       - name: domain
@@ -3909,7 +3964,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: "Forbidden: admin role required"
+          description: "Forbidden: authorization decision permission required"
           content:
             '*/*':
               schema:
@@ -4227,7 +4282,9 @@ paths:
   /v1/audit/pricing-snapshots/{snapshotId}:
     get:
       tags:
-      - audit-controller
+      - Audit
+      summary: Get pricing snapshot
+      description: Returns an immutable pricing snapshot by its snapshot identifier.
       operationId: getPricingSnapshot
       parameters:
       - name: snapshotId
@@ -4238,7 +4295,7 @@ paths:
           format: uuid
       responses:
         "404":
-          description: Not Found
+          description: Pricing snapshot not found
           content:
             '*/*':
               schema:
@@ -4274,7 +4331,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "200":
-          description: OK
+          description: Pricing snapshot returned successfully
           content:
             '*/*':
               schema:
@@ -4282,7 +4339,9 @@ paths:
   /v1/audit/events/{eventId}:
     get:
       tags:
-      - audit-controller
+      - Audit
+      summary: Get audit event
+      description: Returns a previously recorded audit event by its event identifier.
       operationId: getEvent
       parameters:
       - name: eventId
@@ -4293,7 +4352,7 @@ paths:
           format: uuid
       responses:
         "404":
-          description: Not Found
+          description: Audit event not found
           content:
             '*/*':
               schema:
@@ -4329,7 +4388,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "200":
-          description: OK
+          description: Audit event returned successfully
           content:
             '*/*':
               schema:

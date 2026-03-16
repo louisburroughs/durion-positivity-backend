@@ -35,7 +35,7 @@ public class UserRoleController {
     @EmitEvent(id = "SECURITY_USER_ROLE_ASSIGN", apiVersion = "1")
     @PutMapping("/{userId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('security:role:assign')")
-    @Operation(summary = "Assign a role to a user")
+    @Operation(summary = "Assign a role to a user", description = "Creates an effective role assignment linking the specified user to the specified role.")
     public ResponseEntity<Void> assignRoleToUser(
             @PathVariable UUID userId,
             @PathVariable UUID roleId) {
@@ -49,7 +49,7 @@ public class UserRoleController {
     @EmitEvent(id = "SECURITY_USER_ROLE_REVOKE", apiVersion = "1")
     @DeleteMapping("/{userId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('security:role:assign')")
-    @Operation(summary = "Revoke a role from a user")
+    @Operation(summary = "Revoke a role from a user", description = "Removes the effective assignment of the specified role from the specified user.")
     public ResponseEntity<Void> revokeRoleFromUser(
             @PathVariable UUID userId,
             @PathVariable UUID roleId) {

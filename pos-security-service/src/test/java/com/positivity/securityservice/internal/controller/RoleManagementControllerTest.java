@@ -53,26 +53,26 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 /**
  * Story #62 controller slice tests for {@link RoleController}.
  *
- * <p>All 13 acceptance criteria from the Story #62 spec (13 tests,
- * 8 RED + 5 GREEN). Tests are {@link WebMvcTest} slices — service logic is
+ * <p>All 13 acceptance criteria from the Story #62 spec. Tests are
+ * {@link WebMvcTest} slices — service logic is
  * fully mocked; no database or full-context boot required.
  *
  * <h3>Status Summary</h3>
  * <table>
- *   <tr><th>SC</th><th>Path</th><th>Status</th><th>Reason if RED</th></tr>
- *   <tr><td>SC1</td><td>POST /v1/roles → 201</td><td>GREEN</td><td>—</td></tr>
- *   <tr><td>SC2</td><td>POST /v1/roles → 409 duplicate</td><td>GREEN</td><td>—</td></tr>
- *   <tr><td>SC3</td><td>GET /v1/roles → 200</td><td>GREEN</td><td>—</td></tr>
- *   <tr><td>SC4</td><td>GET /v1/roles/{id} → 200</td><td><b>RED</b></td><td>existing /{name} returns null body</td></tr>
- *   <tr><td>SC5</td><td>GET /v1/roles/{id} → 404</td><td><b>RED</b></td><td>existing /{name} returns 200</td></tr>
- *   <tr><td>SC6</td><td>DELETE /v1/roles/{id} → 204</td><td><b>RED</b></td><td>no endpoint → 404</td></tr>
- *   <tr><td>SC7</td><td>PUT /v1/roles/{id}/permissions/{p} → 204</td><td><b>RED</b></td><td>only /grant endpoint → 404</td></tr>
- *   <tr><td>SC8</td><td>DELETE /v1/roles/{id}/permissions/{p} → 204</td><td><b>RED</b></td><td>existing endpoint returns 200</td></tr>
- *   <tr><td>SC9</td><td>PUT /v1/users/{u}/roles/{r} → 201</td><td>GREEN</td><td>—</td></tr>
- *   <tr><td>SC10</td><td>DELETE /v1/users/{u}/roles/{r} → 204</td><td>GREEN</td><td>—</td></tr>
- *   <tr><td>SC11</td><td>GET /v1/users/{u}/permissions → 200</td><td>GREEN</td><td>—</td></tr>
- *   <tr><td>SC12</td><td>Unauthenticated → 401</td><td>GREEN</td><td>—</td></tr>
- *   <tr><td>SC13</td><td>VIEWER role → 403</td><td>GREEN</td><td>—</td></tr>
+ *   <tr><th>SC</th><th>Path</th><th>Status</th></tr>
+ *   <tr><td>SC1</td><td>POST /v1/roles → 201</td><td>Covered</td></tr>
+ *   <tr><td>SC2</td><td>POST /v1/roles → 409 duplicate</td><td>Covered</td></tr>
+ *   <tr><td>SC3</td><td>GET /v1/roles → 200</td><td>Covered</td></tr>
+ *   <tr><td>SC4</td><td>GET /v1/roles/{id} → 200</td><td>Covered</td></tr>
+ *   <tr><td>SC5</td><td>GET /v1/roles/{id} → 404</td><td>Covered</td></tr>
+ *   <tr><td>SC6</td><td>DELETE /v1/roles/{id} → 204</td><td>Covered</td></tr>
+ *   <tr><td>SC7</td><td>PUT /v1/roles/{id}/permissions/{p} → 204</td><td>Covered</td></tr>
+ *   <tr><td>SC8</td><td>DELETE /v1/roles/{id}/permissions/{p} → 204</td><td>Covered</td></tr>
+ *   <tr><td>SC9</td><td>PUT /v1/users/{u}/roles/{r} → 201</td><td>Covered</td></tr>
+ *   <tr><td>SC10</td><td>DELETE /v1/users/{u}/roles/{r} → 204</td><td>Covered</td></tr>
+ *   <tr><td>SC11</td><td>GET /v1/users/{u}/permissions → 200</td><td>Covered</td></tr>
+ *   <tr><td>SC12</td><td>Unauthenticated → 401</td><td>Covered</td></tr>
+ *   <tr><td>SC13</td><td>VIEWER role → 403</td><td>Covered</td></tr>
  * </table>
  */
 @WebMvcTest({ RoleController.class, UserRoleController.class })
@@ -188,14 +188,6 @@ class RoleManagementControllerTest {
      * SC4: GET /v1/roles/{id} by UUID returns 200 with the Role JSON.
      *
      * <p>Story mapping: Functional Behavior 1 — view a specific role by UUID.
-     * <p><strong>RED</strong>: No UUID-typed {@code GET /v1/roles/{id}} exists.
-     * The existing {@code GET /{name}} (String) is matched; it calls
-     * {@code roleManagementService.getRoleByName(uuid-string)} (not mocked) → returns null
-     * → controller returns {@code ResponseEntity.ok(null)} → 200 with no JSON body
-     * → {@code jsonPath("$.id")} fails.
-     *
-     * <p>Expected failure: {@code org.assertj.core.error.ShouldNotBeNull}
-     * or {@code No value at JSON path "$.id"}.
      */
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -213,9 +205,6 @@ class RoleManagementControllerTest {
 
     /**
      * SC5: GET /v1/roles/{id} for a non-existent UUID returns 404 Not Found.
-     *
-     * <p><strong>RED</strong>: Existing {@code GET /{name}} returns 200 with null body
-     * when the mock returns null → expected 404 but was 200.
      */
     @Test
     @WithMockUser(roles = "ADMIN")

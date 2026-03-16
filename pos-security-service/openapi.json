@@ -992,7 +992,7 @@
                 }
             }
         },
-        "/v1/roles/{name}": {
+        "/v1/roles/by-name/{name}": {
             "get": {
                 "tags": [
                     "Role Management"

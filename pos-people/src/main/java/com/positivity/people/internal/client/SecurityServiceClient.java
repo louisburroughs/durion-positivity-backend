@@ -75,7 +75,7 @@ public class SecurityServiceClient {
 		log.debug("Fetching role by name: {}", roleName);
 
 		Role role = restClient.get()
-			.uri("/v1/roles/{name}", roleName)
+			.uri("/v1/roles/by-name/{name}", roleName)
 			.retrieve()
 			.onStatus(statusCode -> statusCode.value() == 404, (request, response) -> {
 				throw new jakarta.persistence.EntityNotFoundException(

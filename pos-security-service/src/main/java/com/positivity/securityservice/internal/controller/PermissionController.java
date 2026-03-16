@@ -78,7 +78,7 @@ public class PermissionController {
      */
     @EmitEvent(id = "SECURITY_PERMISSION_REGISTER", apiVersion = "1")
     @PostMapping("/registerPermissions")
-    @Operation(summary = "Register permissions (RBAC contract endpoint)")
+    @Operation(summary = "Register permissions (RBAC contract endpoint)", description = "Registers or updates permissions using the RBAC contract payload and returns the resulting permission set.")
     @PreAuthorize("hasAuthority('security:permission:register')")
     public ResponseEntity<List<PermissionDto>> registerPermissionsContract(
             @RequestBody @NonNull PermissionRegistrationRequest request) {
@@ -89,7 +89,7 @@ public class PermissionController {
      * Issue #42: Get a permission by UUID identifier.
      */
     @GetMapping("/{id}")
-    @Operation(summary = "Get permission by identifier")
+    @Operation(summary = "Get permission by identifier", description = "Returns a single registered permission by its UUID identifier.")
     @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<PermissionDto> getPermissionById(@PathVariable @NonNull UUID id) {
         return ResponseEntity.ok(permissionService.getPermission(id));
@@ -99,7 +99,7 @@ public class PermissionController {
      * Issue #42: Query permissions by domain.
      */
     @GetMapping(params = "domain")
-    @Operation(summary = "Query permissions by domain")
+    @Operation(summary = "Query permissions by domain", description = "Returns all registered permissions for the requested domain using the domain query parameter.")
     @PreAuthorize("hasAuthority('security:permission:view')")
     public ResponseEntity<List<PermissionDto>> getPermissionsByDomainQuery(@RequestParam @NonNull String domain) {
         return ResponseEntity.ok(permissionService.getByDomain(domain));
