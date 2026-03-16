@@ -33,6 +33,7 @@ import com.positivity.securityservice.internal.exception.InvalidRefreshTokenExce
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.service.AuditEventService;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -193,6 +194,24 @@ public class GlobalExceptionHandler {
                                                 "PERMISSION_NOT_FOUND",
                                                 ex.getMessage(),
                                                 HttpStatus.NOT_FOUND,
+                                                correlationId));
+        }
+
+        @ExceptionHandler(SelfRegistrationConflictException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ResponseEntity<ErrorResponse> handleSelfRegistrationConflictException(
+                        SelfRegistrationConflictException ex,
+                        WebRequest request) {
+
+                String correlationId = extractCorrelationId(request);
+                log.warn("Self-registration conflict (correlationId={}): {}", correlationId, ex.getMessage());
+
+                return ResponseEntity
+                                .status(HttpStatus.CONFLICT)
+                                .body(errorResponse(
+                                                ex.getErrorCode(),
+                                                ex.getMessage(),
+                                                HttpStatus.CONFLICT,
                                                 correlationId));
         }
 
