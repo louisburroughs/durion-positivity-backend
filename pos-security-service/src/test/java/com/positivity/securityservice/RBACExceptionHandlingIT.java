@@ -31,7 +31,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         private static final String TEST_CORRELATION_ID = "rbac-test-correlation-id";
 
         /**
-         * Test: GET /v1/roles/{name} with non-existent role
+         * Test: GET /v1/roles/by-name/{name} with non-existent role
          * 
          * **Expected:** 404 NOT_FOUND with ErrorResponse {code="ROLE_NOT_FOUND",
          * correlationId}
@@ -43,7 +43,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
                                 + UUID.fromString("00000000-0000-0000-0000-000000000001");
 
                 MvcResult result = mockMvc.perform(
-                                withAuth(get("/v1/roles/" + nonExistentRoleName))
+                                withAuth(get("/v1/roles/by-name/" + nonExistentRoleName))
                                                 .header("X-Correlation-Id", TEST_CORRELATION_ID)
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isNotFound())

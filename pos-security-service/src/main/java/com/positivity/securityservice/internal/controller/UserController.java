@@ -90,11 +90,15 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Assign roles to a user", description = "Replaces or applies the requested role set for the specified user by username.")
+    @ApiResponse(responseCode = "200", description = "User roles updated successfully.")
+    @ApiResponse(responseCode = "404", description = "User not found.")
     @EmitEvent(id = "SECURITY_USER_ASSIGN_ROLES", apiVersion = "1")
     @PreAuthorize("hasAuthority('security:role:assign')")
     @PutMapping("/{username}/roles")
-    public ResponseEntity<UserDto> assignRoles(@PathVariable String username,
-            @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<UserDto> assignRoles(
+            @Parameter(description = "Username of the user whose roles are being assigned") @PathVariable String username,
+            @Parameter(description = "Payload containing the roles to assign") @RequestBody Map<String, Object> payload) {
         List<?> rolesList = (List<?>) payload.get("roles");
         Set<String> roles = rolesList.stream()
                 .map(Object::toString)
