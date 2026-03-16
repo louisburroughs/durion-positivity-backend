@@ -1,20 +1,20 @@
 [INFO] Scanning for projects...
-[INFO] 
+[INFO]
 [INFO] --------------------< com.positivity:pos-inventory >--------------------
 [INFO] Building pos-inventory 0.1.0-SNAPSHOT
 [INFO]   from pom.xml
 [INFO] --------------------------------[ jar ]---------------------------------
-[INFO] 
+[INFO]
 [INFO] --- enforcer:3.4.1:enforce (enforce-java) @ pos-inventory ---
 [INFO] Rule 0: org.apache.maven.enforcer.rules.version.RequireJavaVersion passed
-[INFO] 
+[INFO]
 [INFO] --- jacoco:0.8.11:prepare-agent (default) @ pos-inventory ---
-[INFO] argLine set to -javaagent:/home/louisb/.m2/repository/org/jacoco/org.jacoco.agent/0.8.11/org.jacoco.agent-0.8.11-runtime.jar=destfile=/home/louisb/Projects/durion-positivity-backend/pos-inventory/target/jacoco.exec
-[INFO] 
+[INFO] argLine set to -javaagent:/home/louisb/.m2/repository/org/jacoco/org.jacoco.agent/0.8.11/org.jacoco.agent-0.8.11-runtime.jar=destfile=~/IdeaProjects/durion-positivity-backend/pos-inventory/target/jacoco.exec
+[INFO]
 [INFO] --- resources:3.3.1:resources (default-resources) @ pos-inventory ---
 [INFO] Copying 1 resource from src/main/resources to target/classes
 [INFO] Copying 10 resources from src/main/resources to target/classes
-[INFO] 
+[INFO]
 [INFO] --- compiler:3.13.0:compile (default-compile) @ pos-inventory ---
 [INFO] Recompiling the module because of changed source code.
 [INFO] Compiling 293 source files with javac [debug parameters release 21] to target/classes

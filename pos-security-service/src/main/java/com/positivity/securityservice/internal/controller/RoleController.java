@@ -46,7 +46,6 @@ import java.util.UUID;
 public class RoleController {
     private final Clock clock;
 
-
     private final RoleManagementService roleManagementService;
     private final RolePermissionService rolePermissionService;
 
@@ -55,7 +54,7 @@ public class RoleController {
      */
     @EmitEvent(id = "SECURITY_ROLE_CREATE", apiVersion = "1")
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:role:create')")
     @Operation(summary = "Create a new role", description = "Creates a new role with the specified name and description")
     @ApiResponse(responseCode = "201", description = "Role created")
     @ApiResponse(responseCode = "400", description = "Invalid role payload", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -77,10 +76,8 @@ public class RoleController {
      */
     @EmitEvent(id = "SECURITY_ROLE_PERMISSION_GRANT", apiVersion = "1")
     @PutMapping("/{roleId}/permissions/grant")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Grant permission to a role",
-            description = "Grants a single permission to the specified role and returns the updated role")
+    @PreAuthorize("hasAuthority('security:role:edit')")
+    @Operation(summary = "Grant permission to a role", description = "Grants a single permission to the specified role and returns the updated role")
     @ApiResponse(responseCode = "200", description = "Permission granted to role")
     @ApiResponse(responseCode = "400", description = "Invalid grant request", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -98,10 +95,8 @@ public class RoleController {
      */
     @EmitEvent(id = "SECURITY_ROLE_PERMISSION_REVOKE", apiVersion = "1")
     @DeleteMapping("/{roleId}/permissions/{permissionKey}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Revoke permission from a role",
-            description = "Removes the specified permission from the role")
+    @PreAuthorize("hasAuthority('security:role:edit')")
+    @Operation(summary = "Revoke permission from a role", description = "Removes the specified permission from the role")
     @ApiResponse(responseCode = "204", description = "Permission revoked from role")
     @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Void> revokePermissionFromRole(
@@ -116,10 +111,8 @@ public class RoleController {
      */
     @EmitEvent(id = "SECURITY_ROLE_PERMISSION_ASSIGN", apiVersion = "1")
     @PutMapping("/{roleId}/permissions/{permissionKey}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Assign permission to a role by key",
-            description = "Assigns the permission identified by path key to the specified role")
+    @PreAuthorize("hasAuthority('security:role:edit')")
+    @Operation(summary = "Assign permission to a role by key", description = "Assigns the permission identified by path key to the specified role")
     @ApiResponse(responseCode = "204", description = "Permission assigned to role")
     @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Void> assignPermissionToRole(
@@ -134,7 +127,7 @@ public class RoleController {
      */
     @EmitEvent(id = "SECURITY_ROLE_PERMISSIONS_UPDATE", apiVersion = "1")
     @PutMapping("/permissions")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:role:edit')")
     @Operation(summary = "Update role permissions", description = "Assigns a set of permissions to a role")
     @ApiResponse(responseCode = "200", description = "Role permissions updated")
     @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -148,7 +141,7 @@ public class RoleController {
      */
     @EmitEvent(id = "SECURITY_ROLE_ASSIGNMENT_CREATE", apiVersion = "1")
     @PostMapping("/assignments")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:role:assign')")
     @Operation(summary = "Create role assignment", description = "Assigns a role to a user with optional scope and effective dates")
     @ApiResponse(responseCode = "201", description = "Role assignment created")
     @ApiResponse(responseCode = "404", description = "User or role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -161,7 +154,7 @@ public class RoleController {
      * Get effective role assignments for a user
      */
     @GetMapping("/assignments/user/{userId}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:role:view')")
     @Operation(summary = "Get user role assignments", description = "Returns currently effective assignments by default. Set includeHistory=true to return all assignments including expired/revoked")
     @ApiResponse(responseCode = "200", description = "Role assignments returned successfully")
     @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -176,7 +169,7 @@ public class RoleController {
      * Get all permissions for a user
      */
     @GetMapping("/permissions/user/{userId}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:permission:view')")
     @Operation(summary = "Get user permissions (legacy path)", description = "Returns all permissions for a user from their role assignments")
     @ApiResponse(responseCode = "200", description = "User permissions returned successfully")
     @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -189,7 +182,7 @@ public class RoleController {
      * Check if a user has a specific permission
      */
     @GetMapping("/check-permission")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:permission:view')")
     @Operation(summary = "Check user permission", description = "Checks if a user has a specific permission for a location")
     @ApiResponse(responseCode = "200", description = "Permission check completed")
     @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -208,7 +201,7 @@ public class RoleController {
      */
     @EmitEvent(id = "SECURITY_ROLE_ASSIGNMENT_REVOKE", apiVersion = "1")
     @DeleteMapping("/assignments/{assignmentId}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:role:assign')")
     @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date. Supports past, present, or future dates. The system automatically records when the revocation was requested. Defaults to today when endDate is omitted")
     @ApiResponse(responseCode = "204", description = "Role assignment revoked")
     @ApiResponse(responseCode = "400", description = "Invalid endDate")
@@ -225,7 +218,7 @@ public class RoleController {
      * Get all roles
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:role:view')")
     @Operation(summary = "Get all roles", description = "Returns all roles in the system")
     @ApiResponse(responseCode = "200", description = "Roles returned successfully")
     public ResponseEntity<List<RoleDto>> getAllRoles() {
@@ -236,7 +229,7 @@ public class RoleController {
      * Get role by name (legacy path: /v1/roles/{name})
      */
     @GetMapping("/{name:[A-Za-z_][A-Za-z0-9_-]*}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:role:view')")
     @Operation(summary = "Get role by name", description = "Returns a specific role by its name")
     @ApiResponse(responseCode = "200", description = "Role returned successfully")
     @ApiResponse(responseCode = "404", description = "Role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -248,7 +241,7 @@ public class RoleController {
      * Story #62: Get role by UUID.
      */
     @GetMapping("/{id:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:role:view')")
     @Operation(summary = "Get role by ID", description = "Returns a specific role by its UUID")
     @ApiResponse(responseCode = "200", description = "Role returned successfully")
     @ApiResponse(responseCode = "404", description = "Role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -262,11 +255,9 @@ public class RoleController {
      * Story #62: Delete a role and cascade-remove all associations.
      */
     @EmitEvent(id = "SECURITY_ROLE_DELETE", apiVersion = "1")
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Delete a role",
-            description = "Deletes a role by UUID and removes its associations")
+    @DeleteMapping("/{id:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}}")
+    @PreAuthorize("hasAuthority('security:role:delete')")
+    @Operation(summary = "Delete a role", description = "Deletes a role by UUID and removes its associations")
     @ApiResponse(responseCode = "204", description = "Role deleted")
     @ApiResponse(responseCode = "404", description = "Role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Void> deleteRole(@PathVariable UUID id) {

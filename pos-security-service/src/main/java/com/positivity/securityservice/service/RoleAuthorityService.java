@@ -8,6 +8,8 @@ public interface RoleAuthorityService {
     // CRM roles
     String ROLE_CSR = "CSR";
     String ROLE_FLEET_MANAGER = "FLEET_MANAGER";
+    String ROLE_GENERAL_MANAGER = "GENERAL_MANAGER";
+    String ROLE_MANAGER = "MANAGER";
     // Accounting roles
     String ROLE_GL_ANALYST = "GL_ANALYST";
     String ROLE_AP_CLERK = "AP_CLERK";

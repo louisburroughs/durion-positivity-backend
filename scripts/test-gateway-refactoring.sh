@@ -14,7 +14,7 @@ echo "Gateway API Versioning Integration Test"
 echo "========================================="
 echo ""
 
-BACKEND_DIR="/home/louisb/Projects/durion-positivity-backend"
+BACKEND_DIR="$HOME/IdeaProjects/durion-positivity-backend"
 cd "$BACKEND_DIR"
 
 # Color codes
@@ -119,7 +119,7 @@ echo "---"
 if [ -f "pos-api-gateway/src/main/java/com/positivity/gateway/filter/ApiVersionHeaderToPathFilter.java" ]; then
     echo -e "${GREEN}✓${NC} ApiVersionHeaderToPathFilter.java exists"
     ((TESTS_PASSED++))
-    
+
     # Check for key methods
     if grep -q "public Mono<Void> filter" pos-api-gateway/src/main/java/com/positivity/gateway/filter/ApiVersionHeaderToPathFilter.java; then
         echo -e "${GREEN}✓${NC} filter() method implemented"
@@ -128,7 +128,7 @@ if [ -f "pos-api-gateway/src/main/java/com/positivity/gateway/filter/ApiVersionH
         echo -e "${RED}✗${NC} filter() method not found"
         ((TESTS_FAILED++))
     fi
-    
+
     if grep -q "VERSION_HEADER" pos-api-gateway/src/main/java/com/positivity/gateway/filter/ApiVersionHeaderToPathFilter.java; then
         echo -e "${GREEN}✓${NC} VERSION_HEADER constant defined"
         ((TESTS_PASSED++))
@@ -136,7 +136,7 @@ if [ -f "pos-api-gateway/src/main/java/com/positivity/gateway/filter/ApiVersionH
         echo -e "${RED}✗${NC} VERSION_HEADER constant not found"
         ((TESTS_FAILED++))
     fi
-    
+
     if grep -q "HIGHEST_PRECEDENCE" pos-api-gateway/src/main/java/com/positivity/gateway/filter/ApiVersionHeaderToPathFilter.java; then
         echo -e "${GREEN}✓${NC} Filter runs at HIGHEST_PRECEDENCE"
         ((TESTS_PASSED++))

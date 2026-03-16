@@ -1,5 +1,5 @@
 generatedAt: "2026-03-09T16:51:40.331333+00:00"
-root: "/home/louisb/Projects/durion-positivity-backend"
+root: "$HOME/IdeaProjects/durion-positivity-backend"
 summary:
   manifestCount: 17
   permissionCount: 215
@@ -1847,7 +1847,5 @@ permissions:
     serviceName: "pos-workorder"
     module: "pos-workorder"
     source: "pos-workorder/src/main/resources/permissions.yaml"
-duplicates:
-  []
-parseIssues:
-  []
+duplicates: []
+parseIssues: []

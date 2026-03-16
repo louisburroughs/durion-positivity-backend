@@ -34,7 +34,7 @@ public class UserRoleController {
      */
     @EmitEvent(id = "SECURITY_USER_ROLE_ASSIGN", apiVersion = "1")
     @PutMapping("/{userId}/roles/{roleId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:role:assign')")
     @Operation(summary = "Assign a role to a user")
     public ResponseEntity<Void> assignRoleToUser(
             @PathVariable UUID userId,
@@ -48,7 +48,7 @@ public class UserRoleController {
      */
     @EmitEvent(id = "SECURITY_USER_ROLE_REVOKE", apiVersion = "1")
     @DeleteMapping("/{userId}/roles/{roleId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:role:assign')")
     @Operation(summary = "Revoke a role from a user")
     public ResponseEntity<Void> revokeRoleFromUser(
             @PathVariable UUID userId,
@@ -61,7 +61,7 @@ public class UserRoleController {
      * Story #62 (CAP-141): Get all effective permissions for a user.
      */
     @GetMapping("/{userId}/permissions")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasAuthority('security:permission:view')")
     @Operation(summary = "Get user permissions", description = "Returns all effective permissions for a user")
     public ResponseEntity<Set<PermissionDto>> getUserPermissions(@PathVariable UUID userId) {
         return ResponseEntity.ok(roleManagementService.getUserPermissions(userId));

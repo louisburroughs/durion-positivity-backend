@@ -265,13 +265,21 @@ public enum PermissionCode {
     WORKORDER__PARTS__VIEW(211, "workorder:parts:view"),
     WORKORDER__PARTS__ADD(212, "workorder:parts:add"),
     WORKORDER__WIP__VIEW(213, "workorder:wip:view"),
-    WORKORDER__WIP__VIEW_ALL_LOCATIONS(214, "workorder:wip:view_all_locations");
+    WORKORDER__WIP__VIEW_ALL_LOCATIONS(214, "workorder:wip:view_all_locations"),
+
+    // ── Security (batch 2) ───────────────────────────────────────────────────
+    SECURITY__USER_ACCOUNT_STATE__VIEW(215, "security:user_account_state:view"),
+    SECURITY__USER_ACCOUNT_STATE__MANAGE(216, "security:user_account_state:manage"),
+    SECURITY__AUDIT__VIEW(217, "security:audit:view"),
+    SECURITY__AUDIT__CREATE(218, "security:audit:create"),
+    SECURITY__AUTHORIZATION__DECIDE(219, "security:authorization:decide"),
+    SECURITY__TOKEN__ISSUE_INTERNAL(220, "security:token:issue_internal");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 1;
+    public static final int CATALOG_VERSION = 2;
 
     private static final Map<String, PermissionCode> BY_CODE = Stream.of(values())
             .collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

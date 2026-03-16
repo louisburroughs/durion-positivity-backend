@@ -80,7 +80,7 @@ public class JwtController {
     @ApiResponse(responseCode = "403", description = "Forbidden: internal admin context required", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @EmitEvent(id = "SECURITY_AUTH_INTERNAL_TOKEN_ISSUE", apiVersion = "1")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('security:token:issue_internal')")
     @PostMapping("/internal/token")
     public ResponseEntity<TokenResponse> issueInternalToken(@Valid @RequestBody InternalTokenRequest request) {
         log.info("Internal token issuance request received: subject={}, rolesCount={}",
