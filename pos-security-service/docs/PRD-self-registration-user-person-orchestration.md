@@ -276,16 +276,17 @@ Recommended result:
 - success: return created registration response
 - link conflict: compensate by disabling or deleting the just-created user and return deterministic failure
 
-#### 9. Optional post-registration token issuance
+#### 9. Post-registration authentication behavior
 
-Optionally issue tokens only after:
+Self-registration should not issue tokens immediately.
 
-- user created,
-- person linked,
-- account active,
-- no conflict detected.
+Recommended behavior:
 
-If token issuance is deferred, return registration success without tokens.
+- create the person if needed,
+- create the user only after person resolution or creation succeeds,
+- create the user-person link,
+- return registration success without tokens,
+- require the caller to perform a follow-up login.
 
 ## Recommended API and Contract Changes
 
@@ -313,7 +314,6 @@ Recommended response DTO:
 - `linkStatus`
 - `matchedExistingPerson`
 - `crmMatchSummary`
-- optional `tokenPair`
 
 Recommended internal additions:
 
@@ -335,9 +335,15 @@ Recommended enhancement:
 
 ### `pos-customer`
 
-Existing `GET /v1/crm/persons` search is useful but incomplete for this scenario.
+Existing `GET /v1/crm/persons` search is sufficient for the current phase.
 
-Recommended enhancement:
+Recommended current approach:
+
+- use `searchPersons` as-is for self-registration support,
+- interpret its results as supplemental evidence during person resolution,
+- defer any dedicated identity-summary endpoint until experience shows the current search response is insufficient.
+
+Recommended future enhancement if needed:
 
 - enrich person search results to indicate whether the CRM person is:
   - an individual customer,
@@ -449,6 +455,11 @@ If the matched person is an employee or commercial contact but has no active use
 - link it to the existing person,
 - do not auto-assign staff or commercial workflow permissions.
 
+Recommended default role:
+
+- create and assign a dedicated low-privilege external customer role for self-registration,
+- keep this role intentionally narrow because additional external customer roles are expected in future phases.
+
 ## Error Handling
 
 Recommended status mapping per ADR-0017:
@@ -538,12 +549,12 @@ Recommended emitted events:
 - add account recovery integration for disabled or legacy linked accounts
 - add explicit review queue for ambiguous human identity matches if needed
 
-## Open Questions
+## Resolved Decisions
 
-- Should self-registration issue tokens immediately on success, or require a follow-up login?
-- Should the flow create a disabled user first and only activate after link success, or create only after person resolution succeeds?
-- Do we want a dedicated low-privilege role such as `SELF_SERVICE_USER`, or zero default roles?
-- Should CRM expose a dedicated identity-summary endpoint instead of enriching `searchPersons`?
+- Self-registration requires a follow-up login and does not issue tokens immediately on success.
+- The flow creates the user only after person resolution or person creation succeeds.
+- Self-registration should assign a dedicated low-privilege role for external customers, with room for additional external customer roles later.
+- `searchPersons` in `pos-customer` is sufficient for now; a dedicated identity-summary endpoint can be deferred unless implementation experience shows a gap.
 
 ## Final Recommendation
 
