@@ -39,6 +39,7 @@ public class RoleInitializer {
                 "GENERAL_MANAGER", "General manager with broad organizational access",
                 "MANAGER", "Department or location manager",
                 "CUSTOMER", "Customer with limited access to self-service features",
+                "SELF_SERVICE_CUSTOMER", "Low-privilege self-registration role for external customer access",
                 "INVENTORY_LEAD", "Inventory lead with permission to create adjustment requests",
                 "INVENTORY_MANAGER", "Inventory manager with permission to create and approve adjustments",
                 "INVENTORY_CONTROLLER", "Inventory controller with global adjustment approval authority");
