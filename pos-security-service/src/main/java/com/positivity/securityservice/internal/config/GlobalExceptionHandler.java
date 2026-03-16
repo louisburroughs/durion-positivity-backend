@@ -205,6 +205,7 @@ public class GlobalExceptionHandler {
 
                 String correlationId = extractCorrelationId(request);
                 log.warn("Self-registration conflict (correlationId={}): {}", correlationId, ex.getMessage());
+                SelfRegistrationGuidance guidance = selfRegistrationGuidance(ex.getErrorCode());
 
                 return ResponseEntity
                                 .status(HttpStatus.CONFLICT)
@@ -212,7 +213,9 @@ public class GlobalExceptionHandler {
                                                 ex.getErrorCode(),
                                                 ex.getMessage(),
                                                 HttpStatus.CONFLICT,
-                                                correlationId));
+                                                correlationId,
+                                                guidance.nextAction(),
+                                                guidance.supportAction()));
         }
 
         /**
@@ -554,7 +557,50 @@ public class GlobalExceptionHandler {
          * @return error response record
          */
         private ErrorResponse errorResponse(String code, String message, HttpStatus status, String correlationId) {
-                return new ErrorResponse(code, message, status.value(), Instant.now(clock).toString(), correlationId);
+                return errorResponse(code, message, status, correlationId, null, null);
+        }
+
+        private ErrorResponse errorResponse(
+                        String code,
+                        String message,
+                        HttpStatus status,
+                        String correlationId,
+                        String nextAction,
+                        String supportAction) {
+                return new ErrorResponse(
+                                code,
+                                message,
+                                status.value(),
+                                Instant.now(clock).toString(),
+                                correlationId,
+                                nextAction,
+                                supportAction);
+        }
+
+        private SelfRegistrationGuidance selfRegistrationGuidance(String errorCode) {
+                return switch (errorCode) {
+                        case "USER_ALREADY_EXISTS" -> new SelfRegistrationGuidance(
+                                        "Sign in with the existing account or use password recovery instead of registering again.",
+                                        "Confirm that the submitted username or derived email username already maps to an active user in pos-security-service. Preserve the existing account.");
+                        case "ACCOUNT_RECOVERY_REQUIRED" -> new SelfRegistrationGuidance(
+                                        "Use account recovery or reactivation instead of self-registration.",
+                                        "Locate the existing inactive or already-linked account, verify the person linkage, and recover or reactivate it rather than creating a second user.");
+                        case "PERSON_ALREADY_HAS_ACTIVE_USER" -> new SelfRegistrationGuidance(
+                                        "Use the already-linked account instead of creating a new one.",
+                                        "Review the resolved person's linked users in pos-people and pos-security-service. Maintain the 1:1 person-to-active-user rule.");
+                        case "USER_PERSON_LINK_CONFLICT" -> new SelfRegistrationGuidance(
+                                        "Retry later or contact support with the correlation ID.",
+                                        "Investigate user-person linkage consistency between pos-security-service and pos-people before retrying registration.");
+                        case "CRM_PERSON_CONFLICT" -> new SelfRegistrationGuidance(
+                                        "Do not retry self-registration. Contact support to review the existing customer or contact identity.",
+                                        "Review CRM person matches, people resolution output, and linked users before creating or linking any account.");
+                        default -> new SelfRegistrationGuidance(
+                                        "Contact support with the correlation ID if the problem continues.",
+                                        "Review the self-registration correlation ID and downstream identity resolution logs.");
+                };
+        }
+
+        private record SelfRegistrationGuidance(String nextAction, String supportAction) {
         }
 
         /**

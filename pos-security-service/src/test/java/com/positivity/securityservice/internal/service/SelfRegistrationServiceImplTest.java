@@ -55,7 +55,17 @@ class SelfRegistrationServiceImplTest {
 
         when(userRepository.findByUsername("jane")).thenReturn(Optional.empty());
         when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", "+15551234567"))
-                .thenReturn(List.of(new CustomerPersonSearchResponse(personId, "Jane", "Smith", "Jane Smith", List.of(), null, null)));
+                .thenReturn(List.of(new CustomerPersonSearchResponse(
+                        personId,
+                        "Jane",
+                        "Smith",
+                        "Jane Smith",
+                        List.of(),
+                        true,
+                        true,
+                        2,
+                        null,
+                        null)));
         when(peopleRegistrationClient.resolvePerson(any()))
                 .thenReturn(new PeopleResolvePersonResponse(personId, true, 60, 30, List.of("EMAIL"), "Jane", "Smith", "jane@example.com", List.of("+15551234567")));
         when(peopleRegistrationClient.getLinkedUserIds(personId)).thenReturn(List.of());
@@ -84,6 +94,7 @@ class SelfRegistrationServiceImplTest {
         assertThat(response.issuedTokens()).isFalse();
         assertThat(response.crmMatchSummary()).isNotNull();
         assertThat(response.crmMatchSummary().getCandidateCount()).isEqualTo(1);
+        assertThat(response.crmMatchSummary().getSharedIdentityCandidateCount()).isEqualTo(1);
     }
 
     @Test
@@ -165,5 +176,49 @@ class SelfRegistrationServiceImplTest {
                 .hasMessageContaining("could not be linked");
 
         verify(userRepository).deleteById(userId);
+    }
+
+    @Test
+    void selfRegister_crmConflictAfterPersonCreation_compensatesByDeletingCreatedPerson() {
+        UUID createdPersonId = UUID.fromString("00000000-0000-0000-0000-000000000107");
+        when(userRepository.findByUsername("jane")).thenReturn(Optional.empty());
+        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
+                .thenReturn(List.of(new CustomerPersonSearchResponse(
+                        UUID.fromString("00000000-0000-0000-0000-000000000108"),
+                        "Jane",
+                        "Smith",
+                        "Jane Smith",
+                        List.of(new CustomerPersonSearchResponse.ContactPointDto(
+                                UUID.fromString("00000000-0000-0000-0000-000000000109"),
+                                "EMAIL",
+                                "jane@example.com",
+                                true)),
+                        true,
+                        true,
+                        1,
+                        null,
+                        null)));
+        when(peopleRegistrationClient.resolvePerson(any()))
+                .thenReturn(new PeopleResolvePersonResponse(
+                        createdPersonId,
+                        false,
+                        0,
+                        30,
+                        List.of("CREATED"),
+                        "Jane",
+                        "Smith",
+                        "jane@example.com",
+                        List.of()));
+
+        assertThatThrownBy(() -> service.selfRegister(SelfRegistrationRequest.builder()
+                .email("jane@example.com")
+                .password("secret")
+                .firstName("Jane")
+                .lastName("Smith")
+                .build()))
+                .isInstanceOf(SelfRegistrationConflictException.class)
+                .hasMessageContaining("contact support");
+
+        verify(peopleRegistrationClient).deletePerson(createdPersonId);
     }
 }
