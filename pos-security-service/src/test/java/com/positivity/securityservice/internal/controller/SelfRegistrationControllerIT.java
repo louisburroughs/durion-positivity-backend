@@ -15,6 +15,8 @@ import com.positivity.securityservice.internal.client.dto.PeopleUserLinkResponse
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.repository.RoleRepository;
+import com.positivity.securityservice.internal.repository.SelfRegistrationAttemptRepository;
+import com.positivity.securityservice.internal.repository.SelfRegistrationReviewCaseRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import java.util.List;
 import java.util.UUID;
@@ -40,6 +42,12 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
     @Autowired
     private RoleRepository roleRepository;
 
+    @Autowired
+    private SelfRegistrationAttemptRepository selfRegistrationAttemptRepository;
+
+    @Autowired
+    private SelfRegistrationReviewCaseRepository selfRegistrationReviewCaseRepository;
+
     @MockitoBean
     private PeopleRegistrationClient peopleRegistrationClient;
 
@@ -48,6 +56,8 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
 
     @BeforeEach
     void clearUsers() {
+        selfRegistrationAttemptRepository.deleteAll();
+        selfRegistrationReviewCaseRepository.deleteAll();
         userRepository.deleteAll();
         assertThat(roleRepository.findByName("SELF_SERVICE_CUSTOMER")).isPresent();
     }
@@ -85,7 +95,8 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
                                   "password": "Sup3rS3cret!",
                                   "firstName": "Jane",
                                   "lastName": "Smith",
-                                  "phone": "+1-555-123-4567"
+                                  "phone": "+1-555-123-4567",
+                                  "idempotencyKey": "self-reg-001"
                                 }
                                 """))
                 .andExpect(status().isCreated())
@@ -93,6 +104,7 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.username").value("jane"))
                 .andExpect(jsonPath("$.linkStatus").value("LINKED"))
                 .andExpect(jsonPath("$.matchedExistingPerson").value(true))
+                .andExpect(jsonPath("$.idempotencyKey").value("self-reg-001"))
                 .andExpect(jsonPath("$.issuedTokens").value(false));
 
         User created = userRepository.findByUsername("jane").orElseThrow();
@@ -196,9 +208,107 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
                                 """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CRM_PERSON_CONFLICT"))
+                .andExpect(jsonPath("$.referenceId").isNotEmpty())
                 .andExpect(jsonPath("$.nextAction").value("Do not retry self-registration. Contact support to review the existing customer or contact identity."))
                 .andExpect(jsonPath("$.supportAction").value("Review CRM person matches, people resolution output, and linked users before creating or linking any account."));
 
         assertThat(userRepository.findByUsername("jane")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("POST /v1/auth/self-register replays the same successful result for a reused idempotency key")
+    void selfRegister_sameIdempotencyKey_replaysCreatedResponse() throws Exception {
+        UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000211");
+        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
+                .thenReturn(List.of());
+        when(peopleRegistrationClient.resolvePerson(any()))
+                .thenReturn(new PeopleResolvePersonResponse(personId, false, 0, 30, List.of("CREATED"), "Jane", "Smith", "jane@example.com", List.of()));
+        when(peopleRegistrationClient.getLinkedUserIds(personId)).thenReturn(List.of());
+        when(peopleRegistrationClient.linkUserToPerson(any()))
+                .thenAnswer(invocation -> {
+                    var req = invocation.getArgument(0, com.positivity.securityservice.internal.client.dto.PeopleLinkUserRequest.class);
+                    return new PeopleUserLinkResponse(UUID.randomUUID(), req.userId(), req.personId(), "PRIMARY", null, "system", "Created by self-registration");
+                });
+
+        String payload = """
+                {
+                  "email": "jane@example.com",
+                  "password": "Sup3rS3cret!",
+                  "firstName": "Jane",
+                  "lastName": "Smith",
+                  "idempotencyKey": "self-reg-replay-001"
+                }
+                """;
+
+        mockMvc.perform(post("/v1/auth/self-register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idempotencyKey").value("self-reg-replay-001"));
+
+        String firstUserId = userRepository.findByUsername("jane").orElseThrow().getId().toString();
+
+        mockMvc.perform(post("/v1/auth/self-register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userId").value(firstUserId))
+                .andExpect(jsonPath("$.idempotencyKey").value("self-reg-replay-001"));
+
+        assertThat(userRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("GET /v1/self-registration/review-cases returns blocked CRM review cases")
+    void listReviewCases_returnsBlockedIdentityReviewCases() throws Exception {
+        UUID createdPersonId = UUID.fromString("00000000-0000-0000-0000-000000000212");
+        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
+                .thenReturn(List.of(new CustomerPersonSearchResponse(
+                        UUID.fromString("00000000-0000-0000-0000-000000000213"),
+                        "Jane",
+                        "Smith",
+                        "Jane Smith",
+                        List.of(new CustomerPersonSearchResponse.ContactPointDto(
+                                UUID.fromString("00000000-0000-0000-0000-000000000214"),
+                                "EMAIL",
+                                "jane@example.com",
+                                true)),
+                        true,
+                        true,
+                        1,
+                        null,
+                        null)));
+        when(peopleRegistrationClient.resolvePerson(any()))
+                .thenReturn(new PeopleResolvePersonResponse(
+                        createdPersonId,
+                        false,
+                        0,
+                        30,
+                        List.of("CREATED"),
+                        "Jane",
+                        "Smith",
+                        "jane@example.com",
+                        List.of()));
+
+        mockMvc.perform(post("/v1/auth/self-register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "jane@example.com",
+                                  "password": "Sup3rS3cret!",
+                                  "firstName": "Jane",
+                                  "lastName": "Smith"
+                                }
+                                """))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(withAuth(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/v1/self-registration/review-cases")
+                        .param("status", "OPEN")
+                        .param("caseType", "IDENTITY_REVIEW"),
+                "security:user_account_state:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].reasonCode").value("CRM_PERSON_CONFLICT"))
+                .andExpect(jsonPath("$[0].email").value("jane@example.com"));
     }
 }

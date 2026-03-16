@@ -59,7 +59,7 @@ class JsonAccessDeniedHandler implements AccessDeniedHandler {
 
         ErrorResponse body = new ErrorResponse(
                 "FORBIDDEN", "Access denied",
-                HttpServletResponse.SC_FORBIDDEN, Instant.now(clock).toString(), correlationId, null, null);
+                HttpServletResponse.SC_FORBIDDEN, Instant.now(clock).toString(), correlationId, null, null, null);
 
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType("application/json;charset=UTF-8");

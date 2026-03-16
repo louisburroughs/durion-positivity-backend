@@ -21,6 +21,9 @@ public record SelfRegistrationResponse(
         @Nullable
         @Schema(description = "Summary of CRM person search candidates")
         CrmMatchSummaryDto crmMatchSummary,
+        @Nullable
+        @Schema(description = "Idempotency key echoed back when the caller supplied one")
+        String idempotencyKey,
         @Schema(description = "False for Phase 1 because follow-up login is required")
         boolean issuedTokens) {
 }

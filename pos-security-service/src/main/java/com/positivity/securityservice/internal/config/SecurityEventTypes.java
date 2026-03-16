@@ -17,7 +17,7 @@ public final class SecurityEventTypes {
 
         /**
          * All event type registrations for the security module.
-         * Total: 30 event types.
+         * Total: 31 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -97,6 +97,10 @@ public final class SecurityEventTypes {
                                 EventTypeRegistration.write("SECURITY_USER_EXPIRE_ACCOUNT",
                                                 "Expire a user account").build(),
                                 EventTypeRegistration.write("SECURITY_USER_EXPIRE_CREDENTIALS",
-                                                "Expire user credentials").build());
+                                                "Expire user credentials").build(),
+
+                                // SelfRegistrationReviewController - 1 event
+                                EventTypeRegistration.write("SECURITY_SELF_REGISTRATION_REVIEW_RESOLVE",
+                                                "Resolve a blocked self-registration review case").build());
         }
 }

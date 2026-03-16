@@ -1,6 +1,6 @@
 ---
 title: "PRD: Self-Registration with User-Person Orchestration"
-status: "PARTIALLY_IMPLEMENTED"
+status: "IMPLEMENTED"
 capability: "security-self-registration"
 version: "1.0"
 created: "2026-03-16"
@@ -68,7 +68,8 @@ Current delivery status as of `2026-03-16`:
 - Successful self-registration requires a follow-up login and does not issue tokens immediately.
 - A dedicated low-privilege role, `SELF_SERVICE_CUSTOMER`, is assigned during self-registration.
 - Focused unit and controller integration tests are in place for the Phase 1 flow.
-- Phase 2 is complete; Phase 3 items in this PRD remain pending.
+- Phase 2 is complete.
+- Phase 3 is complete, including idempotent retries, persisted review cases, and recovery-oriented blocking for inactive linked accounts.
 
 ## User Experience & Functionality
 
@@ -572,11 +573,11 @@ Status: Completed
 
 ### Phase 3
 
-Status: Pending
+Status: Completed
 
-- [ ] Add idempotent retry support
-- [ ] Add account recovery integration for disabled or legacy linked accounts
-- [ ] Add explicit review queue for ambiguous human identity matches if needed
+- [x] Add idempotent retry support
+- [x] Add account recovery integration for disabled or legacy linked accounts
+- [x] Add explicit review queue for ambiguous human identity matches if needed
 
 ## Resolved Decisions
 

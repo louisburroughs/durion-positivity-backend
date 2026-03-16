@@ -34,6 +34,7 @@ import com.positivity.securityservice.internal.exception.PermissionNotFoundExcep
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
+import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.service.AuditEventService;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -214,8 +215,27 @@ public class GlobalExceptionHandler {
                                                 ex.getMessage(),
                                                 HttpStatus.CONFLICT,
                                                 correlationId,
+                                                ex.getReferenceId() == null ? null : ex.getReferenceId().toString(),
                                                 guidance.nextAction(),
                                                 guidance.supportAction()));
+        }
+
+        @ExceptionHandler(SelfRegistrationReviewCaseNotFoundException.class)
+        @ResponseStatus(HttpStatus.NOT_FOUND)
+        public ResponseEntity<ErrorResponse> handleSelfRegistrationReviewCaseNotFoundException(
+                        SelfRegistrationReviewCaseNotFoundException ex,
+                        WebRequest request) {
+
+                String correlationId = extractCorrelationId(request);
+                log.warn("Self-registration review case not found (correlationId={}): {}", correlationId, ex.getMessage());
+
+                return ResponseEntity
+                                .status(HttpStatus.NOT_FOUND)
+                                .body(errorResponse(
+                                                "SELF_REGISTRATION_REVIEW_CASE_NOT_FOUND",
+                                                ex.getMessage(),
+                                                HttpStatus.NOT_FOUND,
+                                                correlationId));
         }
 
         /**
@@ -557,7 +577,7 @@ public class GlobalExceptionHandler {
          * @return error response record
          */
         private ErrorResponse errorResponse(String code, String message, HttpStatus status, String correlationId) {
-                return errorResponse(code, message, status, correlationId, null, null);
+                return errorResponse(code, message, status, correlationId, null, null, null);
         }
 
         private ErrorResponse errorResponse(
@@ -565,6 +585,7 @@ public class GlobalExceptionHandler {
                         String message,
                         HttpStatus status,
                         String correlationId,
+                        String referenceId,
                         String nextAction,
                         String supportAction) {
                 return new ErrorResponse(
@@ -573,6 +594,7 @@ public class GlobalExceptionHandler {
                                 status.value(),
                                 Instant.now(clock).toString(),
                                 correlationId,
+                                referenceId,
                                 nextAction,
                                 supportAction);
         }
@@ -594,6 +616,9 @@ public class GlobalExceptionHandler {
                         case "CRM_PERSON_CONFLICT" -> new SelfRegistrationGuidance(
                                         "Do not retry self-registration. Contact support to review the existing customer or contact identity.",
                                         "Review CRM person matches, people resolution output, and linked users before creating or linking any account.");
+                        case "IDEMPOTENCY_KEY_REUSED" -> new SelfRegistrationGuidance(
+                                        "Retry with the original request payload or generate a new idempotency key.",
+                                        "Confirm whether the original request already completed, then either reuse that payload or instruct the caller to submit a new key.");
                         default -> new SelfRegistrationGuidance(
                                         "Contact support with the correlation ID if the problem continues.",
                                         "Review the self-registration correlation ID and downstream identity resolution logs.");

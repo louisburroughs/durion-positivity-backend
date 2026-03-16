@@ -9,12 +9,19 @@ import com.positivity.securityservice.internal.client.dto.PeopleResolvePersonRes
 import com.positivity.securityservice.internal.dto.CrmMatchSummaryDto;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
+import com.positivity.securityservice.internal.dto.SelfRegistrationReviewCaseCreateRequest;
+import com.positivity.securityservice.internal.entity.SelfRegistrationAttempt;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.enums.SelfRegistrationAttemptStatus;
+import com.positivity.securityservice.internal.enums.SelfRegistrationCaseType;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.service.SelfRegistrationReviewService;
 import com.positivity.securityservice.service.SelfRegistrationService;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -38,6 +45,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final PeopleRegistrationClient peopleRegistrationClient;
     private final CustomerRegistrationClient customerRegistrationClient;
+    private final SelfRegistrationAttemptService selfRegistrationAttemptService;
+    private final SelfRegistrationReviewService selfRegistrationReviewService;
 
     @Override
     @Transactional
@@ -49,8 +58,68 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         String explicitUsername = normalizeUsername(request.username());
         String derivedUsername = deriveUsernameFromEmail(normalizedEmail);
         String chosenUsername = explicitUsername != null ? explicitUsername : derivedUsername;
+        String normalizedIdpSubject = normalizeOptionalText(request.idpSubject());
+        String idempotencyKey = normalizeIdempotencyKey(request.idempotencyKey());
+        String requestFingerprint = buildRequestFingerprint(
+                normalizedEmail,
+                normalizedPhone,
+                normalizedFirstName,
+                normalizedLastName,
+                explicitUsername,
+                normalizedIdpSubject);
 
-        ensureUserDoesNotAlreadyExist(chosenUsername, derivedUsername);
+        if (idempotencyKey != null) {
+            Optional<SelfRegistrationAttempt> existingAttempt =
+                    selfRegistrationAttemptService.findByIdempotencyKey(idempotencyKey);
+            if (existingAttempt.isPresent()) {
+                return replayAttempt(existingAttempt.get(), requestFingerprint);
+            }
+        }
+
+        try {
+            SelfRegistrationResponse response = doSelfRegister(
+                    normalizedEmail,
+                    normalizedPhone,
+                    normalizedFirstName,
+                    normalizedLastName,
+                    chosenUsername,
+                    derivedUsername,
+                    request.password(),
+                    idempotencyKey);
+            if (idempotencyKey != null) {
+                selfRegistrationAttemptService.recordSuccess(
+                        idempotencyKey,
+                        requestFingerprint,
+                        normalizedEmail,
+                        chosenUsername,
+                        response);
+            }
+            return response;
+        } catch (SelfRegistrationConflictException ex) {
+            if (idempotencyKey != null) {
+                selfRegistrationAttemptService.recordConflict(
+                        idempotencyKey,
+                        requestFingerprint,
+                        normalizedEmail,
+                        chosenUsername,
+                        ex.getErrorCode(),
+                        ex.getMessage(),
+                        ex.getReferenceId());
+            }
+            throw ex;
+        }
+    }
+
+    private SelfRegistrationResponse doSelfRegister(
+            String normalizedEmail,
+            String normalizedPhone,
+            String normalizedFirstName,
+            String normalizedLastName,
+            String chosenUsername,
+            String derivedUsername,
+            String rawPassword,
+            String idempotencyKey) {
+        ensureUserDoesNotAlreadyExist(chosenUsername, derivedUsername, normalizedEmail);
 
         List<CustomerPersonSearchResponse> crmMatches = customerRegistrationClient.searchPersons(
                 buildFullName(normalizedFirstName, normalizedLastName),
@@ -69,11 +138,11 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 .firstName(normalizedFirstName)
                 .lastName(normalizedLastName)
                 .build());
-        enforceCrmConflictRules(resolvedPerson, crmSignalAssessment);
+        enforceCrmConflictRules(resolvedPerson, crmSignalAssessment, normalizedEmail, chosenUsername);
 
-        enforceLinkedUserRules(resolvedPerson.personId());
+        enforceLinkedUserRules(resolvedPerson.personId(), normalizedEmail, chosenUsername);
 
-        User createdUser = createUser(chosenUsername, request.password(), resolvedPerson.personId());
+        User createdUser = createUser(chosenUsername, rawPassword, resolvedPerson.personId());
         try {
             peopleRegistrationClient.linkUserToPerson(PeopleLinkUserRequest.builder()
                     .userId(createdUser.getId())
@@ -83,9 +152,19 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                     .build());
         } catch (RuntimeException ex) {
             userRepository.deleteById(createdUser.getId());
+            UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
+                    .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
+                    .reasonCode("USER_PERSON_LINK_CONFLICT")
+                    .reasonMessage("User was created but could not be linked to the resolved person")
+                    .email(normalizedEmail)
+                    .requestedUsername(chosenUsername)
+                    .personId(resolvedPerson.personId())
+                    .notes("User creation succeeded but link-to-person compensation was required")
+                    .build());
             throw new SelfRegistrationConflictException(
                     "USER_PERSON_LINK_CONFLICT",
-                    "User was created but could not be linked to the resolved person");
+                    "User was created but could not be linked to the resolved person",
+                    referenceId);
         }
 
         return SelfRegistrationResponse.builder()
@@ -95,11 +174,54 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 .linkStatus("LINKED")
                 .matchedExistingPerson(resolvedPerson.matchedExisting())
                 .crmMatchSummary(crmSignalAssessment.summary())
+                .idempotencyKey(idempotencyKey)
                 .issuedTokens(false)
                 .build();
     }
 
-    private void ensureUserDoesNotAlreadyExist(String chosenUsername, String derivedUsername) {
+    private SelfRegistrationResponse replayAttempt(SelfRegistrationAttempt attempt, String requestFingerprint) {
+        if (!requestFingerprint.equals(attempt.getRequestFingerprint())) {
+            throw new SelfRegistrationConflictException(
+                    "IDEMPOTENCY_KEY_REUSED",
+                    "The provided idempotency key has already been used with a different self-registration request",
+                    attempt.getReferenceId());
+        }
+        if (attempt.getStatus() == SelfRegistrationAttemptStatus.SUCCEEDED) {
+            return SelfRegistrationResponse.builder()
+                    .userId(attempt.getUserId())
+                    .personId(attempt.getPersonId())
+                    .username(attempt.getUsername())
+                    .linkStatus(attempt.getLinkStatus())
+                    .matchedExistingPerson(attempt.isMatchedExistingPerson())
+                    .crmMatchSummary(toCrmMatchSummary(attempt))
+                    .idempotencyKey(attempt.getIdempotencyKey())
+                    .issuedTokens(attempt.isIssuedTokens())
+                    .build();
+        }
+        throw new SelfRegistrationConflictException(
+                attempt.getConflictCode(),
+                attempt.getConflictMessage(),
+                attempt.getReferenceId());
+    }
+
+    private CrmMatchSummaryDto toCrmMatchSummary(SelfRegistrationAttempt attempt) {
+        if (attempt.getCrmCandidateCount() == null) {
+            return null;
+        }
+        return CrmMatchSummaryDto.builder()
+                .candidateCount(attempt.getCrmCandidateCount())
+                .anyMatches(Boolean.TRUE.equals(attempt.getCrmAnyMatches()))
+                .individualCustomerCandidateCount(defaultInteger(attempt.getCrmIndividualCustomerCandidateCount()))
+                .commercialContactCandidateCount(defaultInteger(attempt.getCrmCommercialContactCandidateCount()))
+                .sharedIdentityCandidateCount(defaultInteger(attempt.getCrmSharedIdentityCandidateCount()))
+                .exactEmailMatch(Boolean.TRUE.equals(attempt.getCrmExactEmailMatch()))
+                .exactPhoneMatch(Boolean.TRUE.equals(attempt.getCrmExactPhoneMatch()))
+                .exactNameMatch(Boolean.TRUE.equals(attempt.getCrmExactNameMatch()))
+                .reviewRequired(Boolean.TRUE.equals(attempt.getCrmReviewRequired()))
+                .build();
+    }
+
+    private void ensureUserDoesNotAlreadyExist(String chosenUsername, String derivedUsername, String normalizedEmail) {
         Set<String> usernamesToCheck = new LinkedHashSet<>();
         usernamesToCheck.add(chosenUsername);
         usernamesToCheck.add(derivedUsername);
@@ -117,40 +239,85 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                         "USER_ALREADY_EXISTS",
                         "A user account already exists for username " + username);
             }
+            UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
+                    .caseType(SelfRegistrationCaseType.ACCOUNT_RECOVERY)
+                    .reasonCode("ACCOUNT_RECOVERY_REQUIRED")
+                    .reasonMessage("An existing inactive account must be recovered instead of creating a second account")
+                    .email(normalizedEmail)
+                    .requestedUsername(username)
+                    .personId(existing.get().getPersonId())
+                    .linkedUserId(existing.get().getId())
+                    .notes("Self-registration matched an inactive existing username")
+                    .build());
             throw new SelfRegistrationConflictException(
                     "ACCOUNT_RECOVERY_REQUIRED",
-                    "An existing inactive account must be recovered instead of creating a second account");
+                    "An existing inactive account must be recovered instead of creating a second account",
+                    referenceId);
         }
     }
 
-    private void enforceLinkedUserRules(UUID personId) {
+    private void enforceLinkedUserRules(UUID personId, String normalizedEmail, String chosenUsername) {
         List<UUID> linkedUserIds = peopleRegistrationClient.getLinkedUserIds(personId);
         for (UUID linkedUserId : linkedUserIds) {
             User linkedUser = userRepository.findById(linkedUserId)
                     .orElseThrow(() -> new SelfRegistrationConflictException(
                             "USER_PERSON_LINK_CONFLICT",
-                            "Resolved person has an inconsistent existing user link"));
+                            "Resolved person has an inconsistent existing user link",
+                            selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
+                                    .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
+                                    .reasonCode("USER_PERSON_LINK_CONFLICT")
+                                    .reasonMessage("Resolved person has an inconsistent existing user link")
+                                    .email(normalizedEmail)
+                                    .requestedUsername(chosenUsername)
+                                    .personId(personId)
+                                    .linkedUserId(linkedUserId)
+                                    .notes("People link exists but security user record could not be found")
+                                    .build())));
             if (isActive(linkedUser)) {
                 throw new SelfRegistrationConflictException(
                         "PERSON_ALREADY_HAS_ACTIVE_USER",
                         "Resolved person is already linked to a different active user");
             }
+            UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
+                    .caseType(SelfRegistrationCaseType.ACCOUNT_RECOVERY)
+                    .reasonCode("ACCOUNT_RECOVERY_REQUIRED")
+                    .reasonMessage("Resolved person already has an inactive linked user and must go through recovery")
+                    .email(normalizedEmail)
+                    .requestedUsername(chosenUsername)
+                    .personId(personId)
+                    .linkedUserId(linkedUserId)
+                    .notes("Inactive linked user blocks self-registration")
+                    .build());
             throw new SelfRegistrationConflictException(
                     "ACCOUNT_RECOVERY_REQUIRED",
-                    "Resolved person already has an inactive linked user and must go through recovery");
+                    "Resolved person already has an inactive linked user and must go through recovery",
+                    referenceId);
         }
     }
 
     private void enforceCrmConflictRules(
             PeopleResolvePersonResponse resolvedPerson,
-            CrmSignalAssessment crmSignalAssessment) {
+            CrmSignalAssessment crmSignalAssessment,
+            String normalizedEmail,
+            String chosenUsername) {
         if (resolvedPerson.matchedExisting() || !crmSignalAssessment.reviewRequired()) {
             return;
         }
+        UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
+                .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
+                .reasonCode("CRM_PERSON_CONFLICT")
+                .reasonMessage(buildCrmConflictMessage(crmSignalAssessment.summary()))
+                .email(normalizedEmail)
+                .requestedUsername(chosenUsername)
+                .personId(resolvedPerson.personId())
+                .crmMatchSummary(crmSignalAssessment.summary())
+                .notes("CRM indicated an existing human identity that should be reviewed before creating a new account")
+                .build());
         peopleRegistrationClient.deletePerson(resolvedPerson.personId());
         throw new SelfRegistrationConflictException(
                 "CRM_PERSON_CONFLICT",
-                buildCrmConflictMessage(crmSignalAssessment.summary()));
+                buildCrmConflictMessage(crmSignalAssessment.summary()),
+                referenceId);
     }
 
     private CrmSignalAssessment assessCrmMatches(
@@ -263,6 +430,13 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         return normalizeRequired(value, "name");
     }
 
+    private String normalizeIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return null;
+        }
+        return idempotencyKey.trim();
+    }
+
     private String normalizeOptionalText(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -310,6 +484,37 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
 
     private String buildFullName(String firstName, String lastName) {
         return (firstName + " " + lastName).trim();
+    }
+
+    private String buildRequestFingerprint(
+            String normalizedEmail,
+            String normalizedPhone,
+            String normalizedFirstName,
+            String normalizedLastName,
+            String explicitUsername,
+            String normalizedIdpSubject) {
+        String canonical = String.join("|",
+                normalizedEmail,
+                defaultString(normalizedPhone),
+                normalizedFirstName,
+                normalizedLastName,
+                defaultString(explicitUsername),
+                defaultString(normalizedIdpSubject));
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(canonical.getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(hash);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to create self-registration fingerprint", ex);
+        }
+    }
+
+    private String defaultString(String value) {
+        return value == null ? "" : value;
+    }
+
+    private int defaultInteger(Integer value) {
+        return value == null ? 0 : value;
     }
 
     private record CrmSignalAssessment(CrmMatchSummaryDto summary) {
