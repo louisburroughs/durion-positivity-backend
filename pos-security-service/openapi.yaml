@@ -26,6 +26,9 @@ tags:
   description: Central permission registry for all services
 - name: Auth API
   description: User-facing authentication endpoints
+- name: Self-Registration Review API
+  description: Administrative queue for blocked self-registration recovery and identity
+    review cases
 - name: Admin Account-State API
   description: Administrative endpoints for user account state management
 - name: Audit
@@ -56,14 +59,8 @@ paths:
               description: Payload containing the roles to assign
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found.
           content:
             '*/*':
               schema:
@@ -86,8 +83,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found.
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -120,14 +123,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -150,8 +147,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -179,14 +182,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -209,8 +206,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -234,14 +237,8 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found.
           content:
             '*/*':
               schema:
@@ -264,8 +261,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found.
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -298,14 +301,8 @@ paths:
               $ref: "#/components/schemas/UserUpdateRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found.
           content:
             '*/*':
               schema:
@@ -328,8 +325,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found.
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -356,14 +359,8 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found.
           content:
             '*/*':
               schema:
@@ -386,8 +383,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found.
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -415,14 +418,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role or permission not found
           content:
             '*/*':
               schema:
@@ -445,8 +442,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role or permission not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -472,14 +475,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role or permission not found
           content:
             '*/*':
               schema:
@@ -502,8 +499,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role or permission not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -531,14 +534,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role or permission not found
           content:
             '*/*':
               schema:
@@ -561,8 +558,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role or permission not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -588,14 +591,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role or permission not found
           content:
             '*/*':
               schema:
@@ -618,8 +615,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role or permission not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -648,14 +651,8 @@ paths:
               $ref: "#/components/schemas/RolePermissionGrantRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role or permission not found
           content:
             '*/*':
               schema:
@@ -678,8 +675,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role or permission not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -712,14 +715,8 @@ paths:
               $ref: "#/components/schemas/RolePermissionGrantRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role or permission not found
           content:
             '*/*':
               schema:
@@ -742,8 +739,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role or permission not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -768,14 +771,8 @@ paths:
               $ref: "#/components/schemas/RolePermissionsRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role or permission not found
           content:
             '*/*':
               schema:
@@ -798,8 +795,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role or permission not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -824,14 +827,8 @@ paths:
               $ref: "#/components/schemas/RolePermissionsRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role or permission not found
           content:
             '*/*':
               schema:
@@ -854,8 +851,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role or permission not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -874,14 +877,8 @@ paths:
       description: Retrieve a list of all users.
       operationId: getAllUsers
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -904,8 +901,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -932,14 +935,8 @@ paths:
               additionalProperties: {}
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -962,8 +959,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -990,14 +993,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1020,8 +1017,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1044,14 +1047,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1074,8 +1071,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1098,14 +1101,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1128,8 +1125,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1152,14 +1155,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1182,8 +1179,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1206,14 +1209,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1236,8 +1233,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1258,14 +1261,8 @@ paths:
               $ref: "#/components/schemas/RoleAssignmentRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User or role not found
           content:
             '*/*':
               schema:
@@ -1288,8 +1285,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User or role not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1314,14 +1317,8 @@ paths:
               $ref: "#/components/schemas/RoleAssignmentRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User or role not found
           content:
             '*/*':
               schema:
@@ -1344,8 +1341,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User or role not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1364,14 +1367,8 @@ paths:
       description: Returns all roles in the system
       operationId: getAllRoles
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1394,8 +1391,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1423,14 +1426,8 @@ paths:
                 type: string
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1453,8 +1450,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1473,14 +1476,8 @@ paths:
       description: Returns all roles in the system
       operationId: getAllRoles_1
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1503,8 +1500,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1532,14 +1535,8 @@ paths:
                 type: string
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1562,8 +1559,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1597,14 +1600,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Principal or role not found
           content:
             '*/*':
               schema:
@@ -1627,8 +1624,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Principal or role not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1650,14 +1653,8 @@ paths:
               $ref: "#/components/schemas/PermissionRegistrationRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1680,8 +1677,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1709,14 +1712,8 @@ paths:
               $ref: "#/components/schemas/PermissionRegistrationRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1739,8 +1736,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1767,14 +1770,8 @@ paths:
               $ref: "#/components/schemas/PermissionRegistrationRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1797,8 +1794,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1823,14 +1826,8 @@ paths:
               $ref: "#/components/schemas/PermissionRegistrationRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1853,8 +1850,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1880,14 +1883,8 @@ paths:
               $ref: "#/components/schemas/PermissionDecodeRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1910,8 +1907,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1937,14 +1940,8 @@ paths:
               $ref: "#/components/schemas/PermissionDecodeRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -1967,8 +1964,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -1979,6 +1982,70 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PermissionDecodeResponse"
+  /v1/self-registration/review-cases/{caseId}/resolve:
+    post:
+      tags:
+      - Self-Registration Review API
+      summary: Resolve a self-registration review case
+      description: Marks a blocked self-registration case as resolved after recovery
+        or manual review.
+      operationId: resolveCase
+      parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveSelfRegistrationReviewCaseRequest"
+        required: true
+      responses:
+        "404":
+          description: Review case not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "200":
+          description: Review case resolved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
   /v1/auth/token-pair:
     post:
       tags:
@@ -1995,14 +2062,8 @@ paths:
               $ref: "#/components/schemas/TokenPairRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2025,8 +2086,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
           content:
             '*/*':
               schema:
@@ -2054,14 +2121,8 @@ paths:
               $ref: "#/components/schemas/SelfRegistrationRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2085,8 +2146,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2113,14 +2180,8 @@ paths:
               $ref: "#/components/schemas/RefreshTokenRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2143,8 +2204,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
           content:
             '*/*':
               schema:
@@ -2170,14 +2237,8 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
         required: true
       responses:
-        "401":
-          description: Invalid credentials
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2200,8 +2261,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Invalid credentials
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
           content:
             '*/*':
               schema:
@@ -2227,14 +2294,8 @@ paths:
               $ref: "#/components/schemas/InternalTokenRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2257,8 +2318,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
           content:
             '*/*':
               schema:
@@ -2284,14 +2351,8 @@ paths:
               $ref: "#/components/schemas/PricingSnapshotRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2314,8 +2375,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2370,14 +2437,8 @@ paths:
           format: date-time
         example: 2026-01-31T23:59:59Z
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2400,8 +2461,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2428,14 +2495,8 @@ paths:
               $ref: "#/components/schemas/AuditLogEventRequest"
         required: true
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2458,8 +2519,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2485,14 +2552,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2515,8 +2576,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2546,14 +2613,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -2576,8 +2637,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2603,14 +2670,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role not found
           content:
             '*/*':
               schema:
@@ -2633,8 +2694,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2659,14 +2726,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role not found
           content:
             '*/*':
               schema:
@@ -2689,8 +2750,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2712,14 +2779,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role not found
           content:
             '*/*':
               schema:
@@ -2742,8 +2803,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2768,14 +2835,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role not found
           content:
             '*/*':
               schema:
@@ -2798,8 +2859,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2821,14 +2888,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found
           content:
             '*/*':
               schema:
@@ -2851,8 +2912,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2881,14 +2948,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found
           content:
             '*/*':
               schema:
@@ -2911,8 +2972,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -2951,14 +3018,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found
           content:
             '*/*':
               schema:
@@ -2981,8 +3042,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3018,14 +3085,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found
           content:
             '*/*':
               schema:
@@ -3048,8 +3109,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3074,14 +3141,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role not found
           content:
             '*/*':
               schema:
@@ -3104,8 +3165,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3130,14 +3197,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role not found
           content:
             '*/*':
               schema:
@@ -3160,8 +3221,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3198,14 +3265,8 @@ paths:
           default: false
         example: false
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found
           content:
             '*/*':
               schema:
@@ -3228,8 +3289,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3268,14 +3335,8 @@ paths:
           default: false
         example: false
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: User not found
           content:
             '*/*':
               schema:
@@ -3298,8 +3359,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3327,14 +3394,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3357,8 +3418,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3384,14 +3451,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3414,8 +3475,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3441,14 +3508,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3471,8 +3532,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3498,14 +3565,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3528,8 +3589,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3554,14 +3621,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3584,8 +3645,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3610,14 +3677,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3640,8 +3701,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3666,14 +3733,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3696,8 +3757,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3724,14 +3791,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3754,8 +3815,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3777,14 +3844,8 @@ paths:
         No authentication required.
       operationId: getCatalogVersion
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3807,8 +3868,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3828,14 +3895,8 @@ paths:
         No authentication required.
       operationId: getCatalogVersion_1
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3858,8 +3919,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3885,14 +3952,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3915,8 +3976,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -3944,14 +4011,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -3974,8 +4035,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4011,14 +4078,8 @@ paths:
           type: string
         example: pricing:msrp:edit
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -4041,8 +4102,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4053,28 +4120,34 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AuthorizationDecisionResponse"
-  /v1/auth/validate:
+  /v1/self-registration/review-cases:
     get:
       tags:
-      - JWT API
-      summary: Validate JWT token
-      description: "Check if a JWT token is valid (signature, expiration, revocation)"
-      operationId: validateToken
+      - Self-Registration Review API
+      summary: List self-registration review cases
+      description: Returns blocked self-registration cases for recovery or identity
+        review.
+      operationId: listCases
       parameters:
-      - name: token
+      - name: status
         in: query
-        required: true
+        required: false
         schema:
           type: string
+          enum:
+          - OPEN
+          - RESOLVED
+      - name: caseType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACCOUNT_RECOVERY
+          - IDENTITY_REVIEW
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -4097,8 +4170,129 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "200":
+          description: Review cases returned successfully
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
+  /v1/self-registration/review-cases/{caseId}:
+    get:
+      tags:
+      - Self-Registration Review API
+      summary: Get a self-registration review case
+      description: Returns the details of a blocked self-registration case.
+      operationId: getCase
+      parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: Review case not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "200":
+          description: Review case returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
+  /v1/auth/validate:
+    get:
+      tags:
+      - JWT API
+      summary: Validate JWT token
+      description: "Check if a JWT token is valid (signature, expiration, revocation)"
+      operationId: validateToken
+      parameters:
+      - name: token
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
         "404":
           description: Not Found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4123,14 +4317,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Token invalid or expired
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -4153,8 +4341,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Token invalid or expired
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4179,14 +4373,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Token invalid or expired
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -4209,8 +4397,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Token invalid or expired
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4235,14 +4429,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Token invalid or expired
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -4265,8 +4453,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Token invalid or expired
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4294,14 +4488,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Token invalid or expired
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -4324,8 +4512,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Token invalid or expired
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4354,14 +4548,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Pricing snapshot not found
           content:
             '*/*':
               schema:
@@ -4384,8 +4572,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Pricing snapshot not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4411,14 +4605,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Audit event not found
           content:
             '*/*':
               schema:
@@ -4441,8 +4629,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Audit event not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4481,14 +4675,8 @@ paths:
           format: date-time
         example: 2026-02-16T10:30:00
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role assignment not found
           content:
             '*/*':
               schema:
@@ -4511,8 +4699,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role assignment not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4547,14 +4741,8 @@ paths:
           format: date-time
         example: 2026-02-16T10:30:00
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Role assignment not found
           content:
             '*/*':
               schema:
@@ -4577,8 +4765,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Role assignment not found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4599,14 +4793,8 @@ paths:
         schema:
           type: string
       responses:
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           content:
             '*/*':
               schema:
@@ -4629,8 +4817,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
           content:
             '*/*':
               schema:
@@ -4659,6 +4853,9 @@ components:
         correlationId:
           type: string
           description: Unique request correlation ID for tracking
+        referenceId:
+          type: string
+          description: "Workflow or review-case reference identifier, when available"
         nextAction:
           type: string
           description: "Recommended next step for the caller, when available"
@@ -4875,6 +5072,94 @@ components:
           type: array
           items:
             type: string
+    ResolveSelfRegistrationReviewCaseRequest:
+      type: object
+      description: Administrative request to resolve a blocked self-registration case
+      properties:
+        resolutionNotes:
+          type: string
+          description: Resolution note recorded with the case
+          example: Recovered existing disabled account and asked user to sign in.
+      required:
+      - resolutionNotes
+    SelfRegistrationReviewCaseResponse:
+      type: object
+      description: Administrative view of a blocked self-registration case
+      properties:
+        caseId:
+          type: string
+          format: uuid
+          description: Review case identifier
+        caseType:
+          type: string
+          description: Case type
+          enum:
+          - ACCOUNT_RECOVERY
+          - IDENTITY_REVIEW
+        status:
+          type: string
+          description: Case status
+          enum:
+          - OPEN
+          - RESOLVED
+        reasonCode:
+          type: string
+          description: Reason code that created the case
+        reasonMessage:
+          type: string
+          description: Reason message recorded for the case
+        email:
+          type: string
+          description: Submitted email address
+        requestedUsername:
+          type: string
+          description: "Requested username, when available"
+        personId:
+          type: string
+          format: uuid
+          description: "Resolved or created person identifier, when available"
+        linkedUserId:
+          type: string
+          format: uuid
+          description: "Linked or recoverable user identifier, when available"
+        crmCandidateCount:
+          type: integer
+          format: int32
+          description: "CRM candidate count, when available"
+        crmSharedIdentityCandidateCount:
+          type: integer
+          format: int32
+          description: "CRM shared-identity candidate count, when available"
+        crmExactEmailMatch:
+          type: boolean
+          description: "CRM exact email match flag, when available"
+        crmExactPhoneMatch:
+          type: boolean
+          description: "CRM exact phone match flag, when available"
+        crmExactNameMatch:
+          type: boolean
+          description: "CRM exact name match flag, when available"
+        notes:
+          type: string
+          description: Operator notes recorded for the case
+        createdAt:
+          type: string
+          format: date-time
+          description: Case creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Case last-updated timestamp
+        resolvedAt:
+          type: string
+          format: date-time
+          description: "Resolution timestamp, when resolved"
+        resolvedBy:
+          type: string
+          description: "Actor who resolved the case, when resolved"
+        resolutionNotes:
+          type: string
+          description: "Resolution notes, when resolved"
     TokenPairRequest:
       type: object
       description: Request to generate an access token and refresh token pair
@@ -4936,6 +5221,10 @@ components:
         idpSubject:
           type: string
           description: Optional external identity subject for future federation support
+        idempotencyKey:
+          type: string
+          description: Optional idempotency key used to replay a completed registration
+            attempt without creating duplicate side effects
       required:
       - email
       - firstName
@@ -4991,6 +5280,9 @@ components:
         crmMatchSummary:
           $ref: "#/components/schemas/CrmMatchSummaryDto"
           description: Summary of CRM person search candidates
+        idempotencyKey:
+          type: string
+          description: Idempotency key echoed back when the caller supplied one
         issuedTokens:
           type: boolean
           description: False for Phase 1 because follow-up login is required

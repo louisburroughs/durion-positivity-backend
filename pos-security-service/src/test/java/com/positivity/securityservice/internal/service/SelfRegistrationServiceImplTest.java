@@ -3,7 +3,10 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.client.CustomerRegistrationClient;
@@ -11,13 +14,16 @@ import com.positivity.securityservice.internal.client.PeopleRegistrationClient;
 import com.positivity.securityservice.internal.client.dto.CustomerPersonSearchResponse;
 import com.positivity.securityservice.internal.client.dto.PeopleResolvePersonResponse;
 import com.positivity.securityservice.internal.client.dto.PeopleUserLinkResponse;
+import com.positivity.securityservice.internal.entity.SelfRegistrationAttempt;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
+import com.positivity.securityservice.internal.enums.SelfRegistrationAttemptStatus;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.service.SelfRegistrationReviewService;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -42,6 +48,10 @@ class SelfRegistrationServiceImplTest {
     private PeopleRegistrationClient peopleRegistrationClient;
     @Mock
     private CustomerRegistrationClient customerRegistrationClient;
+    @Mock
+    private SelfRegistrationAttemptService selfRegistrationAttemptService;
+    @Mock
+    private SelfRegistrationReviewService selfRegistrationReviewService;
 
     @InjectMocks
     private SelfRegistrationServiceImpl service;
@@ -98,6 +108,46 @@ class SelfRegistrationServiceImplTest {
     }
 
     @Test
+    void selfRegister_replaysSuccessfulAttemptForSameIdempotencyKey() {
+        UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000111");
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000112");
+        SelfRegistrationAttempt attempt = new SelfRegistrationAttempt();
+        attempt.setIdempotencyKey("retry-001");
+        attempt.setRequestFingerprint("90347d3f97f7eba7e0c299d832330bc658c3de70865560154f2f585b8b00f42c");
+        attempt.setStatus(SelfRegistrationAttemptStatus.SUCCEEDED);
+        attempt.setUserId(userId);
+        attempt.setPersonId(personId);
+        attempt.setUsername("jane");
+        attempt.setLinkStatus("LINKED");
+        attempt.setMatchedExistingPerson(true);
+        attempt.setIssuedTokens(false);
+        attempt.setCrmCandidateCount(1);
+        attempt.setCrmAnyMatches(true);
+        attempt.setCrmSharedIdentityCandidateCount(1);
+        attempt.setCrmExactEmailMatch(true);
+        attempt.setCrmExactPhoneMatch(false);
+        attempt.setCrmExactNameMatch(true);
+        attempt.setCrmReviewRequired(true);
+
+        when(selfRegistrationAttemptService.findByIdempotencyKey("retry-001"))
+                .thenReturn(Optional.of(attempt));
+
+        SelfRegistrationResponse response = service.selfRegister(SelfRegistrationRequest.builder()
+                .email("jane@example.com")
+                .password("secret")
+                .firstName("Jane")
+                .lastName("Smith")
+                .idempotencyKey("retry-001")
+                .build());
+
+        assertThat(response.userId()).isEqualTo(userId);
+        assertThat(response.personId()).isEqualTo(personId);
+        assertThat(response.username()).isEqualTo("jane");
+        assertThat(response.idempotencyKey()).isEqualTo("retry-001");
+        verifyNoInteractions(userRepository, roleRepository, customerRegistrationClient, peopleRegistrationClient);
+    }
+
+    @Test
     void selfRegister_existingActiveUser_blocksRegistration() {
         User existing = new User();
         existing.setUsername("jane");
@@ -121,6 +171,7 @@ class SelfRegistrationServiceImplTest {
     void selfRegister_existingInactiveLinkedUser_requiresRecovery() {
         UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000103");
         UUID linkedUserId = UUID.fromString("00000000-0000-0000-0000-000000000104");
+        UUID reviewCaseId = UUID.fromString("00000000-0000-0000-0000-000000000113");
         User linkedUser = new User();
         linkedUser.setId(linkedUserId);
         linkedUser.setEnabled(false);
@@ -134,15 +185,28 @@ class SelfRegistrationServiceImplTest {
                 .thenReturn(new PeopleResolvePersonResponse(personId, true, 60, 30, List.of("EMAIL"), "Jane", "Smith", "jane@example.com", List.of()));
         when(peopleRegistrationClient.getLinkedUserIds(personId)).thenReturn(List.of(linkedUserId));
         when(userRepository.findById(linkedUserId)).thenReturn(Optional.of(linkedUser));
+        when(selfRegistrationReviewService.openCase(any())).thenReturn(reviewCaseId);
 
         assertThatThrownBy(() -> service.selfRegister(SelfRegistrationRequest.builder()
                 .email("jane@example.com")
                 .password("secret")
                 .firstName("Jane")
                 .lastName("Smith")
+                .idempotencyKey("retry-recovery")
                 .build()))
                 .isInstanceOf(SelfRegistrationConflictException.class)
-                .hasMessageContaining("inactive linked user");
+                .hasMessageContaining("inactive linked user")
+                .extracting("referenceId")
+                .isEqualTo(reviewCaseId);
+
+        verify(selfRegistrationAttemptService).recordConflict(
+                eq("retry-recovery"),
+                anyString(),
+                eq("jane@example.com"),
+                eq("jane"),
+                eq("ACCOUNT_RECOVERY_REQUIRED"),
+                eq("Resolved person already has an inactive linked user and must go through recovery"),
+                eq(reviewCaseId));
     }
 
     @Test

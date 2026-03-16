@@ -29,5 +29,8 @@ public record SelfRegistrationRequest(
         String username,
         @Nullable
         @Schema(description = "Optional external identity subject for future federation support")
-        String idpSubject) {
+        String idpSubject,
+        @Nullable
+        @Schema(description = "Optional idempotency key used to replay a completed registration attempt without creating duplicate side effects")
+        String idempotencyKey) {
 }

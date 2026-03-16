@@ -66,7 +66,7 @@ class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
         }
 
         ErrorResponse body = new ErrorResponse(
-                code, message, HttpServletResponse.SC_UNAUTHORIZED, Instant.now(clock).toString(), correlationId, null, null);
+                code, message, HttpServletResponse.SC_UNAUTHORIZED, Instant.now(clock).toString(), correlationId, null, null, null);
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");
