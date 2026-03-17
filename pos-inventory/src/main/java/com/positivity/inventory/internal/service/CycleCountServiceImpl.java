@@ -28,7 +28,7 @@ import java.util.UUID;
 
 /**
  * Implementation of cycle count service with recount support.
- * 
+ *
  * <p>
  * Based on clarification for issue #27:
  * <ul>
@@ -62,7 +62,8 @@ public class CycleCountServiceImpl implements CycleCountService {
 
         @Override
         public CountResponse submitCount(SubmitCountRequest request) {
-                log.info("Submitting count for task: ***, auditor: ***");
+                log.info("Submitting count for task: {}, auditor: {}",
+                                maskForLog(request.getTaskId()), maskForLog(request.getAuditorId()));
 
                 // Validate quantity
                 validateQuantity(request.getActualQuantity());
@@ -93,7 +94,8 @@ public class CycleCountServiceImpl implements CycleCountService {
                                 .build();
 
                 countEntry = countEntryRepository.save(countEntry);
-                log.info("Created count entry: ***, variance: ***");
+                log.info("Created count entry: {}, variance: {}",
+                                maskForLog(countEntry.getCountEntryId()), variance);
 
                 // Update task
                 task.setLatestCountEntryId(countEntry.getCountEntryId());
@@ -106,7 +108,13 @@ public class CycleCountServiceImpl implements CycleCountService {
 
         @Override
         public CountResponse submitRecount(SubmitRecountRequest request) {
-                log.info("Submitting recount for task: ***, auditor: ***, permission: ***");
+
+                if (log.isInfoEnabled()) {
+                        log.info("POST inventory - cycle-count - recount - taskId: {}, auditor:  {}, permission: {}",
+                                        maskForLog(request.getTaskId()),
+                                        maskForLog(request.getAuditorId()),
+                                        request.getPermission());
+                }
 
                 // Validate quantity
                 validateQuantity(request.getActualQuantity());
@@ -117,7 +125,7 @@ public class CycleCountServiceImpl implements CycleCountService {
                 // Check recount limit
                 if (task.getCountEntriesCount() >= MAX_TOTAL_COUNTS) {
                         log.warn("Recount limit exceeded for task: {}. Current: {}, Max: {}",
-                                        task.getTaskId(), task.getCountEntriesCount(), MAX_TOTAL_COUNTS);
+                                        maskForLog(task.getTaskId()), task.getCountEntriesCount(), MAX_TOTAL_COUNTS);
 
                         // Mark task as requiring investigation
                         task.setStatus(TaskStatus.REQUIRES_INVESTIGATION);
@@ -155,7 +163,8 @@ public class CycleCountServiceImpl implements CycleCountService {
                                 .build();
 
                 recountEntry = countEntryRepository.save(recountEntry);
-                log.info("Created recount entry: ***, sequence: ***, variance: ***");
+                log.info("Created recount entry: {}, sequence: {}, variance: {}",
+                                maskForLog(recountEntry.getCountEntryId()), newSequenceNumber, variance);
 
                 // Update task
                 task.setLatestCountEntryId(recountEntry.getCountEntryId());
@@ -165,7 +174,8 @@ public class CycleCountServiceImpl implements CycleCountService {
                 // Check if this was the last allowed recount
                 boolean limitReached = task.getCountEntriesCount() >= MAX_TOTAL_COUNTS;
                 if (limitReached) {
-                        log.info("Maximum recount limit reached for task: ***");
+                        log.info("Maximum recount limit reached for task: {}",
+                                        maskForLog(task.getTaskId()));
                 }
 
                 taskRepository.save(task);
@@ -184,6 +194,9 @@ public class CycleCountServiceImpl implements CycleCountService {
         @Override
         @Transactional(readOnly = true)
         public List<CountEntryResponse> getCountHistory(UUID taskId) {
+                if (log.isInfoEnabled()) {
+                        log.info("GET /api/inventory/cycle-count/task/{}/history", maskForLog(taskId));
+                }
                 return countEntryRepository.findByCycleCountTask_TaskIdOrderByRecountSequenceNumberAsc(taskId)
                                 .stream()
                                 .map(this::toCountEntryResponse)
@@ -193,6 +206,9 @@ public class CycleCountServiceImpl implements CycleCountService {
         @Override
         @Transactional(readOnly = true)
         public List<CycleCountTaskResponse> getTasksByAuditor(String auditorId) {
+                if (log.isInfoEnabled()) {
+                        log.info("GET /api/inventory/cycle-count/auditor/{}/tasks", maskForLog(auditorId));
+                }
                 return taskRepository.findByAuditorId(auditorId)
                                 .stream()
                                 .map(this::toTaskResponse)
@@ -241,12 +257,27 @@ public class CycleCountServiceImpl implements CycleCountService {
                         }
                 } else if (PERMISSION_RECOUNT_ANY.equals(permission)) {
                         // Manager permission: can trigger any recount
-                        log.info("Manager recount authorized for task: {}", task.getTaskId());
+                        log.info("Manager recount authorized for task: {}", maskForLog(task.getTaskId()));
                 } else {
                         throw new InsufficientPermissionException(
                                         String.format("Invalid permission: %s. Expected %s or %s",
                                                         permission, PERMISSION_RECOUNT_SELF, PERMISSION_RECOUNT_ANY));
                 }
+        }
+
+        private String maskForLog(Object value) {
+                if (value == null) {
+                        return "null";
+                }
+                String sanitized = value.toString()
+                                .replace('\r', '_')
+                                .replace('\n', '_')
+                                .replace('\t', '_');
+                int length = sanitized.length();
+                if (length <= 4) {
+                        return "****";
+                }
+                return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
         }
 
         /**

@@ -32,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * REST controller for cycle count operations.
- * 
+ *
  * <p>
  * Implements API endpoints for issue #27:
  * <ul>
@@ -44,7 +44,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 @RestController
-@RequestMapping("/api/inventory/cycleCount")
+@RequestMapping("/v1/inventory/cycleCount")
 @Tag(name = "Cycle Count API", description = "API for cycle count operations and variance tracking")
 @PreAuthorize("hasAuthority('inventory:availability:read')")
 public class CycleCountController {
@@ -82,9 +82,6 @@ public class CycleCountController {
         @ApiResponse(responseCode = "404", description = "Task not found")
         public ResponseEntity<CountResponse> submitRecount(
                         @Valid @RequestBody SubmitRecountRequest request) {
-                log.info("POST /api/inventory/cycle-count/recount - taskId: {}, permission: {}",
-                                request.getTaskId(), request.getPermission());
-
                 CountResponse response = cycleCountService.submitRecount(request);
                 return ResponseEntity.ok(response);
         }
@@ -99,7 +96,6 @@ public class CycleCountController {
         @ApiResponse(responseCode = "404", description = "Task not found")
         public ResponseEntity<CycleCountTaskResponse> getTask(
                         @Parameter(description = "Task ID") @PathVariable UUID taskId) {
-
                 CycleCountTaskResponse task = cycleCountService.getTask(taskId);
                 return ResponseEntity.ok(task);
         }
@@ -113,8 +109,6 @@ public class CycleCountController {
         @ApiResponse(responseCode = "200", description = "History retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CountEntryResponse.class)))
         public ResponseEntity<List<CountEntryResponse>> getCountHistory(
                         @Parameter(description = "Task ID") @PathVariable UUID taskId) {
-                log.info("GET /api/inventory/cycle-count/task/{}/history", taskId);
-
                 List<CountEntryResponse> history = cycleCountService.getCountHistory(taskId);
                 return ResponseEntity.ok(history);
         }
@@ -128,8 +122,6 @@ public class CycleCountController {
         @ApiResponse(responseCode = "200", description = "Tasks retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountTaskResponse.class)))
         public ResponseEntity<List<CycleCountTaskResponse>> getAuditorTasks(
                         @Parameter(description = "Auditor ID") @PathVariable String auditorId) {
-                log.info("GET /api/inventory/cycle-count/auditor/{}/tasks", auditorId);
-
                 List<CycleCountTaskResponse> tasks = cycleCountService.getTasksByAuditor(auditorId);
                 return ResponseEntity.ok(tasks);
         }

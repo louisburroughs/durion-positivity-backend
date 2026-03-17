@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Image API", description = "Operations related to image retrieval and serving")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/images")
+@RequestMapping("/v1/images")
 public class ImageController {
     private final ImageService imageService;
 
