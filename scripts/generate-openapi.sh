@@ -79,14 +79,30 @@ if [[ ! -x "$MVNW" ]]; then
 fi
 
 discover_modules() {
-  rg -l '<outputFileName>openapi.yaml</outputFileName>' pos-*/pom.xml \
+  if command -v rg >/dev/null 2>&1; then
+    rg -l '<outputFileName>openapi.yaml</outputFileName>' pos-*/pom.xml \
+      | sort \
+      | sed 's#/pom.xml$##'
+    return
+  fi
+
+  grep -l '<outputFileName>openapi.yaml</outputFileName>' pos-*/pom.xml 2>/dev/null \
     | sort \
     | sed 's#/pom.xml$##'
 }
 
 module_has_openapi() {
   local module="$1"
-  [[ -f "$module/pom.xml" ]] && rg -q '<outputFileName>openapi.yaml</outputFileName>' "$module/pom.xml"
+  if [[ ! -f "$module/pom.xml" ]]; then
+    return 1
+  fi
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -q '<outputFileName>openapi.yaml</outputFileName>' "$module/pom.xml"
+    return
+  fi
+
+  grep -q '<outputFileName>openapi.yaml</outputFileName>' "$module/pom.xml"
 }
 
 if [[ ${#MODULES[@]} -eq 0 ]]; then
