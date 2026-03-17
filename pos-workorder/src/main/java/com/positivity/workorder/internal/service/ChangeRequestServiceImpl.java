@@ -42,6 +42,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 public class ChangeRequestServiceImpl implements ChangeRequestService {
     private final Clock clock;
+    private static final String IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE = "change-request.create";
 
     private final ChangeRequestRepository changeRequestRepository;
     private final WorkorderRepository workOrderRepository;
@@ -146,7 +147,9 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     public ChangeRequest createChangeRequestWithIdempotency(CreateChangeRequestDTO dto, String idempotencyKey) {
         // Check for existing change request if idempotency key is provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(idempotencyKey);
+            Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(
+                    IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE,
+                    idempotencyKey);
             if (existingChangeRequestId.isPresent()) {
                 log.info("Idempotent request detected for key {}; returning existing change request {}",
                         idempotencyKey, existingChangeRequestId.get());
@@ -163,7 +166,10 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             try {
-                idempotencyService.markKeyProcessedForChangeRequest(idempotencyKey, created.getId());
+                idempotencyService.markKeyProcessedForChangeRequest(
+                        IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE,
+                        idempotencyKey,
+                        created.getId());
                 // Force flush so any unique-constraint violation is raised within this
                 // try/catch
                 TransactionAspectSupport.currentTransactionStatus().flush();
@@ -179,7 +185,9 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 // Note: The DataIntegrityViolationException indicates the other transaction has
                 // committed, so the change request should be visible with READ_COMMITTED
                 // isolation.
-                Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(idempotencyKey);
+                Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(
+                    IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE,
+                    idempotencyKey);
                 if (existingChangeRequestId.isPresent()) {
                     log.warn(
                             "Race condition detected: idempotency key {} already registered for change request {}, returning existing change request",

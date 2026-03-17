@@ -48,6 +48,9 @@ import java.util.UUID;
 @Slf4j
 public class WorkorderLaborServiceImpl implements WorkorderLaborService {
     private final Clock clock;
+        private static final String IDEMPOTENCY_OPERATION_LABOR_START = "labor.start";
+        private static final String IDEMPOTENCY_OPERATION_LABOR_STOP = "labor.stop";
+        private static final String IDEMPOTENCY_OPERATION_LABOR_ADJUST = "labor.adjust";
 
     private final WorkorderLaborEntryRepository laborRepository;
     private final WorkorderRepository workorderRepository;
@@ -86,7 +89,9 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(idempotencyKey);
+                        Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(
+                                        IDEMPOTENCY_OPERATION_LABOR_START,
+                                        idempotencyKey);
             if (existingId.isPresent()) {
                 log.info("Idempotency key {} already processed, returning existing labor entry {}",
                         idempotencyKey, existingId.get());
@@ -139,7 +144,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.registerLaborKey(idempotencyKey, saved.getId());
+                        idempotencyService.registerLaborKey(IDEMPOTENCY_OPERATION_LABOR_START, idempotencyKey, saved.getId());
         }
 
         return saved;
@@ -162,7 +167,9 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(idempotencyKey);
+                        Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(
+                                        IDEMPOTENCY_OPERATION_LABOR_STOP,
+                                        idempotencyKey);
             if (existingId.isPresent()) {
                 log.info("Idempotency key {} already processed, returning existing stopped labor entry {}",
                         idempotencyKey, existingId.get());
@@ -184,7 +191,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.registerLaborKey(idempotencyKey, saved.getId());
+                        idempotencyService.registerLaborKey(IDEMPOTENCY_OPERATION_LABOR_STOP, idempotencyKey, saved.getId());
         }
 
         return saved;
@@ -223,7 +230,9 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(idempotencyKey);
+                        Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(
+                                        IDEMPOTENCY_OPERATION_LABOR_ADJUST,
+                                        idempotencyKey);
             if (existingId.isPresent()) {
                 log.info("Idempotency key {} already processed, returning existing adjusted labor entry {}",
                         idempotencyKey, existingId.get());
@@ -241,7 +250,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.registerLaborKey(idempotencyKey, saved.getId());
+                        idempotencyService.registerLaborKey(IDEMPOTENCY_OPERATION_LABOR_ADJUST, idempotencyKey, saved.getId());
         }
 
         return saved;

@@ -41,6 +41,8 @@ import java.util.UUID;
 @Slf4j
 public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
 
+    private static final String IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE = "workorder.invoice.generate";
+
     private final WorkorderRepository workorderRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
@@ -70,7 +72,9 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
         }
 
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(idempotencyKey);
+            Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
+                    IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                    idempotencyKey);
             if (existingInvoiceId.isPresent()) {
                 UUID invoiceId = existingInvoiceId.get();
                 if (workorder.getInvoiceId() == null) {
@@ -114,7 +118,10 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
         // persisting
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             try {
-                idempotencyService.registerInvoiceKey(idempotencyKey, response.getInvoiceId());
+                idempotencyService.registerInvoiceKey(
+                        IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                        idempotencyKey,
+                        response.getInvoiceId());
                 // Force flush so any unique-constraint violation is raised within this
                 // try/catch
                 try {
@@ -139,7 +146,9 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
                 // Retrieve the existing invoice that won the race
                 // Note: The DataIntegrityViolationException indicates the other transaction has
                 // committed, so the invoice should be visible with READ_COMMITTED isolation.
-                Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(idempotencyKey);
+                Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
+                    IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                    idempotencyKey);
                 if (existingInvoiceId.isPresent()) {
                     log.warn(
                             "Race condition detected: idempotency key {} already registered for invoice {}, returning existing invoice",

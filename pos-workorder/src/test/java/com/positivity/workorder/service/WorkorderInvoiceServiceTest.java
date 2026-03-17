@@ -47,6 +47,7 @@ import com.positivity.workorder.internal.service.WorkorderInvoiceServiceImpl;
 @DisplayName("WorkorderInvoiceService Unit Tests")
 class WorkorderInvoiceServiceTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private static final String IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE = "workorder.invoice.generate";
 
         @Spy
         Clock clock = TEST_CLOCK;
@@ -93,7 +94,9 @@ class WorkorderInvoiceServiceTest {
                                 .thenReturn(List.of(partLine()));
                 when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                                 .thenReturn(List.of());
-                when(idempotencyService.getExistingInvoiceId(INV_KEY_1)).thenReturn(Optional.empty());
+                when(idempotencyService.getExistingInvoiceId(
+                                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                                INV_KEY_1)).thenReturn(Optional.empty());
 
                 UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
                 InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
@@ -117,7 +120,10 @@ class WorkorderInvoiceServiceTest {
                 assertThat(response.getInvoiceId()).isEqualTo(invoiceId);
                 assertThat(workorder.getInvoiceId()).isEqualTo(invoiceId);
                 verify(workorderRepository).save(workorder);
-                verify(idempotencyService).registerInvoiceKey(INV_KEY_1, invoiceId);
+                verify(idempotencyService).registerInvoiceKey(
+                                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                                INV_KEY_1,
+                                invoiceId);
         }
 
         @Test
@@ -359,14 +365,20 @@ class WorkorderInvoiceServiceTest {
 
                 // First call to getExistingInvoiceId (early check) returns empty, second call
                 // (after collision) returns existing
-                when(idempotencyService.getExistingInvoiceId("inv-key-race"))
+                when(idempotencyService.getExistingInvoiceId(
+                                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                                "inv-key-race"))
                                 .thenReturn(Optional.empty())
                                 .thenReturn(Optional.of(existingInvoiceId));
 
                 // Simulate race condition: registerInvoiceKey throws
                 // DataIntegrityViolationException
                 doThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate key"))
-                                .when(idempotencyService).registerInvoiceKey("inv-key-race", newInvoiceId);
+                                .when(idempotencyService)
+                                .registerInvoiceKey(
+                                                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                                                "inv-key-race",
+                                                newInvoiceId);
 
                 // Mock the existing invoice that will be fetched when race condition is
                 // detected
@@ -487,7 +499,9 @@ class WorkorderInvoiceServiceTest {
                 workorder.setInvoiceId(null);
 
                 when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-                when(idempotencyService.getExistingInvoiceId("retry-key-123"))
+                when(idempotencyService.getExistingInvoiceId(
+                                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                                "retry-key-123"))
                                 .thenReturn(Optional.of(existingInvoiceId));
 
                 InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()

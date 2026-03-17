@@ -47,6 +47,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT = "Idempotency key already processed, returning existing event {}";
     private static final String EVENT_NOT_FOUND = "Event not found: ";
     private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
+        private static final String IDEMPOTENCY_OPERATION_PART_ISSUE = "part-usage.issue";
+        private static final String IDEMPOTENCY_OPERATION_PART_CONSUME = "part-usage.consume";
+        private static final String IDEMPOTENCY_OPERATION_PART_RETURN = "part-usage.return";
 
     private static final Logger log = LoggerFactory.getLogger(WorkorderPartUsageServiceImpl.class);
 
@@ -92,7 +95,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingEventId = idempotencyService.getExistingPartUsageEventId(idempotencyKey);
+                        Optional<UUID> existingEventId = idempotencyService
+                                        .getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_ISSUE, idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT,
                         existingEventId.get());
@@ -137,7 +141,10 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.markKeyProcessedForPartUsage(idempotencyKey, event.getId());
+                        idempotencyService.markKeyProcessedForPartUsage(
+                                        IDEMPOTENCY_OPERATION_PART_ISSUE,
+                                        idempotencyKey,
+                                        event.getId());
         }
 
         log.info("Issued part quantity for workorder {}", workorderId);
@@ -167,7 +174,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingEventId = idempotencyService.getExistingPartUsageEventId(idempotencyKey);
+                        Optional<UUID> existingEventId = idempotencyService
+                                        .getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_CONSUME, idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT,
                         existingEventId.get());
@@ -221,7 +229,10 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.markKeyProcessedForPartUsage(idempotencyKey, event.getId());
+                        idempotencyService.markKeyProcessedForPartUsage(
+                                        IDEMPOTENCY_OPERATION_PART_CONSUME,
+                                        idempotencyKey,
+                                        event.getId());
         }
 
         log.info("Consumed part quantity for workorder {}", workorderId);
@@ -252,7 +263,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingEventId = idempotencyService.getExistingPartUsageEventId(idempotencyKey);
+                        Optional<UUID> existingEventId = idempotencyService
+                                        .getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_RETURN, idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT,
                         existingEventId.get());
@@ -311,7 +323,10 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.markKeyProcessedForPartUsage(idempotencyKey, event.getId());
+                        idempotencyService.markKeyProcessedForPartUsage(
+                                        IDEMPOTENCY_OPERATION_PART_RETURN,
+                                        idempotencyKey,
+                                        event.getId());
         }
 
         log.info("Returned part quantity for workorder {}", workorderId);
