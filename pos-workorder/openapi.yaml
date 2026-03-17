@@ -825,6 +825,18 @@ paths:
                   quantity: 1
         required: true
       responses:
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts returned successfully
           content:
@@ -840,18 +852,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/parts/returnUnused:
     post:
       tags:
@@ -896,6 +896,18 @@ paths:
                   notes: Returned to stock
         required: true
       responses:
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Unused quantity returned successfully
           content:
@@ -911,18 +923,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
   /v1/workorders/{workorderId}/parts/issue:
     post:
       tags:
@@ -966,18 +966,6 @@ paths:
                   quantity: 2
         required: true
       responses:
-        "409":
-          description: Idempotency conflict (duplicate key)
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts issued successfully
           content:
@@ -993,6 +981,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Idempotency conflict (duplicate key)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "400":
           description: "Invalid request (negative quantity, etc.)"
           content:
@@ -1043,6 +1043,12 @@ paths:
                   notes: Corrected after inventory count
         required: true
       responses:
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Part quantity corrected successfully
           content:
@@ -1058,12 +1064,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "400":
           description: Invalid request
           content:
@@ -1113,18 +1113,6 @@ paths:
                   quantity: 1
         required: true
       responses:
-        "400":
-          description: "Invalid request (exceeds issued quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts consumption recorded successfully
           content:
@@ -1140,6 +1128,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: "Invalid request (exceeds issued quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/operationalContext/override:
     post:
       tags:
@@ -2514,11 +2514,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "409":
-          description: Conflict while stopping timers
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Timers stopped successfully
           content:
@@ -2534,6 +2529,11 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Conflict while stopping timers
+          content:
+            '*/*':
+              schema: {}
   /v1/workexec/time-entries/timer/start:
     post:
       tags:
@@ -2566,28 +2566,13 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "200":
-          description: Idempotent replay returned existing timer
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkexecTimerEntryResponse"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "400":
           description: Missing or invalid authenticated user id
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Timer started successfully
+        "200":
+          description: Idempotent replay returned existing timer
           content:
             '*/*':
               schema:
@@ -2606,6 +2591,21 @@ paths:
           content:
             '*/*':
               schema: {}
+        "201":
+          description: Timer started successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkexecTimerEntryResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: Referenced resource not found
           content:
@@ -2652,8 +2652,18 @@ paths:
               workorderId: 550e8400-e29b-41d4-a716-446655440001
         required: true
       responses:
-        "200":
-          description: Idempotent replay returned existing labor entry
+        "404":
+          description: Related resource not found
+          content:
+            '*/*':
+              schema: {}
+        "409":
+          description: Conflict while recording labor
+          content:
+            '*/*':
+              schema: {}
+        "201":
+          description: Labor entry created successfully
           content:
             '*/*':
               schema:
@@ -2667,18 +2677,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Related resource not found
-          content:
-            '*/*':
-              schema: {}
-        "409":
-          description: Conflict while recording labor
-          content:
-            '*/*':
-              schema: {}
-        "201":
-          description: Labor entry created successfully
+        "200":
+          description: Idempotent replay returned existing labor entry
           content:
             '*/*':
               schema:
@@ -3299,13 +3299,6 @@ paths:
               schema:
                 type: string
                 format: byte
-        "502":
-          description: Document service unavailable
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: byte
         "200":
           description: PDF generated successfully
           content:
@@ -3314,6 +3307,13 @@ paths:
                 additionalProperties:
                   default: "##default"
                 default: "##default"
+        "502":
+          description: Document service unavailable
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: byte
   /v1/workorders/estimates/shop/{locationId}:
     get:
       tags:
