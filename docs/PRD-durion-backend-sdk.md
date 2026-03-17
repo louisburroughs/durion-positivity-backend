@@ -344,13 +344,13 @@ Current source material shows some drift that should be resolved or explicitly h
 The SDK must be implemented as a new, standalone project/repository and must
 not live under either the `durion` or `durion-positivity-backend` repository.
 Those repositories are input sources for contracts, ADRs, and domain behavior,
-not the SDK implementation home.
+not the SDK implementation home. -> durion-positivity-sdk
 
 The initial target framework for the SDK is Angular, but the implementation
 should remain framework-agnostic across the broader JavaScript ecosystem. The
 first pass is an internal SDK release focused on internal platform and product
 teams, with an explicit plan to evolve toward an external-facing SDK in a later
-phase.
+phase. -> typescript
 
 The first pass is version `1`. SDK versioning should track the highest backend
 API version represented by the generated contracts so consumers can quickly
