@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.inventory.internal.dto.InventoryErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
 import com.positivity.inventory.service.ConsumptionService;
@@ -34,9 +34,9 @@ public class ConsumptionController {
             summary = "Consume picked items",
             description = "Consumes picked inventory for a workorder and records resulting stock movement")
     @ApiResponse(responseCode = "201", description = "Consumption recorded", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ConsumptionResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required consumption authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "422", description = "Consumption business rule validation failed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "403", description = "User lacks required consumption authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "422", description = "Consumption business rule validation failed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ConsumptionResponse> consumePickedItems(@Valid @RequestBody ConsumeItemsRequest request) {
         ConsumptionResponse response = consumptionService.consumePickedItems(request);
         return ResponseEntity.status(201).body(response);

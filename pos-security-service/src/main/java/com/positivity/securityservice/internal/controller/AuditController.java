@@ -2,7 +2,7 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.AuditEventCreatedResponse;
-import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.dto.PricingSnapshotCreatedResponse;
@@ -54,7 +54,7 @@ public class AuditController {
     @PreAuthorize("hasAuthority('security:audit:create')")
     @Operation(summary = "Create audit event", description = "Creates an immutable audit event record and returns the generated event identifier.")
     @ApiResponse(responseCode = "201", description = "Audit event created")
-    @ApiResponse(responseCode = "400", description = "Invalid audit event payload", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid audit event payload", content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AuditEventCreatedResponse> createEvent(@RequestBody @NonNull AuditLogEventRequest request) {
         AuditLogEventDto created = auditEventService.createEvent(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -68,7 +68,7 @@ public class AuditController {
     @PreAuthorize("hasAuthority('security:audit:view')")
     @Operation(summary = "Get audit event", description = "Returns a previously recorded audit event by its event identifier.")
     @ApiResponse(responseCode = "200", description = "Audit event returned successfully")
-    @ApiResponse(responseCode = "404", description = "Audit event not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Audit event not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AuditLogEventDto> getEvent(@PathVariable @NonNull UUID eventId) {
         return ResponseEntity.ok(auditEventService.getEvent(eventId));
     }
@@ -77,7 +77,7 @@ public class AuditController {
     @PreAuthorize("hasAuthority('security:audit:view')")
     @Operation(summary = "Search audit events", description = "Searches audit events by event type alone or by entity identity with an optional time range.")
     @ApiResponse(responseCode = "200", description = "Audit events returned successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid audit search criteria", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid audit search criteria", content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<AuditLogEventDto>> searchEvents(
             @Parameter(description = "Entity identifier to match. Must be supplied together with entityType.") 
             @RequestParam(required = false) String entityId,
@@ -125,7 +125,7 @@ public class AuditController {
     @PreAuthorize("hasAuthority('security:audit:create')")
     @Operation(summary = "Create pricing snapshot", description = "Creates an immutable pricing snapshot record for later audit and traceability.")
     @ApiResponse(responseCode = "201", description = "Pricing snapshot created")
-    @ApiResponse(responseCode = "400", description = "Invalid pricing snapshot payload", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid pricing snapshot payload", content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PricingSnapshotCreatedResponse> createPricingSnapshot(
             @RequestBody @NonNull PricingSnapshotRequest request) {
         PricingSnapshotDto created = pricingSnapshotService.createSnapshot(request);
@@ -137,7 +137,7 @@ public class AuditController {
     @PreAuthorize("hasAuthority('security:audit:view')")
     @Operation(summary = "Get pricing snapshot", description = "Returns an immutable pricing snapshot by its snapshot identifier.")
     @ApiResponse(responseCode = "200", description = "Pricing snapshot returned successfully")
-    @ApiResponse(responseCode = "404", description = "Pricing snapshot not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Pricing snapshot not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PricingSnapshotDto> getPricingSnapshot(@PathVariable @NonNull UUID snapshotId) {
         return ResponseEntity.ok(pricingSnapshotService.getSnapshot(snapshotId));
     }

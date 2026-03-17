@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.Instant;
 
-import com.positivity.accounting.internal.dto.ErrorResponse;
 import com.positivity.accounting.internal.exception.GLPostingException;
+import com.positivity.shared.error.ApiError;
 
 import lombok.RequiredArgsConstructor;
 
@@ -26,15 +26,12 @@ public class GLPostingExceptionHandler {
     private final Clock clock;
 
     @ExceptionHandler(GLPostingException.class)
-    public ResponseEntity<ErrorResponse> handleGLPostingException(GLPostingException ex) {
+    public ResponseEntity<ApiError> handleGLPostingException(GLPostingException ex) {
         log.error("GL Posting Exception: {}", ex.getMessage(), ex);
-
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .errorCode("GL_POSTING_FAILED")
-                .message(ex.getMessage())
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-
-        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+        return new ResponseEntity<>(
+                ApiError.of("GL_POSTING_FAILED", ex.getMessage(),
+                        HttpStatus.CONFLICT.value(), Instant.now(clock).toString(), null),
+                HttpStatus.CONFLICT);
     }
 }
+

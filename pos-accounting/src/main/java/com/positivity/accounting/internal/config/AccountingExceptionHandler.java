@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.positivity.accounting.internal.dto.DuplicateEventException;
-import com.positivity.accounting.internal.dto.ErrorResponse;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.shared.error.ApiError;
 
 /**
  * Standardized error responses for security-related exceptions.
@@ -28,74 +28,66 @@ public class AccountingExceptionHandler {
     private final Clock clock;
 
     @ExceptionHandler({ AuthenticationException.class, AuthenticationCredentialsNotFoundException.class })
-    public ResponseEntity<ErrorResponse> handleAuth(AuthenticationException ex) {
-        ErrorResponse body = ErrorResponse.builder()
-                .errorCode("UNAUTHENTICATED")
-                .message("Authentication required")
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+    public ResponseEntity<ApiError> handleAuth(AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiError.of("UNAUTHENTICATED", "Authentication required",
+                        HttpStatus.UNAUTHORIZED.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
-        ErrorResponse body = ErrorResponse.builder()
-                .errorCode("FORBIDDEN")
-                .message("Access denied")
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiError.of("FORBIDDEN", "Access denied",
+                        HttpStatus.FORBIDDEN.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(DuplicateEventException.class)
-    public ResponseEntity<ErrorResponse> handleDuplicateEvent(DuplicateEventException ex) {
+    public ResponseEntity<ApiError> handleDuplicateEvent(DuplicateEventException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ErrorResponse.of("DUPLICATE_EVENT", ex.getMessage(), Instant.now(clock).toEpochMilli()));
+                .body(ApiError.of("DUPLICATE_EVENT", ex.getMessage(),
+                        HttpStatus.CONFLICT.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(UnbalancedEntryException.class)
-    public ResponseEntity<ErrorResponse> handleUnbalancedEntry(UnbalancedEntryException ex) {
+    public ResponseEntity<ApiError> handleUnbalancedEntry(UnbalancedEntryException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
-                .body(ErrorResponse.of("UNBALANCED_ENTRY", ex.getMessage(), Instant.now(clock).toEpochMilli()));
+                .body(ApiError.of("UNBALANCED_ENTRY", ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex) {
         String fieldName = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
                 .map(fe -> fe.getField())
                 .orElse("unknown");
         String message = fieldName + " is required";
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("ARGUMENT_NOT_VALID", message, Instant.now(clock).toEpochMilli()));
+                .body(ApiError.of("ARGUMENT_NOT_VALID", message,
+                        HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex) {
+    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex) {
         String code = resolveStateErrorCode(ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ErrorResponse.of(code, ex.getMessage(), Instant.now(clock).toEpochMilli()));
+                .body(ApiError.of(code, ex.getMessage(),
+                        HttpStatus.CONFLICT.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(DuplicateAccountCodeException.class)
-    public ResponseEntity<ErrorResponse> handleDuplicateAccountCode(DuplicateAccountCodeException ex) {
-        ErrorResponse body = ErrorResponse.builder()
-                .errorCode("DUPLICATE_ACCOUNT_CODE")
-                .message(ex.getMessage())
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    public ResponseEntity<ApiError> handleDuplicateAccountCode(DuplicateAccountCodeException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of("DUPLICATE_ACCOUNT_CODE", ex.getMessage(),
+                        HttpStatus.CONFLICT.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex) {
+    public ResponseEntity<ApiError> handleResponseStatus(ResponseStatusException ex) {
         String message = ex.getReason() != null ? ex.getReason() : ex.getMessage();
-        ErrorResponse body = ErrorResponse.builder()
-                .errorCode("REQUEST_FAILED")
-                .message(message)
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-        return ResponseEntity.status(ex.getStatusCode()).body(body);
+        int statusCode = ex.getStatusCode().value();
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(ApiError.of("REQUEST_FAILED", message, statusCode, Instant.now(clock).toString(), null));
     }
 
     private String resolveStateErrorCode(String message) {
@@ -108,3 +100,4 @@ public class AccountingExceptionHandler {
         return "ILLEGAL_STATE";
     }
 }
+

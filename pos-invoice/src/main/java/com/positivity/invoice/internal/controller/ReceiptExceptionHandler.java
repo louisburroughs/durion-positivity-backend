@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.controller;
 import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.ReceiptNotFoundException;
+import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -13,60 +14,42 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Map;
 
 @RestControllerAdvice(assignableTypes = ReceiptController.class)
 @RequiredArgsConstructor
 public class ReceiptExceptionHandler {
 
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
-    private static final String MESSAGE = "message";
-    private static final String ERROR = "error";
-    private static final String TIMESTAMP = "timestamp";
-    private static final String CODE = "code";
-    private static final String STATUS = "status";
-    private static final String CORRELATION_ID = "correlationId";
-
     private final Clock clock;
 
     @ExceptionHandler(ReprintLimitExceededException.class)
-    public ResponseEntity<Map<String, Object>> handleReprintLimitExceeded(
+    public ResponseEntity<ApiError> handleReprintLimitExceeded(
             ReprintLimitExceededException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(Map.of(
-                        TIMESTAMP, Instant.now(clock).toString(),
-                        ERROR, "REPRINT_LIMIT_EXCEEDED",
-                        CODE, "REPRINT_LIMIT_EXCEEDED",
-                        STATUS, HttpStatus.CONFLICT.value(),
-                        CORRELATION_ID, correlationId,
-                        MESSAGE, ex.getMessage()));
+                .body(ApiError.of("REPRINT_LIMIT_EXCEEDED", ex.getMessage(),
+                        HttpStatus.CONFLICT.value(), Instant.now(clock).toString(), correlationId));
     }
 
     @ExceptionHandler(ReceiptNotFoundException.class)
-    public ResponseEntity<Object> handleReceiptNotFoundException(
+    public ResponseEntity<ApiError> handleReceiptNotFoundException(
             ReceiptNotFoundException ex, HttpServletRequest request) {
         return handleNotFound(ex.getMessage(), request);
     }
 
     @ExceptionHandler(InvoiceNotFoundException.class)
-    public ResponseEntity<Object> handleInvoiceNotFoundException(
+    public ResponseEntity<ApiError> handleInvoiceNotFoundException(
             InvoiceNotFoundException ex, HttpServletRequest request) {
         return handleNotFound(ex.getMessage(), request);
     }
 
-    private ResponseEntity<Object> handleNotFound(String message, HttpServletRequest request) {
+    private ResponseEntity<ApiError> handleNotFound(String message, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(Map.of(
-                        TIMESTAMP, Instant.now(clock).toString(),
-                        ERROR, "NOT_FOUND",
-                        CODE, "NOT_FOUND",
-                        STATUS, HttpStatus.NOT_FOUND.value(),
-                        CORRELATION_ID, correlationId,
-                        MESSAGE, message));
+                .body(ApiError.of("NOT_FOUND", message,
+                        HttpStatus.NOT_FOUND.value(), Instant.now(clock).toString(), correlationId));
     }
 
     private static String correlationId(HttpServletRequest request) {

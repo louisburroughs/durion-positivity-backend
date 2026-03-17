@@ -1,6 +1,6 @@
 package com.positivity.securityservice;
 
-import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.shared.error.ApiError;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 
  * Tests that typed exceptions (RoleNotFoundException, UserNotFoundException,
  * RoleAssignmentNotFoundException, PermissionNotFoundException) are properly
- * mapped to HTTP 404 with ErrorResponse payload including correlationId.
+ * mapped to HTTP 404 with ApiError payload including correlationId.
  * 
  * @see com.positivity.securityservice.internal.config.GlobalExceptionHandler
  */
@@ -33,7 +33,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         /**
          * Test: GET /v1/roles/by-name/{name} with non-existent role
          * 
-         * **Expected:** 404 NOT_FOUND with ErrorResponse {code="ROLE_NOT_FOUND",
+         * **Expected:** 404 NOT_FOUND with ApiError {code="ROLE_NOT_FOUND",
          * correlationId}
          */
         @Test
@@ -54,9 +54,9 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.correlationId").value(TEST_CORRELATION_ID))
                                 .andReturn();
 
-                ErrorResponse errorResponse = objectMapper.readValue(
+                ApiError errorResponse = objectMapper.readValue(
                                 result.getResponse().getContentAsString(),
-                                ErrorResponse.class);
+                                ApiError.class);
 
                 assertThat(errorResponse.code()).isEqualTo("ROLE_NOT_FOUND");
                 assertThat(errorResponse.message()).contains("Role not found");
@@ -67,7 +67,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         /**
          * Test: GET /v1/roles/assignments/user/{userId} with non-existent user
          * 
-         * **Expected:** 404 NOT_FOUND with ErrorResponse {code="USER_NOT_FOUND",
+         * **Expected:** 404 NOT_FOUND with ApiError {code="USER_NOT_FOUND",
          * correlationId}
          */
         @Test
@@ -87,9 +87,9 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.correlationId").value(TEST_CORRELATION_ID))
                                 .andReturn();
 
-                ErrorResponse errorResponse = objectMapper.readValue(
+                ApiError errorResponse = objectMapper.readValue(
                                 result.getResponse().getContentAsString(),
-                                ErrorResponse.class);
+                                ApiError.class);
 
                 assertThat(errorResponse.code()).isEqualTo("USER_NOT_FOUND");
                 assertThat(errorResponse.message()).contains("User not found");
@@ -100,7 +100,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         /**
          * Test: GET /v1/roles/permissions/user/{userId} with non-existent user
          * 
-         * **Expected:** 404 NOT_FOUND with ErrorResponse {code="USER_NOT_FOUND",
+         * **Expected:** 404 NOT_FOUND with ApiError {code="USER_NOT_FOUND",
          * correlationId}
          */
         @Test
@@ -120,9 +120,9 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.correlationId").value(TEST_CORRELATION_ID))
                                 .andReturn();
 
-                ErrorResponse errorResponse = objectMapper.readValue(
+                ApiError errorResponse = objectMapper.readValue(
                                 result.getResponse().getContentAsString(),
-                                ErrorResponse.class);
+                                ApiError.class);
 
                 assertThat(errorResponse.code()).isEqualTo("USER_NOT_FOUND");
                 assertThat(errorResponse.message()).contains("User not found");
@@ -132,7 +132,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         /**
          * Test: GET /v1/roles/check-permission with non-existent user
          * 
-         * **Expected:** 404 NOT_FOUND with ErrorResponse {code="USER_NOT_FOUND",
+         * **Expected:** 404 NOT_FOUND with ApiError {code="USER_NOT_FOUND",
          * correlationId}
          */
         @Test
@@ -154,9 +154,9 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.correlationId").value(TEST_CORRELATION_ID))
                                 .andReturn();
 
-                ErrorResponse errorResponse = objectMapper.readValue(
+                ApiError errorResponse = objectMapper.readValue(
                                 result.getResponse().getContentAsString(),
-                                ErrorResponse.class);
+                                ApiError.class);
 
                 assertThat(errorResponse.code()).isEqualTo("USER_NOT_FOUND");
                 assertThat(errorResponse.correlationId()).isEqualTo(TEST_CORRELATION_ID);

@@ -2,10 +2,11 @@ package com.positivity.mcp.internal.controller;
 
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
+import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,68 +18,61 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 class NltiExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<Map<String, Object>> handleValidation(
+    ResponseEntity<ApiError> handleValidation(
             MethodArgumentNotValidException ex,
             HttpServletRequest request) {
-        List<String> details = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
+        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
+        List<ApiError.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> new ApiError.FieldError(fe.getField(), fe.getDefaultMessage()))
                 .toList();
-        return errorResponse(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", details, request);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
+                .body(ApiError.withFieldErrors("VALIDATION_ERROR", "Request validation failed",
+                        HttpStatus.BAD_REQUEST.value(), Instant.now().toString(),
+                        correlationId.toString(), fieldErrors));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    ResponseEntity<Map<String, Object>> handleConstraintViolation(
+    ResponseEntity<ApiError> handleConstraintViolation(
             ConstraintViolationException ex,
             HttpServletRequest request) {
-        return errorResponse(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", List.of(ex.getMessage()), request);
+        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
+                .body(ApiError.of("VALIDATION_ERROR", ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(), Instant.now().toString(), correlationId.toString()));
     }
 
     @ExceptionHandler(RateLimitExceededException.class)
-    ResponseEntity<Map<String, Object>> handleRateLimit(
+    ResponseEntity<ApiError> handleRateLimit(
             RateLimitExceededException ex,
             HttpServletRequest request) {
-        return errorResponse(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMIT_EXCEEDED", request);
+        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
+                .body(ApiError.of("RATE_LIMIT_EXCEEDED", ex.getMessage(),
+                        HttpStatus.TOO_MANY_REQUESTS.value(), Instant.now().toString(), correlationId.toString()));
     }
 
     @ExceptionHandler(SessionOwnershipViolationException.class)
-    ResponseEntity<Map<String, Object>> handleSessionOwnershipViolation(
+    ResponseEntity<ApiError> handleSessionOwnershipViolation(
             SessionOwnershipViolationException ex,
             HttpServletRequest request) {
-        return errorResponse(HttpStatus.FORBIDDEN, "SESSION_ACCESS_DENIED", request);
+        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
+                .body(ApiError.of("SESSION_ACCESS_DENIED", ex.getMessage(),
+                        HttpStatus.FORBIDDEN.value(), Instant.now().toString(), correlationId.toString()));
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)
-    ResponseEntity<Map<String, Object>> handleUnsupported(
+    ResponseEntity<ApiError> handleUnsupported(
             UnsupportedOperationException ex,
             HttpServletRequest request) {
-        return errorResponse(HttpStatus.NOT_IMPLEMENTED, "NOT_IMPLEMENTED", request);
-    }
-
-    private ResponseEntity<Map<String, Object>> errorResponse(
-            HttpStatus status,
-            String code,
-            HttpServletRequest request) {
         UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
-        return ResponseEntity.status(status)
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
-                .body(Map.of(
-                        "status", "ERROR",
-                        "code", code,
-                        "correlationId", correlationId.toString()));
-    }
-
-    private ResponseEntity<Map<String, Object>> errorResponse(
-            HttpStatus status,
-            String code,
-            List<String> details,
-            HttpServletRequest request) {
-        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
-        return ResponseEntity.status(status)
-                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
-                .body(Map.of(
-                        "status", "ERROR",
-                        "code", code,
-                        "correlationId", correlationId.toString(),
-                        "details", details));
+                .body(ApiError.of("NOT_IMPLEMENTED", ex.getMessage(),
+                        HttpStatus.NOT_IMPLEMENTED.value(), Instant.now().toString(), correlationId.toString()));
     }
 }
