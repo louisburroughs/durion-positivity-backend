@@ -47,7 +47,7 @@ class DocumentRenderControllerIT {
         request.setFormat(DocumentFormat.TEXT);
         request.setContent("hello");
 
-        mockMvc.perform(post("/api/documents/render")
+        mockMvc.perform(post("/v1/documents/render")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())

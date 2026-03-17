@@ -73,9 +73,9 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final PromotionValidationService promotionValidationService;
     private final ShopmgrOperationalContextClient shopmgrClient;
 
-    @Value("${customer.service.url:http://localhost:8080/api/customers}")
+    @Value("${customer.service.url:http://localhost:8080/v1/customers}")
     private String customerServiceUrl;
-    @Value("${customer.approval.service.url:http://localhost:8080/api/approvals}")
+    @Value("${customer.approval.service.url:http://localhost:8080/v1/approvals}")
     private String customerApprovalServiceUrl;
 
     @Override
@@ -120,12 +120,12 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     /**
      * Create a workorder with idempotency key support.
-     * 
+     *
      * <p>
      * If an idempotency key is provided and has been processed before,
      * returns the existing workorder instead of creating a duplicate.
      * </p>
-     * 
+     *
      * @param estimateId     the estimate ID
      * @param customerId     the customer ID
      * @param idempotencyKey optional idempotency key for duplicate prevention; if
@@ -230,10 +230,10 @@ public class WorkorderServiceImpl implements WorkorderService {
      * Copy approved estimate items to workorder items (CAP:004 Story #27, #29).
      * Creates an immutable financial snapshot of pricing, quantity, and tax
      * information.
-     * 
+     *
      * Story #29: Only copies items with ApprovalStatus.APPROVED to support
      * partial approval workflows where customers can approve a subset of items.
-     * 
+     *
      * @param workorder the workorder to populate with items
      */
     private void copyEstimateItemsToWorkorder(Workorder workorder) {
@@ -496,7 +496,7 @@ public class WorkorderServiceImpl implements WorkorderService {
      * Listen for EstimateRevisedEvent and invalidate Workorder approval if needed.
      * This implements the automatic approval invalidation workflow when estimates
      * are financially revised.
-     * 
+     *
      * @param event the EstimateRevisedEvent containing revision details
      */
     @Override

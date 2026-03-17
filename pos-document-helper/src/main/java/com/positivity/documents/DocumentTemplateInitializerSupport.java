@@ -10,45 +10,54 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
- * Support class for registering document templates with the pos-documents service at startup.
+ * Support class for registering document templates with the pos-documents
+ * service at startup.
+ *
+ * <p>
+ * This class is dependency-agnostic and uses a functional approach. The actual
+ * HTTP
+ * client implementation is provided by the consuming module via a
+ * {@code Consumer}.
+ *
+ * <p>
+ * Example usage with RestClient:
  * 
- * <p>This class is dependency-agnostic and uses a functional approach. The actual HTTP
- * client implementation is provided by the consuming module via a {@code Consumer}.
- * 
- * <p>Example usage with RestClient:
- * <pre>{@code
- * @Component
- * public class OrderDocumentTemplateInitializer implements ApplicationRunner {
- * 
- *     private final RestClient restClient;
- *     private final DocumentTemplateInitializerSupport initializerSupport;
- * 
- *     public OrderDocumentTemplateInitializer(
- *             RestClient.Builder restClientBuilder,
- *             @Value("${pos.documents.base-url}") String documentsBaseUrl) {
- *         this.restClient = restClientBuilder
- *                 .baseUrl(documentsBaseUrl + "/api/documents/templates")
- *                 .build();
- *         this.initializerSupport = new DocumentTemplateInitializerSupport("pos-order");
- *     }
- * 
- *     @Override
- *     public void run(ApplicationArguments args) {
- *         initializerSupport.registerTemplates(
- *             OrderDocumentTemplates.all(), 
- *             this::registerViaHttp);
- *     }
- * 
- *     private void registerViaHttp(TemplateRegistration registration) {
- *         restClient.put()
- *                 .uri("/{templateId}", registration.getTemplateId())
- *                 .contentType(MediaType.APPLICATION_JSON)
- *                 .body(registration)
- *                 .retrieve()
- *                 .toBodilessEntity();
+ * <pre>
+ * {
+ *     &#64;code
+ *     &#64;Component
+ *     public class OrderDocumentTemplateInitializer implements ApplicationRunner {
+ *
+ *         private final RestClient restClient;
+ *         private final DocumentTemplateInitializerSupport initializerSupport;
+ *
+ *         public OrderDocumentTemplateInitializer(
+ *                 RestClient.Builder restClientBuilder,
+ *                 &#64;Value("${pos.documents.base-url}") String documentsBaseUrl) {
+ *             this.restClient = restClientBuilder
+ *                     .baseUrl(documentsBaseUrl + "/v1/documents/templates")
+ *                     .build();
+ *             this.initializerSupport = new DocumentTemplateInitializerSupport("pos-order");
+ *         }
+ *
+ *         @Override
+ *         public void run(ApplicationArguments args) {
+ *             initializerSupport.registerTemplates(
+ *                     OrderDocumentTemplates.all(),
+ *                     this::registerViaHttp);
+ *         }
+ *
+ *         private void registerViaHttp(TemplateRegistration registration) {
+ *             restClient.put()
+ *                     .uri("/{templateId}", registration.getTemplateId())
+ *                     .contentType(MediaType.APPLICATION_JSON)
+ *                     .body(registration)
+ *                     .retrieve()
+ *                     .toBodilessEntity();
+ *         }
  *     }
  * }
- * }</pre>
+ * </pre>
  *
  * Issue: ADR-0020
  */
@@ -68,11 +77,13 @@ public class DocumentTemplateInitializerSupport {
     }
 
     /**
-     * Register a collection of document templates using the provided registration function.
+     * Register a collection of document templates using the provided registration
+     * function.
      * Uses upsert semantics - creates if not exists, updates if exists.
      *
-     * @param templates the templates to register
-     * @param registrationFunction the function to call for each registration (typically an HTTP PUT)
+     * @param templates            the templates to register
+     * @param registrationFunction the function to call for each registration
+     *                             (typically an HTTP PUT)
      * @return the number of successfully registered templates
      */
     public int registerTemplates(
@@ -82,7 +93,7 @@ public class DocumentTemplateInitializerSupport {
         Objects.requireNonNull(templates, "templates cannot be null");
         Objects.requireNonNull(registrationFunction, "registrationFunction cannot be null");
 
-        log.info("[{}] Registering {} document templates with pos-documents...", 
+        log.info("[{}] Registering {} document templates with pos-documents...",
                 serviceName, templates.size());
 
         AtomicInteger successCount = new AtomicInteger(0);
@@ -92,11 +103,11 @@ public class DocumentTemplateInitializerSupport {
             try {
                 registrationFunction.accept(registration);
                 successCount.incrementAndGet();
-                log.debug("[{}] Successfully registered template: {}", 
+                log.debug("[{}] Successfully registered template: {}",
                         serviceName, registration.getTemplateId());
             } catch (Exception e) {
                 failCount.incrementAndGet();
-                log.warn("[{}] Failed to register template: {} - {}", 
+                log.warn("[{}] Failed to register template: {} - {}",
                         serviceName, registration.getTemplateId(), e.getMessage());
             }
         }

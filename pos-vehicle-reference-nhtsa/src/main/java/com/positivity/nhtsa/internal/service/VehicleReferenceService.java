@@ -24,7 +24,7 @@ public class VehicleReferenceService {
     private final Clock clock;
 
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
-    private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
+    private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/v1/vehicles";
 
     private final ManufacturerRepository manufacturerRepository;
     private final MakeRepository makeRepository;

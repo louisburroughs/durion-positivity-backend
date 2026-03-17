@@ -11,7 +11,7 @@ import org.springframework.web.client.RestClient;
 public class PersonClient {
     private final RestClient restClient;
 
-    @Value("${people.service.url:http://localhost:8080/api/people}")
+    @Value("${people.service.url:http://localhost:8080/v1/people}")
     private String peopleServiceUrl;
 
     public PersonDTO getPersonById(Long id) {

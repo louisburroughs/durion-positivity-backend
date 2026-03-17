@@ -10,7 +10,7 @@ import com.positivity.shopmanager.internal.dto.ServiceEntityDTO;
 public class ServiceEntityClient {
     private final RestClient restClient;
 
-    @Value("${catalog.service.url:http://localhost:8080/api/services}")
+    @Value("${catalog.service.url:http://localhost:8080/v1/services}")
     private String catalogServiceUrl;
 
     public ServiceEntityClient(RestClient restClient) {

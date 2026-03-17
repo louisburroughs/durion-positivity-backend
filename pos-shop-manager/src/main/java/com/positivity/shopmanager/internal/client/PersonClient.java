@@ -10,7 +10,7 @@ import com.positivity.shopmanager.internal.dto.PersonDTO;
 public class PersonClient {
     private final RestClient restClient;
 
-    @Value("${people.service.url:http://localhost:8080/api/people}")
+    @Value("${people.service.url:http://localhost:8080/v1/people}")
     private String peopleServiceUrl;
 
     public PersonClient(RestClient restClient) {

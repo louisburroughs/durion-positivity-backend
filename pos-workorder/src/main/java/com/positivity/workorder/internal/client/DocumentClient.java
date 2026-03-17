@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
  * Client for rendering PDFs via pos-documents service.
  *
  * <p>
- * Calls the {@code POST /api/documents/render} endpoint which accepts
+ * Calls the {@code POST /v1/documents/render} endpoint which accepts
  * markdown content and returns a rendered PDF byte array.
  * </p>
  */
@@ -40,7 +40,7 @@ public class DocumentClient {
             var request = new RenderRequestDto("MARKDOWN", markdownContent, templateId);
 
             byte[] pdfBytes = documentServiceRestClient.post()
-                    .uri("/api/documents/render")
+                    .uri("/v1/documents/render")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()

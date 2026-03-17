@@ -130,12 +130,12 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
     /**
      * Create a change request with idempotency key support.
-     * 
+     *
      * <p>
      * If an idempotency key is provided and has been processed before,
      * returns the existing change request instead of creating a duplicate.
      * </p>
-     * 
+     *
      * @param dto            the change request creation request
      * @param idempotencyKey optional idempotency key for duplicate prevention; if
      *                       null, idempotency is not enforced
@@ -558,7 +558,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             renderRequest.put("content", contentJson);
 
             byte[] renderedPdf = documentServiceRestClient.post()
-                    .uri("/api/documents/render")
+                    .uri("/v1/documents/render")
                     .body(renderRequest)
                     .retrieve()
                     .body(byte[].class);

@@ -12,38 +12,38 @@ import java.util.function.Consumer;
 /**
  * Support class for registering event types with the Event Receiver service at
  * startup.
- * 
+ *
  * <p>
  * This class is dependency-agnostic and uses a functional approach. The actual
  * HTTP
  * client implementation is provided by the consuming module via a
  * {@code Consumer}.
- * 
+ *
  * <p>
  * Example usage with RestClient:
- * 
+ *
  * <pre>
  * {
  *     &#64;code
  *     &#64;Component
  *     public class OrderEventTypeInitializer implements ApplicationRunner {
- * 
+ *
  *         private final RestClient restClient;
  *         private final EventTypeInitializerSupport initializerSupport;
- * 
+ *
  *         public OrderEventTypeInitializer(RestClient.Builder restClientBuilder,
  *                 &#64;Value("${gateway.base-url}") String gatewayBaseUrl) {
  *             this.restClient = restClientBuilder
- *                     .baseUrl(gatewayBaseUrl + "/api/event-receiver/v1/eventTypes/code")
+ *                     .baseUrl(gatewayBaseUrl + "/v1/event-receiver/v1/eventTypes/code")
  *                     .build();
  *             this.initializerSupport = new EventTypeInitializerSupport("pos-order");
  *         }
- * 
+ *
  *         @Override
  *         public void run(ApplicationArguments args) {
  *             initializerSupport.registerEventTypes(OrderEventTypes.ALL_EVENT_TYPES, this::registerViaHttp);
  *         }
- * 
+ *
  *         private void registerViaHttp(EventTypeRegistration registration) {
  *             restClient.put()
  *                     .uri("/{typeCode}", registration.getTypeCode())

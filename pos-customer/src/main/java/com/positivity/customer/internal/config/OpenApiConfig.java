@@ -23,7 +23,7 @@ public class OpenApiConfig {
                                                                 .email("louis.burroughs@gmail.com")
                                                                 .name("Durion Team")))
                                 .servers(List.of(
-                                                new Server().url("http://api-gateway.local/api/customer")
+                                                new Server().url("http://api-gateway.local/v1/customer")
                                                                 .description("API Gateway")));
         }
 }
