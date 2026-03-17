@@ -49,6 +49,8 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
         private final Clock clock;
 
         private static final String SYSTEM_USER_ID = "system";
+        private static final String IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED = "workexec.labor.performed";
+        private static final String IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START = "workexec.timer.start";
 
         private static final Set<WorkorderStatus> TIMER_ELIGIBLE_STATUSES = Set.of(
                         WorkorderStatus.APPROVED,
@@ -131,7 +133,9 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                         @NonNull WorkexecLaborPerformedRequest request,
                         @NonNull String idempotencyKey) {
 
-                Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(idempotencyKey);
+                Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(
+                                IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED,
+                                idempotencyKey);
                 if (existingId.isPresent()) {
                         WorkorderLaborEntry existing = laborEntryRepository.findById(existingId.get())
                                         .orElseThrow(
@@ -189,7 +193,10 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                 .build();
 
                 WorkorderLaborEntry saved = laborEntryRepository.save(entry);
-                idempotencyService.registerLaborKey(idempotencyKey, saved.getId());
+                idempotencyService.registerLaborKey(
+                                IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED,
+                                idempotencyKey,
+                                saved.getId());
 
                 return new WorkexecTimeTrackingService.LaborPerformedResult(toLaborPerformedResponse(saved, request),
                                 false);
@@ -211,7 +218,9 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                         @Nullable String idempotencyKey) {
 
                 if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(idempotencyKey);
+                        Optional<UUID> existingId = idempotencyService.getExistingLaborEntryId(
+                                        IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START,
+                                        idempotencyKey);
                         if (existingId.isPresent()) {
                                 WorkorderLaborEntry existing = laborEntryRepository.findById(existingId.get())
                                                 .orElseThrow(() -> new NoSuchElementException(
@@ -265,7 +274,10 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
 
                 WorkorderLaborEntry saved = laborEntryRepository.save(entry);
                 if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                        idempotencyService.registerLaborKey(idempotencyKey, saved.getId());
+                        idempotencyService.registerLaborKey(
+                                        IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START,
+                                        idempotencyKey,
+                                        saved.getId());
                 }
 
                 return new WorkexecTimeTrackingService.TimerStartResult(toTimerResponse(saved), false);

@@ -52,6 +52,9 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
     private static final String ADJUSTMENT_EVENT_NOT_FOUND = "Adjustment event not found: ";
     private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT = "Idempotency key {} already processed, returning existing adjustment event {}";
     private static final String MISSING_AUTHENTICATED_USERNAME = "Missing authenticated username";
+    private static final String IDEMPOTENCY_OPERATION_PART_SUBSTITUTE = "part-adjustment.substitute";
+    private static final String IDEMPOTENCY_OPERATION_PART_ADDITIONAL_RETURN = "part-adjustment.additional-return";
+    private static final String IDEMPOTENCY_OPERATION_PART_CORRECTION = "part-adjustment.correction";
 
     private static final Logger log = LoggerFactory.getLogger(WorkorderPartAdjustmentServiceImpl.class);
 
@@ -106,7 +109,9 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
+            Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(
+                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTE,
+                    idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
                         idempotencyKey, existingEventId.get());
@@ -177,7 +182,10 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
+            idempotencyService.markKeyProcessedForPartAdjustment(
+                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTE,
+                    idempotencyKey,
+                    event.getId());
         }
 
         if (log.isInfoEnabled()) {
@@ -221,7 +229,9 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
+            Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(
+                    IDEMPOTENCY_OPERATION_PART_ADDITIONAL_RETURN,
+                    idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
                         idempotencyKey, existingEventId.get());
@@ -277,7 +287,10 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
+            idempotencyService.markKeyProcessedForPartAdjustment(
+                    IDEMPOTENCY_OPERATION_PART_ADDITIONAL_RETURN,
+                    idempotencyKey,
+                    event.getId());
         }
 
         if (log.isInfoEnabled()) {
@@ -316,7 +329,9 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
+            Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(
+                    IDEMPOTENCY_OPERATION_PART_CORRECTION,
+                    idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_ADJUSTMENT_EVENT,
                         idempotencyKey, existingEventId.get());
@@ -370,7 +385,10 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
+            idempotencyService.markKeyProcessedForPartAdjustment(
+                    IDEMPOTENCY_OPERATION_PART_CORRECTION,
+                    idempotencyKey,
+                    event.getId());
         }
 
         if (log.isInfoEnabled()) {

@@ -37,6 +37,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionService {
+
+    private static final String IDEMPOTENCY_OPERATION_PART_SUBSTITUTION = "part-adjustment.substitution";
     private final Clock clock;
 
     private static final Logger log = LoggerFactory.getLogger(WorkorderSubstitutionServiceImpl.class);
@@ -76,7 +78,9 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
                 () -> new IllegalStateException("Authenticated user context is required for part substitution"));
 
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
+            Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(
+                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTION,
+                    idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info("Idempotency key {} already processed, returning adjustment event {}", idempotencyKey,
                         existingEventId.get());
@@ -167,7 +171,10 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
 
         event = adjustmentEventRepository.save(event);
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
+            idempotencyService.markKeyProcessedForPartAdjustment(
+                    IDEMPOTENCY_OPERATION_PART_SUBSTITUTION,
+                    idempotencyKey,
+                    event.getId());
         }
 
         if (log.isInfoEnabled()) {

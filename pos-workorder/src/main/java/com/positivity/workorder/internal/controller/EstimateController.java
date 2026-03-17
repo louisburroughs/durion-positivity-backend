@@ -59,6 +59,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class EstimateController {
     private static final String SYSTEM = "SYSTEM";
+    private static final String IDEMPOTENCY_OPERATION_ESTIMATE_CREATE = "estimate.create";
+    private static final String IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE = "estimate.promote";
     private final EstimateService estimateService;
     private final WorkorderService workorderService;
     private final IdempotencyService idempotencyService;
@@ -136,7 +138,9 @@ public class EstimateController {
                     request.getCustomerId(), request.getVehicleId());
 
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                var existingEstimateId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+                var existingEstimateId = idempotencyService.getExistingWorkorderId(
+                        IDEMPOTENCY_OPERATION_ESTIMATE_CREATE,
+                        idempotencyKey);
                 if (existingEstimateId.isPresent()) {
                     return estimateService.getEstimateById(existingEstimateId.get())
                             .<ResponseEntity<Object>>map(
@@ -151,7 +155,10 @@ public class EstimateController {
 
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
                 try {
-                    idempotencyService.registerKey(idempotencyKey, response.getId());
+                    idempotencyService.registerKey(
+                            IDEMPOTENCY_OPERATION_ESTIMATE_CREATE,
+                            idempotencyKey,
+                            response.getId());
                 } catch (DataIntegrityViolationException ignored) {
                     log.debug("Idempotency key {} already registered", idempotencyKey);
                 }
@@ -349,7 +356,9 @@ public class EstimateController {
             return null;
         }
 
-        var existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+        var existingWorkorderId = idempotencyService.getExistingWorkorderId(
+            IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE,
+            idempotencyKey);
         if (existingWorkorderId.isEmpty()) {
             return null;
         }
@@ -374,10 +383,15 @@ public class EstimateController {
         }
 
         try {
-            idempotencyService.registerKey(idempotencyKey, currentResponse.getId());
+            idempotencyService.registerKey(
+                    IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE,
+                    idempotencyKey,
+                    currentResponse.getId());
             return null;
         } catch (DataIntegrityViolationException e) {
-            var existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+            var existingWorkorderId = idempotencyService.getExistingWorkorderId(
+                    IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE,
+                    idempotencyKey);
             if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(currentResponse.getId())) {
                 UUID workorderId = existingWorkorderId.get();
                 log.warn("Race condition detected: idempotency key {} already registered for different workorder {}",

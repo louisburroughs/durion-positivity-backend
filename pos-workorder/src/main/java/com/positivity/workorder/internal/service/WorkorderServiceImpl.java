@@ -59,6 +59,7 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkorderServiceImpl implements WorkorderService {
 
     private static final String SYSTEM_ACTOR = "system";
+    private static final String IDEMPOTENCY_OPERATION_WORKORDER_CREATE = "workorder.create";
 
     private final Clock clock;
     private final WorkorderRepository workorderRepository;
@@ -150,7 +151,8 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     private Optional<Workorder> getExistingIdempotentWorkorder(String idempotencyKey) {
-        Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+        Optional<UUID> existingWorkorderId = idempotencyService
+            .getExistingWorkorderId(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey);
         if (existingWorkorderId.isPresent()) {
             log.info("Idempotent request detected for key {}; returning existing workorder {}",
                     idempotencyKey, existingWorkorderId.get());
@@ -164,7 +166,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     private Workorder registerIdempotencyKeyWithFallback(String idempotencyKey, Workorder created) {
         try {
-            idempotencyService.registerKey(idempotencyKey, created.getId());
+            idempotencyService.registerKey(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey, created.getId());
             // Force flush so any unique-constraint violation is raised within this
             // try/catch
             TransactionAspectSupport.currentTransactionStatus().flush();

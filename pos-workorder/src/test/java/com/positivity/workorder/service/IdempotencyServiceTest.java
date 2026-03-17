@@ -36,6 +36,7 @@ import com.positivity.workorder.internal.service.IdempotencyServiceImpl;
 @DisplayName("IdempotencyService Unit Tests")
 class IdempotencyServiceTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final String DEFAULT_WORKORDER_OPERATION = "workorder.default";
 
     @Spy
     Clock clock = TEST_CLOCK;
@@ -47,11 +48,13 @@ class IdempotencyServiceTest {
     private IdempotencyServiceImpl service;
 
     private String testKeyValue;
+    private String scopedTestKeyValue;
     private UUID testWorkorderId;
 
     @BeforeEach
     void setUp() {
         testKeyValue = "test-key-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
+        scopedTestKeyValue = DEFAULT_WORKORDER_OPERATION + ":" + testKeyValue;
         testWorkorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
@@ -63,14 +66,14 @@ class IdempotencyServiceTest {
         // Arrange
         Instant futureExpiry = Instant.now(TEST_CLOCK).plus(1, ChronoUnit.HOURS);
         IdempotencyKey key = new IdempotencyKey(testKeyValue, testWorkorderId, futureExpiry);
-        when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
+        when(repository.findByKeyValue(scopedTestKeyValue)).thenReturn(Optional.of(key));
 
         // Act
         Optional<UUID> result = service.getExistingWorkorderId(testKeyValue);
 
         // Assert
         assertThat(result).isPresent().contains(testWorkorderId);
-        verify(repository).findByKeyValue(testKeyValue);
+        verify(repository).findByKeyValue(scopedTestKeyValue);
     }
 
     @Test
@@ -79,28 +82,28 @@ class IdempotencyServiceTest {
         // Arrange
         Instant pastExpiry = Instant.now(TEST_CLOCK).minus(1, ChronoUnit.HOURS);
         IdempotencyKey key = new IdempotencyKey(testKeyValue, testWorkorderId, pastExpiry);
-        when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
+        when(repository.findByKeyValue(scopedTestKeyValue)).thenReturn(Optional.of(key));
 
         // Act
         Optional<UUID> result = service.getExistingWorkorderId(testKeyValue);
 
         // Assert
         assertThat(result).isEmpty();
-        verify(repository).findByKeyValue(testKeyValue);
+        verify(repository).findByKeyValue(scopedTestKeyValue);
     }
 
     @Test
     @DisplayName("getExistingWorkorderId - returns empty for non-existent key")
     void getExistingWorkorderId_notFound_returnsEmpty() {
         // Arrange
-        when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.empty());
+        when(repository.findByKeyValue(scopedTestKeyValue)).thenReturn(Optional.empty());
 
         // Act
         Optional<UUID> result = service.getExistingWorkorderId(testKeyValue);
 
         // Assert
         assertThat(result).isEmpty();
-        verify(repository).findByKeyValue(testKeyValue);
+        verify(repository).findByKeyValue(scopedTestKeyValue);
     }
 
     // ===== REGISTER KEY TESTS =====
@@ -131,7 +134,7 @@ class IdempotencyServiceTest {
             assertThat(saved.getExpiresAt()).isBetween(
                     expectedExpiry.minus(1, ChronoUnit.SECONDS),
                     expectedExpiry.plus(1, ChronoUnit.SECONDS));
-            assertThat(saved.getKeyValue()).isEqualTo(testKeyValue);
+            assertThat(saved.getKeyValue()).isEqualTo(scopedTestKeyValue);
             assertThat(saved.getWorkorderId()).isEqualTo(testWorkorderId);
             return saved;
         });
