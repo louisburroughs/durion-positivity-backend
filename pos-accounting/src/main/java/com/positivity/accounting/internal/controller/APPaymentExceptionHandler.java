@@ -11,10 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.positivity.accounting.internal.dto.ErrorResponse;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
+import com.positivity.shared.error.ApiError;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -23,7 +23,7 @@ import jakarta.validation.ConstraintViolationException;
  * Global exception handler for AP Payment operations.
  * 
  * Maps domain exceptions to appropriate HTTP status codes using standard
- * ErrorResponse format:
+ * ApiError format:
  * - EventNotFoundException → 404 Not Found
  * - IdempotencyConflictException → 409 Conflict
  * - PaymentGatewayException → 500 Internal Server Error
@@ -37,66 +37,52 @@ public class APPaymentExceptionHandler {
     private final Clock clock;
 
     @ExceptionHandler(EventNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleEventNotFound(EventNotFoundException ex) {
+    public ResponseEntity<ApiError> handleEventNotFound(EventNotFoundException ex) {
         log.warn("Event not found: {}", ex.getMessage());
-        ErrorResponse body = ErrorResponse.builder()
-                .errorCode("EVENT_NOT_FOUND")
-                .message(ex.getMessage())
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiError.of("EVENT_NOT_FOUND", ex.getMessage(),
+                        HttpStatus.NOT_FOUND.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(IdempotencyConflictException.class)
-    public ResponseEntity<ErrorResponse> handleIdempotencyConflict(IdempotencyConflictException ex) {
+    public ResponseEntity<ApiError> handleIdempotencyConflict(IdempotencyConflictException ex) {
         log.warn("Idempotency conflict: {}", ex.getMessage());
-        ErrorResponse body = ErrorResponse.builder()
-                .errorCode("IDEMPOTENCY_CONFLICT")
-                .message(ex.getMessage())
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of("IDEMPOTENCY_CONFLICT", ex.getMessage(),
+                        HttpStatus.CONFLICT.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(PaymentGatewayException.class)
-    public ResponseEntity<ErrorResponse> handlePaymentGatewayException(PaymentGatewayException ex) {
+    public ResponseEntity<ApiError> handlePaymentGatewayException(PaymentGatewayException ex) {
         if (ex.getPaymentRef() != null) {
             log.error("Payment gateway error for payment {}: {}", ex.getPaymentRef(), ex.getMessage(), ex);
         } else {
             log.error("Payment gateway error: {}", ex.getMessage(), ex);
         }
-        ErrorResponse body = ErrorResponse.builder()
-                .errorCode("PAYMENT_GATEWAY_FAILURE")
-                .message(ex.getMessage())
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiError.of("PAYMENT_GATEWAY_FAILURE", ex.getMessage(),
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex) {
         log.warn("Validation error: {}", ex.getMessage());
-        ErrorResponse body = ErrorResponse.builder()
-                .errorCode("VALIDATION_ERROR")
-                .message(ex.getMessage())
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiError.of("VALIDATION_ERROR", ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(), null));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
+    public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException ex) {
         String message = ex.getConstraintViolations().stream()
                 .findFirst()
                 .map(ConstraintViolation::getMessage)
                 .orElse("Validation failed");
 
         log.warn("Validation error: {}", message);
-        ErrorResponse body = ErrorResponse.builder()
-                .errorCode("VALIDATION_ERROR")
-                .message(message)
-                .timestamp(Instant.now(clock).toEpochMilli())
-                .build();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiError.of("VALIDATION_ERROR", message,
+                        HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(), null));
     }
 }
+

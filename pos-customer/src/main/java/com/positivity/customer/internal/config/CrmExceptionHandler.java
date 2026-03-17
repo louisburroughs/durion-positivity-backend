@@ -7,13 +7,12 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.positivity.customer.internal.exception.DuplicateRedemptionException;
+import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,21 +41,8 @@ public class CrmExceptionHandler {
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record ErrorResponse(
-            String code,
-            String message,
-            int status,
-            String timestamp,
-            String correlationId,
-            List<FieldErrorEnvelope> fieldErrors) {
-    }
-
-    public record FieldErrorEnvelope(String field, String message) {
-    }
-
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAccessDenied(
+    public ResponseEntity<ApiError> handleAccessDenied(
             AccessDeniedException ex,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -65,19 +51,14 @@ public class CrmExceptionHandler {
         String correlationId = resolveCorrelationId(request);
         response.setHeader(X_CORRELATION_ID, correlationId);
 
-        ErrorResponse body = new ErrorResponse(
-                "PERMISSION_DENIED",
-                "You do not have permission to perform this action",
-                HttpStatus.FORBIDDEN.value(),
-                Instant.now(clock).toString(),
-                correlationId,
-                null);
-
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiError.of("PERMISSION_DENIED",
+                        "You do not have permission to perform this action",
+                        HttpStatus.FORBIDDEN.value(), Instant.now(clock).toString(), correlationId));
     }
 
     @ExceptionHandler(DuplicateRedemptionException.class)
-    public ResponseEntity<ErrorResponse> handleDuplicateRedemption(
+    public ResponseEntity<ApiError> handleDuplicateRedemption(
             DuplicateRedemptionException ex,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -86,19 +67,13 @@ public class CrmExceptionHandler {
         String correlationId = resolveCorrelationId(request);
         response.setHeader(X_CORRELATION_ID, correlationId);
 
-        ErrorResponse body = new ErrorResponse(
-                "DUPLICATE_REDEMPTION",
-                ex.getMessage(),
-                HttpStatus.CONFLICT.value(),
-                Instant.now(clock).toString(),
-                correlationId,
-                null);
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of("DUPLICATE_REDEMPTION", ex.getMessage(),
+                        HttpStatus.CONFLICT.value(), Instant.now(clock).toString(), correlationId));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
+    public ResponseEntity<ApiError> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -107,25 +82,20 @@ public class CrmExceptionHandler {
         String correlationId = resolveCorrelationId(request);
         response.setHeader(X_CORRELATION_ID, correlationId);
 
-        List<FieldErrorEnvelope> fieldErrors = ex.getBindingResult()
+        List<ApiError.FieldError> fieldErrors = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
-                .map(this::toFieldErrorEnvelope)
+                .map(fe -> new ApiError.FieldError(fe.getField(),
+                        fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid value"))
                 .toList();
 
-        ErrorResponse body = new ErrorResponse(
-                "VALIDATION_FAILED",
-                "Request validation failed",
-                HttpStatus.BAD_REQUEST.value(),
-                Instant.now(clock).toString(),
-                correlationId,
-                fieldErrors);
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiError.withFieldErrors("VALIDATION_FAILED", "Request validation failed",
+                        HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(), correlationId, fieldErrors));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(
+    public ResponseEntity<ApiError> handleIllegalArgument(
             IllegalArgumentException ex,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -134,21 +104,9 @@ public class CrmExceptionHandler {
         String correlationId = resolveCorrelationId(request);
         response.setHeader(X_CORRELATION_ID, correlationId);
 
-        ErrorResponse body = new ErrorResponse(
-                "VALIDATION_ERROR",
-                ex.getMessage(),
-                HttpStatus.BAD_REQUEST.value(),
-                Instant.now(clock).toString(),
-                correlationId,
-                null);
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
-    }
-
-    private FieldErrorEnvelope toFieldErrorEnvelope(FieldError fieldError) {
-        return new FieldErrorEnvelope(
-                fieldError.getField(),
-                fieldError.getDefaultMessage() != null ? fieldError.getDefaultMessage() : "Invalid value");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiError.of("VALIDATION_ERROR", ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(), correlationId));
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {
@@ -163,3 +121,4 @@ public class CrmExceptionHandler {
     }
 
 }
+

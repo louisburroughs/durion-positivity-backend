@@ -2,7 +2,6 @@ package com.positivity.invoice.internal.controller;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +13,7 @@ import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
+import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,101 +25,65 @@ public class PaymentExceptionHandler {
     private final Clock clock;
 
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
-    private static final String MESSAGE = "message";
-    private static final String ERROR = "error";
-    private static final String TIMESTAMP = "timestamp";
-    private static final String CODE = "code";
-    private static final String STATUS = "status";
-    private static final String CORRELATION_ID = "correlationId";
 
     @ExceptionHandler(InvalidPaymentStateException.class)
-    public ResponseEntity<Map<String, Object>> handleInvalidPaymentState(
+    public ResponseEntity<ApiError> handleInvalidPaymentState(
             InvalidPaymentStateException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(Map.of(
-                        TIMESTAMP, Instant.now(clock).toString(),
-                        ERROR, "INVALID_PAYMENT_STATE",
-                        CODE, "INVALID_PAYMENT_STATE",
-                        STATUS, HttpStatus.CONFLICT.value(),
-                        CORRELATION_ID, correlationId,
-                        MESSAGE, ex.getMessage()));
+                .body(ApiError.of("INVALID_PAYMENT_STATE", ex.getMessage(),
+                        HttpStatus.CONFLICT.value(), Instant.now(clock).toString(), correlationId));
     }
 
     @ExceptionHandler(PaymentIdempotencyConflictException.class)
-    public ResponseEntity<Map<String, Object>> handleIdempotencyConflict(
+    public ResponseEntity<ApiError> handleIdempotencyConflict(
             PaymentIdempotencyConflictException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(Map.of(
-                        TIMESTAMP, Instant.now(clock).toString(),
-                        ERROR, "PAYMENT_IDEMPOTENCY_CONFLICT",
-                        CODE, "PAYMENT_IDEMPOTENCY_CONFLICT",
-                        STATUS, HttpStatus.CONFLICT.value(),
-                        CORRELATION_ID, correlationId,
-                        MESSAGE, ex.getMessage()));
+                .body(ApiError.of("PAYMENT_IDEMPOTENCY_CONFLICT", ex.getMessage(),
+                        HttpStatus.CONFLICT.value(), Instant.now(clock).toString(), correlationId));
     }
 
     @ExceptionHandler(PaymentIntentNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleNotFound(
+    public ResponseEntity<ApiError> handleNotFound(
             PaymentIntentNotFoundException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(Map.of(
-                        TIMESTAMP, Instant.now(clock).toString(),
-                        ERROR, "NOT_FOUND",
-                        CODE, "NOT_FOUND",
-                        STATUS, HttpStatus.NOT_FOUND.value(),
-                        CORRELATION_ID, correlationId,
-                        MESSAGE, ex.getMessage()));
+                .body(ApiError.of("NOT_FOUND", ex.getMessage(),
+                        HttpStatus.NOT_FOUND.value(), Instant.now(clock).toString(), correlationId));
     }
 
     @ExceptionHandler(PaymentDeclinedException.class)
-    public ResponseEntity<Map<String, Object>> handlePaymentDeclined(
+    public ResponseEntity<ApiError> handlePaymentDeclined(
             PaymentDeclinedException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(422)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(Map.of(
-                        TIMESTAMP, Instant.now(clock).toString(),
-                        ERROR, "PAYMENT_DECLINED",
-                        CODE, "PAYMENT_DECLINED",
-                        STATUS, 422,
-                        CORRELATION_ID, correlationId,
-                        MESSAGE, ex.getMessage()));
+                .body(ApiError.of("PAYMENT_DECLINED", ex.getMessage(), 422,
+                        Instant.now(clock).toString(), correlationId));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> handleBadRequest(
+    public ResponseEntity<ApiError> handleBadRequest(
             IllegalArgumentException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(Map.of(
-                        TIMESTAMP, Instant.now(clock).toString(),
-                        ERROR, "BAD_REQUEST",
-                        CODE, "BAD_REQUEST",
-                        STATUS, HttpStatus.BAD_REQUEST.value(),
-                        CORRELATION_ID, correlationId,
-                        MESSAGE, ex.getMessage()));
+                .body(ApiError.of("BAD_REQUEST", ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(), correlationId));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Map<String, Object>> handleForbidden(
+    public ResponseEntity<ApiError> handleForbidden(
             AccessDeniedException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(Map.of(
-                        TIMESTAMP, Instant.now(clock).toString(),
-                        ERROR, "FORBIDDEN",
-                        CODE, "FORBIDDEN",
-                        STATUS, HttpStatus.FORBIDDEN.value(),
-                        CORRELATION_ID, correlationId,
-                        MESSAGE, ex.getMessage()));
+                .body(ApiError.of("FORBIDDEN", ex.getMessage(),
+                        HttpStatus.FORBIDDEN.value(), Instant.now(clock).toString(), correlationId));
     }
 
     private static String correlationId(HttpServletRequest request) {

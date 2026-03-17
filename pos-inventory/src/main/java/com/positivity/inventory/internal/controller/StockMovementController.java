@@ -3,7 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
-import com.positivity.inventory.internal.dto.InventoryErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
 import com.positivity.inventory.service.StockMovementService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -65,8 +65,8 @@ public class StockMovementController {
     @Operation(summary = "Create adjustment request", description = "Creates a pending adjustment request for approval before posting to the inventory ledger.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Adjustment request created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AdjustmentRequestResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "User lacks required create permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "User lacks required create permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     public ResponseEntity<AdjustmentRequestResponse> createAdjustmentRequest(
             @Valid @RequestBody CreateAdjustmentRequestDto request) {
@@ -85,11 +85,11 @@ public class StockMovementController {
     @Operation(summary = "Approve adjustment request", description = "Approves a pending adjustment request and posts the resulting movement to the inventory ledger.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Adjustment approved"),
-            @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "User lacks required approval permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Referenced resource not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Adjustment request is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "422", description = "Business rule validation failed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "User lacks required approval permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Referenced resource not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "Adjustment request is in a conflicting state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "422", description = "Business rule validation failed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     public ResponseEntity<Void> approveAdjustmentRequest(
             @PathVariable UUID adjustmentRequestId) {

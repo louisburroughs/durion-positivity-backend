@@ -1,7 +1,7 @@
 package com.positivity.securityservice.internal.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -65,8 +65,8 @@ class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
             correlationId = UUID.randomUUID().toString();
         }
 
-        ErrorResponse body = new ErrorResponse(
-                code, message, HttpServletResponse.SC_UNAUTHORIZED, Instant.now(clock).toString(), correlationId, null, null, null);
+        ApiError body = new ApiError(
+                code, message, HttpServletResponse.SC_UNAUTHORIZED, Instant.now(clock).toString(), correlationId, null, null, null, null);
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");
