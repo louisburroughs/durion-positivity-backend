@@ -58,52 +58,104 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
     public InvoiceGenerationResponse generateInvoice(
             @NonNull UUID workorderId,
             @Nullable String idempotencyKey) {
+        Workorder workorder = loadCompletedWorkorder(workorderId);
 
+        if (workorder.getInvoiceId() != null) {
+            return buildExistingLinkedInvoiceResponse(workorderId, workorder);
+        }
+
+        Optional<InvoiceGenerationResponse> idempotentReplay = findIdempotentReplayResponse(workorder, idempotencyKey);
+        if (idempotentReplay.isPresent()) {
+            return idempotentReplay.get();
+        }
+
+        InvoiceGenerationResponse response = createInvoiceForWorkorder(workorder, idempotencyKey);
+        UUID invoiceId = requireInvoiceId(response, workorderId);
+        backfillTraceability(response, workorder);
+
+        Optional<InvoiceGenerationResponse> raceConditionResponse = registerIdempotencyKeyHandlingRace(
+                workorder,
+                idempotencyKey,
+                invoiceId);
+        if (raceConditionResponse.isPresent()) {
+            return raceConditionResponse.get();
+        }
+
+        workorder.setInvoiceId(invoiceId);
+        workorderRepository.save(workorder);
+        return response;
+    }
+
+    @NonNull
+    private Workorder loadCompletedWorkorder(@NonNull UUID workorderId) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
-
         if (workorder.getStatus() != WorkorderStatus.COMPLETED) {
             throw new InvalidWorkorderStateException(workorderId, workorder.getStatus().name(), "COMPLETED");
         }
+        return workorder;
+    }
 
-        if (workorder.getInvoiceId() != null) {
-            log.info("Invoice already generated for workorder {} as invoice {}", workorderId, workorder.getInvoiceId());
-            return buildExistingResponse(workorder, workorder.getInvoiceId());
+    @NonNull
+    private InvoiceGenerationResponse buildExistingLinkedInvoiceResponse(
+            @NonNull UUID workorderId,
+            @NonNull Workorder workorder) {
+        log.info("Invoice already generated for workorder {} as invoice {}", workorderId, workorder.getInvoiceId());
+        return buildExistingResponse(workorder, workorder.getInvoiceId());
+    }
+
+    @NonNull
+    private Optional<InvoiceGenerationResponse> findIdempotentReplayResponse(
+            @NonNull Workorder workorder,
+            @Nullable String idempotencyKey) {
+        if (!hasIdempotencyKey(idempotencyKey)) {
+            return Optional.empty();
         }
 
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
-                    IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
-                    idempotencyKey);
-            if (existingInvoiceId.isPresent()) {
-                UUID invoiceId = existingInvoiceId.get();
-                if (workorder.getInvoiceId() == null) {
-                    workorder.setInvoiceId(invoiceId);
-                    workorderRepository.save(workorder);
-                }
-                log.info("Idempotent invoice generation replay for key {} and workorder {}, returning invoice {}",
-                        idempotencyKey, workorderId, invoiceId);
-                return buildExistingResponse(workorder, invoiceId);
-            }
+        Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
+                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                idempotencyKey);
+        if (existingInvoiceId.isEmpty()) {
+            return Optional.empty();
         }
 
-        List<InvoiceLineItem> lineItems = buildLineItems(workorderId);
+        UUID invoiceId = existingInvoiceId.get();
+        if (workorder.getInvoiceId() == null) {
+            workorder.setInvoiceId(invoiceId);
+            workorderRepository.save(workorder);
+        }
 
+        log.info("Idempotent invoice generation replay for key {} and workorder {}, returning invoice {}",
+                idempotencyKey, workorder.getId(), invoiceId);
+        return Optional.of(buildExistingResponse(workorder, invoiceId));
+    }
+
+    @NonNull
+    private InvoiceGenerationResponse createInvoiceForWorkorder(
+            @NonNull Workorder workorder,
+            @Nullable String idempotencyKey) {
         InvoiceCreationRequest request = InvoiceCreationRequest.builder()
                 .workorderId(workorder.getId())
                 .estimateId(workorder.getEstimateId())
                 .approvalId(workorder.getApprovalId())
                 .idempotencyKey(idempotencyKey)
-                .lineItems(lineItems)
+                .lineItems(buildLineItems(workorder.getId()))
                 .build();
+        return invoiceClient.createInvoice(request);
+    }
 
-        InvoiceGenerationResponse response = invoiceClient.createInvoice(request);
-
+    @NonNull
+    private UUID requireInvoiceId(@NonNull InvoiceGenerationResponse response, @NonNull UUID workorderId) {
         if (response.getInvoiceId() == null) {
             throw new IllegalStateException("Invoice service returned response without invoiceId for workorder "
                     + workorderId);
         }
+        return response.getInvoiceId();
+    }
 
+    private void backfillTraceability(
+            @NonNull InvoiceGenerationResponse response,
+            @NonNull Workorder workorder) {
         if (response.getWorkorderId() == null) {
             response.setWorkorderId(workorder.getId());
         }
@@ -113,67 +165,69 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
         if (response.getApprovalId() == null) {
             response.setApprovalId(workorder.getApprovalId());
         }
+    }
 
-        // Register idempotency key first (if provided) to detect race conditions before
-        // persisting
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            try {
-                idempotencyService.registerInvoiceKey(
-                        IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
-                        idempotencyKey,
-                        response.getInvoiceId());
-                // Force flush so any unique-constraint violation is raised within this
-                // try/catch
-                try {
-                    TransactionAspectSupport.currentTransactionStatus().flush();
-                } catch (NoTransactionException e) {
-                    // No active transaction (e.g., in unit tests) - flush not needed
-                    log.debug("Flush skipped: no active transaction");
-                }
-            } catch (DataIntegrityViolationException e) {
-                // Race condition: another request already registered this key
-                // The unique constraint violation means another transaction has committed the
-                // key.
-                // Mark our transaction for rollback to prevent persisting the duplicate
-                // invoice reference.
-                try {
-                    TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                } catch (NoTransactionException ex) {
-                    // No active transaction (e.g., in unit tests) - rollback not needed
-                    log.debug("Rollback skipped: no active transaction");
-                }
-
-                // Retrieve the existing invoice that won the race
-                // Note: The DataIntegrityViolationException indicates the other transaction has
-                // committed, so the invoice should be visible with READ_COMMITTED isolation.
-                Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
-                    IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
-                    idempotencyKey);
-                if (existingInvoiceId.isPresent()) {
-                    log.warn(
-                            "Race condition detected: idempotency key {} already registered for invoice {}, returning existing invoice",
-                            idempotencyKey, existingInvoiceId.get());
-                    // Return the existing invoice to maintain idempotency semantics
-                    // The transaction will be rolled back, preventing the duplicate workorder
-                    // invoice reference
-                    return buildExistingResponse(workorder, existingInvoiceId.get());
-                } else {
-                    // This should not happen - if DataIntegrityViolationException was thrown,
-                    // the key must exist. This indicates a serious data inconsistency.
-                    log.error("Race condition detected but no existing invoice found for idempotency key {}",
-                            idempotencyKey);
-                    throw new IllegalStateException(
-                            "Idempotency key collision but no existing invoice found: " + idempotencyKey, e);
-                }
-            }
+    @NonNull
+    private Optional<InvoiceGenerationResponse> registerIdempotencyKeyHandlingRace(
+            @NonNull Workorder workorder,
+            @Nullable String idempotencyKey,
+            @NonNull UUID invoiceId) {
+        if (!hasIdempotencyKey(idempotencyKey)) {
+            return Optional.empty();
         }
 
-        // Persist the workorder invoice link after successful idempotency key
-        // registration
-        workorder.setInvoiceId(response.getInvoiceId());
-        workorderRepository.save(workorder);
+        try {
+            idempotencyService.registerInvoiceKey(
+                    IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                    idempotencyKey,
+                    invoiceId);
+            flushCurrentTransaction();
+            return Optional.empty();
+        } catch (DataIntegrityViolationException e) {
+            rollbackCurrentTransaction();
+            return Optional.of(handleIdempotencyRace(workorder, idempotencyKey, e));
+        }
+    }
 
-        return response;
+    @NonNull
+    private InvoiceGenerationResponse handleIdempotencyRace(
+            @NonNull Workorder workorder,
+            @NonNull String idempotencyKey,
+            @NonNull DataIntegrityViolationException e) {
+        Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
+                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE,
+                idempotencyKey);
+        if (existingInvoiceId.isPresent()) {
+            log.warn(
+                    "Race condition detected: idempotency key {} already registered for invoice {}, returning existing invoice",
+                    idempotencyKey, existingInvoiceId.get());
+            return buildExistingResponse(workorder, existingInvoiceId.get());
+        }
+
+        log.error("Race condition detected but no existing invoice found for idempotency key {}", idempotencyKey);
+        throw new IllegalStateException(
+                "Idempotency key collision but no existing invoice found: " + idempotencyKey,
+                e);
+    }
+
+    private void flushCurrentTransaction() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().flush();
+        } catch (NoTransactionException e) {
+            log.debug("Flush skipped: no active transaction");
+        }
+    }
+
+    private void rollbackCurrentTransaction() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (NoTransactionException ex) {
+            log.debug("Rollback skipped: no active transaction");
+        }
+    }
+
+    private boolean hasIdempotencyKey(@Nullable String idempotencyKey) {
+        return idempotencyKey != null && !idempotencyKey.isBlank();
     }
 
     @NonNull
