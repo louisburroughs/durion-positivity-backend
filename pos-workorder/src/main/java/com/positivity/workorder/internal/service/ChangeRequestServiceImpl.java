@@ -41,6 +41,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Slf4j
 public class ChangeRequestServiceImpl implements ChangeRequestService {
+    private static final String CHANGE_REQUEST_NOT_FOUND = "Change request not found: ";
     private final Clock clock;
     private static final String IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE = "change-request.create";
 
@@ -63,6 +64,10 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     @Override
     @Transactional
     public ChangeRequest createChangeRequest(CreateChangeRequestDTO dto) {
+        return createChangeRequestInternal(dto);
+    }
+
+    private ChangeRequest createChangeRequestInternal(CreateChangeRequestDTO dto) {
         // Validation
         if (dto.getDescription() == null || dto.getDescription().trim().isEmpty()) {
             throw new IllegalArgumentException("Description is required for change request");
@@ -161,7 +166,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         }
 
         // Create new change request
-        ChangeRequest created = createChangeRequest(dto);
+        ChangeRequest created = createChangeRequestInternal(dto);
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -222,7 +227,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         String resolvedActorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
                 () -> new IllegalStateException("Authenticated user context is required for approving change request"));
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
+                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
 
         if (!changeRequest.canApprove()) {
             throw new IllegalStateException(
@@ -268,7 +273,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         String resolvedActorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
                 () -> new IllegalStateException("Authenticated user context is required for declining change request"));
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
+                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
 
         if (!changeRequest.canDecline()) {
             throw new IllegalStateException(
@@ -314,7 +319,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         String managerActorId = SecurityContextHelper.getCurrentUsername().orElseThrow(
                 () -> new IllegalStateException("Authenticated user context is required for emergency override"));
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
+                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
 
         if (!changeRequest.canApprove()) {
             throw new IllegalStateException(
@@ -359,9 +364,10 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     @Transactional
     public void recordCustomerDenialAcknowledgment(UUID changeRequestId) {
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
+                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
 
-        if (!changeRequest.getIsEmergencyException()) {
+        boolean isEmergencyException = Boolean.TRUE.equals(changeRequest.getIsEmergencyException());
+        if (!isEmergencyException) {
             throw new IllegalStateException("Change request is not marked as emergency/safety exception");
         }
 
@@ -399,29 +405,33 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         List<ChangeRequest> emergencyRequests = changeRequestRepository.findByWorkorder_IdAndStatus(
                 workorderId, ChangeRequestStatus.DECLINED);
 
-        for (ChangeRequest request : emergencyRequests) {
-            if (Boolean.TRUE.equals(request.getIsEmergencyException())) {
-                // Check if all emergency items are acknowledged
-                List<com.positivity.workorder.internal.entity.WorkorderService> services = workOrderServiceRepository
-                        .findByChangeRequest_Id(request.getId());
-                for (com.positivity.workorder.internal.entity.WorkorderService service : services) {
-                    if (Boolean.TRUE.equals(service.getIsEmergencySafety())
-                            && !Boolean.TRUE.equals(service.getCustomerDenialAcknowledged())) {
-                        return false;
-                    }
-                }
+        return emergencyRequests.stream()
+                .filter(this::isEmergencyException)
+                .noneMatch(this::hasUnacknowledgedEmergencyItems);
+    }
 
-                List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequest_Id(request.getId());
-                for (WorkorderPart part : parts) {
-                    if (Boolean.TRUE.equals(part.getIsEmergencySafety())
-                            && !Boolean.TRUE.equals(part.getCustomerDenialAcknowledged())) {
-                        return false;
-                    }
-                }
-            }
-        }
+    private boolean isEmergencyException(ChangeRequest request) {
+        return Boolean.TRUE.equals(request.getIsEmergencyException());
+    }
 
-        return true;
+    private boolean hasUnacknowledgedEmergencyItems(ChangeRequest request) {
+        return hasUnacknowledgedEmergencyServices(request.getId())
+                || hasUnacknowledgedEmergencyParts(request.getId());
+    }
+
+    private boolean hasUnacknowledgedEmergencyServices(UUID changeRequestId) {
+        List<com.positivity.workorder.internal.entity.WorkorderService> services = workOrderServiceRepository
+                .findByChangeRequest_Id(changeRequestId);
+        return services.stream()
+                .anyMatch(service -> Boolean.TRUE.equals(service.getIsEmergencySafety())
+                        && !Boolean.TRUE.equals(service.getCustomerDenialAcknowledged()));
+    }
+
+    private boolean hasUnacknowledgedEmergencyParts(UUID changeRequestId) {
+        List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequest_Id(changeRequestId);
+        return parts.stream()
+                .anyMatch(part -> Boolean.TRUE.equals(part.getIsEmergencySafety())
+                        && !Boolean.TRUE.equals(part.getCustomerDenialAcknowledged()));
     }
 
     /**
@@ -460,7 +470,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     @Override
     public ChangeRequest getChangeRequestById(UUID id) {
         return changeRequestRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + id));
+                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + id));
     }
 
     private void validateEmergencyDocumentation(CreateChangeRequestDTO dto) {

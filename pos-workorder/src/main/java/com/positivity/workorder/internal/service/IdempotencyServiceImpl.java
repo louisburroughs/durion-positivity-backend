@@ -78,12 +78,16 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingWorkorderId(@NonNull String keyValue) {
-        return getExistingWorkorderId(DEFAULT_WORKORDER_OPERATION, keyValue);
+        return getExistingWorkorderIdInternal(DEFAULT_WORKORDER_OPERATION, keyValue);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingWorkorderId(@NonNull String operation, @NonNull String keyValue) {
+        return getExistingWorkorderIdInternal(operation, keyValue);
+    }
+
+    private Optional<UUID> getExistingWorkorderIdInternal(@NonNull String operation, @NonNull String keyValue) {
         String scopedKey = scope(operation, keyValue);
         Optional<IdempotencyKey> existing = repository.findByKeyValue(scopedKey);
         if (existing.isPresent()) {
@@ -110,12 +114,16 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingChangeRequestId(@NonNull String keyValue) {
-        return getExistingChangeRequestId(DEFAULT_CHANGE_REQUEST_OPERATION, keyValue);
+        return getExistingChangeRequestIdInternal(DEFAULT_CHANGE_REQUEST_OPERATION, keyValue);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingChangeRequestId(@NonNull String operation, @NonNull String keyValue) {
+        return getExistingChangeRequestIdInternal(operation, keyValue);
+    }
+
+    private Optional<UUID> getExistingChangeRequestIdInternal(@NonNull String operation, @NonNull String keyValue) {
         String scopedKey = scope(operation, keyValue);
         Optional<IdempotencyKey> existing = repository.findByKeyValue(scopedKey);
         if (existing.isPresent()) {
@@ -141,12 +149,16 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingLaborEntryId(@NonNull String keyValue) {
-        return getExistingLaborEntryId(DEFAULT_LABOR_OPERATION, keyValue);
+        return getExistingLaborEntryIdInternal(DEFAULT_LABOR_OPERATION, keyValue);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingLaborEntryId(@NonNull String operation, @NonNull String keyValue) {
+        return getExistingLaborEntryIdInternal(operation, keyValue);
+    }
+
+    private Optional<UUID> getExistingLaborEntryIdInternal(@NonNull String operation, @NonNull String keyValue) {
         String scopedKey = scope(operation, keyValue);
         Optional<IdempotencyKey> existing = repository.findByKeyValue(scopedKey);
         if (existing.isPresent()) {
@@ -170,12 +182,16 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional
     public void registerKey(@NonNull String keyValue, @NonNull UUID workorderId) {
-        registerKey(DEFAULT_WORKORDER_OPERATION, keyValue, workorderId);
+        registerKeyInternal(DEFAULT_WORKORDER_OPERATION, keyValue, workorderId);
     }
 
     @Override
     @Transactional
     public void registerKey(@NonNull String operation, @NonNull String keyValue, @NonNull UUID workorderId) {
+        registerKeyInternal(operation, keyValue, workorderId);
+    }
+
+    private void registerKeyInternal(@NonNull String operation, @NonNull String keyValue, @NonNull UUID workorderId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
         IdempotencyKey key = new IdempotencyKey(scopedKey, workorderId, expiresAt);
@@ -192,12 +208,17 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional
     public void markKeyProcessedForChangeRequest(@NonNull String keyValue, @NonNull UUID changeRequestId) {
-        markKeyProcessedForChangeRequest(DEFAULT_CHANGE_REQUEST_OPERATION, keyValue, changeRequestId);
+        markKeyProcessedForChangeRequestInternal(DEFAULT_CHANGE_REQUEST_OPERATION, keyValue, changeRequestId);
     }
 
     @Override
     @Transactional
     public void markKeyProcessedForChangeRequest(@NonNull String operation, @NonNull String keyValue,
+            @NonNull UUID changeRequestId) {
+        markKeyProcessedForChangeRequestInternal(operation, keyValue, changeRequestId);
+        }
+
+        private void markKeyProcessedForChangeRequestInternal(@NonNull String operation, @NonNull String keyValue,
             @NonNull UUID changeRequestId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
@@ -215,12 +236,17 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional
     public void registerLaborKey(@NonNull String keyValue, @NonNull UUID laborEntryId) {
-        registerLaborKey(DEFAULT_LABOR_OPERATION, keyValue, laborEntryId);
+        registerLaborKeyInternal(DEFAULT_LABOR_OPERATION, keyValue, laborEntryId);
     }
 
     @Override
     @Transactional
     public void registerLaborKey(@NonNull String operation, @NonNull String keyValue, @NonNull UUID laborEntryId) {
+        registerLaborKeyInternal(operation, keyValue, laborEntryId);
+        }
+
+        private void registerLaborKeyInternal(@NonNull String operation, @NonNull String keyValue,
+            @NonNull UUID laborEntryId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
         IdempotencyKey key = new IdempotencyKey();
@@ -244,12 +270,16 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingPartUsageEventId(@NonNull String keyValue) {
-        return getExistingPartUsageEventId(DEFAULT_PART_USAGE_OPERATION, keyValue);
+        return getExistingPartUsageEventIdInternal(DEFAULT_PART_USAGE_OPERATION, keyValue);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingPartUsageEventId(@NonNull String operation, @NonNull String keyValue) {
+        return getExistingPartUsageEventIdInternal(operation, keyValue);
+    }
+
+    private Optional<UUID> getExistingPartUsageEventIdInternal(@NonNull String operation, @NonNull String keyValue) {
         String scopedKey = scope(operation, keyValue);
         Optional<IdempotencyKey> existing = repository.findByKeyValue(scopedKey);
         if (existing.isPresent()) {
@@ -274,12 +304,17 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional
     public void markKeyProcessedForPartUsage(@NonNull String keyValue, @NonNull UUID partUsageEventId) {
-        markKeyProcessedForPartUsage(DEFAULT_PART_USAGE_OPERATION, keyValue, partUsageEventId);
+        markKeyProcessedForPartUsageInternal(DEFAULT_PART_USAGE_OPERATION, keyValue, partUsageEventId);
     }
 
     @Override
     @Transactional
     public void markKeyProcessedForPartUsage(@NonNull String operation, @NonNull String keyValue,
+            @NonNull UUID partUsageEventId) {
+        markKeyProcessedForPartUsageInternal(operation, keyValue, partUsageEventId);
+        }
+
+        private void markKeyProcessedForPartUsageInternal(@NonNull String operation, @NonNull String keyValue,
             @NonNull UUID partUsageEventId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
@@ -304,12 +339,17 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingPartAdjustmentEventId(@NonNull String keyValue) {
-        return getExistingPartAdjustmentEventId(DEFAULT_PART_ADJUSTMENT_OPERATION, keyValue);
+        return getExistingPartAdjustmentEventIdInternal(DEFAULT_PART_ADJUSTMENT_OPERATION, keyValue);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingPartAdjustmentEventId(@NonNull String operation, @NonNull String keyValue) {
+        return getExistingPartAdjustmentEventIdInternal(operation, keyValue);
+        }
+
+        private Optional<UUID> getExistingPartAdjustmentEventIdInternal(@NonNull String operation,
+            @NonNull String keyValue) {
         String scopedKey = scope(operation, keyValue);
         Optional<IdempotencyKey> existing = repository.findByKeyValue(scopedKey);
         if (existing.isPresent()) {
@@ -335,12 +375,16 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingInvoiceId(@NonNull String keyValue) {
-        return getExistingInvoiceId(DEFAULT_INVOICE_OPERATION, keyValue);
+        return getExistingInvoiceIdInternal(DEFAULT_INVOICE_OPERATION, keyValue);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> getExistingInvoiceId(@NonNull String operation, @NonNull String keyValue) {
+        return getExistingInvoiceIdInternal(operation, keyValue);
+    }
+
+    private Optional<UUID> getExistingInvoiceIdInternal(@NonNull String operation, @NonNull String keyValue) {
         String scopedKey = scope(operation, keyValue);
         Optional<IdempotencyKey> existing = repository.findByKeyValue(scopedKey);
         if (existing.isPresent()) {
@@ -364,12 +408,17 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional
     public void markKeyProcessedForPartAdjustment(@NonNull String keyValue, @NonNull UUID partAdjustmentEventId) {
-        markKeyProcessedForPartAdjustment(DEFAULT_PART_ADJUSTMENT_OPERATION, keyValue, partAdjustmentEventId);
+        markKeyProcessedForPartAdjustmentInternal(DEFAULT_PART_ADJUSTMENT_OPERATION, keyValue, partAdjustmentEventId);
     }
 
     @Override
     @Transactional
     public void markKeyProcessedForPartAdjustment(@NonNull String operation, @NonNull String keyValue,
+            @NonNull UUID partAdjustmentEventId) {
+        markKeyProcessedForPartAdjustmentInternal(operation, keyValue, partAdjustmentEventId);
+        }
+
+        private void markKeyProcessedForPartAdjustmentInternal(@NonNull String operation, @NonNull String keyValue,
             @NonNull UUID partAdjustmentEventId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
@@ -391,12 +440,17 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Override
     @Transactional
     public void registerInvoiceKey(@NonNull String keyValue, @NonNull UUID invoiceId) {
-        registerInvoiceKey(DEFAULT_INVOICE_OPERATION, keyValue, invoiceId);
+        registerInvoiceKeyInternal(DEFAULT_INVOICE_OPERATION, keyValue, invoiceId);
     }
 
     @Override
     @Transactional
     public void registerInvoiceKey(@NonNull String operation, @NonNull String keyValue, @NonNull UUID invoiceId) {
+        registerInvoiceKeyInternal(operation, keyValue, invoiceId);
+        }
+
+        private void registerInvoiceKeyInternal(@NonNull String operation, @NonNull String keyValue,
+            @NonNull UUID invoiceId) {
         Instant expiresAt = Instant.now(clock).plus(KEY_EXPIRATION);
         String scopedKey = scope(operation, keyValue);
         IdempotencyKey key = new IdempotencyKey();

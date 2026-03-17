@@ -41,6 +41,8 @@ import com.positivity.workorder.service.WorkorderPartUsageService;
  */
 @Service
 public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService {
+    private static final String MISSING_AUTHENTICATED_USERNAME = "Missing authenticated username";
+
     private final Clock clock;
 
     private static final String PART_NOT_FOUND = "Part not found: ";
@@ -91,7 +93,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull BigDecimal quantity,
             @Nullable String idempotencyKey) {
         String actorId = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
+                .orElseThrow(() -> new IllegalStateException(MISSING_AUTHENTICATED_USERNAME));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -170,7 +172,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull BigDecimal quantity,
             @Nullable String idempotencyKey) {
         String actorId = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
+                .orElseThrow(() -> new IllegalStateException(MISSING_AUTHENTICATED_USERNAME));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -259,7 +261,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull BigDecimal quantity,
             @Nullable String idempotencyKey) {
         String actorId = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new IllegalStateException("Missing authenticated username"));
+                .orElseThrow(() -> new IllegalStateException(MISSING_AUTHENTICATED_USERNAME));
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {

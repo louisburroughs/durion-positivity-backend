@@ -354,10 +354,10 @@ class PriceOverrideServiceTest {
 
         @Test
         void testGetOverrideById_NotFound() {
+                UUID missingOverrideId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
                 // When/Then
-                assertThatThrownBy(
-                                () -> priceOverrideService.getOverrideById(
-                                                UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                assertThatThrownBy(() -> priceOverrideService.getOverrideById(missingOverrideId))
                                 .isInstanceOf(PriceOverrideNotFoundException.class);
         }
 
@@ -398,8 +398,7 @@ class PriceOverrideServiceTest {
                 List<PriceOverrideDetail> pending = priceOverrideService.getPendingApprovals();
 
                 // Then
-                assertThat(pending).hasSize(2);
-                assertThat(pending).allMatch(o -> o.status().equals(OverrideStatus.PENDING_APPROVAL.name()));
+                assertThat(pending).hasSize(2).allMatch(o -> o.status().equals(OverrideStatus.PENDING_APPROVAL.name()));
         }
 
         @Test
@@ -416,7 +415,7 @@ class PriceOverrideServiceTest {
                 List<PriceOverrideDetail> approved = priceOverrideService.getOverridesByStatus("APPROVED");
 
                 // Then
-                assertThat(approved).hasSize(2);
+                assertThat(approved).hasSize(2).allMatch(o -> o.status().equals(OverrideStatus.APPROVED.name()));
         }
 
         // Helper methods

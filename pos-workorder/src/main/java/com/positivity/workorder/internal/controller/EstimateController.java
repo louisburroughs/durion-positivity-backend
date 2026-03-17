@@ -58,6 +58,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class EstimateController {
+    private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+    private static final String CONFLICT = "CONFLICT";
     private static final String SYSTEM = "SYSTEM";
     private static final String IDEMPOTENCY_OPERATION_ESTIMATE_CREATE = "estimate.create";
     private static final String IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE = "estimate.promote";
@@ -146,23 +148,14 @@ public class EstimateController {
                             .<ResponseEntity<Object>>map(
                                     existing -> ResponseEntity.status(HttpStatus.CREATED).body(existing))
                             .orElseGet(() -> ResponseEntity.status(HttpStatus.CONFLICT)
-                                    .body(Map.of("code", "CONFLICT")));
+                                    .body(Map.of("code", CONFLICT)));
                 }
             }
 
             String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateResponse response = estimateService.createEstimate(request, username);
 
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                try {
-                    idempotencyService.registerKey(
-                            IDEMPOTENCY_OPERATION_ESTIMATE_CREATE,
-                            idempotencyKey,
-                            response.getId());
-                } catch (DataIntegrityViolationException ignored) {
-                    log.debug("Idempotency key {} already registered", idempotencyKey);
-                }
-            }
+            registerCreateEstimateIdempotencyKeyIfPresent(idempotencyKey, response.getId());
 
             log.info("Estimate created successfully: id={}, number={}",
                     response.getId(), response.getEstimateNumber());
@@ -171,19 +164,34 @@ public class EstimateController {
 
         } catch (IllegalArgumentException e) {
             log.warn("Validation error creating estimate: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR"));
+            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
 
         } catch (IllegalStateException e) {
             log.warn("Conflict creating estimate: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "CONFLICT"));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
 
         } catch (DataIntegrityViolationException e) {
             log.warn("Conflict creating estimate: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "CONFLICT"));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
 
         } catch (Exception e) {
             log.error("Unexpected error creating estimate", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private void registerCreateEstimateIdempotencyKeyIfPresent(String idempotencyKey, UUID estimateId) {
+        if (!hasIdempotencyKey(idempotencyKey)) {
+            return;
+        }
+
+        try {
+            idempotencyService.registerKey(
+                    IDEMPOTENCY_OPERATION_ESTIMATE_CREATE,
+                    idempotencyKey,
+                    estimateId);
+        } catch (DataIntegrityViolationException ignored) {
+            log.debug("Idempotency key {} already registered", idempotencyKey);
         }
     }
 
@@ -195,26 +203,26 @@ public class EstimateController {
             @RequestBody Map<String, Object> patchRequest) {
         Object rawStatus = patchRequest.get("status");
         if (!(rawStatus instanceof String statusValue) || statusValue.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR"));
+            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
         }
 
         final EstimateStatus targetStatus;
         try {
             targetStatus = EstimateStatus.valueOf(statusValue);
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR"));
+            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
         }
 
         try {
             return switch (targetStatus) {
                 case DECLINED -> ResponseEntity.ok(estimateService.declineEstimate(estimateId, null));
                 case DRAFT -> ResponseEntity.ok(estimateService.reopenEstimate(estimateId));
-                default -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "CONFLICT"));
+                default -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
             };
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR"));
+            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
         } catch (IllegalStateException ex) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "CONFLICT"));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
         }
     }
 
