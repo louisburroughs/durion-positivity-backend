@@ -26,6 +26,9 @@ tags:
   description: Central permission registry for all services
 - name: Auth API
   description: User-facing authentication endpoints
+- name: Self-Registration Review API
+  description: Administrative queue for blocked self-registration recovery and identity
+    review cases
 - name: Admin Account-State API
   description: Administrative endpoints for user account state management
 - name: Audit
@@ -62,6 +65,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -70,12 +79,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -126,6 +129,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -134,12 +143,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -185,6 +188,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -193,12 +202,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -240,6 +243,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -248,12 +257,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -304,6 +307,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -312,12 +321,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -362,6 +365,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -370,12 +379,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -421,6 +424,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -429,12 +438,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -478,6 +481,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -486,12 +495,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -537,6 +540,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -545,12 +554,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -594,6 +597,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -602,12 +611,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -654,6 +657,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid grant request
           content:
@@ -662,12 +671,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -718,6 +721,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid grant request
           content:
@@ -726,12 +735,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -774,6 +777,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -782,12 +791,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -830,6 +833,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -838,12 +847,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -880,6 +883,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -888,12 +897,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -938,6 +941,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -946,12 +955,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -996,6 +999,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1004,12 +1013,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1050,6 +1053,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1058,12 +1067,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1104,6 +1107,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1112,12 +1121,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1158,6 +1161,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1166,12 +1175,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1212,6 +1215,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1220,12 +1229,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1264,6 +1267,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1272,12 +1281,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1320,6 +1323,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1328,12 +1337,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1370,6 +1373,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1378,12 +1387,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1429,6 +1432,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Role name already exists
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid role payload
           content:
@@ -1437,12 +1446,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Role name already exists
           content:
             '*/*':
               schema:
@@ -1479,6 +1482,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1487,12 +1496,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1538,6 +1541,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Role name already exists
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid role payload
           content:
@@ -1546,12 +1555,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Role name already exists
           content:
             '*/*':
               schema:
@@ -1603,6 +1606,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1611,12 +1620,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1656,6 +1659,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1664,12 +1673,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1715,6 +1718,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1723,12 +1732,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1773,6 +1776,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1781,12 +1790,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1829,6 +1832,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1837,12 +1846,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1886,6 +1889,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1894,12 +1903,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1943,6 +1946,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -1951,12 +1960,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -1979,6 +1982,70 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PermissionDecodeResponse"
+  /v1/self-registration/review-cases/{caseId}/resolve:
+    post:
+      tags:
+      - Self-Registration Review API
+      summary: Resolve a self-registration review case
+      description: Marks a blocked self-registration case as resolved after recovery
+        or manual review.
+      operationId: resolveCase
+      parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveSelfRegistrationReviewCaseRequest"
+        required: true
+      responses:
+        "404":
+          description: Review case not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "200":
+          description: Review case resolved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
   /v1/auth/token-pair:
     post:
       tags:
@@ -2001,6 +2068,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid request (blank username or empty roles)
           content:
@@ -2009,12 +2082,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2037,6 +2104,66 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/TokenPairResponse"
+  /v1/auth/self-register:
+    post:
+      tags:
+      - Auth API
+      summary: Self-register a new user
+      description: "Creates a low-privilege customer account after resolving or creating\
+        \ a linked person record. Successful registration requires a follow-up login\
+        \ and does not issue tokens immediately. Conflict responses include operator\
+        \ guidance for recovery, linked-account, and CRM identity-review cases."
+      operationId: selfRegister
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelfRegistrationRequest"
+        required: true
+      responses:
+        "404":
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Registration blocked because an account or linked person already
+            exists; response includes nextAction and supportAction guidance
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Invalid registration payload
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "201":
+          description: Self-registration completed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SelfRegistrationResponse"
   /v1/auth/refresh:
     post:
       tags:
@@ -2059,6 +2186,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Concurrency conflict during token revocation
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid refresh token
           content:
@@ -2067,12 +2200,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Concurrency conflict during token revocation
           content:
             '*/*':
               schema:
@@ -2116,6 +2243,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Missing or blank username/password
           content:
@@ -2124,12 +2257,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2173,6 +2300,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid request (blank username or empty roles)
           content:
@@ -2181,12 +2314,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: "Forbidden: internal admin context required"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2230,6 +2357,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid pricing snapshot payload
           content:
@@ -2238,12 +2371,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2316,6 +2443,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid audit search criteria
           content:
@@ -2324,12 +2457,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2374,6 +2501,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid audit event payload
           content:
@@ -2382,12 +2515,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2431,6 +2558,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2439,12 +2572,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2492,6 +2619,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2500,12 +2633,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2549,6 +2676,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2557,12 +2690,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2605,6 +2732,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2613,12 +2746,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2658,6 +2785,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2666,12 +2799,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2714,6 +2841,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2722,12 +2855,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2767,6 +2894,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2775,12 +2908,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2827,6 +2954,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2835,12 +2968,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2897,6 +3024,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2905,12 +3038,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -2964,6 +3091,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -2972,12 +3105,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3020,6 +3147,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3028,12 +3161,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3076,6 +3203,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3084,12 +3217,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3144,6 +3271,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3152,12 +3285,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3214,6 +3341,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3222,12 +3355,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3273,6 +3400,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3281,12 +3414,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3330,6 +3457,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3338,12 +3471,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3387,6 +3514,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3395,12 +3528,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3444,6 +3571,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3452,12 +3585,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3500,6 +3627,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3508,12 +3641,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3556,6 +3683,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3564,12 +3697,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3612,6 +3739,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3620,12 +3753,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3670,6 +3797,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3678,12 +3811,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3723,6 +3850,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3731,12 +3864,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3774,6 +3901,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3782,12 +3915,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3831,6 +3958,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3839,12 +3972,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3890,6 +4017,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3898,12 +4031,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3957,6 +4084,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -3965,12 +4098,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: "Forbidden: authorization decision permission required"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -3993,6 +4120,133 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AuthorizationDecisionResponse"
+  /v1/self-registration/review-cases:
+    get:
+      tags:
+      - Self-Registration Review API
+      summary: List self-registration review cases
+      description: Returns blocked self-registration cases for recovery or identity
+        review.
+      operationId: listCases
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - RESOLVED
+      - name: caseType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACCOUNT_RECOVERY
+          - IDENTITY_REVIEW
+      responses:
+        "404":
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "200":
+          description: Review cases returned successfully
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
+  /v1/self-registration/review-cases/{caseId}:
+    get:
+      tags:
+      - Self-Registration Review API
+      summary: Get a self-registration review case
+      description: Returns the details of a blocked self-registration case.
+      operationId: getCase
+      parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: Review case not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "200":
+          description: Review case returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SelfRegistrationReviewCaseResponse"
   /v1/auth/validate:
     get:
       tags:
@@ -4013,6 +4267,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -4021,12 +4281,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4069,6 +4323,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -4077,12 +4337,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4125,6 +4379,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -4133,12 +4393,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4181,6 +4435,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -4189,12 +4449,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4240,6 +4494,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -4248,12 +4508,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4300,6 +4554,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -4308,12 +4568,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4357,6 +4611,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -4365,12 +4625,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4427,6 +4681,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid endDate
           content:
@@ -4435,12 +4695,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4493,6 +4747,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Invalid endDate
           content:
@@ -4501,12 +4761,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4545,6 +4799,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Bad Request
           content:
@@ -4553,12 +4813,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conflict
           content:
             '*/*':
               schema:
@@ -4599,6 +4853,15 @@ components:
         correlationId:
           type: string
           description: Unique request correlation ID for tracking
+        referenceId:
+          type: string
+          description: "Workflow or review-case reference identifier, when available"
+        nextAction:
+          type: string
+          description: "Recommended next step for the caller, when available"
+        supportAction:
+          type: string
+          description: "Support/admin investigation guidance, when available"
     UserDto:
       type: object
       properties:
@@ -4809,6 +5072,94 @@ components:
           type: array
           items:
             type: string
+    ResolveSelfRegistrationReviewCaseRequest:
+      type: object
+      description: Administrative request to resolve a blocked self-registration case
+      properties:
+        resolutionNotes:
+          type: string
+          description: Resolution note recorded with the case
+          example: Recovered existing disabled account and asked user to sign in.
+      required:
+      - resolutionNotes
+    SelfRegistrationReviewCaseResponse:
+      type: object
+      description: Administrative view of a blocked self-registration case
+      properties:
+        caseId:
+          type: string
+          format: uuid
+          description: Review case identifier
+        caseType:
+          type: string
+          description: Case type
+          enum:
+          - ACCOUNT_RECOVERY
+          - IDENTITY_REVIEW
+        status:
+          type: string
+          description: Case status
+          enum:
+          - OPEN
+          - RESOLVED
+        reasonCode:
+          type: string
+          description: Reason code that created the case
+        reasonMessage:
+          type: string
+          description: Reason message recorded for the case
+        email:
+          type: string
+          description: Submitted email address
+        requestedUsername:
+          type: string
+          description: "Requested username, when available"
+        personId:
+          type: string
+          format: uuid
+          description: "Resolved or created person identifier, when available"
+        linkedUserId:
+          type: string
+          format: uuid
+          description: "Linked or recoverable user identifier, when available"
+        crmCandidateCount:
+          type: integer
+          format: int32
+          description: "CRM candidate count, when available"
+        crmSharedIdentityCandidateCount:
+          type: integer
+          format: int32
+          description: "CRM shared-identity candidate count, when available"
+        crmExactEmailMatch:
+          type: boolean
+          description: "CRM exact email match flag, when available"
+        crmExactPhoneMatch:
+          type: boolean
+          description: "CRM exact phone match flag, when available"
+        crmExactNameMatch:
+          type: boolean
+          description: "CRM exact name match flag, when available"
+        notes:
+          type: string
+          description: Operator notes recorded for the case
+        createdAt:
+          type: string
+          format: date-time
+          description: Case creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Case last-updated timestamp
+        resolvedAt:
+          type: string
+          format: date-time
+          description: "Resolution timestamp, when resolved"
+        resolvedBy:
+          type: string
+          description: "Actor who resolved the case, when resolved"
+        resolutionNotes:
+          type: string
+          description: "Resolution notes, when resolved"
     TokenPairRequest:
       type: object
       description: Request to generate an access token and refresh token pair
@@ -4839,6 +5190,102 @@ components:
           type: string
           description: Long-lived JWT refresh token (7 days expiration)
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+    SelfRegistrationRequest:
+      type: object
+      description: Anonymous self-registration request
+      properties:
+        email:
+          type: string
+          description: Primary email address
+          example: jane.smith@example.com
+        password:
+          type: string
+          description: Password for the new account
+          example: Sup3rS3cret!
+        firstName:
+          type: string
+          description: Given name
+          example: Jane
+        lastName:
+          type: string
+          description: Family name
+          example: Smith
+        phone:
+          type: string
+          description: Optional primary phone number
+          example: +1-555-123-4567
+        username:
+          type: string
+          description: "Optional requested username. If omitted, the email local part\
+            \ is used."
+        idpSubject:
+          type: string
+          description: Optional external identity subject for future federation support
+        idempotencyKey:
+          type: string
+          description: Optional idempotency key used to replay a completed registration
+            attempt without creating duplicate side effects
+      required:
+      - email
+      - firstName
+      - lastName
+      - password
+    CrmMatchSummaryDto:
+      type: object
+      properties:
+        candidateCount:
+          type: integer
+          format: int32
+        anyMatches:
+          type: boolean
+        individualCustomerCandidateCount:
+          type: integer
+          format: int32
+        commercialContactCandidateCount:
+          type: integer
+          format: int32
+        sharedIdentityCandidateCount:
+          type: integer
+          format: int32
+        exactEmailMatch:
+          type: boolean
+        exactPhoneMatch:
+          type: boolean
+        exactNameMatch:
+          type: boolean
+        reviewRequired:
+          type: boolean
+    SelfRegistrationResponse:
+      type: object
+      description: Result of a successful self-registration
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: Created user identifier
+        personId:
+          type: string
+          format: uuid
+          description: Resolved or created person identifier
+        username:
+          type: string
+          description: Canonical username assigned to the account
+        linkStatus:
+          type: string
+          description: User-person link status
+          example: LINKED
+        matchedExistingPerson:
+          type: boolean
+          description: True when an existing person was reused
+        crmMatchSummary:
+          $ref: "#/components/schemas/CrmMatchSummaryDto"
+          description: Summary of CRM person search candidates
+        idempotencyKey:
+          type: string
+          description: Idempotency key echoed back when the caller supplied one
+        issuedTokens:
+          type: boolean
+          description: False for Phase 1 because follow-up login is required
     RefreshTokenRequest:
       type: object
       description: Request to refresh an access token using a refresh token

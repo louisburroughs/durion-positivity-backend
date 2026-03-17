@@ -12,4 +12,6 @@ import java.util.UUID;
 @Repository
 public interface ContactRepository extends JpaRepository<Contact, UUID> {
     List<Contact> findByCommercialParty(CommercialParty commercialParty);
+
+    List<Contact> findByPersonIdAndActiveTrue(UUID personId);
 }

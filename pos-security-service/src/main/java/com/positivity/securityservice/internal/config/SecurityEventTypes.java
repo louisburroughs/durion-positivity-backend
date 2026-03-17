@@ -17,13 +17,15 @@ public final class SecurityEventTypes {
 
         /**
          * All event type registrations for the security module.
-         * Total: 29 event types.
+         * Total: 31 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
                                 // AuthController - 1 event
                                 EventTypeRegistration.write("SECURITY_AUTH_LOGIN",
                                                 "User login via /v1/auth/login").build(),
+                                EventTypeRegistration.write("SECURITY_AUTH_SELF_REGISTER",
+                                                "Register a new self-service user account").build(),
 
                                 // JwtController - 4 events
                                 EventTypeRegistration.write("SECURITY_AUTH_INTERNAL_TOKEN_ISSUE",
@@ -95,6 +97,10 @@ public final class SecurityEventTypes {
                                 EventTypeRegistration.write("SECURITY_USER_EXPIRE_ACCOUNT",
                                                 "Expire a user account").build(),
                                 EventTypeRegistration.write("SECURITY_USER_EXPIRE_CREDENTIALS",
-                                                "Expire user credentials").build());
+                                                "Expire user credentials").build(),
+
+                                // SelfRegistrationReviewController - 1 event
+                                EventTypeRegistration.write("SECURITY_SELF_REGISTRATION_REVIEW_RESOLVE",
+                                                "Resolve a blocked self-registration review case").build());
         }
 }

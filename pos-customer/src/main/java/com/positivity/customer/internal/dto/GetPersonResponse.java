@@ -45,6 +45,15 @@ public class GetPersonResponse {
     @Schema(description = "Contact points (emails, phones)")
     private List<ContactPointDto> contactPoints;
 
+    @Schema(description = "Whether this CRM record represents an individual customer", example = "true")
+    private boolean individualCustomer;
+
+    @Schema(description = "Whether this person is an active contact on one or more commercial accounts", example = "false")
+    private boolean commercialContact;
+
+    @Schema(description = "Number of active commercial accounts where this person is a contact", example = "0")
+    private int commercialAccountCount;
+
     @Schema(description = "Timestamp when the person was created")
     private Instant createdAt;
 

@@ -1,6 +1,6 @@
 ---
 title: "PRD: Self-Registration with User-Person Orchestration"
-status: "PROPOSED"
+status: "IMPLEMENTED"
 capability: "security-self-registration"
 version: "1.0"
 created: "2026-03-16"
@@ -55,6 +55,21 @@ Add a self-registration capability in `pos-security-service` that orchestrates a
 - When a matching person already has a different active user, the API returns a deterministic conflict and does not create a new user.
 - When identity matching is ambiguous, the API does not auto-create a duplicate person; it returns a review-required conflict.
 - The registration flow does not infer elevated roles from employee, contact, or customer status.
+
+## Implementation Status
+
+Current delivery status as of `2026-03-16`:
+
+- Phase 1 in `pos-security-service` is complete and implemented on branch `self-registration-phase-1`.
+- The public endpoint `POST /v1/auth/self-register` is implemented and published in the checked-in OpenAPI contract.
+- Security-side duplicate account checks are implemented before user creation.
+- `pos-people` resolve and link orchestration is implemented, with the current flow relying on the existing resolve operation for person resolution/create behavior.
+- Linked-user conflict blocking is implemented for active and inactive linked users.
+- Successful self-registration requires a follow-up login and does not issue tokens immediately.
+- A dedicated low-privilege role, `SELF_SERVICE_CUSTOMER`, is assigned during self-registration.
+- Focused unit and controller integration tests are in place for the Phase 1 flow.
+- Phase 2 is complete.
+- Phase 3 is complete, including idempotent retries, persisted review cases, and recovery-oriented blocking for inactive linked accounts.
 
 ## User Experience & Functionality
 
@@ -484,6 +499,11 @@ Recommended error codes:
 - `USER_PERSON_LINK_CONFLICT`
 - `CRM_PERSON_CONFLICT`
 
+For blocked self-registration responses, the API should also return:
+
+- `nextAction`: caller-facing remediation guidance
+- `supportAction`: support/admin investigation guidance keyed to the conflict code
+
 ## Security, Audit, and Observability
 
 - Self-registration endpoint must be `permitAll`.
@@ -532,22 +552,32 @@ Recommended emitted events:
 
 ### Phase 1
 
-- Add `POST /v1/auth/self-register`
-- implement security-side duplicate checks
-- integrate with `pos-people` resolve, create, and link APIs
-- block on any detected active-user conflict
+Status: Completed in `pos-security-service` on `2026-03-16`
+
+- [x] Add `POST /v1/auth/self-register`
+- [x] Implement security-side duplicate checks
+- [x] Integrate with `pos-people` resolve and link APIs
+- [x] Use the current people resolve flow for resolve-or-create behavior in this phase
+- [x] Block on any detected active-user conflict
+- [x] Require follow-up login and do not issue tokens on registration success
+- [x] Assign a dedicated low-privilege self-registration role
+- [x] Add focused automated coverage and publish the OpenAPI contract
 
 ### Phase 2
 
-- integrate `pos-customer` lookup for richer duplicate detection
-- add CRM identity summary to person search
-- add support/admin guidance for blocked registration cases
+Status: Completed
+
+- [x] Integrate `pos-customer` lookup into richer duplicate-detection decisioning beyond supplemental match visibility
+- [x] Add CRM identity summary to person search
+- [x] Add support/admin guidance for blocked registration cases
 
 ### Phase 3
 
-- add idempotent retry support
-- add account recovery integration for disabled or legacy linked accounts
-- add explicit review queue for ambiguous human identity matches if needed
+Status: Completed
+
+- [x] Add idempotent retry support
+- [x] Add account recovery integration for disabled or legacy linked accounts
+- [x] Add explicit review queue for ambiguous human identity matches if needed
 
 ## Resolved Decisions
 
