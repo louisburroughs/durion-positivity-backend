@@ -380,6 +380,12 @@ paths:
               $ref: "#/components/schemas/PersonRoleAssignmentRequest"
         required: true
       responses:
+        "201":
+          description: Role assignment created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserRoleDto"
         "400":
           description: Invalid request
           content:
@@ -392,12 +398,6 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "201":
-          description: Role assignment created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UserRoleDto"
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -1436,14 +1436,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
+        "204":
+          description: Role assignment revoked successfully
         "404":
           description: Person or role assignment not found
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "204":
-          description: Role assignment revoked successfully
   /v1/people/users/{userId}/link:
     delete:
       tags:
@@ -1725,6 +1725,24 @@ components:
           format: date-time
       required:
       - roleCode
+    UserRoleDto:
+      type: object
+      properties:
+        userId:
+          type: string
+        roleCode:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        active:
+          type: boolean
     ProblemDetail:
       type: object
       properties:
@@ -1744,24 +1762,6 @@ components:
         properties:
           type: object
           additionalProperties: {}
-    UserRoleDto:
-      type: object
-      properties:
-        userId:
-          type: string
-        roleCode:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
-        active:
-          type: boolean
     BreakDto:
       type: object
       properties:

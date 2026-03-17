@@ -196,6 +196,11 @@ paths:
           application/json: {}
         required: true
       responses:
+        "400":
+          description: Invalid request - missing or empty toolName
+          content:
+            text/plain:
+              example: '''toolName'' is required'
         "200":
           description: Tool execution succeeded
           content:
@@ -212,11 +217,6 @@ paths:
           content:
             text/plain:
               example: "Failed to execute MCP tool: Tool not found"
-        "400":
-          description: Invalid request - missing or empty toolName
-          content:
-            text/plain:
-              example: '''toolName'' is required'
   /v1/llm-apis:
     get:
       tags:
