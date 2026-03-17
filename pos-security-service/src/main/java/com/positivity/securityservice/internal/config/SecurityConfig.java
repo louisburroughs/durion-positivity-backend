@@ -25,6 +25,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
     private static final String V1_AUTH_LOGIN = "/v1/auth/login";
+    private static final String V1_AUTH_SELF_REGISTER = "/v1/auth/self-register";
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
     private final JsonAuthenticationEntryPoint jsonAuthenticationEntryPoint;
@@ -47,7 +48,7 @@ public class SecurityConfig {
                     .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .authorizeHttpRequests(auth -> auth
                             .requestMatchers("/v1/auth/token-pair",
-                                    "/v1/auth/refresh", "/v1/auth/validate", V1_AUTH_LOGIN)
+                                    "/v1/auth/refresh", "/v1/auth/validate", V1_AUTH_LOGIN, V1_AUTH_SELF_REGISTER)
                             .permitAll()
                             .anyRequest().authenticated())
                     .userDetailsService(userDetailsService)
