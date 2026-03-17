@@ -15,6 +15,10 @@
         <!-- Add pos-inquiry-specific dependencies here -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <!-- Spring Boot Logging (includes SLF4J + Logback) -->
@@ -26,6 +30,15 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-reflect</artifactId>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
@@ -51,4 +64,66 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>local</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <jmxPort>9111</jmxPort>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>start-for-openapi</id>
+                                <phase>pre-integration-test</phase>
+                                <goals>
+                                    <goal>start</goal>
+                                </goals>
+                                <configuration>
+                                    <arguments>
+                                        <argument>--server.port=8086</argument>
+                                        <argument>--spring.profiles.active=local</argument>
+                                        <argument>--eureka.client.enabled=false</argument>
+                                        <argument>--spring.boot.admin.client.enabled=false</argument>
+                                        <argument>--logging.level.root=WARN</argument>
+                                    </arguments>
+                                    <wait>8000</wait>
+                                    <maxAttempts>180</maxAttempts>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>stop-after-openapi</id>
+                                <phase>post-integration-test</phase>
+                                <goals>
+                                    <goal>stop</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.springdoc</groupId>
+                        <artifactId>springdoc-openapi-maven-plugin</artifactId>
+                        <version>${springdoc-openapi-maven-plugin.version}</version>
+                        <configuration>
+                            <apiDocsUrl>http://localhost:8086/v3/api-docs.yaml</apiDocsUrl>
+                            <outputFileName>openapi.yaml</outputFileName>
+                            <outputDir>${project.basedir}</outputDir>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>generate-openapi-profile</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>generate</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
