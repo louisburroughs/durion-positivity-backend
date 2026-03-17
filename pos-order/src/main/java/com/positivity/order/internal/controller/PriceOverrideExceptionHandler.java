@@ -1,6 +1,7 @@
 package com.positivity.order.internal.controller;
 
 import com.positivity.order.internal.exception.InvalidPriceOverrideException;
+import com.positivity.order.internal.exception.PriceOverrideIdempotencyConflictException;
 import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -62,6 +63,22 @@ public class PriceOverrideExceptionHandler {
                         ERROR, "ORDER_PRICE_OVERRIDE_INVALID",
                         CODE, "ORDER_PRICE_OVERRIDE_INVALID",
                         STATUS, 422,
+                        CORRELATION_ID, correlationId,
+                        MESSAGE, ex.getMessage()));
+    }
+
+    @ExceptionHandler(PriceOverrideIdempotencyConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleIdempotencyConflict(
+            PriceOverrideIdempotencyConflictException ex,
+            HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(Map.of(
+                        TIMESTAMP, Instant.now(clock).toString(),
+                        ERROR, "ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT",
+                        CODE, "ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT",
+                        STATUS, HttpStatus.CONFLICT.value(),
                         CORRELATION_ID, correlationId,
                         MESSAGE, ex.getMessage()));
     }

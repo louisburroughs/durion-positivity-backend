@@ -7,6 +7,7 @@ import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
+import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
@@ -68,11 +69,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         return paymentIntentRepository.findByIdempotencyKey(request.getIdempotencyKey())
                 .map(paymentIntent -> {
-                    if (paymentIntent.getInvoice() == null || !invoiceId.equals(paymentIntent.getInvoice().getId())) {
-                        throw new PaymentIntentNotFoundException(
-                                "Idempotency key " + request.getIdempotencyKey()
-                                        + " not found under invoice " + invoiceId);
-                    }
+                    validateIdempotentReplayPayload(paymentIntent, invoiceId, request);
                     return toResponse(paymentIntent);
                 })
                 .orElseGet(() -> createAndProcessPaymentIntent(invoiceId, request));
@@ -207,6 +204,26 @@ public class PaymentServiceImpl implements PaymentService {
         if (!SecurityContextHelper.hasAuthority(authority)) {
             throw new AccessDeniedException("Missing authority: " + authority);
         }
+    }
+
+    private void validateIdempotentReplayPayload(
+            @NonNull PaymentIntent paymentIntent,
+            @NonNull UUID invoiceId,
+            @NonNull InitiatePaymentRequest request) {
+        boolean matchesInvoice = paymentIntent.getInvoice() != null && invoiceId.equals(paymentIntent.getInvoice().getId());
+        boolean matchesFlow = paymentIntent.getPaymentFlow() == request.getPaymentFlow();
+        boolean matchesAmount = sameAmount(paymentIntent.getAuthorizedAmount(), request.getAmount());
+        boolean matchesToken = paymentIntent.getPaymentToken() != null
+                && paymentIntent.getPaymentToken().equals(request.getPaymentToken());
+
+        if (!matchesInvoice || !matchesFlow || !matchesAmount || !matchesToken) {
+            throw new PaymentIdempotencyConflictException(
+                    "Idempotency key was already used with a different payment request");
+        }
+    }
+
+    private boolean sameAmount(BigDecimal left, BigDecimal right) {
+        return left != null && right != null && left.compareTo(right) == 0;
     }
 
     @NonNull

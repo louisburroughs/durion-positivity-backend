@@ -11,6 +11,7 @@ import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.event.OrderPriceOverrideApplied;
 import com.positivity.order.internal.exception.InvalidPriceOverrideException;
+import com.positivity.order.internal.exception.PriceOverrideIdempotencyConflictException;
 import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
 import com.positivity.order.internal.repository.ApprovalRecordRepository;
 import com.positivity.order.internal.repository.PriceOverrideRepository;
@@ -175,6 +176,41 @@ class PriceOverrideServiceTest {
         }
 
         @Test
+        void testApplyPriceOverride_WithIdempotencyKeyDifferentPayload_ThrowsConflict() {
+                String idempotencyKey = "idem-key-" + UUID.randomUUID();
+                createOrderWithLine(
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000009"),
+                                BigDecimal.valueOf(100.00));
+
+                ApplyPriceOverrideRequest firstRequest = new ApplyPriceOverrideRequest();
+                firstRequest.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+                firstRequest.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000009").toString());
+                firstRequest.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000011").toString());
+                firstRequest.setOriginalPrice(BigDecimal.valueOf(100.00));
+                firstRequest.setOverridePrice(BigDecimal.valueOf(95.00));
+                firstRequest.setReasonCode("CUSTOMER_LOYALTY");
+                firstRequest.setJustification("Loyal customer discount");
+                firstRequest.setIdempotencyKey(idempotencyKey);
+
+                ApplyPriceOverrideRequest secondRequest = new ApplyPriceOverrideRequest();
+                secondRequest.setOrderId(UUID.fromString("00000000-0000-0000-0000-000000000001").toString());
+                secondRequest.setOrderLineId(UUID.fromString("00000000-0000-0000-0000-000000000009").toString());
+                secondRequest.setProductId(UUID.fromString("00000000-0000-0000-0000-000000000011").toString());
+                secondRequest.setOriginalPrice(BigDecimal.valueOf(100.00));
+                secondRequest.setOverridePrice(BigDecimal.valueOf(94.00));
+                secondRequest.setReasonCode("CUSTOMER_LOYALTY");
+                secondRequest.setJustification("Loyal customer discount");
+                secondRequest.setIdempotencyKey(idempotencyKey);
+
+                priceOverrideService.applyPriceOverride(firstRequest);
+
+                assertThatThrownBy(() -> priceOverrideService.applyPriceOverride(secondRequest))
+                                .isInstanceOf(PriceOverrideIdempotencyConflictException.class)
+                                .hasMessageContaining("Idempotency key was already used");
+        }
+
+        @Test
         void testApplyPriceOverride_OverridePriceGreaterThanOriginal_ThrowsException() {
                 // Given: Override price greater than original
                 ApplyPriceOverrideRequest request = new ApplyPriceOverrideRequest();
@@ -268,10 +304,10 @@ class PriceOverrideServiceTest {
                 assertThat(approvalRecordRepository.findByPriceOverride_OverrideId(override.getOverrideId()))
                                 .hasSize(1)
                                 .first()
-                                .satisfies(record -> {
-                                        assertThat(record.getReviewerUserId()).isEqualTo(managerUserId);
-                                        assertThat(record.getReviewerRole()).isEqualTo("MANAGER");
-                                        assertThat(record.getAction()).isEqualTo("APPROVED");
+                                .satisfies(reccord -> {
+                                        assertThat(reccord.getReviewerUserId()).isEqualTo(managerUserId);
+                                        assertThat(reccord.getReviewerRole()).isEqualTo("MANAGER");
+                                        assertThat(reccord.getAction()).isEqualTo("APPROVED");
                                 });
         }
 
@@ -298,8 +334,8 @@ class PriceOverrideServiceTest {
                 assertThat(approvalRecordRepository.findByPriceOverride_OverrideId(override.getOverrideId()))
                                 .hasSize(1)
                                 .first()
-                                .satisfies(record -> {
-                                        assertThat(record.getAction()).isEqualTo("REJECTED");
+                                .satisfies(reccord -> {
+                                        assertThat(reccord.getAction()).isEqualTo("REJECTED");
                                 });
         }
 

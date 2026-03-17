@@ -50,10 +50,15 @@ Content-Type: application/json
   "productId": "PROD-001",
   "originalPrice": 100.00,
   "overridePrice": 85.00,
+  "idempotencyKey": "override-req-001",
   "reasonCode": "CUSTOMER_LOYALTY",
   "justification": "Long-term customer retention"
 }
 ```
+
+**Idempotency behavior:**
+- Reusing the same `idempotencyKey` with the same payload returns the original result.
+- Reusing the same `idempotencyKey` with a different payload returns HTTP `409 Conflict` with code `ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT`.
 
 **Response (Auto-approved):**
 ```json
