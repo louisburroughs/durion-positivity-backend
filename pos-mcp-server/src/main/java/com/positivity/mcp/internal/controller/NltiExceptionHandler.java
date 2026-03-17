@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +24,9 @@ class NltiExceptionHandler {
             HttpServletRequest request) {
         UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
         List<ApiError.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> new ApiError.FieldError(fe.getField(), fe.getDefaultMessage()))
+                .map(fe -> new ApiError.FieldError(
+                        fe.getField(),
+                        Objects.requireNonNullElse(fe.getDefaultMessage(), "Validation error")))
                 .toList();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
