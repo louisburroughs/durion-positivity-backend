@@ -32,7 +32,7 @@ public record ApiError(
                 example = "550e8400-e29b-41d4-a716-446655440000")
         String correlationId,
 
-        @Schema(description = "Field-level validation errors; present when code is VALIDATION_ERROR")
+        @Schema(description = "Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types")
         List<FieldError> fieldErrors,
 
         @Schema(description = "Workflow or review-case reference identifier, when applicable")

@@ -32,7 +32,7 @@ All Durion backend REST APIs return a consistent `ApiError` JSON object for non-
 | `status`      | `integer`        | ✅ Yes          | HTTP status code mirrored in the body for clients that can't access response headers easily. |
 | `timestamp`   | `string`         | ✅ Yes          | ISO 8601 UTC timestamp when the error occurred (e.g. `2026-03-17T14:30:00.123456789Z`). |
 | `correlationId` | `string`       | ✅ Yes          | UUID identifying this specific request across all services. Include this in bug reports and support tickets. Also present in the `X-Correlation-Id` response header. |
-| `fieldErrors` | `array\|null`    | ❌ Conditional  | Present only when `code` is `VALIDATION_ERROR` or `VALIDATION_FAILED`. Each entry names the offending field and why it failed. Omitted (not `null`) for all other error types. |
+| `fieldErrors` | `array\|null`    | ❌ Conditional  | Present (non-null) when the response contains field-level validation details; typically accompanies validation-related codes such as `VALIDATION_ERROR` or `VALIDATION_FAILED`. Each entry names the offending field and why it failed. Omitted entirely for all other error types. |
 | `referenceId` | `string\|null`   | ❌ Conditional  | Reference to a workflow case, review request, or external audit record. Present for guided error flows such as self-registration review. |
 | `nextAction`  | `string\|null`   | ❌ Conditional  | Recommended action for the caller to resolve the error (e.g. "Sign in with the existing account"). Present alongside `referenceId`. |
 | `supportAction` | `string\|null` | ❌ Conditional  | Investigation guidance for operations or support staff. Not intended for end-user display. |
