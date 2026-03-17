@@ -1,7 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.securityservice.service.RolePermissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -36,7 +36,7 @@ public class PrincipalRoleController {
     @PreAuthorize("hasAuthority('security:role:assign')")
     @Operation(summary = "Assign a role to a principal", description = "Assigns the specified role to the specified principal identifier for RBAC matrix authorization.")
     @ApiResponse(responseCode = "200", description = "Role assigned to principal successfully")
-    @ApiResponse(responseCode = "404", description = "Principal or role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Principal or role not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> assignRoleToPrincipal(
             @Parameter(description = "Principal identifier receiving the role assignment")
             @PathVariable String principalId,

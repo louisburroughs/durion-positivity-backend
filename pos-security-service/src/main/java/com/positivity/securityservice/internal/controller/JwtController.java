@@ -1,7 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.securityservice.internal.dto.InternalTokenRequest;
 import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
@@ -76,9 +76,9 @@ public class JwtController {
             +
             "See BACKEND_CONTRACT_GUIDE.md §Login Endpoint for full specification.")
     @ApiResponse(responseCode = "200", description = "JWT token issued successfully", content = @Content(schema = @Schema(implementation = TokenResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (blank username or empty roles)", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "403", description = "Forbidden: internal admin context required", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request (blank username or empty roles)", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "403", description = "Forbidden: internal admin context required", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SECURITY_AUTH_INTERNAL_TOKEN_ISSUE", apiVersion = "1")
     @PreAuthorize("hasAuthority('security:token:issue_internal')")
     @PostMapping("/internal/token")
@@ -124,8 +124,8 @@ public class JwtController {
             +
             "See BACKEND_CONTRACT_GUIDE.md §Token Pair Endpoint for full specification.")
     @ApiResponse(responseCode = "200", description = "Token pair issued successfully", content = @Content(schema = @Schema(implementation = TokenPairResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (blank username or empty roles)", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request (blank username or empty roles)", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SECURITY_AUTH_TOKEN_PAIR", apiVersion = "1")
     @PreAuthorize("permitAll()")
     @PostMapping("/token-pair")
@@ -176,9 +176,9 @@ public class JwtController {
             "Old tokens are immediately revoked. " +
             "See BACKEND_CONTRACT_GUIDE.md §Refresh Endpoint for full specification.")
     @ApiResponse(responseCode = "200", description = "New token pair issued successfully", content = @Content(schema = @Schema(implementation = TokenPairResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid refresh token", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "409", description = "Concurrency conflict during token revocation", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid refresh token", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "409", description = "Concurrency conflict during token revocation", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SECURITY_AUTH_REFRESH", apiVersion = "1")
     @PreAuthorize("permitAll()")
     @PostMapping("/refresh")

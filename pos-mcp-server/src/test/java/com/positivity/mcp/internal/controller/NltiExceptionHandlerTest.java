@@ -81,7 +81,7 @@ class NltiExceptionHandlerTest {
                 .content(validRequestBody())
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, INBOUND_CORRELATION_ID.toString()))
                 .andExpect(status().is(HttpStatus.TOO_MANY_REQUESTS.value()))
-                .andExpect(jsonPath("$.status").value("ERROR"))
+                .andExpect(jsonPath("$.status").isNumber())
                 .andExpect(jsonPath("$.code").value("RATE_LIMIT_EXCEEDED"))
                 .andExpect(jsonPath("$.correlationId").value(INBOUND_CORRELATION_ID.toString()))
                 .andExpect(result -> assertThat(result.getResponse()
@@ -105,7 +105,7 @@ class NltiExceptionHandlerTest {
                 .content(validRequestBody())
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, "not-a-uuid"))
                 .andExpect(status().is(HttpStatus.TOO_MANY_REQUESTS.value()))
-                .andExpect(jsonPath("$.status").value("ERROR"))
+                .andExpect(jsonPath("$.status").isNumber())
                 .andExpect(jsonPath("$.code").value("RATE_LIMIT_EXCEEDED"))
                 .andExpect(result -> {
                     String responseBody = result.getResponse().getContentAsString();
@@ -128,7 +128,7 @@ class NltiExceptionHandlerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validRequestBody()))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.status").value("ERROR"))
+                .andExpect(jsonPath("$.status").isNumber())
                 .andExpect(jsonPath("$.code").value("SESSION_ACCESS_DENIED"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
@@ -146,7 +146,7 @@ class NltiExceptionHandlerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validRequestBody()))
                 .andExpect(status().is(HttpStatus.NOT_IMPLEMENTED.value()))
-                .andExpect(jsonPath("$.status").value("ERROR"))
+                .andExpect(jsonPath("$.status").isNumber())
                 .andExpect(jsonPath("$.code").value("NOT_IMPLEMENTED"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
@@ -164,7 +164,7 @@ class NltiExceptionHandlerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validRequestBody()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value("ERROR"))
+                .andExpect(jsonPath("$.status").isNumber())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }

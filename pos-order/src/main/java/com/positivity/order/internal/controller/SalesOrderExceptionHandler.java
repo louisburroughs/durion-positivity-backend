@@ -2,12 +2,11 @@ package com.positivity.order.internal.controller;
 
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -22,101 +21,71 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class SalesOrderExceptionHandler {
 
         private static final String X_CORRELATION_ID = "X-Correlation-Id";
-        private static final String TIMESTAMP = "timestamp";
-        private static final String ERROR = "error";
-        private static final String CODE = "code";
-        private static final String STATUS = "status";
-        private static final String CORRELATION_ID = "correlationId";
-        private static final String MESSAGE = "message";
-
         private final Clock clock;
 
         @ExceptionHandler(SalesOrderNotFoundException.class)
-        public ResponseEntity<Map<String, Object>> handleSalesOrderNotFound(
+        public ResponseEntity<ApiError> handleSalesOrderNotFound(
                         SalesOrderNotFoundException ex,
                         HttpServletRequest request) {
                 String correlationId = correlationId(request);
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                                 .header(X_CORRELATION_ID, correlationId)
-                                .body(Map.of(
-                                                TIMESTAMP, Instant.now(clock).toString(),
-                                                ERROR, "ORDER_NOT_FOUND",
-                                                CODE, "ORDER_NOT_FOUND",
-                                                STATUS, HttpStatus.NOT_FOUND.value(),
-                                                CORRELATION_ID, correlationId,
-                                                MESSAGE, ex.getMessage()));
+                                .body(ApiError.of("ORDER_NOT_FOUND", ex.getMessage(),
+                                                HttpStatus.NOT_FOUND.value(), Instant.now(clock).toString(),
+                                                correlationId));
         }
 
         @ExceptionHandler(InvalidSkuException.class)
-        public ResponseEntity<Map<String, Object>> handleInvalidSku(
+        public ResponseEntity<ApiError> handleInvalidSku(
                         InvalidSkuException ex,
                         HttpServletRequest request) {
                 String correlationId = correlationId(request);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                                 .header(X_CORRELATION_ID, correlationId)
-                                .body(Map.of(
-                                                TIMESTAMP, Instant.now(clock).toString(),
-                                                ERROR, "ORDER_INVALID_SKU",
-                                                CODE, "ORDER_INVALID_SKU",
-                                                STATUS, HttpStatus.BAD_REQUEST.value(),
-                                                CORRELATION_ID, correlationId,
-                                                MESSAGE, ex.getMessage()));
+                                .body(ApiError.of("ORDER_INVALID_SKU", ex.getMessage(),
+                                                HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(),
+                                                correlationId));
         }
 
         @ExceptionHandler(IllegalStateException.class)
-        public ResponseEntity<Map<String, Object>> handleUnprocessableRequest(
+        public ResponseEntity<ApiError> handleUnprocessableRequest(
                         IllegalStateException ex,
                         HttpServletRequest request) {
                 String correlationId = correlationId(request);
                 return ResponseEntity.status(422)
                                 .header(X_CORRELATION_ID, correlationId)
-                                .body(Map.of(
-                                                TIMESTAMP, Instant.now(clock).toString(),
-                                                ERROR, "UNPROCESSABLE_REQUEST",
-                                                CODE, "UNPROCESSABLE_REQUEST",
-                                                STATUS, 422,
-                                                CORRELATION_ID, correlationId,
-                                                MESSAGE, ex.getMessage()));
+                                .body(ApiError.of("UNPROCESSABLE_REQUEST", ex.getMessage(),
+                                                422, Instant.now(clock).toString(), correlationId));
         }
 
         @ExceptionHandler(IllegalArgumentException.class)
-        public ResponseEntity<Map<String, Object>> handleIllegalArgument(
+        public ResponseEntity<ApiError> handleIllegalArgument(
                         IllegalArgumentException ex,
                         HttpServletRequest request) {
                 String correlationId = Optional.ofNullable(request.getHeader(X_CORRELATION_ID))
                                 .filter(header -> !header.isBlank())
                                 .orElse(UUIDv7Generator.generate().toString());
                 log.warn("Invalid argument: correlationId={}", correlationId, ex);
-                Map<String, Object> body = new LinkedHashMap<>();
-                body.put(TIMESTAMP, clock.instant().toString());
-                body.put(ERROR, "INVALID_ARGUMENT");
-                body.put(CODE, "ORDER_INVALID_ARGUMENT");
-                body.put(STATUS, HttpStatus.UNPROCESSABLE_CONTENT.value());
-                body.put(CORRELATION_ID, correlationId);
-                body.put(MESSAGE, ex.getMessage());
                 return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                                 .header(X_CORRELATION_ID, correlationId)
-                                .body(body);
+                                .body(ApiError.of("ORDER_INVALID_ARGUMENT", ex.getMessage(),
+                                                HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                                                Instant.now(clock).toString(), correlationId));
         }
 
         @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
-        public ResponseEntity<Map<String, Object>> handleAccessDenied(
+        public ResponseEntity<ApiError> handleAccessDenied(
                         org.springframework.security.access.AccessDeniedException ex,
                         HttpServletRequest request) {
                 String correlationId = Optional.ofNullable(request.getHeader(X_CORRELATION_ID))
                                 .filter(header -> !header.isBlank())
                                 .orElse(UUIDv7Generator.generate().toString());
                 log.warn("Access denied: correlationId={}", correlationId, ex);
-                Map<String, Object> body = new LinkedHashMap<>();
-                body.put(TIMESTAMP, clock.instant().toString());
-                body.put(ERROR, "FORBIDDEN");
-                body.put(CODE, "ORDER_FORBIDDEN");
-                body.put(STATUS, HttpStatus.FORBIDDEN.value());
-                body.put(CORRELATION_ID, correlationId);
-                body.put(MESSAGE, ex.getMessage());
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                                 .header(X_CORRELATION_ID, correlationId)
-                                .body(body);
+                                .body(ApiError.of("ORDER_FORBIDDEN", ex.getMessage(),
+                                                HttpStatus.FORBIDDEN.value(), Instant.now(clock).toString(),
+                                                correlationId));
         }
 
         private static String correlationId(HttpServletRequest request) {

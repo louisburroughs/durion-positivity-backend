@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.inventory.internal.dto.InventoryErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
 import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
 import com.positivity.inventory.service.AllocationReallocationService;
@@ -34,9 +34,9 @@ public class ReallocationController {
             summary = "Reallocate inventory allocations",
             description = "Rebalances existing allocations for a stock item based on priority and available inventory")
     @ApiResponse(responseCode = "200", description = "Reallocation completed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReallocateResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required reallocation authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "422", description = "Reallocation failed business validation", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "403", description = "User lacks required reallocation authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "422", description = "Reallocation failed business validation", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReallocateResponse> reallocate(@Valid @RequestBody ReallocateRequest request) {
         return ResponseEntity.ok(allocationReallocationService.reallocate(request));
     }
