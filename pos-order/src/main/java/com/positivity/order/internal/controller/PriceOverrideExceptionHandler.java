@@ -88,7 +88,7 @@ public class PriceOverrideExceptionHandler {
                 .toList();
         return ResponseEntity.badRequest()
                 .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.withFieldErrors("ORDER_PRICE_OVERRIDE_BAD_REQUEST", "Request validation failed",
+                .body(ApiError.withFieldErrors("VALIDATION_FAILED", "Request validation failed",
                         HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(), correlationId, fieldErrors));
     }
 
