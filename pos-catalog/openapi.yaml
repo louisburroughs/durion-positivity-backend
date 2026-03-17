@@ -8,7 +8,7 @@ info:
     email: louis.burroughs@gmail.com
   version: v1
 servers:
-- url: http://api-gateway.local/api/catalog
+- url: http://api-gateway.local/v1/catalog
   description: API Gateway
 tags:
 - name: UOM Conversion API
@@ -84,18 +84,6 @@ paths:
               $ref: "#/components/schemas/ProductUpdateRequestDto"
         required: true
       responses:
-        "400":
-          description: Validation error
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
-        "409":
-          description: Business conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductDto"
         "200":
           description: Product updated
           content:
@@ -111,6 +99,18 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: Validation error
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
+        "409":
+          description: Business conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductDto"
         "404":
           description: Product not found
           content:
@@ -154,6 +154,18 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+        "409":
+          description: Temporal overlap or optimistic locking conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
         "200":
           description: MSRP updated
           content:
@@ -169,18 +181,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
-        "409":
-          description: Temporal overlap or optimistic locking conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
   /v1/products/{productId}/lifecycle:
     get:
       tags:
@@ -256,6 +256,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductLifecycleResponse"
+        "409":
+          description: Lifecycle business rule conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductLifecycleResponse"
         "200":
           description: Lifecycle state updated successfully
           content:
@@ -271,12 +277,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "409":
-          description: Lifecycle business rule conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ProductLifecycleResponse"
   /v1/products/uom-conversions/{id}:
     get:
       tags:
@@ -717,12 +717,6 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "400":
-          description: Invalid request body
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogDto"
         "200":
           description: Catalog updated successfully
           content:
@@ -738,6 +732,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: Invalid request body
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogDto"
         "404":
           description: Catalog not found
           content:
@@ -995,21 +995,6 @@ paths:
               $ref: "#/components/schemas/CreateMsrpRequestDto"
         required: true
       responses:
-        "201":
-          description: MSRP created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductMsrpDto"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "409":
           description: Temporal overlap conflict
           content:
@@ -1028,6 +1013,21 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ProductMsrpDto"
+        "201":
+          description: MSRP created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductMsrpDto"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/products/uom-conversions:
     get:
       tags:
@@ -1144,6 +1144,18 @@ paths:
               $ref: "#/components/schemas/LocationPriceOverrideCreateRequestDto"
         required: true
       responses:
+        "400":
+          description: Guardrail validation failed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
         "201":
           description: Override created
           content:
@@ -1159,18 +1171,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Guardrail validation failed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/LocationPriceOverrideResponseDto"
   /v1/products/pricing/location-overrides/{overrideId}/reject:
     post:
       tags:
@@ -1400,6 +1400,12 @@ paths:
               $ref: "#/components/schemas/PriceBookRuleCreateRequestDto"
         required: true
       responses:
+        "409":
+          description: Rule conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceBookRuleDto"
         "201":
           description: Price book rule created
           content:
@@ -1415,12 +1421,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "409":
-          description: Rule conflict
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceBookRuleDto"
   /v1/products/price-books/resolve-price:
     post:
       tags:
@@ -1689,12 +1689,6 @@ paths:
         schema:
           default: "##default"
       responses:
-        "404":
-          description: Service not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ServiceDto"
         "200":
           description: Successfully retrieved service
           content:
@@ -1710,6 +1704,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Service not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ServiceDto"
   /v1/products/services/name/{name}:
     get:
       tags:
@@ -1786,12 +1786,6 @@ paths:
         schema:
           default: "##default"
       responses:
-        "400":
-          description: "Invalid request parameter (e.g., non-numeric limit)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CatalogSearchResultDto"
         "200":
           description: Search results
           content:
@@ -1807,6 +1801,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: "Invalid request parameter (e.g., non-numeric limit)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CatalogSearchResultDto"
   /v1/products/pricing/effective-price/{locationId}/{productId}:
     get:
       tags:

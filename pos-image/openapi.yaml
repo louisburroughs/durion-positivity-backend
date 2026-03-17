@@ -10,7 +10,7 @@ tags:
 - name: Image API
   description: Operations related to image retrieval and serving
 paths:
-  /api/images/id/{id}:
+  /v1/images/id/{id}:
     get:
       tags:
       - Image API
@@ -41,7 +41,7 @@ paths:
               schema:
                 type: string
                 format: binary
-  /api/images/filename/{filename}:
+  /v1/images/filename/{filename}:
     get:
       tags:
       - Image API

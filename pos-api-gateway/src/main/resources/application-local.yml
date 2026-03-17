@@ -1,0 +1,5 @@
+security:
+  jwt:
+    # Local/test fallback; override with SECURITY_JWT_SECRET in real environments.
+    # Must be >= 32 bytes for HS256 key material.
+    secret: ${SECURITY_JWT_SECRET:local-dev-jwt-secret-change-me-32-bytes-minimum}
