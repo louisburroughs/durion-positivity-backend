@@ -48,7 +48,8 @@ import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.service.AuditEventService;
 
 /**
- * Unit tests for GlobalExceptionHandler — covers PERM-004, AUTH-003, and AUTH-004 handlers.
+ * Unit tests for GlobalExceptionHandler — covers PERM-004, AUTH-003, and
+ * AUTH-004 handlers.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -376,7 +377,7 @@ class GlobalExceptionHandlerTest {
         void returns403WithNullAuditService() {
             AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
             HttpServletRequest httpReq = mock(HttpServletRequest.class);
-            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
             ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
@@ -392,7 +393,7 @@ class GlobalExceptionHandlerTest {
         void returns403AndEmitsAuditEventWhenServiceAvailable() {
             AuthorizationDeniedException ex = new AuthorizationDeniedException("access denied to resource");
             HttpServletRequest httpReq = mock(HttpServletRequest.class);
-            when(httpReq.getRequestURI()).thenReturn("/api/orders");
+            when(httpReq.getRequestURI()).thenReturn("/v1/orders");
             AuditEventService auditService = mock(AuditEventService.class);
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(auditService);
 
@@ -414,7 +415,7 @@ class GlobalExceptionHandlerTest {
         void returns403WhenAuditEventThrows() {
             AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
             HttpServletRequest httpReq = mock(HttpServletRequest.class);
-            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             AuditEventService auditService = mock(AuditEventService.class);
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(auditService);
             doThrow(new RuntimeException("Audit DB unavailable")).when(auditService).createEvent(any());
@@ -445,7 +446,7 @@ class GlobalExceptionHandlerTest {
             AuthorizationDeniedException ex = mock(AuthorizationDeniedException.class);
             when(ex.getMessage()).thenReturn(null);
             HttpServletRequest httpReq = mock(HttpServletRequest.class);
-            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
             ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
@@ -597,7 +598,7 @@ class GlobalExceptionHandlerTest {
 
             AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
             HttpServletRequest httpReq = mock(HttpServletRequest.class);
-            when(httpReq.getRequestURI()).thenReturn("/api/thing");
+            when(httpReq.getRequestURI()).thenReturn("/v1/thing");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
             ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
@@ -614,7 +615,7 @@ class GlobalExceptionHandlerTest {
 
             AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
             HttpServletRequest httpReq = mock(HttpServletRequest.class);
-            when(httpReq.getRequestURI()).thenReturn("/api/thing");
+            when(httpReq.getRequestURI()).thenReturn("/v1/thing");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
             ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
@@ -641,7 +642,7 @@ class GlobalExceptionHandlerTest {
 
             AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
             HttpServletRequest httpReq = mock(HttpServletRequest.class);
-            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
             ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
@@ -668,7 +669,7 @@ class GlobalExceptionHandlerTest {
 
             AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
             HttpServletRequest httpReq = mock(HttpServletRequest.class);
-            when(httpReq.getRequestURI()).thenReturn("/api/resource");
+            when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             WebRequest req = mock(WebRequest.class);
             when(req.getHeader("X-Correlation-Id")).thenReturn(CORRELATION_ID);
 
@@ -772,4 +773,3 @@ class GlobalExceptionHandlerTest {
         }
     }
 }
-

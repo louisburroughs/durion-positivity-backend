@@ -19,25 +19,25 @@ import java.util.Objects;
  * Client for interacting with the pos-documents service.
  * Provides high-level methods for template registration and document rendering
  * with built-in retry logic and error handling.
+ *
+ * <p>
+ * Example usage:
  * 
- * <p>Example usage:
  * <pre>{@code
  * DocumentServiceClient client = DocumentServiceClient.builder()
- *     .baseUrl("http://pos-documents:8080")
- *     .maxRetries(3)
- *     .build();
- * 
+ *         .baseUrl("http://pos-documents:8080")
+ *         .maxRetries(3)
+ *         .build();
+ *
  * // Register a template
  * client.registerTemplate(TemplateRegistration.htmlTemplate(
- *     "INVOICE_TEMPLATE",
- *     "Customer invoice template",
- *     invoiceHtml
- * ));
- * 
+ *         "INVOICE_TEMPLATE",
+ *         "Customer invoice template",
+ *         invoiceHtml));
+ *
  * // Render a document
  * RenderResponse response = client.renderDocument(
- *     RenderRequest.pdf("INVOICE_TEMPLATE", invoiceData)
- * );
+ *         RenderRequest.pdf("INVOICE_TEMPLATE", invoiceData));
  * }</pre>
  *
  * Issue: ADR-0020
@@ -53,7 +53,7 @@ public class DocumentServiceClient {
      * Create a new document service client.
      *
      * @param restClient configured RestClient for pos-documents
-     * @param retry resilience4j retry configuration
+     * @param retry      resilience4j retry configuration
      */
     public DocumentServiceClient(@NonNull RestClient restClient, @NonNull Retry retry) {
         this.restClient = Objects.requireNonNull(restClient, "restClient cannot be null");
@@ -77,13 +77,13 @@ public class DocumentServiceClient {
             Retry.decorateRunnable(retry, () -> {
                 try {
                     restClient.put()
-                            .uri("/api/documents/templates/{templateId}", registration.getTemplateId())
+                            .uri("/v1/documents/templates/{templateId}", registration.getTemplateId())
                             .contentType(MediaType.APPLICATION_JSON)
                             .body(registration)
                             .retrieve()
                             .toBodilessEntity();
                 } catch (Exception e) {
-                    log.warn("Template registration attempt failed for {}: {}", 
+                    log.warn("Template registration attempt failed for {}: {}",
                             registration.getTemplateId(), e.getMessage());
                     throw e;
                 }
@@ -111,20 +111,20 @@ public class DocumentServiceClient {
         Objects.requireNonNull(request.getTemplateId(), "templateId cannot be null");
         Objects.requireNonNull(request.getFormat(), "format cannot be null");
 
-        log.debug("Rendering document: templateId={}, format={}", 
+        log.debug("Rendering document: templateId={}, format={}",
                 request.getTemplateId(), request.getFormat());
 
         try {
             ResponseEntity<byte[]> response = Retry.decorateSupplier(retry, () -> {
                 try {
                     return restClient.post()
-                            .uri("/api/documents/render")
+                            .uri("/v1/documents/render")
                             .contentType(MediaType.APPLICATION_JSON)
                             .body(request)
                             .retrieve()
                             .toEntity(byte[].class);
                 } catch (Exception e) {
-                    log.warn("Document render attempt failed for template {}: {}", 
+                    log.warn("Document render attempt failed for template {}: {}",
                             request.getTemplateId(), e.getMessage());
                     throw e;
                 }
@@ -134,8 +134,7 @@ public class DocumentServiceClient {
                 throw new DocumentRenderException(
                         "Invalid response from pos-documents service",
                         request.getTemplateId(),
-                        request.getFormat().name()
-                );
+                        request.getFormat().name());
             }
 
             byte[] content = response.getBody();

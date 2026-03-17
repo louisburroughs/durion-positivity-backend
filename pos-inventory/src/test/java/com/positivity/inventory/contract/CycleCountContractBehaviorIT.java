@@ -79,7 +79,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 new SubmitCountBody(task.getTaskId(), "auditor-1", 102));
 
                 mockMvc.perform(withGatewayAuth(
-                                post("/api/inventory/cycleCount/submit")
+                                post("/v1/inventory/cycleCount/submit")
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(body)))
                                 .andExpect(status().isOk())
@@ -123,7 +123,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 new SubmitRecountBody(task.getTaskId(), "auditor-2", 49, "TRIGGER_RECOUNT_SELF"));
 
                 mockMvc.perform(withGatewayAuth(
-                                post("/api/inventory/cycleCount/recount")
+                                post("/v1/inventory/cycleCount/recount")
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(body)))
                                 .andExpect(status().isOk())
@@ -176,7 +176,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 new SubmitRecountBody(task.getTaskId(), "auditor-3", 74, "TRIGGER_RECOUNT_SELF"));
 
                 mockMvc.perform(withGatewayAuth(
-                                post("/api/inventory/cycleCount/recount")
+                                post("/v1/inventory/cycleCount/recount")
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(body)))
                                 .andExpect(status().isForbidden());
@@ -226,7 +226,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 new SubmitRecountBody(task.getTaskId(), "manager-1", 199, "TRIGGER_RECOUNT_ANY"));
 
                 mockMvc.perform(withGatewayAuth(
-                                post("/api/inventory/cycleCount/recount")
+                                post("/v1/inventory/cycleCount/recount")
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(body)))
                                 .andExpect(status().isOk())
@@ -289,7 +289,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 new SubmitRecountBody(task.getTaskId(), "manager-2", 30, "TRIGGER_RECOUNT_ANY"));
 
                 mockMvc.perform(withGatewayAuth(
-                                post("/api/inventory/cycleCount/recount")
+                                post("/v1/inventory/cycleCount/recount")
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(body)))
                                 .andExpect(status().isBadRequest());
@@ -314,7 +314,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 new SubmitCountBody(task.getTaskId(), "auditor-6", -1));
 
                 mockMvc.perform(withGatewayAuth(
-                                post("/api/inventory/cycleCount/submit")
+                                post("/v1/inventory/cycleCount/submit")
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(body)))
                                 .andExpect(status().isBadRequest());
@@ -331,7 +331,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 new SubmitCountBody(randomTaskId, "auditor-7", 50));
 
                 mockMvc.perform(withGatewayAuth(
-                                post("/api/inventory/cycleCount/submit")
+                                post("/v1/inventory/cycleCount/submit")
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(body)))
                                 .andExpect(status().isNotFound());
@@ -353,7 +353,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 mockMvc.perform(withGatewayAuth(
-                                get("/api/inventory/cycleCount/task/{taskId}", task.getTaskId())))
+                                get("/v1/inventory/cycleCount/task/{taskId}", task.getTaskId())))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.taskId").value(task.getTaskId().toString()))
                                 .andExpect(jsonPath("$.itemSku").value("SKU-007"))
@@ -366,7 +366,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("AC-27-9: getTask for non-existent taskId returns 404 Not Found")
         void getTask_unknownTaskId_returns404() throws Exception {
                 mockMvc.perform(withGatewayAuth(
-                                get("/api/inventory/cycleCount/task/{taskId}",
+                                get("/v1/inventory/cycleCount/task/{taskId}",
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                                 .andExpect(status().isNotFound());
         }
@@ -412,7 +412,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                 cycleCountTaskRepository.save(task);
 
                 mockMvc.perform(withGatewayAuth(
-                                get("/api/inventory/cycleCount/task/{taskId}/history", task.getTaskId())))
+                                get("/v1/inventory/cycleCount/task/{taskId}/history", task.getTaskId())))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.length()").value(2))
                                 .andExpect(jsonPath("$[0].recountSequenceNumber").value(0))
@@ -445,7 +445,7 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build());
 
                 mockMvc.perform(withGatewayAuth(
-                                get("/api/inventory/cycleCount/auditor/{auditorId}/tasks", "auditor-target")))
+                                get("/v1/inventory/cycleCount/auditor/{auditorId}/tasks", "auditor-target")))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.length()").value(1))
                                 .andExpect(jsonPath("$[0].auditorId").value("auditor-target"));

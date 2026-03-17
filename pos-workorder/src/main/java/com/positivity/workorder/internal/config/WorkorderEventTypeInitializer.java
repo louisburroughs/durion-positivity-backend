@@ -14,7 +14,7 @@ import org.springframework.web.client.RestClient;
 /**
  * Initializer that registers Workorder module event types with the Event
  * Receiver service at startup.
- * 
+ *
  * Uses upsert semantics for idempotent registration - safe to restart the
  * service without
  * duplicating event types.
@@ -36,7 +36,7 @@ public class WorkorderEventTypeInitializer implements ApplicationRunner {
             @Value("${pos.events.api-secret:}") String apiSecret,
             @Value("${pos-events.registration.enabled:true}") boolean enabled) {
         this.restClient = restClientBuilder
-                .baseUrl(gatewayBaseUrl + "/api/event-receiver/v1/eventTypes/code")
+                .baseUrl(gatewayBaseUrl + "/v1/event-receiver/v1/eventTypes/code")
                 .build();
         this.initializerSupport = new EventTypeInitializerSupport(SERVICE_NAME);
         this.apiSecret = apiSecret;

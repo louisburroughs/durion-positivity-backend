@@ -195,7 +195,7 @@ public class CycleCountServiceImpl implements CycleCountService {
         @Transactional(readOnly = true)
         public List<CountEntryResponse> getCountHistory(UUID taskId) {
                 if (log.isInfoEnabled()) {
-                        log.info("GET /api/inventory/cycle-count/task/{}/history", maskForLog(taskId));
+                        log.info("GET /v1/inventory/cycle-count/task/{}/history", maskForLog(taskId));
                 }
                 return countEntryRepository.findByCycleCountTask_TaskIdOrderByRecountSequenceNumberAsc(taskId)
                                 .stream()
@@ -207,7 +207,7 @@ public class CycleCountServiceImpl implements CycleCountService {
         @Transactional(readOnly = true)
         public List<CycleCountTaskResponse> getTasksByAuditor(String auditorId) {
                 if (log.isInfoEnabled()) {
-                        log.info("GET /api/inventory/cycle-count/auditor/{}/tasks", maskForLog(auditorId));
+                        log.info("GET /v1/inventory/cycle-count/auditor/{}/tasks", maskForLog(auditorId));
                 }
                 return taskRepository.findByAuditorId(auditorId)
                                 .stream()
