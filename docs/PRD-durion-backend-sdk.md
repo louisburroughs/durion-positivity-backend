@@ -6,7 +6,11 @@ Owner: Platform API / SDK
 
 ## Summary
 
-Build a first-party SDK for `durion-positivity-backend` that is generated from the module-level OpenAPI files in this repo, with `openapi.yaml` treated as canonical when both YAML and JSON are present, and shaped by the behavioral rules in the sibling `../durion/domains/*/.business-rules/` workspace.
+Build a first-party SDK as a standalone project outside both `durion` and
+`durion-positivity-backend`. The SDK should be generated from module-level
+OpenAPI files in `durion-positivity-backend`, with `openapi.yaml` treated as
+canonical when both YAML and JSON are present, and shaped by behavioral rules
+in the sibling `../durion/domains/*/.business-rules/` workspace.
 
 The SDK should make the backend feel like one coherent platform instead of 19 loosely related service contracts. It must preserve contract fidelity to OpenAPI while adding domain-aware ergonomics for workflows such as approvals, state transitions, retries, idempotent mutations, and security-sensitive operations.
 
@@ -336,6 +340,11 @@ Current source material shows some drift that should be resolved or explicitly h
 - Runtime security is centralized through `pos-security-service` and `pos-api-gateway`, but the module OpenAPI specs do not yet model that with one clearly shared, reusable security convention across all modules.
 
 ### Product Decisions Still Needed
+
+The SDK must be implemented as a new, standalone project/repository and must
+not live under either the `durion` or `durion-positivity-backend` repository.
+Those repositories are input sources for contracts, ADRs, and domain behavior,
+not the SDK implementation home.
 
 The initial target framework for the SDK is Angular, but the implementation
 should remain framework-agnostic across the broader JavaScript ecosystem. The
