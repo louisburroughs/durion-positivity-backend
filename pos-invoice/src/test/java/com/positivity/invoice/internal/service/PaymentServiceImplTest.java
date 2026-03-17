@@ -34,6 +34,7 @@ import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
+import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
@@ -188,7 +189,7 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void initiatePayment_idempotent_differentInvoice_throwsPaymentIntentNotFound() {
+    void initiatePayment_idempotent_differentInvoice_throwsConflict() {
         withAuthorities("PROCESS_PAYMENT");
         var request = buildRequest(PaymentFlow.SALE_CAPTURE, AMOUNT_BELOW_LIMIT, IDEMPOTENCY_KEY);
         var existing = capturedPaymentIntent();
@@ -197,8 +198,24 @@ class PaymentServiceImplTest {
                 .thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
-                .isInstanceOf(PaymentIntentNotFoundException.class)
-                .hasMessageContaining("not found under invoice");
+            .isInstanceOf(PaymentIdempotencyConflictException.class)
+            .hasMessageContaining("already used with a different payment request");
+
+        verify(gatewayPort, never()).saleCapture(any());
+        verify(gatewayPort, never()).authorize(any());
+        verify(paymentIntentRepository, never()).save(any(PaymentIntent.class));
+    }
+
+    @Test
+    void initiatePayment_idempotent_differentAmount_throwsConflict() {
+        withAuthorities("PROCESS_PAYMENT");
+        var request = buildRequest(PaymentFlow.SALE_CAPTURE, BigDecimal.valueOf(210_00, 2), IDEMPOTENCY_KEY);
+        when(paymentIntentRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
+            .thenReturn(Optional.of(capturedPaymentIntent()));
+
+        assertThatThrownBy(() -> paymentService.initiatePayment(INVOICE_ID, request))
+            .isInstanceOf(PaymentIdempotencyConflictException.class)
+            .hasMessageContaining("already used with a different payment request");
 
         verify(gatewayPort, never()).saleCapture(any());
         verify(gatewayPort, never()).authorize(any());
@@ -489,6 +506,8 @@ class PaymentServiceImplTest {
         intent.setId(PAYMENT_INTENT_ID);
         intent.setInvoice(invoice(INVOICE_ID));
         intent.setIdempotencyKey(IDEMPOTENCY_KEY);
+        intent.setPaymentFlow(PaymentFlow.SALE_CAPTURE);
+        intent.setPaymentToken("tok_test_001");
         intent.setStatus(PaymentIntentStatus.CAPTURED);
         intent.setAuthorizedAmount(AMOUNT_BELOW_LIMIT);
         intent.setCapturedAmount(AMOUNT_BELOW_LIMIT);

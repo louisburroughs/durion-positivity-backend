@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
+import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.shared.id.UUIDv7Generator;
 
@@ -41,6 +42,21 @@ public class PaymentExceptionHandler {
                         TIMESTAMP, Instant.now(clock).toString(),
                         ERROR, "INVALID_PAYMENT_STATE",
                         CODE, "INVALID_PAYMENT_STATE",
+                        STATUS, HttpStatus.CONFLICT.value(),
+                        CORRELATION_ID, correlationId,
+                        MESSAGE, ex.getMessage()));
+    }
+
+    @ExceptionHandler(PaymentIdempotencyConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleIdempotencyConflict(
+            PaymentIdempotencyConflictException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(Map.of(
+                        TIMESTAMP, Instant.now(clock).toString(),
+                        ERROR, "PAYMENT_IDEMPOTENCY_CONFLICT",
+                        CODE, "PAYMENT_IDEMPOTENCY_CONFLICT",
                         STATUS, HttpStatus.CONFLICT.value(),
                         CORRELATION_ID, correlationId,
                         MESSAGE, ex.getMessage()));

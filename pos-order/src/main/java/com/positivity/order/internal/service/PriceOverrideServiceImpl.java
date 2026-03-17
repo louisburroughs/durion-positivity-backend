@@ -8,6 +8,7 @@ import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.event.OrderPriceOverrideApplied;
 import com.positivity.order.internal.exception.InvalidPriceOverrideException;
+import com.positivity.order.internal.exception.PriceOverrideIdempotencyConflictException;
 import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
 import com.positivity.order.internal.repository.ApprovalRecordRepository;
 import com.positivity.order.internal.repository.PriceOverrideRepository;
@@ -25,6 +26,7 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +72,7 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                         Optional<PriceOverride> existing = priceOverrideRepository
                                         .findByIdempotencyKey(request.getIdempotencyKey());
                         if (existing.isPresent()) {
+                                validateIdempotentReplayPayload(existing.get(), request);
                                 log.info("Idempotent replay for key={}, returning existing overrideId={}",
                                                 request.getIdempotencyKey(), existing.get().getOverrideId());
                                 return toResponse(existing.get());
@@ -297,7 +300,8 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 return new PriceOverrideResult(
                                 override.getOverrideId(),
                                 override.getOrder() == null ? null : override.getOrder().getOrderId().toString(),
-                                override.getOrderLine() == null ? null : override.getOrderLine().getOrderLineId().toString(),
+                                override.getOrderLine() == null ? null
+                                                : override.getOrderLine().getOrderLineId().toString(),
                                 override.getProductId().toString(),
                                 override.getOriginalPrice(),
                                 override.getOverridePrice(),
@@ -324,7 +328,8 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 return new PriceOverrideDetail(
                                 override.getOverrideId(),
                                 override.getOrder() == null ? null : override.getOrder().getOrderId().toString(),
-                                override.getOrderLine() == null ? null : override.getOrderLine().getOrderLineId().toString(),
+                                override.getOrderLine() == null ? null
+                                                : override.getOrderLine().getOrderLineId().toString(),
                                 override.getProductId().toString(),
                                 override.getOriginalPrice(),
                                 override.getOverridePrice(),
@@ -387,5 +392,38 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 return originalPrice.subtract(overridePrice)
                                 .divide(originalPrice, 4, java.math.RoundingMode.HALF_UP)
                                 .multiply(BigDecimal.valueOf(100));
+        }
+
+        private void validateIdempotentReplayPayload(
+                        PriceOverride existing,
+                        ApplyPriceOverrideRequest request) {
+                boolean matches = Objects.equals(existing.getOrder().getOrderId().toString(), request.getOrderId())
+                                && Objects.equals(existing.getOrderLine().getOrderLineId().toString(),
+                                                request.getOrderLineId())
+                                && Objects.equals(existing.getProductId().toString(), request.getProductId())
+                                && hasSameAmount(existing.getOriginalPrice(), request.getOriginalPrice())
+                                && hasSameAmount(existing.getOverridePrice(), request.getOverridePrice())
+                                && Objects.equals(existing.getReasonCode().name(), request.getReasonCode())
+                                && hasSameText(existing.getJustification(), request.getJustification());
+
+                if (!matches) {
+                        throw new PriceOverrideIdempotencyConflictException(
+                                        "Idempotency key was already used with a different price override request");
+                }
+        }
+
+        private boolean hasSameAmount(BigDecimal left, BigDecimal right) {
+                return left != null && right != null && left.compareTo(right) == 0;
+        }
+
+        private boolean hasSameText(String left, String right) {
+                return normalizeText(left).equals(normalizeText(right));
+        }
+
+        private String normalizeText(String value) {
+                if (value == null) {
+                        return "";
+                }
+                return value.trim();
         }
 }

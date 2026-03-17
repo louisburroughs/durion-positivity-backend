@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.order.internal.exception.PriceOverrideIdempotencyConflictException;
 import com.positivity.order.internal.security.PriceOverridePermissions;
 import com.positivity.order.service.PriceOverrideService;
 import com.positivity.order.service.model.PriceOverrideDetail;
@@ -101,6 +102,32 @@ class PriceOverrideControllerTest extends BaseContractIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"))
                 .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    @DisplayName("PO-005: POST /v1/orders/price-overrides idempotency conflict returns 409 Conflict")
+    void applyPriceOverride_whenIdempotencyConflict_thenReturns409Conflict() throws Exception {
+        when(priceOverrideService.applyPriceOverride(any()))
+                .thenThrow(new PriceOverrideIdempotencyConflictException("conflict"));
+
+        String body = """
+                {
+                  "orderId": "00000000-0000-0000-0000-000000000001",
+                  "orderLineId": "00000000-0000-0000-0000-000000000009",
+                  "productId": "00000000-0000-0000-0000-000000000011",
+                  "originalPrice": 100.00,
+                  "overridePrice": 90.00,
+                  "reasonCode": "PRICE_MATCH",
+                  "idempotencyKey": "override-req-001"
+                }
+                """;
+
+        mockMvc.perform(withGatewayAuth(post("/v1/orders/price-overrides")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body), PriceOverridePermissions.PRICE_OVERRIDE_APPLY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT"))
+                .andExpect(jsonPath("$.status").value(409));
     }
 
     @Test

@@ -32,6 +32,7 @@ import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
+import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.service.PaymentService;
 
@@ -137,6 +138,20 @@ class PaymentControllerTest {
     void initiatePayment_returns409_whenInvalidPaymentState() throws Exception {
         when(paymentService.initiatePayment(any(), any()))
                 .thenThrow(new InvalidPaymentStateException("invalid state"));
+
+        mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                        """
+                                {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
+                                """))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void initiatePayment_returns409_whenIdempotencyConflict() throws Exception {
+        when(paymentService.initiatePayment(any(), any()))
+                .thenThrow(new PaymentIdempotencyConflictException("idempotency conflict"));
 
         mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments")
                 .contentType(MediaType.APPLICATION_JSON)
