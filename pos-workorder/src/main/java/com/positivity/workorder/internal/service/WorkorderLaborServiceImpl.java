@@ -47,6 +47,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderLaborServiceImpl implements WorkorderLaborService {
+    private static final String LABOR_ENTRY_NOT_FOUND = "Labor entry not found: ";
     private final Clock clock;
         private static final String IDEMPOTENCY_OPERATION_LABOR_START = "labor.start";
         private static final String IDEMPOTENCY_OPERATION_LABOR_STOP = "labor.stop";
@@ -96,7 +97,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
                 log.info("Idempotency key {} already processed, returning existing labor entry {}",
                         idempotencyKey, existingId.get());
                 return laborRepository.findById(existingId.get())
-                        .orElseThrow(() -> new NoSuchElementException("Labor entry not found: " + existingId.get()));
+                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get()));
             }
         }
 
@@ -174,12 +175,12 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
                 log.info("Idempotency key {} already processed, returning existing stopped labor entry {}",
                         idempotencyKey, existingId.get());
                 return laborRepository.findById(existingId.get())
-                        .orElseThrow(() -> new NoSuchElementException("Labor entry not found: " + existingId.get()));
+                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get()));
             }
         }
 
         WorkorderLaborEntry entry = laborRepository.findById(entryId)
-                .orElseThrow(() -> new NoSuchElementException("Labor entry not found: " + entryId));
+                .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + entryId));
 
         if (!entry.isActive()) {
             throw new IllegalStateException("Labor session already stopped");
@@ -237,12 +238,12 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
                 log.info("Idempotency key {} already processed, returning existing adjusted labor entry {}",
                         idempotencyKey, existingId.get());
                 return laborRepository.findById(existingId.get())
-                        .orElseThrow(() -> new NoSuchElementException("Labor entry not found: " + existingId.get()));
+                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get()));
             }
         }
 
         WorkorderLaborEntry entry = laborRepository.findById(entryId)
-                .orElseThrow(() -> new NoSuchElementException("Labor entry not found: " + entryId));
+                .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + entryId));
 
         entry.adjustHours(hours, reason);
         WorkorderLaborEntry saved = laborRepository.save(entry);
