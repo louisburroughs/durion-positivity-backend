@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/documents")
+@RequestMapping("/v1/documents")
 @Tag(name = "Document Render API", description = "Render source content into PDF output")
 public class DocumentRenderController {
 
