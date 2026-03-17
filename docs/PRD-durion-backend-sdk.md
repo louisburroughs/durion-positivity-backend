@@ -18,7 +18,7 @@ The SDK should make the backend feel like one coherent platform instead of 19 lo
 
 Durion currently has:
 
-- 19 service-level OpenAPI specs plus 1 gateway transport spec in this repo.
+- 19 service-level OpenAPI specs, 1 gateway transport spec, and 1 aggregate API reference in this repo.
 - 601 documented operations across the 19 service-level specs.
 - 14 domain business-rules directories in the sibling `../durion/domains` workspace that describe behavior, invariants, permissions, and workflow intent.
 - Cross-cutting ADRs that define security, response codes, service boundaries, internal-only services, and UUID contract expectations.
@@ -40,6 +40,11 @@ Provide a first-party SDK that lets product teams integrate with Durion backend 
 ## Current Repo Snapshot
 
 - `openapi.yaml` exists for 20 modules: 19 service modules plus `pos-api-gateway`.
+- `pos-api-gateway/docs/openapi-aggregate.yaml` now exists as an aggregate API reference artifact for gateway-facing discovery.
+- `pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md` now exists as a platform-wide auth and token usage reference for gateway consumers.
+- `pos-security-service/docs/permissions-aggregate.yaml` now exists as an aggregated permission catalog across service manifests.
+- `pos-shared-dtos/src/main/java/com/positivity/shared/error/ApiError.java` now defines the common backend error envelope used across modules.
+- `docs/ERROR_ENVELOPE.md` now documents the shared error payload shape with examples and field semantics.
 - `openapi.json` also exists for 13 modules; these artifacts are not consistently present across the repo and should be treated as compatibility outputs, not the canonical generation source.
 - The largest current service specs by operation count are:
   - `pos-workorder`: 85
@@ -91,7 +96,8 @@ Provide a first-party SDK that lets product teams integrate with Durion backend 
 - Deliver one first-party SDK package with sub-clients per domain or module.
 - Generate the raw operation layer from OpenAPI.
 - Add a thin handwritten layer for cross-cutting configuration and workflow helpers.
-- Treat the gateway OpenAPI as transport metadata, not as the sole source of individual service operations, because `pos-api-gateway/openapi.yaml` currently documents headers and routes but exposes no operation paths.
+- Use `pos-api-gateway/docs/openapi-aggregate.yaml` as the aggregate API reference and discovery artifact for the SDK pipeline.
+- Keep module-level `pos-*/openapi.yaml` files as the canonical contract inputs for client generation fidelity unless and until the aggregate reference fully materializes every routed operation and schema.
 - Default to public, gateway-safe modules.
 - Support an optional internal profile for internal-only service clients if platform teams need it.
 
@@ -100,6 +106,8 @@ Provide a first-party SDK that lets product teams integrate with Durion backend 
 ### Canonical API Sources
 
 - Prefer `pos-*/openapi.yaml` as the canonical source for generation.
+- Use `pos-api-gateway/docs/openapi-aggregate.yaml` as the unified aggregate API reference for discovery, inventory, and SDK documentation.
+- Use `pos-api-gateway/openapi.yaml` for shared gateway transport metadata such as base server information and common headers where needed.
 - Use `pos-*/openapi.json` only as a compatibility artifact where present; do not require it repo-wide.
 - Notable module sizes by operation count:
   - `pos-workorder`: 85
@@ -128,6 +136,10 @@ Use the contents of `../durion/domains/{domain}/.business-rules/`, especially:
 - `docs/ARCHITECTURE_GUIDE.md`
 - `docs/DEVELOPMENT_GUIDE.md`
 - `docs/OPERATIONS_RUNBOOK.md`
+- `docs/ERROR_ENVELOPE.md`
+- `pos-shared-dtos/src/main/java/com/positivity/shared/error/ApiError.java`
+- `pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md`
+- `pos-security-service/docs/permissions-aggregate.yaml`
 - `../durion/docs/architecture/api/BACKEND_CONTRACT_GLOBAL_STANDARDS.md`
 
 ## ADRs That Should Inform SDK Design
@@ -221,7 +233,7 @@ These helpers must compose raw operations rather than inventing new contract sem
 The SDK must:
 
 - support bearer-token auth aligned with ADR-0011,
-- document permission-sensitive operations when known from business rules,
+- document permission-sensitive operations using canonical permission names from `pos-security-service/docs/permissions-aggregate.yaml` where available,
 - expose auth-related clients from `pos-security-service`,
 - avoid implying that downstream services own identity or role lifecycle.
 
@@ -240,10 +252,14 @@ The SDK should make correlation and idempotency easy to opt into globally and ov
 The SDK must provide a standard error abstraction that preserves:
 
 - HTTP status,
-- backend error body,
+- backend error body aligned with the canonical `ApiError` envelope,
 - correlation ID,
 - field errors when present,
+- machine-readable error code,
+- guided error fields such as `referenceId`, `nextAction`, and `supportAction` when present,
 - raw response access for debugging.
+
+The canonical backend source for this model is `com.positivity.shared.error.ApiError` in `pos-shared-dtos`, with payload examples documented in `docs/ERROR_ENVELOPE.md`.
 
 Status handling should reflect ADR-0017 semantics for `400`, `401`, `403`, `404`, `409`, `422`, and `500`.
 
@@ -279,7 +295,7 @@ The SDK build must generate:
 - Order business rules show approval-driven price override workflows and pending contract gaps for cart creation and cancellation. The SDK needs draft-safe handling and clear experimental markings.
 - Workexec business rules suggest high-value workflow helpers around estimates, approvals, timers, labor, and change requests.
 - Inventory rules define explicit behavioral semantics such as ATP calculation, adjustment approvals, and procure-to-receive lifecycle. These are strong candidates for examples and helper docs.
-- Security rules and ADR-0011 make auth, token lifecycle, role assignment, and permission inspection first-class SDK concerns.
+- Security rules, ADR-0011, `pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md`, and `pos-security-service/docs/permissions-aggregate.yaml` make auth, token lifecycle, role assignment, and permission inspection first-class SDK concerns.
 - Accounting has a large surface area and multiple idempotent and retry-oriented operations; it should be treated as a priority module for contract stability and error modeling.
 
 ## Delivery Plan
@@ -287,7 +303,7 @@ The SDK build must generate:
 ### Phase 1: Contract Foundation
 
 - Define SDK package structure and target language.
-- Build OpenAPI aggregation and generation pipeline.
+- Build OpenAPI aggregation and generation pipeline around `pos-api-gateway/docs/openapi-aggregate.yaml` plus module-level canonical specs.
 - Implement shared transport configuration.
 - Publish raw generated clients for highest-value modules:
   - security
@@ -313,7 +329,7 @@ The SDK build must generate:
 ## Acceptance Criteria
 
 - A consumer can configure the SDK once and call multiple Durion modules through a unified client.
-- Every supported operation is traceable back to an `operationId` in a module OpenAPI file.
+- Every supported operation is traceable back to an `operationId` in a module OpenAPI file and represented through the aggregate API reference where applicable.
 - UUID-typed identifiers are modeled as strong SDK types where the target language supports it.
 - Gateway-level headers and bearer auth can be applied globally.
 - Permission-sensitive and idempotent operations are clearly documented.
@@ -334,10 +350,12 @@ Current source material shows some drift that should be resolved or explicitly h
 
 ### Spec Hygiene
 
-- `pos-api-gateway/openapi.yaml` documents headers and route prefixes but has no concrete `paths`, so it is useful for shared transport metadata but not sufficient as the only input to client generation.
+- `pos-api-gateway/docs/openapi-aggregate.yaml` should be treated as the unified API reference artifact for discovery and documentation. The SDK pipeline should validate that it stays aligned with the module-level canonical specs and should not rely on it as the only source of truth unless it fully materializes the routed contract surface.
+- `pos-api-gateway/openapi.yaml` still serves as the low-level gateway transport metadata source and should remain aligned with the aggregate reference.
+- The shared `ApiError` envelope should be modeled consistently in module OpenAPI specs so the generated SDK can map non-2xx responses to one common error type instead of per-module variants.
 - Idempotency should be standardized in OpenAPI as an explicit `Idempotency-Key` request header. Existing body-field or prose-only semantics should be migrated to the header or documented as temporary exceptions with clear replay/conflict behavior.
 - Correlation tracing should be standardized in OpenAPI as an explicit `X-Correlation-Id` header across all externally callable modules, with response echo behavior documented consistently.
-- Runtime security is centralized through `pos-security-service` and `pos-api-gateway`, but the module OpenAPI specs do not yet model that with one clearly shared, reusable security convention across all modules.
+- Runtime security is centralized through `pos-security-service` and `pos-api-gateway`. The SDK should use `pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md` as the consumer auth reference, while continuing to push the module OpenAPI specs toward one clearly shared, reusable security convention across all modules.
 
 ### Product Decisions Still Needed
 
@@ -365,16 +383,20 @@ overcomplicating abstractions.
 The SDK can be built from the current sources, but these documents would materially improve quality:
 
 - A definitive gateway route inventory mapping public URL prefixes to backend modules and exposure level.
-- A platform-wide auth and token usage guide with concrete request examples for gateway consumers.
-- A single cross-module error envelope reference with real payload examples.
 - A canonical idempotency standard describing which endpoints accept `Idempotency-Key` and the expected replay/conflict semantics.
 - A deprecation and versioning policy for OpenAPI operations and SDK releases.
-- A consumer-facing permission catalog derived from `permissions.yaml` so SDK docs can explain required authorities without scraping code.
 - Example end-to-end workflows for the highest-value domains:
   - quote to order
   - estimate to workorder to invoice
   - purchase order to ASN to receiving
   - login to token refresh to protected call
+
+Existing helpful references now available:
+
+- `docs/ERROR_ENVELOPE.md` for the shared cross-module error envelope and payload examples.
+- `pos-shared-dtos/src/main/java/com/positivity/shared/error/ApiError.java` for the canonical backend error type used by REST APIs.
+- `pos-security-service/docs/AUTH_TOKEN_USAGE_GUIDE.md` for gateway auth, token lifecycle, and header usage patterns.
+- `pos-security-service/docs/permissions-aggregate.yaml` for a consumer-facing permission catalog derived from service manifests.
 
 ## Recommendation
 
