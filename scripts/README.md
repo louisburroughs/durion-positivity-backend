@@ -4,6 +4,42 @@ Utility scripts for managing the project build, versioning, and deployment.
 
 ## Available Scripts
 
+### `generate-openapi.sh` - Per-Module + Aggregate OpenAPI Generation
+
+Generates `openapi.yaml` for every configured module and then creates an aggregate index spec.
+
+**Usage:**
+```bash
+./generate-openapi.sh [options] [module...]
+```
+
+**Examples:**
+
+```bash
+# Generate for all configured modules + aggregate file
+./generate-openapi.sh
+
+# Generate only selected modules + aggregate file
+./generate-openapi.sh pos-api-gateway pos-workorder
+
+# Generate and write aggregate file to a custom location
+./generate-openapi.sh --aggregate-output docs/openapi-aggregate.yaml
+
+# Generate module specs only (skip aggregate)
+./generate-openapi.sh --no-aggregate
+```
+
+**What it does:**
+1. Discovers modules configured to output `openapi.yaml`
+2. Runs Maven generation per module (`verify` by default)
+3. Produces aggregate index spec at `openapi-aggregate.yaml` by default
+    - The aggregate file uses `$ref` pointers to each module's `openapi.yaml`
+    - Duplicate path keys across modules are skipped and listed in `x-duplicate-paths-skipped`
+
+**Notes:**
+- Requires `python3` and `PyYAML` for aggregate generation.
+- Module generation still works if aggregate generation is disabled via `--no-aggregate`.
+
 ### `update-version.sh` - Semantic Version Management
 
 Automated semantic versioning for the multi-module Maven project.
