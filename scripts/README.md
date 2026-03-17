@@ -32,7 +32,7 @@ Generates `openapi.yaml` for every configured module and then creates an aggrega
 **What it does:**
 1. Discovers modules configured to output `openapi.yaml`
 2. Runs Maven generation per module (`verify` by default)
-3. Produces aggregate index spec at `openapi-aggregate.yaml` by default
+3. Produces aggregate index spec at `pos-api-gateway/docs/openapi-aggregate.yaml` by default
     - The aggregate file uses `$ref` pointers to each module's `openapi.yaml`
     - Duplicate path keys across modules are skipped and listed in `x-duplicate-paths-skipped`
 
