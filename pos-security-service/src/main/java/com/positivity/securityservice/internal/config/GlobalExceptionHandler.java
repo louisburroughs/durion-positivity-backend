@@ -27,7 +27,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.context.request.WebRequest;
 
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
-import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
@@ -101,7 +101,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(RoleNotFoundException.class)
         @ResponseStatus(HttpStatus.NOT_FOUND)
-        public ResponseEntity<ErrorResponse> handleRoleNotFoundException(
+        public ResponseEntity<ApiError> handleRoleNotFoundException(
                         RoleNotFoundException ex,
                         WebRequest request) {
 
@@ -128,7 +128,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(UserNotFoundException.class)
         @ResponseStatus(HttpStatus.NOT_FOUND)
-        public ResponseEntity<ErrorResponse> handleUserNotFoundException(
+        public ResponseEntity<ApiError> handleUserNotFoundException(
                         UserNotFoundException ex,
                         WebRequest request) {
 
@@ -155,7 +155,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(RoleAssignmentNotFoundException.class)
         @ResponseStatus(HttpStatus.NOT_FOUND)
-        public ResponseEntity<ErrorResponse> handleRoleAssignmentNotFoundException(
+        public ResponseEntity<ApiError> handleRoleAssignmentNotFoundException(
                         RoleAssignmentNotFoundException ex,
                         WebRequest request) {
 
@@ -182,7 +182,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(PermissionNotFoundException.class)
         @ResponseStatus(HttpStatus.NOT_FOUND)
-        public ResponseEntity<ErrorResponse> handlePermissionNotFoundException(
+        public ResponseEntity<ApiError> handlePermissionNotFoundException(
                         PermissionNotFoundException ex,
                         WebRequest request) {
 
@@ -200,7 +200,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(SelfRegistrationConflictException.class)
         @ResponseStatus(HttpStatus.CONFLICT)
-        public ResponseEntity<ErrorResponse> handleSelfRegistrationConflictException(
+        public ResponseEntity<ApiError> handleSelfRegistrationConflictException(
                         SelfRegistrationConflictException ex,
                         WebRequest request) {
 
@@ -222,7 +222,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(SelfRegistrationReviewCaseNotFoundException.class)
         @ResponseStatus(HttpStatus.NOT_FOUND)
-        public ResponseEntity<ErrorResponse> handleSelfRegistrationReviewCaseNotFoundException(
+        public ResponseEntity<ApiError> handleSelfRegistrationReviewCaseNotFoundException(
                         SelfRegistrationReviewCaseNotFoundException ex,
                         WebRequest request) {
 
@@ -254,7 +254,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(IllegalArgumentException.class)
         @ResponseStatus(HttpStatus.BAD_REQUEST)
-        public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
+        public ResponseEntity<ApiError> handleIllegalArgumentException(
                         IllegalArgumentException ex,
                         WebRequest request) {
 
@@ -278,7 +278,7 @@ public class GlobalExceptionHandler {
                         MissingServletRequestParameterException.class
         })
         @ResponseStatus(HttpStatus.BAD_REQUEST)
-        public ResponseEntity<ErrorResponse> handleBadRequestExceptions(
+        public ResponseEntity<ApiError> handleBadRequestExceptions(
                         Exception ex,
                         WebRequest request) {
                 String correlationId = extractCorrelationId(request);
@@ -295,7 +295,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(AuthorizationDeniedException.class)
         @ResponseStatus(HttpStatus.FORBIDDEN)
-        public ResponseEntity<ErrorResponse> handleAuthorizationDeniedException(
+        public ResponseEntity<ApiError> handleAuthorizationDeniedException(
                         AuthorizationDeniedException ex,
                         WebRequest request,
                         HttpServletRequest httpServletRequest) {
@@ -341,7 +341,7 @@ public class GlobalExceptionHandler {
         }
 
         @ExceptionHandler(IllegalStateException.class)
-        public ResponseEntity<ErrorResponse> handleIllegalStateException(
+        public ResponseEntity<ApiError> handleIllegalStateException(
                         IllegalStateException ex,
                         WebRequest request) {
                 String correlationId = extractCorrelationId(request);
@@ -387,7 +387,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
         @ResponseStatus(HttpStatus.CONFLICT)
-        public ResponseEntity<ErrorResponse> handleOptimisticLockingFailure(
+        public ResponseEntity<ApiError> handleOptimisticLockingFailure(
                         ObjectOptimisticLockingFailureException ex,
                         WebRequest request) {
 
@@ -415,7 +415,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(DuplicateRoleNameException.class)
         @ResponseStatus(HttpStatus.CONFLICT)
-        public ResponseEntity<ErrorResponse> handleDuplicateRoleNameException(
+        public ResponseEntity<ApiError> handleDuplicateRoleNameException(
                         DuplicateRoleNameException ex,
                         WebRequest request) {
 
@@ -444,7 +444,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(InvalidRefreshTokenException.class)
         @ResponseStatus(HttpStatus.UNAUTHORIZED)
-        public ResponseEntity<ErrorResponse> handleInvalidRefreshTokenException(
+        public ResponseEntity<ApiError> handleInvalidRefreshTokenException(
                         InvalidRefreshTokenException ex,
                         WebRequest request) {
                 String correlationId = extractCorrelationId(request);
@@ -461,7 +461,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(LockedException.class)
         @ResponseStatus(HttpStatus.UNAUTHORIZED)
-        public ResponseEntity<ErrorResponse> handleLockedException(
+        public ResponseEntity<ApiError> handleLockedException(
                         LockedException ex,
                         WebRequest request) {
                 String correlationId = extractCorrelationId(request);
@@ -477,7 +477,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(DisabledException.class)
         @ResponseStatus(HttpStatus.UNAUTHORIZED)
-        public ResponseEntity<ErrorResponse> handleDisabledException(
+        public ResponseEntity<ApiError> handleDisabledException(
                         DisabledException ex,
                         WebRequest request) {
                 String correlationId = extractCorrelationId(request);
@@ -493,7 +493,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(AccountExpiredException.class)
         @ResponseStatus(HttpStatus.UNAUTHORIZED)
-        public ResponseEntity<ErrorResponse> handleAccountExpiredException(
+        public ResponseEntity<ApiError> handleAccountExpiredException(
                         AccountExpiredException ex,
                         WebRequest request) {
                 String correlationId = extractCorrelationId(request);
@@ -509,7 +509,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(CredentialsExpiredException.class)
         @ResponseStatus(HttpStatus.UNAUTHORIZED)
-        public ResponseEntity<ErrorResponse> handleCredentialsExpiredException(
+        public ResponseEntity<ApiError> handleCredentialsExpiredException(
                         CredentialsExpiredException ex,
                         WebRequest request) {
                 String correlationId = extractCorrelationId(request);
@@ -525,7 +525,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(BadCredentialsException.class)
         @ResponseStatus(HttpStatus.UNAUTHORIZED)
-        public ResponseEntity<ErrorResponse> handleBadCredentialsException(
+        public ResponseEntity<ApiError> handleBadCredentialsException(
                         BadCredentialsException ex,
                         WebRequest request) {
                 String correlationId = extractCorrelationId(request);
@@ -550,7 +550,7 @@ public class GlobalExceptionHandler {
          */
         @ExceptionHandler(Exception.class)
         @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-        public ResponseEntity<ErrorResponse> handleGenericException(
+        public ResponseEntity<ApiError> handleGenericException(
                         Exception ex,
                         WebRequest request) {
 
@@ -576,11 +576,11 @@ public class GlobalExceptionHandler {
          * @param correlationId request correlation ID for tracking
          * @return error response record
          */
-        private ErrorResponse errorResponse(String code, String message, HttpStatus status, String correlationId) {
+        private ApiError errorResponse(String code, String message, HttpStatus status, String correlationId) {
                 return errorResponse(code, message, status, correlationId, null, null, null);
         }
 
-        private ErrorResponse errorResponse(
+        private ApiError errorResponse(
                         String code,
                         String message,
                         HttpStatus status,
@@ -588,12 +588,13 @@ public class GlobalExceptionHandler {
                         String referenceId,
                         String nextAction,
                         String supportAction) {
-                return new ErrorResponse(
+                return new ApiError(
                                 code,
                                 message,
                                 status.value(),
                                 Instant.now(clock).toString(),
                                 correlationId,
+                                null,
                                 referenceId,
                                 nextAction,
                                 supportAction);

@@ -2,7 +2,7 @@ package com.positivity.securityservice.internal.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
-import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.securityservice.service.AuditEventService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -57,9 +57,9 @@ class JsonAccessDeniedHandler implements AccessDeniedHandler {
                     correlationId, request, accessDeniedException.getMessage());
         }
 
-        ErrorResponse body = new ErrorResponse(
+        ApiError body = new ApiError(
                 "FORBIDDEN", "Access denied",
-                HttpServletResponse.SC_FORBIDDEN, Instant.now(clock).toString(), correlationId, null, null, null);
+                HttpServletResponse.SC_FORBIDDEN, Instant.now(clock).toString(), correlationId, null, null, null, null);
 
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType("application/json;charset=UTF-8");

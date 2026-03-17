@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.inventory.internal.dto.InventoryErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
@@ -40,9 +40,9 @@ public class ReservationController {
             summary = "Create or update a reservation",
             description = "Creates a reservation for a workorder line or updates an existing reservation with the requested quantity")
     @ApiResponse(responseCode = "201", description = "Reservation created or updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReservationResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required reservation authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "422", description = "Business rule validation failed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "403", description = "User lacks required reservation authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "422", description = "Business rule validation failed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReservationResponse> createOrUpdateReservation(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
@@ -60,10 +60,10 @@ public class ReservationController {
             summary = "Promote allocation to hard",
             description = "Promotes an existing allocation to HARD state when ATP is sufficient")
     @ApiResponse(responseCode = "200", description = "Allocation promoted", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReservationResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required reservation authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Allocation or reservation not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "422", description = "Insufficient ATP or business rule validation failed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "403", description = "User lacks required reservation authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "404", description = "Allocation or reservation not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "422", description = "Insufficient ATP or business rule validation failed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReservationResponse> promoteToHard(
             @Parameter(description = "Allocation identifier to promote", required = true)
             @PathVariable UUID allocationId,
@@ -81,8 +81,8 @@ public class ReservationController {
             summary = "Cancel reservation by workorder line",
             description = "Cancels reservation and releases associated allocations for a workorder line")
     @ApiResponse(responseCode = "204", description = "Reservation cancelled")
-    @ApiResponse(responseCode = "403", description = "User lacks required reservation authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Reservation not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+    @ApiResponse(responseCode = "403", description = "User lacks required reservation authority", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "404", description = "Reservation not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> cancelReservation(
             @Parameter(description = "Workorder line identifier", required = true)
             @PathVariable UUID workorderLineId) {

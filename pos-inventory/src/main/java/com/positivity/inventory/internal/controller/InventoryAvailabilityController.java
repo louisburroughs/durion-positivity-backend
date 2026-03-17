@@ -2,7 +2,7 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.AvailabilityView;
-import com.positivity.inventory.internal.dto.InventoryErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.inventory.internal.dto.InventoryAvailabilityResponse;
 import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
@@ -58,10 +58,10 @@ public class InventoryAvailabilityController {
     @Operation(summary = "Query inventory availability by SKU and location", description = "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location. storageLocationId is optional to narrow the scope to a sub-location.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Availability view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AvailabilityView.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Product SKU or location not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Product SKU or location not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     // Issue: CAP-215 Story #36
     public ResponseEntity<AvailabilityView> queryAvailabilityBySku(
@@ -78,10 +78,10 @@ public class InventoryAvailabilityController {
     @Operation(summary = "Query product lead time", description = "Returns dynamic lead-time estimate for a product at a location.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Lead-time view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LeadTimeView.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Lead-time data not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class))),
-            @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "User lacks required read permission", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Lead-time data not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "500", description = "Unexpected server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     public ResponseEntity<LeadTimeView> queryLeadTime(
             @Parameter(description = "Product identifier", required = true) @RequestParam UUID productId,

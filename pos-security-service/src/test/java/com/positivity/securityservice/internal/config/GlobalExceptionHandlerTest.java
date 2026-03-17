@@ -38,7 +38,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.context.request.WebRequest;
 
-import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
@@ -112,7 +112,7 @@ class GlobalExceptionHandlerTest {
         WebRequest request = mock(WebRequest.class);
         when(request.getHeader("X-Correlation-Id")).thenReturn(CORRELATION_ID);
 
-        ResponseEntity<ErrorResponse> response = sut.handleInvalidRefreshTokenException(ex, request);
+        ResponseEntity<ApiError> response = sut.handleInvalidRefreshTokenException(ex, request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody()).isNotNull();
@@ -130,7 +130,7 @@ class GlobalExceptionHandlerTest {
         WebRequest request = mock(WebRequest.class);
         when(request.getHeader("X-Correlation-Id")).thenReturn(null);
 
-        ResponseEntity<ErrorResponse> response = sut.handleInvalidRefreshTokenException(ex, request);
+        ResponseEntity<ApiError> response = sut.handleInvalidRefreshTokenException(ex, request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody()).isNotNull();
@@ -151,7 +151,7 @@ class GlobalExceptionHandlerTest {
         void returns401WithCorrelationIdFromHeader() {
             LockedException ex = new LockedException("Account locked");
 
-            ResponseEntity<ErrorResponse> response = sut.handleLockedException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleLockedException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody()).isNotNull();
@@ -165,7 +165,7 @@ class GlobalExceptionHandlerTest {
         void generatesCorrelationIdWhenHeaderAbsent() {
             LockedException ex = new LockedException("Account locked");
 
-            ResponseEntity<ErrorResponse> response = sut.handleLockedException(ex, requestWithoutHeader());
+            ResponseEntity<ApiError> response = sut.handleLockedException(ex, requestWithoutHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody()).isNotNull();
@@ -178,7 +178,7 @@ class GlobalExceptionHandlerTest {
         void generatesCorrelationIdWhenHeaderIsBlank() {
             LockedException ex = new LockedException("Account locked");
 
-            ResponseEntity<ErrorResponse> response = sut.handleLockedException(ex, requestWithBlankHeader());
+            ResponseEntity<ApiError> response = sut.handleLockedException(ex, requestWithBlankHeader());
 
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().correlationId()).isNotBlank();
@@ -199,7 +199,7 @@ class GlobalExceptionHandlerTest {
         void returns401InvalidCredentials() {
             BadCredentialsException ex = new BadCredentialsException("bad password");
 
-            ResponseEntity<ErrorResponse> response = sut.handleBadCredentialsException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleBadCredentialsException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody()).isNotNull();
@@ -221,7 +221,7 @@ class GlobalExceptionHandlerTest {
         void returns404RoleNotFound() {
             RoleNotFoundException ex = new RoleNotFoundException("Role not found: ADMIN");
 
-            ResponseEntity<ErrorResponse> response = sut.handleRoleNotFoundException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleRoleNotFoundException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(response.getBody()).isNotNull();
@@ -244,7 +244,7 @@ class GlobalExceptionHandlerTest {
         void returns404UserNotFound() {
             UserNotFoundException ex = new UserNotFoundException("User not found");
 
-            ResponseEntity<ErrorResponse> response = sut.handleUserNotFoundException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleUserNotFoundException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(response.getBody()).isNotNull();
@@ -265,7 +265,7 @@ class GlobalExceptionHandlerTest {
         void returns404RoleAssignmentNotFound() {
             RoleAssignmentNotFoundException ex = new RoleAssignmentNotFoundException("Assignment not found");
 
-            ResponseEntity<ErrorResponse> response = sut.handleRoleAssignmentNotFoundException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleRoleAssignmentNotFoundException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(response.getBody()).isNotNull();
@@ -286,7 +286,7 @@ class GlobalExceptionHandlerTest {
         void returns404PermissionNotFound() {
             PermissionNotFoundException ex = new PermissionNotFoundException("Permission not found");
 
-            ResponseEntity<ErrorResponse> response = sut.handlePermissionNotFoundException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handlePermissionNotFoundException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(response.getBody()).isNotNull();
@@ -307,7 +307,7 @@ class GlobalExceptionHandlerTest {
         void returns400WithMessage() {
             IllegalArgumentException ex = new IllegalArgumentException("bad param");
 
-            ResponseEntity<ErrorResponse> response = sut.handleIllegalArgumentException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleIllegalArgumentException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
@@ -320,7 +320,7 @@ class GlobalExceptionHandlerTest {
         void returns400WithDefaultMessageWhenNull() {
             IllegalArgumentException ex = new IllegalArgumentException((String) null);
 
-            ResponseEntity<ErrorResponse> response = sut.handleIllegalArgumentException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleIllegalArgumentException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
@@ -343,7 +343,7 @@ class GlobalExceptionHandlerTest {
             HttpMessageNotReadableException ex = mock(HttpMessageNotReadableException.class);
             when(ex.getMessage()).thenReturn("JSON parse error");
 
-            ResponseEntity<ErrorResponse> response = sut.handleBadRequestExceptions(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleBadRequestExceptions(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
@@ -356,7 +356,7 @@ class GlobalExceptionHandlerTest {
         void returns400ForMissingParameter() {
             MissingServletRequestParameterException ex = new MissingServletRequestParameterException("id", "String");
 
-            ResponseEntity<ErrorResponse> response = sut.handleBadRequestExceptions(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleBadRequestExceptions(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
@@ -380,7 +380,7 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
                     ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -402,7 +402,7 @@ class GlobalExceptionHandlerTest {
             when(auth.getName()).thenReturn("alice");
             SecurityContextHolder.getContext().setAuthentication(auth);
 
-            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
                     ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -420,7 +420,7 @@ class GlobalExceptionHandlerTest {
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(auditService);
             doThrow(new RuntimeException("Audit DB unavailable")).when(auditService).createEvent(any());
 
-            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
                     ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -434,7 +434,7 @@ class GlobalExceptionHandlerTest {
             AuthorizationDeniedException ex = new AuthorizationDeniedException("denied");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
                     ex, requestWithHeader(), null);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -449,7 +449,7 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
                     ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -469,7 +469,7 @@ class GlobalExceptionHandlerTest {
         void returns409ForOverlappingRoleAssignment() {
             IllegalStateException ex = new IllegalStateException("Overlapping role assignment detected");
 
-            ResponseEntity<ErrorResponse> response = sut.handleIllegalStateException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleIllegalStateException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(response.getBody()).isNotNull();
@@ -481,7 +481,7 @@ class GlobalExceptionHandlerTest {
         void returns400ForOtherIllegalState() {
             IllegalStateException ex = new IllegalStateException("Some other invalid state");
 
-            ResponseEntity<ErrorResponse> response = sut.handleIllegalStateException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleIllegalStateException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
@@ -494,7 +494,7 @@ class GlobalExceptionHandlerTest {
         void returns400WithDefaultMessageWhenNull() {
             IllegalStateException ex = new IllegalStateException((String) null);
 
-            ResponseEntity<ErrorResponse> response = sut.handleIllegalStateException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleIllegalStateException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
@@ -517,7 +517,7 @@ class GlobalExceptionHandlerTest {
             ObjectOptimisticLockingFailureException ex = new ObjectOptimisticLockingFailureException(
                     Object.class, "id-123");
 
-            ResponseEntity<ErrorResponse> response = sut.handleOptimisticLockingFailure(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleOptimisticLockingFailure(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(response.getBody()).isNotNull();
@@ -538,7 +538,7 @@ class GlobalExceptionHandlerTest {
         void returns409DuplicateRoleName() {
             DuplicateRoleNameException ex = new DuplicateRoleNameException("Role 'ADMIN' already exists");
 
-            ResponseEntity<ErrorResponse> response = sut.handleDuplicateRoleNameException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleDuplicateRoleNameException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(response.getBody()).isNotNull();
@@ -559,7 +559,7 @@ class GlobalExceptionHandlerTest {
         void returns500InternalServerError() {
             Exception ex = new RuntimeException("unexpected failure");
 
-            ResponseEntity<ErrorResponse> response = sut.handleGenericException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleGenericException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             assertThat(response.getBody()).isNotNull();
@@ -572,7 +572,7 @@ class GlobalExceptionHandlerTest {
         void returns500WithGeneratedCorrelationId() {
             Exception ex = new RuntimeException("unexpected");
 
-            ResponseEntity<ErrorResponse> response = sut.handleGenericException(ex, requestWithoutHeader());
+            ResponseEntity<ApiError> response = sut.handleGenericException(ex, requestWithoutHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             assertThat(response.getBody()).isNotNull();
@@ -601,7 +601,7 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/thing");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
                     ex, requestWithHeader(), httpReq);
 
             // Handler completed successfully — username was resolved from context
@@ -618,7 +618,7 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/thing");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
                     ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -645,7 +645,7 @@ class GlobalExceptionHandlerTest {
             when(httpReq.getRequestURI()).thenReturn("/v1/resource");
             when(auditEventServiceProvider.getIfAvailable()).thenReturn(null);
 
-            ResponseEntity<ErrorResponse> response = sut.handleAuthorizationDeniedException(
+            ResponseEntity<ApiError> response = sut.handleAuthorizationDeniedException(
                     ex, requestWithHeader(), httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -673,7 +673,7 @@ class GlobalExceptionHandlerTest {
             WebRequest req = mock(WebRequest.class);
             when(req.getHeader("X-Correlation-Id")).thenReturn(CORRELATION_ID);
 
-            ResponseEntity<ErrorResponse> response = handlerWithNullProvider.handleAuthorizationDeniedException(
+            ResponseEntity<ApiError> response = handlerWithNullProvider.handleAuthorizationDeniedException(
                     ex, req, httpReq);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -695,7 +695,7 @@ class GlobalExceptionHandlerTest {
         void returns401WithCorrelationIdFromHeader() {
             DisabledException ex = new DisabledException("Account is disabled");
 
-            ResponseEntity<ErrorResponse> response = sut.handleDisabledException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleDisabledException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody().code()).isEqualTo("ACCOUNT_DISABLED");
@@ -707,7 +707,7 @@ class GlobalExceptionHandlerTest {
         void generatesCorrelationIdWhenHeaderAbsent() {
             DisabledException ex = new DisabledException("Account is disabled");
 
-            ResponseEntity<ErrorResponse> response = sut.handleDisabledException(ex, requestWithoutHeader());
+            ResponseEntity<ApiError> response = sut.handleDisabledException(ex, requestWithoutHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody().code()).isEqualTo("ACCOUNT_DISABLED");
@@ -724,7 +724,7 @@ class GlobalExceptionHandlerTest {
         void returns401WithCorrelationIdFromHeader() {
             AccountExpiredException ex = new AccountExpiredException("Account has expired");
 
-            ResponseEntity<ErrorResponse> response = sut.handleAccountExpiredException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleAccountExpiredException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody().code()).isEqualTo("ACCOUNT_EXPIRED");
@@ -736,7 +736,7 @@ class GlobalExceptionHandlerTest {
         void generatesCorrelationIdWhenHeaderAbsent() {
             AccountExpiredException ex = new AccountExpiredException("Account has expired");
 
-            ResponseEntity<ErrorResponse> response = sut.handleAccountExpiredException(ex, requestWithoutHeader());
+            ResponseEntity<ApiError> response = sut.handleAccountExpiredException(ex, requestWithoutHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody().code()).isEqualTo("ACCOUNT_EXPIRED");
@@ -753,7 +753,7 @@ class GlobalExceptionHandlerTest {
         void returns401WithCorrelationIdFromHeader() {
             CredentialsExpiredException ex = new CredentialsExpiredException("Credentials have expired");
 
-            ResponseEntity<ErrorResponse> response = sut.handleCredentialsExpiredException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response = sut.handleCredentialsExpiredException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody().code()).isEqualTo("CREDENTIALS_EXPIRED");
@@ -765,7 +765,7 @@ class GlobalExceptionHandlerTest {
         void generatesCorrelationIdWhenHeaderAbsent() {
             CredentialsExpiredException ex = new CredentialsExpiredException("Credentials have expired");
 
-            ResponseEntity<ErrorResponse> response = sut.handleCredentialsExpiredException(ex, requestWithoutHeader());
+            ResponseEntity<ApiError> response = sut.handleCredentialsExpiredException(ex, requestWithoutHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody().code()).isEqualTo("CREDENTIALS_EXPIRED");
