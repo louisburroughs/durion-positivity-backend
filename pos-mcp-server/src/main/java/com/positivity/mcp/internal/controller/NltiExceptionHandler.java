@@ -23,7 +23,8 @@ class NltiExceptionHandler {
             HttpServletRequest request) {
         UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
         List<ApiError.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> new ApiError.FieldError(fe.getField(), fe.getDefaultMessage()))
+                .map(fe -> new ApiError.FieldError(fe.getField(),
+                        fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid value"))
                 .toList();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
