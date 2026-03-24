@@ -1,0 +1,356 @@
+erDiagram
+	estimate {
+		UUID id
+		VARCHAR estimateNumber
+		UUID locationId
+		UUID vehicleId
+		UUID customerId
+		VARCHAR status
+		VARCHAR currencyUomId
+		UUID taxRegionId
+		VARCHAR createdByUserId
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+		TIMESTAMP approvedAt
+		TIMESTAMP declinedAt
+		TIMESTAMP expiresAt
+		TIMESTAMP submittedAt
+		VARCHAR submittedBy
+		VARCHAR createdById
+		UUID approval_configuration_id
+		UUID appointmentId
+		VARCHAR declineReason
+		UUID approvedBy
+		TEXT signatureData
+		VARCHAR signatureMimeType
+		VARCHAR signerName
+		VARCHAR approvalNotes
+		VARCHAR purchaseOrderNumber
+		DECIMAL subtotal
+		DECIMAL taxAmount
+		DECIMAL total
+		INT version
+		VARCHAR crmPartyId
+		VARCHAR crmVehicleId
+		TEXT crmContactIds
+	}
+	estimate_item {
+		UUID id
+		UUID estimate_id
+		VARCHAR itemType
+		VARCHAR description
+		DECIMAL quantity
+		DECIMAL unitPrice
+		DECIMAL lineTotal
+		VARCHAR taxCode
+		UUID productId
+		UUID serviceId
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+		VARCHAR createdById
+		BOOLEAN deleted
+		VARCHAR approvalStatus
+		TIMESTAMP approvalTimestamp
+		VARCHAR approvalMethodUsed
+		UUID approvalProofId
+		VARCHAR rejectionReason
+		VARCHAR approvalNotes
+	}
+	estimate_snapshot {
+		UUID id
+		UUID estimate_id
+		VARCHAR status
+		TEXT snapshotData
+		TIMESTAMP capturedAt
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+		VARCHAR capturedById
+	}
+	workorder_part {
+		UUID id
+		UUID work_order_service_id
+		UUID work_order_id
+		UUID productEntityId
+		UUID nonInventoryProductEntityId
+		VARCHAR description
+		DECIMAL quantity
+		DECIMAL unitPrice
+		DECIMAL lineTotal
+		VARCHAR taxCode
+		UUID origin_estimate_item_id
+		BOOLEAN isSubstituted
+		VARCHAR priceLockStatus
+		UUID originalProductId
+		BOOLEAN declined
+		VARCHAR status
+		UUID change_request_id
+		BOOLEAN isEmergencySafety
+		VARCHAR photoEvidenceUrl
+		TEXT emergencyNotes
+		BOOLEAN photoNotPossible
+		BOOLEAN customerDenialAcknowledged
+		DECIMAL quantityIssued
+		DECIMAL quantityConsumed
+		DECIMAL quantityReturned
+		TIMESTAMP updatedAt
+		TIMESTAMP createdAt
+	}
+	workorder_part_usage_event {
+		UUID id
+		UUID workorder_part_id
+		UUID workorderId
+		VARCHAR eventType
+		DECIMAL quantity
+		VARCHAR performedBy
+		TIMESTAMP performedAt
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+		TEXT notes
+	}
+	workorder_part_substitution {
+		UUID substitutionId
+		UUID workorder_id
+		UUID workorder_line_item_id
+		UUID originalProductId
+		VARCHAR originalPartNumberSnapshot
+		UUID substituteProductId
+		VARCHAR substitutePartNumberSnapshot
+		VARCHAR selectedBy
+		TIMESTAMP selectedAt
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+		VARCHAR reasonCode
+		TEXT pricingSnapshot
+		VARCHAR status
+	}
+	workorder_part_adjustment_event {
+		UUID id
+		UUID original_part_id
+		UUID workorder_id
+		VARCHAR adjustment_type
+		UUID substituted_with_part_id
+		DECIMAL quantity_adjustment
+		VARCHAR reason
+		VARCHAR performed_by
+		TIMESTAMP performed_at
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+	}
+	workorder_labor_entry {
+		UUID id
+		UUID workorder_id
+		UUID workorder_service_id
+		UUID technicianId
+		TIMESTAMP startTime
+		TIMESTAMP endTime
+		DECIMAL hoursWorked
+		TEXT notes
+		TEXT adjustmentReason
+		VARCHAR createdBy
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+	}
+	work_order_state_transitions {
+		UUID id
+		UUID workorder_id
+		VARCHAR fromStatus
+		VARCHAR toStatus
+		TIMESTAMP transitionedAt
+		TIMESTAMP updatedAt
+		TIMESTAMP createdAt
+		VARCHAR transitionedBy
+		TEXT reason
+		TEXT metadata
+	}
+	work_order_snapshots {
+		UUID id
+		UUID workorder_id
+		VARCHAR status
+		TIMESTAMP capturedAt
+		TIMESTAMP updatedAt
+		TIMESTAMP createdAt
+		VARCHAR capturedBy
+		VARCHAR snapshotType
+		TEXT snapshotData
+		TEXT reason
+	}
+	work_session {
+		UUID workSessionId
+		UUID mechanicId
+		UUID work_order_id
+		UUID workOrderTaskId
+		UUID locationId
+		UUID resourceId
+		TIMESTAMP startAt
+		TIMESTAMP endAt
+		VARCHAR status
+		BOOLEAN locked
+		INT totalDurationSeconds
+		TIMESTAMP approvedAt
+		VARCHAR approvedByUserId
+		TEXT approvalNotes
+		TIMESTAMP lockedAt
+		BOOLEAN overlapOverrideUsed
+		TEXT overrideReason
+		VARCHAR overriddenByUserId
+		TIMESTAMP overrideAt
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+	}
+	break_segment {
+		UUID breakSegmentId
+		UUID work_session_id
+		TIMESTAMP breakStartAt
+		TIMESTAMP breakEndAt
+		VARCHAR breakType
+		TEXT notes
+		TIMESTAMP createdAt
+	}
+	travel_segment {
+		UUID travelSegmentId
+		UUID mobileWorkAssignmentId
+		UUID technicianId
+		VARCHAR segmentType
+		TIMESTAMP startAt
+		TIMESTAMP endAt
+		UUID fromLocationId
+		UUID toLocationId
+		UUID work_order_id
+		INT durationMinutes
+		INT rawMinutes
+		INT bufferedMinutes
+		VARCHAR status
+		VARCHAR createdBy
+		VARCHAR lastModifiedBy
+		TIMESTAMP lastModifiedAt
+		VARCHAR actedByUserId
+		UUID actedForPersonId
+		VARCHAR onBehalfReasonCode
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+	}
+	travel_segment_adjustment {
+		UUID adjustmentId
+		UUID travel_segment_id
+		TIMESTAMP adjustedStartAt
+		TIMESTAMP adjustedEndAt
+		TEXT adjustmentReason
+		VARCHAR adjustedByUserId
+		VARCHAR approvalStatus
+		VARCHAR approvedByUserId
+		TIMESTAMP approvedAt
+		TIMESTAMP createdAt
+	}
+	time_entry {
+		UUID timeEntryId
+		UUID personId
+		UUID work_order_id
+		TIMESTAMP startAt
+		TIMESTAMP endAt
+		VARCHAR status
+		TIMESTAMP submittedAt
+		VARCHAR decisionByUserId
+		TIMESTAMP decisionAtUtc
+		TEXT rejectionReason
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+	}
+	time_entry_adjustment {
+		UUID adjustmentId
+		UUID time_entry_id
+		VARCHAR requestedBy
+		VARCHAR reasonCode
+		TEXT notes
+		TIMESTAMP proposedStartAt
+		TIMESTAMP proposedEndAt
+		INT minutesDelta
+		VARCHAR status
+		VARCHAR approvedBy
+		TIMESTAMP approvedAt
+		TIMESTAMP createdAt
+	}
+	technician_assignment {
+		BIGINT id
+		UUID workorder_id
+		UUID technicianId
+		TIMESTAMP assignedAt
+		TEXT assignedBy
+		TIMESTAMP unassignedAt
+		TEXT reassignmentReason
+		TEXT notes
+		BOOLEAN current
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+	}
+	substitute_link {
+		UUID id
+		UUID productId
+		UUID substitutePartId
+		VARCHAR substituteType
+		BOOLEAN isAutoSuggest
+		INT priority
+		TIMESTAMP effectiveFrom
+		TIMESTAMP effectiveTo
+		BOOLEAN isActive
+		VARCHAR createdBy
+		TIMESTAMP createdAt
+		VARCHAR updatedBy
+		TIMESTAMP updatedAt
+		BIGINT version
+	}
+	substitute_audit {
+		UUID auditId
+		UUID link_id
+		VARCHAR operation
+		TEXT payloadBefore
+		TEXT payloadAfter
+		VARCHAR actorId
+		TIMESTAMP timestamp
+		VARCHAR correlationId
+	}
+	idempotency_keys {
+		UUID id
+		VARCHAR keyValue
+		UUID workorderId
+		UUID changeRequestId
+		UUID laborEntryId
+		UUID partUsageEventId
+		UUID partAdjustmentEventId
+		UUID invoiceId
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+	}
+	audit_events {
+		UUID id
+		VARCHAR entityType
+		UUID entityId
+		VARCHAR eventType
+		TIMESTAMP eventTimestamp
+		TIMESTAMP updatedAt
+		TIMESTAMP createdAt
+		VARCHAR userId
+		TEXT details
+	}
+	approval_record {
+		UUID id
+		UUID change_request_id
+		UUID workorder_id
+		VARCHAR resolutionStatus
+		TIMESTAMP resolvedAt
+		TIMESTAMP updatedAt
+		TIMESTAMP createdAt
+		VARCHAR resolvedBy
+		TEXT exceptionReason
+		TEXT approvalNote
+	}
+
+	estimate ||--|{ estimate_item : "estimate_id"
+	estimate ||--o{ estimate_snapshot : "estimate_id"
+	estimate_item ||--o| workorder_part : "origin_estimate_item_id"
+	workorder_part ||--o{ workorder_part_usage_event : "workorder_part_id"
+	workorder_part ||--o{ workorder_part_substitution : "workorder_line_item_id"
+	workorder_part ||--o{ workorder_part_adjustment_event : "original_part_id"
+	work_session ||--o{ break_segment : "work_session_id"
+	travel_segment ||--o{ travel_segment_adjustment : "travel_segment_id"
+	time_entry ||--o{ time_entry_adjustment : "time_entry_id"
+	substitute_link ||--o{ substitute_audit : "link_id"
