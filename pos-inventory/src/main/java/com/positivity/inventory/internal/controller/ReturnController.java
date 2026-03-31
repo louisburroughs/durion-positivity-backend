@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/inventory/returns")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create')")
 @Tag(name = "Returns", description = "Inventory return-to-stock endpoints")
 public class ReturnController {
 
@@ -31,6 +30,7 @@ public class ReturnController {
 
     @PostMapping
     @EmitEvent(id = "INVENTORY_RETURN_TO_STOCK_CREATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @Operation(
             summary = "Return items to stock",
             description = "Returns issued parts to inventory and records resulting return movement")

@@ -16,11 +16,11 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/v1/inventory/pickingLists")
 @Tag(name = "Picking Lists", description = "Picking list command endpoints")
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:picking:manage')")
 public class PickingListController {
 
     @PostMapping("/{id}/confirm")
     @EmitEvent(id = "INVENTORY_PICKING_LIST_CONFIRM", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
     @Operation(summary = "Confirm picking list", description = "Confirms a picking list and commits consumption. Stub implementation.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Picking list confirmed"),

@@ -29,7 +29,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/inventory/availability")
 @Tag(name = "Inventory Availability", description = "Inventory availability read/write endpoints")
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:approve','inventory:adjustment:create')")
 public class InventoryAvailabilityController {
 
     private final InventoryAvailabilityService availabilityService;
@@ -43,6 +42,7 @@ public class InventoryAvailabilityController {
     }
 
     @GetMapping("/{productId}")
+    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
     @Operation(summary = "Query inventory availability", description = "Returns per-location availability for a product.")
     @ApiResponse(responseCode = "200", description = "Availability returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = LocationAvailabilityDto.class))))
     @ApiResponse(responseCode = "400", description = "Invalid product identifier")
@@ -55,6 +55,7 @@ public class InventoryAvailabilityController {
 
     @GetMapping("/query")
     @EmitEvent(id = "INVENTORY_AVAILABILITY_QUERY", apiVersion = "1")
+    @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
     @Operation(summary = "Query inventory availability by SKU and location", description = "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location. storageLocationId is optional to narrow the scope to a sub-location.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Availability view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AvailabilityView.class))),
@@ -75,6 +76,7 @@ public class InventoryAvailabilityController {
 
     @GetMapping("/lead-time")
     @EmitEvent(id = "INVENTORY_LEAD_TIME_QUERY", apiVersion = "1")
+    @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
     @Operation(summary = "Query product lead time", description = "Returns dynamic lead-time estimate for a product at a location.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Lead-time view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LeadTimeView.class))),
@@ -103,6 +105,7 @@ public class InventoryAvailabilityController {
      */
     @PostMapping("/{productId}")
     @EmitEvent(id = "INVENTORY_AVAILABILITY_UPDATE", apiVersion = "1")
+    @PreAuthorize("hasAnyAuthority('inventory:adjustment:create','inventory:adjustment:approve')")
     @Operation(
             summary = "Update inventory availability",
             description = "Not implemented by design. Availability is derived from ledger events and is read-only via this endpoint. "

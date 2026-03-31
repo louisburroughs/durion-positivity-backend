@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/inventory/consumption")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create')")
 @Tag(name = "Consumption", description = "Workorder parts consumption endpoints")
 public class ConsumptionController {
 
@@ -30,6 +29,7 @@ public class ConsumptionController {
 
     @PostMapping
     @EmitEvent(id = "INVENTORY_WORKORDER_CONSUMPTION_CREATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @Operation(
             summary = "Consume picked items",
             description = "Consumes picked inventory for a workorder and records resulting stock movement")

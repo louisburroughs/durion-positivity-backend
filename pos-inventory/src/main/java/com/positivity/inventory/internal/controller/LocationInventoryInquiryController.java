@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/inventory/locations")
 @Tag(name = "Inventory Locations", description = "Read inventory facts for storage locations")
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:location:write')")
 public class LocationInventoryInquiryController {
 
     private final LocationInventoryInquiryService locationInventoryInquiryService;
@@ -29,6 +28,7 @@ public class LocationInventoryInquiryController {
     }
 
     @GetMapping("/{locationId}/inventory-inquiry")
+    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
     @Operation(summary = "Get location inventory summary", description = "Returns on-hand quantity aggregated for a storage location.")
     @ApiResponse(responseCode = "200", description = "Location inventory returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationInventoryInquiryResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid location identifier")

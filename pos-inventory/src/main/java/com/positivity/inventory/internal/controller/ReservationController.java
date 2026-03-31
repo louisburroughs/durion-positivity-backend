@@ -28,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/inventory/reservations")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create')")
 @Tag(name = "Inventory Reservations", description = "Reserve, promote, and cancel inventory allocations for workorder lines")
 public class ReservationController {
 
@@ -36,6 +35,7 @@ public class ReservationController {
 
     @PostMapping()
     @EmitEvent(id = "INVENTORY_RESERVATION_CREATE_OR_UPDATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @Operation(
             summary = "Create or update a reservation",
             description = "Creates a reservation for a workorder line or updates an existing reservation with the requested quantity")
@@ -56,6 +56,7 @@ public class ReservationController {
 
     @PostMapping("/{allocationId}/promote")
     @EmitEvent(id = "INVENTORY_ALLOCATION_PROMOTE_HARD", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @Operation(
             summary = "Promote allocation to hard",
             description = "Promotes an existing allocation to HARD state when ATP is sufficient")
@@ -77,6 +78,7 @@ public class ReservationController {
 
     @DeleteMapping("/{workorderLineId}")
     @EmitEvent(id = "INVENTORY_RESERVATION_CANCEL", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @Operation(
             summary = "Cancel reservation by workorder line",
             description = "Cancels reservation and releases associated allocations for a workorder line")

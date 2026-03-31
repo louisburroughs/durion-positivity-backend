@@ -46,7 +46,6 @@ import lombok.extern.slf4j.Slf4j;
 @RestController
 @RequestMapping("/v1/inventory/cycleCount")
 @Tag(name = "Cycle Count API", description = "API for cycle count operations and variance tracking")
-@PreAuthorize("hasAuthority('inventory:availability:read')")
 public class CycleCountController {
         private final CycleCountService cycleCountService;
 
@@ -55,6 +54,7 @@ public class CycleCountController {
          */
         @PostMapping("/submit")
         @EmitEvent(id = "INVENTORY_CYCLE_COUNT_SUBMIT", apiVersion = "1")
+        @PreAuthorize("hasAuthority('inventory:cycle_count:complete')")
         @Tag(name = "Cycle Count Operations")
         @Operation(summary = "Submit a count for a cycle count task", description = "Records the actual quantity counted by an auditor. Calculates variance and updates task status.")
         @ApiResponse(responseCode = "200", description = "Count submitted successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CountResponse.class)))
@@ -72,6 +72,7 @@ public class CycleCountController {
          */
         @PostMapping("/recount")
         @EmitEvent(id = "INVENTORY_CYCLE_COUNT_RECOUNT", apiVersion = "1")
+        @PreAuthorize("hasAuthority('inventory:cycle_count:complete')")
         @Tag(name = "Cycle Count Operations")
         @Operation(summary = "Submit a recount for a cycle count task", description = "Records a recount with permission validation and limit enforcement. "
                         +
@@ -90,6 +91,7 @@ public class CycleCountController {
          * Get a cycle count task by ID.
          */
         @GetMapping("/task/{taskId}")
+        @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
         @Tag(name = "Cycle Count Query")
         @Operation(summary = "Get cycle count task details", description = "Retrieves details of a specific cycle count task.")
         @ApiResponse(responseCode = "200", description = "Task retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountTaskResponse.class)))
@@ -104,6 +106,7 @@ public class CycleCountController {
          * Get count history for a task.
          */
         @GetMapping("/task/{taskId}/history")
+        @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
         @Tag(name = "Cycle Count Query")
         @Operation(summary = "Get count history for a task", description = "Retrieves all count entries (original + recounts) for a task, ordered by sequence.")
         @ApiResponse(responseCode = "200", description = "History retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CountEntryResponse.class)))
@@ -117,6 +120,7 @@ public class CycleCountController {
          * Get tasks assigned to an auditor.
          */
         @GetMapping("/auditor/{auditorId}/tasks")
+        @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
         @Tag(name = "Cycle Count Query")
         @Operation(summary = "Get tasks assigned to an auditor", description = "Retrieves all cycle count tasks assigned to a specific auditor.")
         @ApiResponse(responseCode = "200", description = "Tasks retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountTaskResponse.class)))

@@ -25,7 +25,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 @RequestMapping("/v1/inventory/locations")
 @Tag(name = "Inventory Management", description = "Operations related to inventory location management")
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:location:write')")
 public class InventoryLocationDeactivationController {
 
         private final InventoryLocationService service;
@@ -39,6 +38,7 @@ public class InventoryLocationDeactivationController {
          */
         @PostMapping("/{locationId}/deactivate")
         @EmitEvent(id = "INVENTORY_LOCATION_DEACTIVATE", apiVersion = "1")
+        @PreAuthorize("hasAuthority('inventory:location:admin')")
         @Operation(summary = "Deactivate a storage location", description = "Deactivate a storage location with atomic stock transfer to a destination location (Option B). "
                         +
                         "If the location contains active inventory, a destination location must be specified.")
