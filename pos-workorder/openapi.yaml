@@ -3691,7 +3691,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/WorkorderPickListResponse'
         "403":
           description: Forbidden - requires inventory:pick_list:view
         "404":
@@ -3719,7 +3719,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: object
+                  $ref: '#/components/schemas/WorkorderPickTaskResponse'
         "403":
           description: Forbidden - requires inventory:pick_list:view
         "404":
@@ -3765,7 +3765,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ResolveScanResponse'
         "400":
           description: Invalid request
         "403":
@@ -3819,7 +3819,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/WorkorderPickTaskResponse'
         "400":
           description: Invalid request
         "403":
@@ -3863,7 +3863,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/WorkorderPickTaskResponse'
         "403":
           description: Forbidden - requires inventory:pick_list:execute
         "404":
@@ -3891,7 +3891,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: object
+                  $ref: '#/components/schemas/WorkorderPickedItemResponse'
         "403":
           description: Forbidden - requires inventory:pick_list:view
         "404":
@@ -3938,7 +3938,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ConsumePickedItemsResponse'
         "400":
           description: Invalid request or quantity exceeds available
         "403":
@@ -3947,6 +3947,175 @@ paths:
           description: Workorder or pick list not found
 components:
   schemas:
+    ConsumedItemResult:
+      type: object
+      description: Result for a single consumed item
+      properties:
+        pickTaskId:
+          type: string
+          format: uuid
+          description: Pick task ID
+        quantityConsumed:
+          type: integer
+          description: Quantity consumed
+          example: 3
+        status:
+          type: string
+          description: Consumption status
+          example: SUCCESS
+    ConsumePickedItemsResponse:
+      type: object
+      description: Response after consuming picked items into a workorder
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder ID
+        totalItemsConsumed:
+          type: integer
+          description: Total number of items consumed
+          example: 5
+        results:
+          type: array
+          description: Per-item consumption results
+          items:
+            $ref: '#/components/schemas/ConsumedItemResult'
+    ResolveScanResponse:
+      type: object
+      description: Barcode scan resolution response
+      properties:
+        pickTaskId:
+          type: string
+          format: uuid
+          description: Pick task ID matched
+        pickListId:
+          type: string
+          format: uuid
+          description: Pick list ID
+        resolvedSkuId:
+          type: string
+          format: uuid
+          description: Scanned SKU ID
+        resolvedLocationId:
+          type: string
+          format: uuid
+          description: Scanned location ID
+        matched:
+          type: boolean
+          description: True if both SKU and location match the task
+        matchStatus:
+          type: string
+          description: "Match result: MATCHED | LOCATION_MISMATCH | SKU_MISMATCH | NO_MATCH"
+          example: MATCHED
+    WorkorderPickListResponse:
+      type: object
+      description: Pick list response for a workorder
+      properties:
+        pickListId:
+          type: string
+          format: uuid
+          description: Pick list ID
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder ID
+        status:
+          type: string
+          description: Pick list status
+          example: ACTIVE
+        priority:
+          type: integer
+          description: Priority level
+          example: 1
+        dueAt:
+          type: string
+          format: date-time
+          description: Due date/time for pick completion
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    WorkorderPickedItemResponse:
+      type: object
+      description: Picked item response for a workorder
+      properties:
+        pickTaskId:
+          type: string
+          format: uuid
+          description: Pick task ID
+        pickListId:
+          type: string
+          format: uuid
+          description: Pick list ID
+        skuId:
+          type: string
+          format: uuid
+          description: SKU ID of the picked item
+        qtyPicked:
+          type: integer
+          description: Quantity picked
+          example: 5
+        qtyConsumed:
+          type: integer
+          description: Quantity consumed into the workorder
+          example: 0
+        qtyRemaining:
+          type: integer
+          description: Quantity picked but not yet consumed
+          example: 5
+        status:
+          type: string
+          description: Pick task status
+          example: PICKED
+    WorkorderPickTaskResponse:
+      type: object
+      description: Pick task response
+      properties:
+        pickTaskId:
+          type: string
+          format: uuid
+          description: Pick task ID
+        pickListId:
+          type: string
+          format: uuid
+          description: Pick list ID
+        skuId:
+          type: string
+          format: uuid
+          description: SKU to be picked
+        locationId:
+          type: string
+          format: uuid
+          description: Warehouse location ID
+        requiredQty:
+          type: integer
+          description: Quantity required to pick
+          example: 3
+        pickedQty:
+          type: integer
+          description: Quantity already picked
+          example: 2
+        remainingQty:
+          type: integer
+          description: Quantity remaining to pick
+          example: 1
+        status:
+          type: string
+          description: Pick task status
+          example: IN_PROGRESS
+        sortOrder:
+          type: integer
+          description: Display sort order
+          example: 1
+        version:
+          type: integer
+          format: int64
+          description: "Version for optimistic locking (reserved; always 0)"
+          example: 0
     AssignmentHistoryEntry:
       type: object
       default: "##default"

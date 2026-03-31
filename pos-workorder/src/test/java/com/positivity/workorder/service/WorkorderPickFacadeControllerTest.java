@@ -205,7 +205,7 @@ class WorkorderPickFacadeControllerTest {
                 .requiredQty(3)
                 .pickedQty(2)
                 .remainingQty(1)
-                .version(1L)
+                .version(0L)
                 .build();
         when(workorderPickFacadeService.confirmPickLine(
                 eq(WORKORDER_ID), eq(PICK_TASK_ID), eq(PICK_LINE_ID), any()))
@@ -236,7 +236,7 @@ class WorkorderPickFacadeControllerTest {
                 .requiredQty(3)
                 .pickedQty(3)
                 .remainingQty(0)
-                .version(2L)
+                .version(0L)
                 .build();
         when(workorderPickFacadeService.completePickTask(eq(WORKORDER_ID), eq(PICK_TASK_ID), any()))
                 .thenReturn(response);
