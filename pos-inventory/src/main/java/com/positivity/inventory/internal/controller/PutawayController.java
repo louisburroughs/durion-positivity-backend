@@ -29,13 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/inventory/putaway/tasks")
 @RequiredArgsConstructor
 @Tag(name = "Putaway", description = "Putaway task generation and claiming endpoints")
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create')")
 public class PutawayController {
 
         private final PutawayGenerationService putawayGenerationService;
 
         @PostMapping("/generate")
         @EmitEvent(id = "INVENTORY_PUTAWAY_TASK_GENERATE", apiVersion = "1")
+        @PreAuthorize("hasAuthority('inventory:putaway:generate')")
         @Operation(summary = "Generate putaway tasks", description = "Generates putaway tasks for received inventory lines.")
         @ApiResponse(responseCode = "201", description = "Putaway tasks generated", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PutawayTaskResponse.class))))
         @ApiResponse(responseCode = "400", description = "Validation failure")
@@ -46,6 +46,7 @@ public class PutawayController {
         }
 
         @GetMapping
+        @PreAuthorize("hasAuthority('inventory:putaway:view')")
         @Operation(summary = "List available putaway tasks", description = "Returns all currently available putaway tasks.")
         @ApiResponse(responseCode = "200", description = "Available putaway tasks returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PutawayTaskResponse.class))))
         public ResponseEntity<List<PutawayTaskResponse>> getAvailableTasks() {
@@ -54,6 +55,7 @@ public class PutawayController {
 
         @PostMapping("/{taskId}/claim")
         @EmitEvent(id = "INVENTORY_PUTAWAY_TASK_CLAIM", apiVersion = "1")
+        @PreAuthorize("hasAuthority('inventory:putaway:claim')")
         @Operation(summary = "Claim a putaway task", description = "Claims an available putaway task for the current actor.")
         @ApiResponse(responseCode = "200", description = "Putaway task claimed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PutawayTaskResponse.class)))
         @ApiResponse(responseCode = "404", description = "Putaway task not found")

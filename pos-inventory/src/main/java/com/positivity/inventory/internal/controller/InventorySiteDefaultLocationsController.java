@@ -22,10 +22,10 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/inventory/sites")
 @Tag(name = "Inventory Sites", description = "Site inventory configuration endpoints. Inventory Sites represent physical locations that hold inventory.")
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:location:write')")
 public class InventorySiteDefaultLocationsController {
 
     @GetMapping("/{siteId}/defaultLocations")
+    @PreAuthorize("hasAuthority('inventory:location:view')")
     @Operation(summary = "Get site default locations", description = "Returns configured default locations for a site. Stub implementation.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Default locations returned", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = UUID.class)))),
@@ -39,6 +39,7 @@ public class InventorySiteDefaultLocationsController {
 
     @PutMapping("/{siteId}/defaultLocations")
     @EmitEvent(id = "INVENTORY_SITE_DEFAULT_LOCATIONS_UPDATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:location:admin')")
     @Operation(summary = "Replace site default locations", description = "Replaces the configured default locations for a site. Stub implementation.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Default locations replaced"),

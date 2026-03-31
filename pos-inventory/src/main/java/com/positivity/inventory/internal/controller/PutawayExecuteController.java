@@ -25,13 +25,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/inventory/putaway")
 @RequiredArgsConstructor
 @Tag(name = "Putaway Execution", description = "Execute putaway tasks with validation and audit events")
-@PreAuthorize("hasAuthority('inventory:picking:manage')")
 public class PutawayExecuteController {
 
     private final PutawayExecuteService putawayExecuteService;
 
     @PostMapping("/tasks/{taskId}/execute")
     @EmitEvent(id = "INVENTORY_PUTAWAY_EXECUTE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:putaway:execute')")
     @Operation(
             summary = "Execute putaway task",
             description = "Executes a putaway task by moving SKU quantity from source location to destination location.")

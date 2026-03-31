@@ -47,7 +47,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Cycle Count Adjustments", description = "Manage inventory adjustments from cycle counts")
-@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create','inventory:adjustment:approve')")
 public class CycleCountAdjustmentController {
 
     private final CycleCountAdjustmentService adjustmentService;
@@ -67,6 +66,7 @@ public class CycleCountAdjustmentController {
      */
     @PostMapping
     @EmitEvent(id = "INVENTORY_CYCLE_COUNT_ADJUSTMENT_CREATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @Operation(summary = "Create cycle count adjustment", description = "Creates a new adjustment from a cycle count. Automatically evaluates against approval thresholds.")
     @ApiResponse(responseCode = "201", description = "Adjustment created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request or no variance detected")
@@ -90,6 +90,7 @@ public class CycleCountAdjustmentController {
      */
     @PostMapping("/{adjustmentId}/approve")
     @EmitEvent(id = "INVENTORY_CYCLE_COUNT_ADJUSTMENT_APPROVE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
     @Operation(summary = "Approve adjustment", description = "Approves a pending adjustment and posts it to the inventory ledger")
     @ApiResponse(responseCode = "200", description = "Adjustment approved and posted")
     @ApiResponse(responseCode = "400", description = "Adjustment not found or not in approvable state")
@@ -117,6 +118,7 @@ public class CycleCountAdjustmentController {
      */
     @PostMapping("/{adjustmentId}/reject")
     @EmitEvent(id = "INVENTORY_CYCLE_COUNT_ADJUSTMENT_REJECT", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
     @Operation(summary = "Reject adjustment", description = "Rejects a pending adjustment with a reason. No inventory changes are made.")
     @ApiResponse(responseCode = "200", description = "Adjustment rejected")
     @ApiResponse(responseCode = "400", description = "Adjustment not found or not in rejectable state")
@@ -136,6 +138,7 @@ public class CycleCountAdjustmentController {
      * @return the adjustment details
      */
     @GetMapping("/{adjustmentId}")
+    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
     @Operation(summary = "Get adjustment details", description = "Retrieves details of a specific cycle count adjustment")
     @ApiResponse(responseCode = "200", description = "Adjustment found")
     @ApiResponse(responseCode = "404", description = "Adjustment not found")
@@ -152,6 +155,7 @@ public class CycleCountAdjustmentController {
      * @return list of matching adjustments
      */
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
     @Operation(summary = "List adjustments by status", description = "Lists all adjustments matching the specified status")
     @ApiResponse(responseCode = "200", description = "Adjustments retrieved")
     public ResponseEntity<List<AdjustmentResponse>> listAdjustments(
@@ -168,6 +172,7 @@ public class CycleCountAdjustmentController {
      * @return list of adjustments awaiting approval
      */
     @GetMapping("/pending")
+    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
     @Operation(summary = "List pending approvals", description = "Lists all adjustments awaiting approval")
     @ApiResponse(responseCode = "200", description = "Pending adjustments retrieved")
     public ResponseEntity<List<AdjustmentResponse>> listPendingApprovals() {
@@ -182,6 +187,7 @@ public class CycleCountAdjustmentController {
      * @return count of adjustments awaiting approval
      */
     @GetMapping("/pending/count")
+    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
     @Operation(summary = "Count pending approvals", description = "Returns the count of adjustments awaiting approval")
     @ApiResponse(responseCode = "200", description = "Count retrieved")
     public ResponseEntity<Long> countPendingApprovals() {

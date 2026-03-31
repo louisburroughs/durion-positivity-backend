@@ -44,7 +44,63 @@ public class InventoryPermissionRegistry {
      */
     public static final String ADJUSTMENT_VIEW = "inventory:adjustment:view";
 
+    // ==================== MOVEMENT PERMISSIONS ====================
+
+    /**
+     * Record direct stock movements in the inventory ledger.
+     */
+    public static final String STOCK_MOVEMENT_CREATE = "inventory:stock_movement:create";
+
+    // ==================== LOCATION PERMISSIONS ====================
+
+    /**
+     * View location configuration and site default location assignments.
+     */
+    public static final String LOCATION_VIEW = "inventory:location:view";
+
+    /**
+     * Manage location lifecycle and site default location assignments.
+     */
+    public static final String LOCATION_ADMIN = "inventory:location:admin";
+
+    // ==================== PICK LIST PERMISSIONS ====================
+
+    /**
+     * Create pick lists for workorders.
+     */
+    public static final String PICK_LIST_CREATE = "inventory:pick_list:create";
+
+    /**
+     * View pick lists and pick tasks.
+     */
+    public static final String PICK_LIST_VIEW = "inventory:pick_list:view";
+
+    /**
+     * Execute pick list workflow actions such as release, confirm, and cancel.
+     */
+    public static final String PICK_LIST_EXECUTE = "inventory:pick_list:execute";
+
     // ==================== PUTAWAY PERMISSIONS ====================
+
+    /**
+     * Generate putaway tasks from received inventory.
+     */
+    public static final String PUTAWAY_GENERATE = "inventory:putaway:generate";
+
+    /**
+     * View putaway tasks and their assignment status.
+     */
+    public static final String PUTAWAY_VIEW = "inventory:putaway:view";
+
+    /**
+     * Claim a putaway task for execution.
+     */
+    public static final String PUTAWAY_CLAIM = "inventory:putaway:claim";
+
+    /**
+     * Execute a putaway task and move inventory into storage.
+     */
+    public static final String PUTAWAY_EXECUTE = "inventory:putaway:execute";
 
     /**
      * Override location compatibility rules.
@@ -124,6 +180,44 @@ public class InventoryPermissionRegistry {
                         "View adjustment history and details",
                         "LOW"),
 
+                // Stock movement permissions (1)
+                permission(STOCK_MOVEMENT_CREATE,
+                        "Record RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movements directly in the inventory ledger",
+                        "HIGH", "Issue #37"),
+
+                // Location permissions (2)
+                permission(LOCATION_VIEW,
+                        "View storage location configuration and site default location assignments",
+                        "LOW"),
+                permission(LOCATION_ADMIN,
+                        "Manage storage location lifecycle and site default location assignments",
+                        "HIGH"),
+
+                // Pick list permissions (3)
+                permission(PICK_LIST_CREATE,
+                        "Create pick lists for workorders",
+                        "MEDIUM"),
+                permission(PICK_LIST_VIEW,
+                        "View pick lists and pick tasks",
+                        "LOW"),
+                permission(PICK_LIST_EXECUTE,
+                        "Release pick lists, confirm pick tasks, update pick status, and complete picking workflows",
+                        "HIGH"),
+
+                // Putaway permissions (4)
+                permission(PUTAWAY_GENERATE,
+                        "Generate putaway tasks from received inventory",
+                        "MEDIUM"),
+                permission(PUTAWAY_VIEW,
+                        "View putaway tasks and their assignment status",
+                        "LOW"),
+                permission(PUTAWAY_CLAIM,
+                        "Claim a putaway task for execution",
+                        "MEDIUM"),
+                permission(PUTAWAY_EXECUTE,
+                        "Execute a putaway task and move inventory into storage",
+                        "HIGH"),
+
                 // Putaway override permissions (2)
                 permission(PUTAWAY_OVERRIDE_LOCATION_COMPATIBILITY,
                         "Override location compatibility rules when location is not valid for SKU",
@@ -180,6 +274,34 @@ public class InventoryPermissionRegistry {
      */
     public static List<String> adjustmentPermissions() {
         return Arrays.asList(ADJUSTMENT_CREATE, ADJUSTMENT_APPROVE, ADJUSTMENT_VIEW);
+    }
+
+    /**
+     * Stock movement permissions
+     */
+    public static List<String> stockMovementPermissions() {
+        return Arrays.asList(STOCK_MOVEMENT_CREATE);
+    }
+
+    /**
+     * Location permissions
+     */
+    public static List<String> locationPermissions() {
+        return Arrays.asList(LOCATION_VIEW, LOCATION_ADMIN);
+    }
+
+    /**
+     * Pick list permissions
+     */
+    public static List<String> pickListPermissions() {
+        return Arrays.asList(PICK_LIST_CREATE, PICK_LIST_VIEW, PICK_LIST_EXECUTE);
+    }
+
+    /**
+     * Putaway task permissions
+     */
+    public static List<String> putawayTaskPermissions() {
+        return Arrays.asList(PUTAWAY_GENERATE, PUTAWAY_VIEW, PUTAWAY_CLAIM, PUTAWAY_EXECUTE);
     }
 
     /**

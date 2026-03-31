@@ -139,7 +139,7 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
          *
          * <p>
          * GREEN in RED phase: {@code ReturnController} already carries
-         * {@code @PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create')")}.
+         * {@code @PreAuthorize("hasAuthority('inventory:adjustment:create')")}.
          *
          * Issue: #177
          */

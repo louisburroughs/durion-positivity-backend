@@ -30,13 +30,13 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/v1/inventory/cycleCountPlans")
 @RequiredArgsConstructor
 @Tag(name = "Cycle Count Plans", description = "Cycle count plan management endpoints")
-@PreAuthorize("hasAnyAuthority('inventory:adjustment:create','inventory:availability:read')")
 public class CycleCountPlanController {
 
         private final CycleCountPlanService cycleCountPlanService;
 
         @PostMapping
         @EmitEvent(id = "INVENTORY_CYCLE_COUNT_PLAN_CREATE", apiVersion = "1")
+        @PreAuthorize("hasAuthority('inventory:cycle_count:initiate')")
         @Operation(summary = "Create cycle count plan", description = "Creates a cycle count plan and returns its configuration details.")
         @ApiResponse(responseCode = "201", description = "Cycle count plan created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountPlanResponse.class)))
         @ApiResponse(responseCode = "400", description = "Validation failure")
@@ -50,6 +50,7 @@ public class CycleCountPlanController {
         }
 
         @GetMapping("/{planId}")
+        @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
         @Operation(summary = "Get cycle count plan", description = "Returns a cycle count plan by identifier.")
         @ApiResponse(responseCode = "200", description = "Cycle count plan returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountPlanResponse.class)))
         @ApiResponse(responseCode = "404", description = "Cycle count plan not found")

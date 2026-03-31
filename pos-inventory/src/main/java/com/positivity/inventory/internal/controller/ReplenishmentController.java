@@ -27,12 +27,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/inventory/replenishment")
 @RequiredArgsConstructor
 @Tag(name = "Replenishment", description = "Replenishment task and policy endpoints")
-@PreAuthorize("hasAnyAuthority('inventory:stock:view','inventory:stock:adjust','inventory:availability:read','inventory:adjustment:create')")
 public class ReplenishmentController {
 
     private final ReplenishmentService replenishmentService;
 
     @GetMapping("/tasks")
+    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
     @Operation(
             summary = "List replenishment tasks",
             description = "Returns replenishment tasks that should be fulfilled.")
@@ -47,6 +47,7 @@ public class ReplenishmentController {
     }
 
     @GetMapping("/policies")
+    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
     @Operation(
             summary = "List replenishment policies",
             description = "Returns configured replenishment policies.")
@@ -62,6 +63,7 @@ public class ReplenishmentController {
 
     @PostMapping("/policies")
     @EmitEvent(id = "INVENTORY_REPLENISHMENT_POLICY_CREATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @Operation(
             summary = "Create replenishment policy",
             description = "Creates a replenishment policy used to generate replenishment tasks.")
