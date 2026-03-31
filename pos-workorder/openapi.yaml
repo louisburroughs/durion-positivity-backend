@@ -740,21 +740,6 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "200":
-          description: Picked items consumed successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ConsumePickedItemsResponse"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "403":
           description: Forbidden
           content:
@@ -770,8 +755,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Workorder not found
+        "400":
+          description: Invalid request
           content:
             '*/*':
               schema:
@@ -785,8 +770,23 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid request
+        "200":
+          description: Picked items consumed successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ConsumePickedItemsResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: Workorder not found
           content:
             '*/*':
               schema:
@@ -852,21 +852,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "200":
-          description: Scan resolved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ResolveScanResponse"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "400":
           description: Invalid request
           content:
@@ -888,6 +873,21 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "200":
+          description: Scan resolved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ResolveScanResponse"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -949,12 +949,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "200":
-          description: Pick task completed successfully
+        "404":
+          description: Workorder or pick task not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/WorkorderPickTaskResponse"
+                $ref: "#/components/schemas/ApiError"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -964,12 +964,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Workorder or pick task not found
+        "200":
+          description: Pick task completed successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: "#/components/schemas/WorkorderPickTaskResponse"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -1023,6 +1023,36 @@ paths:
                 default: "##default"
         required: true
       responses:
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "404":
           description: "Workorder, pick task, or pick line not found"
           content:
@@ -1053,38 +1083,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "422":
           description: Scan mismatch or domain validation error from pos-inventory
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
-        "400":
-          description: Invalid request
           content:
             '*/*':
               schema:
@@ -1288,6 +1288,18 @@ paths:
                   notes: Returned to stock
         required: true
       responses:
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Unused quantity returned successfully
           content:
@@ -1303,18 +1315,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: "Invalid request (exceeds available quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
   /v1/workorders/{workorderId}/parts/issue:
     post:
       tags:
@@ -1358,21 +1358,6 @@ paths:
                   quantity: 2
         required: true
       responses:
-        "201":
-          description: Parts issued successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "409":
           description: Idempotency conflict (duplicate key)
           content:
@@ -1391,6 +1376,21 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "201":
+          description: Parts issued successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
   /v1/workorders/{workorderId}/parts/correct:
     post:
       tags:
@@ -1511,12 +1511,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts consumption recorded successfully
           content:
@@ -1532,6 +1526,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/operationalContext/override:
     post:
       tags:
@@ -2906,11 +2906,6 @@ paths:
           content:
             '*/*':
               schema: {}
-        "409":
-          description: Conflict while stopping timers
-          content:
-            '*/*':
-              schema: {}
         "200":
           description: Timers stopped successfully
           content:
@@ -2926,6 +2921,11 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Conflict while stopping timers
+          content:
+            '*/*':
+              schema: {}
   /v1/workexec/time-entries/timer/start:
     post:
       tags:
@@ -2963,8 +2963,8 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Timer started successfully
+        "200":
+          description: Idempotent replay returned existing timer
           content:
             '*/*':
               schema:
@@ -2983,8 +2983,8 @@ paths:
           content:
             '*/*':
               schema: {}
-        "200":
-          description: Idempotent replay returned existing timer
+        "201":
+          description: Timer started successfully
           content:
             '*/*':
               schema:
@@ -3450,12 +3450,12 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
-          description: Pick list retrieved successfully
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/WorkorderPickListResponse"
+                $ref: "#/components/schemas/ApiError"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -3465,12 +3465,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "403":
-          description: Forbidden
+        "200":
+          description: Pick list retrieved successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: "#/components/schemas/WorkorderPickListResponse"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -3510,6 +3510,25 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Pick tasks retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                contains:
+                  default: "##default"
+                items:
+                  $ref: "#/components/schemas/WorkorderPickTaskResponse"
+                  additionalProperties:
+                    default: "##default"
+                  contains:
+                    default: "##default"
+                  default: "##default"
+                  unevaluatedItems:
+                    default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "403":
           description: Forbidden
           content:
@@ -3538,25 +3557,6 @@ paths:
                 default: "##default"
                 items:
                   default: "##default"
-                unevaluatedItems:
-                  default: "##default"
-        "200":
-          description: Pick tasks retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: array
-                contains:
-                  default: "##default"
-                items:
-                  $ref: "#/components/schemas/WorkorderPickTaskResponse"
-                  additionalProperties:
-                    default: "##default"
-                  contains:
-                    default: "##default"
-                  default: "##default"
-                  unevaluatedItems:
-                    default: "##default"
                 unevaluatedItems:
                   default: "##default"
   /v1/workorders/{workorderId}/parts/usageHistory:
@@ -3857,14 +3857,6 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "200":
-          description: PDF generated successfully
-          content:
-            application/pdf:
-              schema:
-                additionalProperties:
-                  default: "##default"
-                default: "##default"
         "404":
           description: Estimate not found
           content:
@@ -3879,6 +3871,14 @@ paths:
               schema:
                 type: string
                 format: byte
+        "200":
+          description: PDF generated successfully
+          content:
+            application/pdf:
+              schema:
+                additionalProperties:
+                  default: "##default"
+                default: "##default"
   /v1/workorders/estimates/shop/{locationId}:
     get:
       tags:
@@ -4059,6 +4059,11 @@ paths:
       description: Retrieve active timer entries for the authenticated mechanic
       operationId: getActiveTimerEntries
       responses:
+        "400":
+          description: Missing or invalid authenticated user id
+          content:
+            '*/*':
+              schema: {}
         "200":
           description: Active timers returned successfully
           content:
@@ -4074,11 +4079,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Missing or invalid authenticated user id
-          content:
-            '*/*':
-              schema: {}
   /v1/workexec/job-time-totals:
     get:
       tags:
@@ -4231,281 +4231,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
-  /v1/workorders/{workorderId}/pick-list:
-    get:
-      tags:
-      - Workorder Pick Facade
-      summary: Get pick list for workorder
-      description: Retrieve the active pick list for a workorder via the inventory pick facade.
-      operationId: getPickListForWorkorder
-      parameters:
-      - name: workorderId
-        in: path
-        description: ID of the workorder
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Pick list retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkorderPickListResponse'
-        "403":
-          description: Forbidden - requires inventory:pick_list:view
-        "404":
-          description: No pick list found for workorder
-  /v1/workorders/{workorderId}/pick-list/tasks:
-    get:
-      tags:
-      - Workorder Pick Facade
-      summary: Get pick tasks for workorder
-      description: Retrieve all pick tasks for the active pick list of a workorder.
-      operationId: getPickTasksForWorkorder
-      parameters:
-      - name: workorderId
-        in: path
-        description: ID of the workorder
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Pick tasks retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/WorkorderPickTaskResponse'
-        "403":
-          description: Forbidden - requires inventory:pick_list:view
-        "404":
-          description: Workorder or pick list not found
-  /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:resolve-scan:
-    post:
-      tags:
-      - Workorder Pick Facade
-      summary: Resolve barcode or QR scan for pick task
-      description: Validate a scanned SKU and location against the expected pick task values.
-      operationId: resolveScan
-      parameters:
-      - name: workorderId
-        in: path
-        description: ID of the workorder
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: pickTaskId
-        in: path
-        description: ID of the pick task
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                scannedSkuId:
-                  type: string
-                  format: uuid
-                scannedLocationId:
-                  type: string
-                  format: uuid
-      responses:
-        "200":
-          description: "Scan resolved - matchStatus: MATCHED | LOCATION_MISMATCH | SKU_MISMATCH | NO_MATCH"
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ResolveScanResponse'
-        "400":
-          description: Invalid request
-        "403":
-          description: Forbidden - requires inventory:pick_list:execute
-        "404":
-          description: Workorder or pick task not found
-  /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}/lines/{pickLineId}:confirm:
-    post:
-      tags:
-      - Workorder Pick Facade
-      summary: Confirm pick line quantity
-      description: Record the picked quantity for a pick task line. Returns updated pick task state.
-      operationId: confirmPickLine
-      parameters:
-      - name: workorderId
-        in: path
-        description: ID of the workorder
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: pickTaskId
-        in: path
-        description: ID of the pick task
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: pickLineId
-        in: path
-        description: Pick line ID (aliases pickTaskId in current implementation)
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - quantityPicked
-              properties:
-                quantityPicked:
-                  type: integer
-                  minimum: 1
-      responses:
-        "200":
-          description: Pick line confirmed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkorderPickTaskResponse'
-        "400":
-          description: Invalid request
-        "403":
-          description: Forbidden - requires inventory:pick_list:execute
-        "404":
-          description: Workorder, pick task, or pick line not found
-  /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:complete:
-    post:
-      tags:
-      - Workorder Pick Facade
-      summary: Complete pick task
-      description: Mark a pick task as complete. Confirms any remaining required quantity.
-      operationId: completePickTask
-      parameters:
-      - name: workorderId
-        in: path
-        description: ID of the workorder
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: pickTaskId
-        in: path
-        description: ID of the pick task
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-      responses:
-        "200":
-          description: Pick task completed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkorderPickTaskResponse'
-        "403":
-          description: Forbidden - requires inventory:pick_list:execute
-        "404":
-          description: Workorder or pick task not found
-  /v1/workorders/{workorderId}/picked-items:
-    get:
-      tags:
-      - Workorder Picked Items
-      summary: Get picked items for workorder
-      description: Retrieve all items that have been picked for a workorder (quantityPicked > 0 or status PICKED).
-      operationId: getPickedItemsForWorkorder
-      parameters:
-      - name: workorderId
-        in: path
-        description: ID of the workorder
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Picked items retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/WorkorderPickedItemResponse'
-        "403":
-          description: Forbidden - requires inventory:pick_list:view
-        "404":
-          description: Workorder not found
-  /v1/workorders/{workorderId}/picked-items:consume:
-    post:
-      tags:
-      - Workorder Picked Items
-      summary: Consume picked items into workorder
-      description: "Trigger inventory consumption for picked items. Calls pos-inventory POST /v1/inventory/consumption and records results per item."
-      operationId: consumePickedItems
-      parameters:
-      - name: workorderId
-        in: path
-        description: ID of the workorder
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                items:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                    - pickTaskId
-                    - quantityToConsume
-                    properties:
-                      pickTaskId:
-                        type: string
-                        format: uuid
-                      quantityToConsume:
-                        type: integer
-                        minimum: 1
-      responses:
-        "200":
-          description: Items consumed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConsumePickedItemsResponse'
-        "400":
-          description: Invalid request or quantity exceeds available
-        "403":
-          description: Forbidden - requires workorder:parts:consume
-        "404":
-          description: Workorder or pick list not found
 components:
   schemas:
     AssignmentHistoryEntry:
@@ -5127,34 +4852,6 @@ components:
             $ref: "#/components/schemas/ConsumeItem"
       required:
       - items
-    ConsumePickedItemsResponse:
-      type: object
-      properties:
-        workorderId:
-          type: string
-          format: uuid
-        totalItemsConsumed:
-          type: integer
-          format: int32
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/ConsumedItemResult"
-    ConsumedItemResult:
-      type: object
-      properties:
-        pickTaskId:
-          type: string
-          format: uuid
-        quantityConsumed:
-          type: integer
-          format: int32
-        status:
-          type: string
-          enum:
-          - SUCCESS
-          - PARTIAL
-          - FAILED
     ApiError:
       type: object
       default: "##default"
@@ -5222,6 +4919,34 @@ components:
           default: "##default"
           description: Validation failure message
           example: must be greater than 0
+    ConsumePickedItemsResponse:
+      type: object
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+        totalItemsConsumed:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsumedItemResult"
+    ConsumedItemResult:
+      type: object
+      properties:
+        pickTaskId:
+          type: string
+          format: uuid
+        quantityConsumed:
+          type: integer
+          format: int32
+        status:
+          type: string
+          enum:
+          - SUCCESS
+          - PARTIAL
+          - FAILED
     ResolveScanRequest:
       type: object
       properties:
