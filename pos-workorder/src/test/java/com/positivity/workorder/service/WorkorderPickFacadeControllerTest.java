@@ -58,7 +58,8 @@ class WorkorderPickFacadeControllerTest {
 
     private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000218");
     private static final UUID PICK_TASK_ID = UUID.fromString("00000000-0000-0000-0000-000000000219");
-    private static final UUID PICK_LINE_ID = UUID.fromString("00000000-0000-0000-0000-000000000220");
+    // pickLineId aliases pickTaskId while lines are aliased to tasks (facade v1 contract)
+    private static final UUID PICK_LINE_ID = PICK_TASK_ID;
 
     private static final String PICK_LIST_URL = "/v1/workorders/{workorderId}/pick-list";
     private static final String PICK_TASKS_URL = "/v1/workorders/{workorderId}/pick-list/tasks";

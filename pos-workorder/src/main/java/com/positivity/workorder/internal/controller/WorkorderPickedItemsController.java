@@ -61,6 +61,8 @@ public class WorkorderPickedItemsController {
     public ResponseEntity<ConsumePickedItemsResponse> consumePickedItems(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
             @PathVariable @NonNull UUID workorderId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
+                    content = @Content(schema = @Schema(implementation = ConsumePickedItemsRequest.class)))
             @RequestBody @Valid ConsumePickedItemsRequest request) {
 
         ConsumePickedItemsResponse response = workorderPickFacadeService.consumePickedItems(workorderId, request);

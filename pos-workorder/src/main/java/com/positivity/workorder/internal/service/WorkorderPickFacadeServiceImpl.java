@@ -16,6 +16,7 @@ import com.positivity.workorder.internal.dto.pick.ResolveScanResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickListResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickTaskResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickedItemResponse;
+import com.positivity.workorder.internal.enums.ConsumeItemStatus;
 import com.positivity.workorder.service.WorkorderPickFacadeService;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,6 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
   private static final String STATUS_LOCATION_MISMATCH = "LOCATION_MISMATCH";
   private static final String STATUS_SKU_MISMATCH = "SKU_MISMATCH";
   private static final String STATUS_NO_MATCH = "NO_MATCH";
-  private static final String STATUS_SUCCESS = "SUCCESS";
   private static final String STATUS_PICKED = "PICKED";
 
   private final InventoryPickClient inventoryPickClient;
@@ -155,10 +155,13 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
         return mapPickTask(task);
       }
 
+      // Send total required quantity so pos-inventory sets quantityPicked = quantityRequired,
+      // completing the task. Sending only `remaining` would under-report picks when
+      // quantityPicked > 0 (e.g. picked=2/required=3 → remaining=1 → inventory sets picked to 1).
       InventoryConfirmPickTaskRequest confirmRequest = new InventoryConfirmPickTaskRequest(
           task.skuId(),
           task.locationId(),
-          remaining);
+          task.quantityRequired());
 
       InventoryPickTaskDto confirmed = inventoryPickClient.confirmPickTask(pickList.pickListId(), task.pickTaskId(),
           confirmRequest);
@@ -233,7 +236,7 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
           .map(item -> ConsumePickedItemsResponse.ConsumedItemResult.builder()
               .pickTaskId(item.getPickTaskId())
               .quantityConsumed(item.getQuantityToConsume())
-              .status(STATUS_SUCCESS)
+              .status(ConsumeItemStatus.SUCCESS)
               .build())
           .toList();
 
