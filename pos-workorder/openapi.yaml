@@ -740,6 +740,21 @@ paths:
                 default: "##default"
         required: true
       responses:
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "403":
           description: Forbidden
           content:
@@ -755,8 +770,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "400":
-          description: Invalid request
+        "404":
+          description: Workorder not found
           content:
             '*/*':
               schema:
@@ -776,21 +791,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ConsumePickedItemsResponse"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
-        "404":
-          description: Workorder not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -837,21 +837,6 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "400":
           description: Invalid request
           content:
@@ -867,8 +852,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Workorder or pick task not found
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
@@ -888,6 +873,21 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ResolveScanResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "404":
+          description: Workorder or pick task not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -934,6 +934,21 @@ paths:
               unevaluatedItems:
                 default: "##default"
       responses:
+        "200":
+          description: Pick task completed successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPickTaskResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "403":
           description: Forbidden
           content:
@@ -955,21 +970,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
-        "200":
-          description: Pick task completed successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPickTaskResponse"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -1023,21 +1023,6 @@ paths:
                 default: "##default"
         required: true
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "400":
           description: Invalid request
           content:
@@ -1053,8 +1038,23 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: "Workorder, pick task, or pick line not found"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "422":
+          description: Scan mismatch or domain validation error from pos-inventory
           content:
             '*/*':
               schema:
@@ -1083,8 +1083,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "422":
-          description: Scan mismatch or domain validation error from pos-inventory
+        "404":
+          description: "Workorder, pick task, or pick line not found"
           content:
             '*/*':
               schema:
@@ -1223,12 +1223,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts returned successfully
           content:
@@ -1244,6 +1238,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
   /v1/workorders/{workorderId}/parts/returnUnused:
     post:
       tags:
@@ -1294,12 +1294,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
-          description: Workorder or part not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
         "201":
           description: Unused quantity returned successfully
           content:
@@ -1315,6 +1309,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
   /v1/workorders/{workorderId}/parts/issue:
     post:
       tags:
@@ -1358,6 +1358,21 @@ paths:
                   quantity: 2
         required: true
       responses:
+        "201":
+          description: Parts issued successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "409":
           description: Idempotency conflict (duplicate key)
           content:
@@ -1376,21 +1391,6 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-        "201":
-          description: Parts issued successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
   /v1/workorders/{workorderId}/parts/correct:
     post:
       tags:
@@ -1505,12 +1505,6 @@ paths:
                   quantity: 1
         required: true
       responses:
-        "400":
-          description: "Invalid request (exceeds issued quantity, etc.)"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "201":
           description: Parts consumption recorded successfully
           content:
@@ -1526,6 +1520,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "400":
+          description: "Invalid request (exceeds issued quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
         "404":
           description: Workorder or part not found
           content:
@@ -2906,6 +2906,11 @@ paths:
           content:
             '*/*':
               schema: {}
+        "409":
+          description: Conflict while stopping timers
+          content:
+            '*/*':
+              schema: {}
         "200":
           description: Timers stopped successfully
           content:
@@ -2921,11 +2926,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "409":
-          description: Conflict while stopping timers
-          content:
-            '*/*':
-              schema: {}
   /v1/workexec/time-entries/timer/start:
     post:
       tags:
@@ -2978,11 +2978,6 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "409":
-          description: Conflict while starting timer
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Timer started successfully
           content:
@@ -2998,6 +2993,11 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
+        "409":
+          description: Conflict while starting timer
+          content:
+            '*/*':
+              schema: {}
         "404":
           description: Referenced resource not found
           content:
@@ -3054,8 +3054,8 @@ paths:
           content:
             '*/*':
               schema: {}
-        "201":
-          description: Labor entry created successfully
+        "200":
+          description: Idempotent replay returned existing labor entry
           content:
             '*/*':
               schema:
@@ -3069,8 +3069,8 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "200":
-          description: Idempotent replay returned existing labor entry
+        "201":
+          description: Labor entry created successfully
           content:
             '*/*':
               schema:
@@ -3401,21 +3401,6 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
-                unevaluatedItems:
-                  default: "##default"
         "200":
           description: Picked items retrieved successfully
           content:
@@ -3433,6 +3418,21 @@ paths:
                   default: "##default"
                   unevaluatedItems:
                     default: "##default"
+                unevaluatedItems:
+                  default: "##default"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
                 unevaluatedItems:
                   default: "##default"
   /v1/workorders/{workorderId}/pick-list:
@@ -3465,12 +3465,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "200":
-          description: Pick list retrieved successfully
+        "404":
+          description: Workorder not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/WorkorderPickListResponse"
+                $ref: "#/components/schemas/ApiError"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -3480,12 +3480,12 @@ paths:
                   default: "##default"
                 unevaluatedItems:
                   default: "##default"
-        "404":
-          description: Workorder not found
+        "200":
+          description: Pick list retrieved successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: "#/components/schemas/WorkorderPickListResponse"
                 additionalProperties:
                   default: "##default"
                 contains:
@@ -3510,6 +3510,21 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiError"
+                additionalProperties:
+                  default: "##default"
+                contains:
+                  default: "##default"
+                default: "##default"
+                items:
+                  default: "##default"
+                unevaluatedItems:
+                  default: "##default"
         "200":
           description: Pick tasks retrieved successfully
           content:
@@ -3527,21 +3542,6 @@ paths:
                   default: "##default"
                   unevaluatedItems:
                     default: "##default"
-                unevaluatedItems:
-                  default: "##default"
-        "403":
-          description: Forbidden
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ApiError"
-                additionalProperties:
-                  default: "##default"
-                contains:
-                  default: "##default"
-                default: "##default"
-                items:
-                  default: "##default"
                 unevaluatedItems:
                   default: "##default"
         "404":
@@ -3857,6 +3857,14 @@ paths:
           default: "##default"
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: PDF generated successfully
+          content:
+            application/pdf:
+              schema:
+                additionalProperties:
+                  default: "##default"
+                default: "##default"
         "404":
           description: Estimate not found
           content:
@@ -3871,14 +3879,6 @@ paths:
               schema:
                 type: string
                 format: byte
-        "200":
-          description: PDF generated successfully
-          content:
-            application/pdf:
-              schema:
-                additionalProperties:
-                  default: "##default"
-                default: "##default"
   /v1/workorders/estimates/shop/{locationId}:
     get:
       tags:
