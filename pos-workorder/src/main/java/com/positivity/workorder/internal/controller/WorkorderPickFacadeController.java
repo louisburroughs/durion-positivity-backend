@@ -81,6 +81,8 @@ public class WorkorderPickFacadeController {
             @PathVariable @NonNull UUID workorderId,
             @Parameter(description = "Pick task ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001")
             @PathVariable @NonNull UUID pickTaskId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
+                    content = @Content(schema = @Schema(implementation = ResolveScanRequest.class)))
             @RequestBody @Valid ResolveScanRequest request) {
 
         ResolveScanResponse response = workorderPickFacadeService.resolveScan(workorderId, pickTaskId, request);
@@ -95,6 +97,7 @@ public class WorkorderPickFacadeController {
     @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Workorder, pick task, or pick line not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "422", description = "Scan mismatch or domain validation error from pos-inventory", content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<WorkorderPickTaskResponse> confirmPickLine(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
             @PathVariable @NonNull UUID workorderId,
@@ -102,6 +105,8 @@ public class WorkorderPickFacadeController {
             @PathVariable @NonNull UUID pickTaskId,
             @Parameter(description = "Pick line ID", required = true, example = "550e8400-e29b-41d4-a716-446655440002")
             @PathVariable @NonNull UUID pickLineId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
+                    content = @Content(schema = @Schema(implementation = ConfirmPickLineRequest.class)))
             @RequestBody @Valid ConfirmPickLineRequest request) {
 
         WorkorderPickTaskResponse response = workorderPickFacadeService.confirmPickLine(
@@ -115,9 +120,7 @@ public class WorkorderPickFacadeController {
     @PostMapping("/pick-tasks/{pickTaskId}:complete")
     @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_COMPLETE_TASK", apiVersion = "1")
-    @Operation(summary = "Complete pick task",
-            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
-                    description = "Completion details; send {} if no reason is provided"))
+    @Operation(summary = "Complete pick task")
     @ApiResponse(responseCode = "200", description = "Pick task completed successfully", content = @Content(schema = @Schema(implementation = WorkorderPickTaskResponse.class)))
     @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Workorder or pick task not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -126,9 +129,13 @@ public class WorkorderPickFacadeController {
             @PathVariable @NonNull UUID workorderId,
             @Parameter(description = "Pick task ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001")
             @PathVariable @NonNull UUID pickTaskId,
-            @RequestBody @Valid CompletePickTaskRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = false,
+                    description = "Completion details; omit or send {} if no reason is provided",
+                    content = @Content(schema = @Schema(implementation = CompletePickTaskRequest.class)))
+            @RequestBody(required = false) @Valid CompletePickTaskRequest request) {
 
-        WorkorderPickTaskResponse response = workorderPickFacadeService.completePickTask(workorderId, pickTaskId, request);
+        WorkorderPickTaskResponse response = workorderPickFacadeService.completePickTask(
+                workorderId, pickTaskId, request != null ? request : new CompletePickTaskRequest());
         return ResponseEntity.ok(response);
     }
 }

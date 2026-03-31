@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.dto.pick;
 
+import com.positivity.workorder.internal.enums.ConsumeItemStatus;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -23,6 +24,6 @@ public class ConsumePickedItemsResponse {
   public static class ConsumedItemResult {
     private UUID pickTaskId;
     private int quantityConsumed;
-    private String status;
+    private ConsumeItemStatus status;
   }
 }
