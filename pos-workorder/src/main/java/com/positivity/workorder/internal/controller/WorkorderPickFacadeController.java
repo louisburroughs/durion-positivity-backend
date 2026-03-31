@@ -115,7 +115,9 @@ public class WorkorderPickFacadeController {
     @PostMapping("/pick-tasks/{pickTaskId}:complete")
     @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_COMPLETE_TASK", apiVersion = "1")
-    @Operation(summary = "Complete pick task")
+    @Operation(summary = "Complete pick task",
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
+                    description = "Completion details; send {} if no reason is provided"))
     @ApiResponse(responseCode = "200", description = "Pick task completed successfully", content = @Content(schema = @Schema(implementation = WorkorderPickTaskResponse.class)))
     @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Workorder or pick task not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -124,7 +126,7 @@ public class WorkorderPickFacadeController {
             @PathVariable @NonNull UUID workorderId,
             @Parameter(description = "Pick task ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001")
             @PathVariable @NonNull UUID pickTaskId,
-            @RequestBody CompletePickTaskRequest request) {
+            @RequestBody @Valid CompletePickTaskRequest request) {
 
         WorkorderPickTaskResponse response = workorderPickFacadeService.completePickTask(workorderId, pickTaskId, request);
         return ResponseEntity.ok(response);
