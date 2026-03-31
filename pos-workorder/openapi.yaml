@@ -47,6 +47,10 @@ tags:
   description: Endpoints for Work-In-Progress status visibility
 - name: Time Entry API
   description: Endpoints for approving and rejecting submitted time entries
+- name: Workorder Pick Facade
+  description: Browser-facing pick list and pick task endpoints for workorder fulfillment
+- name: Workorder Picked Items
+  description: Picked items visibility and consumption facade for workorder fulfillment
 paths:
   /v1/workorders/{workorderId}/technician:
     get:
@@ -3666,6 +3670,281 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApprovalConfigurationResponse"
+  /v1/workorders/{workorderId}/pick-list:
+    get:
+      tags:
+      - Workorder Pick Facade
+      summary: Get pick list for workorder
+      description: Retrieve the active pick list for a workorder via the inventory pick facade.
+      operationId: getPickListForWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Pick list retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        "403":
+          description: Forbidden - requires inventory:pick_list:view
+        "404":
+          description: No pick list found for workorder
+  /v1/workorders/{workorderId}/pick-list/tasks:
+    get:
+      tags:
+      - Workorder Pick Facade
+      summary: Get pick tasks for workorder
+      description: Retrieve all pick tasks for the active pick list of a workorder.
+      operationId: getPickTasksForWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Pick tasks retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "403":
+          description: Forbidden - requires inventory:pick_list:view
+        "404":
+          description: Workorder or pick list not found
+  /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:resolve-scan:
+    post:
+      tags:
+      - Workorder Pick Facade
+      summary: Resolve barcode or QR scan for pick task
+      description: Validate a scanned SKU and location against the expected pick task values.
+      operationId: resolveScan
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: pickTaskId
+        in: path
+        description: ID of the pick task
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scannedSkuId:
+                  type: string
+                  format: uuid
+                scannedLocationId:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: "Scan resolved - matchStatus: MATCHED | LOCATION_MISMATCH | SKU_MISMATCH | NO_MATCH"
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request
+        "403":
+          description: Forbidden - requires inventory:pick_list:execute
+        "404":
+          description: Workorder or pick task not found
+  /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}/lines/{pickLineId}:confirm:
+    post:
+      tags:
+      - Workorder Pick Facade
+      summary: Confirm pick line quantity
+      description: Record the picked quantity for a pick task line. Returns updated pick task state.
+      operationId: confirmPickLine
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: pickTaskId
+        in: path
+        description: ID of the pick task
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: pickLineId
+        in: path
+        description: Pick line ID (aliases pickTaskId in current implementation)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - quantityPicked
+              properties:
+                quantityPicked:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Pick line confirmed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request
+        "403":
+          description: Forbidden - requires inventory:pick_list:execute
+        "404":
+          description: Workorder, pick task, or pick line not found
+  /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:complete:
+    post:
+      tags:
+      - Workorder Pick Facade
+      summary: Complete pick task
+      description: Mark a pick task as complete. Confirms any remaining required quantity.
+      operationId: completePickTask
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: pickTaskId
+        in: path
+        description: ID of the pick task
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Pick task completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        "403":
+          description: Forbidden - requires inventory:pick_list:execute
+        "404":
+          description: Workorder or pick task not found
+  /v1/workorders/{workorderId}/picked-items:
+    get:
+      tags:
+      - Workorder Picked Items
+      summary: Get picked items for workorder
+      description: Retrieve all items that have been picked for a workorder (quantityPicked > 0 or status PICKED).
+      operationId: getPickedItemsForWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Picked items retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "403":
+          description: Forbidden - requires inventory:pick_list:view
+        "404":
+          description: Workorder not found
+  /v1/workorders/{workorderId}/picked-items:consume:
+    post:
+      tags:
+      - Workorder Picked Items
+      summary: Consume picked items into workorder
+      description: "Trigger inventory consumption for picked items. Calls pos-inventory POST /v1/inventory/consumption and records results per item."
+      operationId: consumePickedItems
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                    - pickTaskId
+                    - quantityToConsume
+                    properties:
+                      pickTaskId:
+                        type: string
+                        format: uuid
+                      quantityToConsume:
+                        type: integer
+                        minimum: 1
+      responses:
+        "200":
+          description: Items consumed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request or quantity exceeds available
+        "403":
+          description: Forbidden - requires workorder:parts:consume
+        "404":
+          description: Workorder or pick list not found
 components:
   schemas:
     AssignmentHistoryEntry:

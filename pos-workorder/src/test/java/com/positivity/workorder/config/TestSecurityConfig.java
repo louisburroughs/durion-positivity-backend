@@ -86,7 +86,22 @@ public class TestSecurityConfig {
             // Issue CAP-140: Story #59 — operational context override authority
             new SimpleGrantedAuthority("workorder.operationalContext.override"),
             // Issue CAP-142: Story #60 — daily dispatch board dashboard view authority
-            new SimpleGrantedAuthority("workorder:dashboard:view"));
+            new SimpleGrantedAuthority("workorder:dashboard:view"),
+            // Issue CAP-218: pick list view/execute and parts consume authorities
+            new SimpleGrantedAuthority("inventory:pick_list:view"),
+            new SimpleGrantedAuthority("inventory:pick_list:execute"),
+            new SimpleGrantedAuthority("workorder:parts:consume"));
+
+    /**
+     * Request attribute name: when set to {@code Boolean.TRUE} on a MockMvc request,
+     * the TestAutoAuthFilter injects a limited authority set that excludes pick and
+     * consume permissions. Use this in 403 test cases.
+     */
+    public static final String NO_PICK_AUTH_ATTR = "test.no-pick-auth";
+
+    private static final List<SimpleGrantedAuthority> NO_PICK_AUTHORITIES = List.of(
+            new SimpleGrantedAuthority("workorder:workorder:view"),
+            new SimpleGrantedAuthority("workorder:workorder:create"));
 
     private static final UUID TEST_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
@@ -130,8 +145,12 @@ public class TestSecurityConfig {
                 }
             }
 
+            List<SimpleGrantedAuthority> authorities =
+                    Boolean.TRUE.equals(request.getAttribute(NO_PICK_AUTH_ATTR))
+                            ? NO_PICK_AUTHORITIES
+                            : TEST_AUTHORITIES;
             var authentication = new UsernamePasswordAuthenticationToken(
-                    username, null, TEST_AUTHORITIES);
+                    username, null, authorities);
             authentication.setDetails(Map.of(
                     "username", username,
                     "userId", userId));

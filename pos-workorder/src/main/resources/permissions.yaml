@@ -76,6 +76,8 @@ permissions:
     description: "View parts on workorder"
   - name: "workorder:parts:add"
     description: "Add parts to workorder"
+  - name: "workorder:parts:consume"
+    description: "Consume picked items into workorder via pick facade"
   - name: "workorder:wip:view"
     description: "View work-in-progress dashboard for workorders"
   - name: "workorder:wip:view_all_locations"
