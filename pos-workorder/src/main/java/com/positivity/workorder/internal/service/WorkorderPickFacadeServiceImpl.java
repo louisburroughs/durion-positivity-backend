@@ -18,7 +18,9 @@ import com.positivity.workorder.internal.dto.pick.WorkorderPickTaskResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickedItemResponse;
 import com.positivity.workorder.service.WorkorderPickFacadeService;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -117,6 +119,11 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
       List<InventoryPickTaskDto> tasks = inventoryPickClient.getPickTasksForPickList(pickList.pickListId());
       InventoryPickTaskDto task = resolveTask(tasks, pickTaskId);
 
+      if (!pickLineId.equals(pickTaskId)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "pickLineId " + pickLineId + " does not match pickTaskId " + pickTaskId);
+      }
+
       // Inventory tasks are the atomic unit; facade pickLineId aliases pickTaskId.
       InventoryConfirmPickTaskRequest confirmRequest = new InventoryConfirmPickTaskRequest(
           task.skuId(),
@@ -203,10 +210,16 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
 
       InventoryPickListDto pickList = pickLists.getFirst();
       List<InventoryPickTaskDto> tasks = inventoryPickClient.getPickTasksForPickList(pickList.pickListId());
+      Map<UUID, InventoryPickTaskDto> taskMap = tasks.stream()
+          .collect(Collectors.toMap(InventoryPickTaskDto::pickTaskId, t -> t));
 
       List<InventoryConsumeItemLine> inventoryItems = request.getItems().stream()
           .map(item -> {
-            InventoryPickTaskDto task = resolveTask(tasks, item.getPickTaskId());
+            InventoryPickTaskDto task = taskMap.get(item.getPickTaskId());
+            if (task == null) {
+              throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                  "Pick task not found: " + item.getPickTaskId());
+            }
             return new InventoryConsumeItemLine(item.getPickTaskId(), task.skuId(), item.getQuantityToConsume());
           })
           .toList();

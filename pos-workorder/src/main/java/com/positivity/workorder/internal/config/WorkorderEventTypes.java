@@ -480,6 +480,28 @@ public final class WorkorderEventTypes {
                         .p99Micros(3_500_000L)
                         .build();
 
+        // ==================== PICK EXECUTION EVENTS (CAP-218) ====================
+
+        public static final EventTypeRegistration WORKORDER_PICK_FACADE_RESOLVE_SCAN = EventTypeRegistration
+                        .write("WORKORDER_PICK_FACADE_RESOLVE_SCAN",
+                                        "Resolve a barcode scan during mechanic picking workflow")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_PICK_FACADE_CONFIRM_LINE = EventTypeRegistration
+                        .write("WORKORDER_PICK_FACADE_CONFIRM_LINE",
+                                        "Confirm a pick line quantity for a pick task")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_PICK_FACADE_COMPLETE_TASK = EventTypeRegistration
+                        .write("WORKORDER_PICK_FACADE_COMPLETE_TASK",
+                                        "Complete a pick task for a workorder")
+                        .apiVersion("1").build();
+
+        public static final EventTypeRegistration WORKORDER_PICKED_ITEMS_CONSUME = EventTypeRegistration
+                        .write("WORKORDER_PICKED_ITEMS_CONSUME",
+                                        "Consume picked items into a workorder")
+                        .apiVersion("1").build();
+
         // ==================== ALL EVENT TYPES ====================
 
         /** All event types for registration at startup */
@@ -567,5 +589,10 @@ public final class WorkorderEventTypes {
                         WORKORDER_SUBSTITUTE_LINK_DELETE,
                         WORKORDER_SUBSTITUTE_SUGGEST,
                         // Dashboard events (CAP-142)
-                        WORKEXEC_DASHBOARD_TODAY_GET);
+                        WORKEXEC_DASHBOARD_TODAY_GET,
+                        // Pick execution events (CAP-218)
+                        WORKORDER_PICK_FACADE_RESOLVE_SCAN,
+                        WORKORDER_PICK_FACADE_CONFIRM_LINE,
+                        WORKORDER_PICK_FACADE_COMPLETE_TASK,
+                        WORKORDER_PICKED_ITEMS_CONSUME);
 }
