@@ -64,37 +64,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: User roles updated successfully.
           content:
@@ -128,37 +128,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
     delete:
@@ -187,37 +187,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
   /v1/users/{id}:
@@ -242,37 +242,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: User found and returned.
           content:
@@ -306,37 +306,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: User updated successfully.
           content:
@@ -364,37 +364,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: User deleted successfully.
   /v1/users/roles/{roleId}/permissions/{permissionKey}:
@@ -423,37 +423,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: Permission assigned to role
     delete:
@@ -480,37 +480,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: Permission revoked from role
   /v1/roles/{roleId}/permissions/{permissionKey}:
@@ -539,37 +539,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: Permission assigned to role
     delete:
@@ -596,37 +596,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: Permission revoked from role
   /v1/users/roles/{roleId}/permissions/grant:
@@ -656,37 +656,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid grant request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Permission granted to role
           content:
@@ -720,37 +720,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid grant request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Permission granted to role
           content:
@@ -776,37 +776,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Role permissions updated
           content:
@@ -832,37 +832,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Role permissions updated
           content:
@@ -882,37 +882,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: List of users returned successfully.
           content:
@@ -940,37 +940,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: User created successfully.
           content:
@@ -998,37 +998,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: User account unlocked successfully
   /v1/users/{id}/expire-credentials:
@@ -1052,37 +1052,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: User credentials expired successfully
   /v1/users/{id}/expire-account:
@@ -1106,37 +1106,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: User account expired successfully
   /v1/users/{id}/enable:
@@ -1160,37 +1160,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: User account enabled successfully
   /v1/users/{id}/disable:
@@ -1214,37 +1214,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: User account disabled successfully
   /v1/roles/assignments:
@@ -1266,37 +1266,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: Role assignment created
           content:
@@ -1322,37 +1322,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: Role assignment created
           content:
@@ -1372,37 +1372,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Roles returned successfully
           content:
@@ -1431,37 +1431,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Role name already exists
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid role payload
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: Role created
           content:
@@ -1481,37 +1481,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Roles returned successfully
           content:
@@ -1540,37 +1540,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Role name already exists
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid role payload
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: Role created
           content:
@@ -1605,37 +1605,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Role assigned to principal successfully
   /v1/permissions/registerPermissions:
@@ -1658,37 +1658,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -1717,37 +1717,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -1775,37 +1775,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -1831,37 +1831,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -1888,37 +1888,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -1945,37 +1945,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -2009,37 +2009,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Review case resolved successfully
           content:
@@ -2067,37 +2067,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid request (blank username or empty roles)
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal server error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Token pair issued successfully
           content:
@@ -2126,38 +2126,38 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Registration blocked because an account or linked person already
             exists; response includes nextAction and supportAction guidance
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid registration payload
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: Self-registration completed
           content:
@@ -2185,37 +2185,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Concurrency conflict during token revocation
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid refresh token
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal server error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: New token pair issued successfully
           content:
@@ -2242,37 +2242,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Missing or blank username/password
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Invalid credentials
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal server error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Authentication successful
           content:
@@ -2299,37 +2299,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid request (blank username or empty roles)
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: "Forbidden: internal admin context required"
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal server error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: JWT token issued successfully
           content:
@@ -2356,37 +2356,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid pricing snapshot payload
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: Pricing snapshot created
           content:
@@ -2442,37 +2442,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid audit search criteria
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Audit events returned successfully
           content:
@@ -2500,37 +2500,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid audit event payload
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: Audit event created
           content:
@@ -2557,37 +2557,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -2618,37 +2618,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: User account state returned successfully
           content:
@@ -2675,37 +2675,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Role returned successfully
           content:
@@ -2731,37 +2731,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: Role deleted
   /v1/users/roles/{id}:
@@ -2784,37 +2784,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Role returned successfully
           content:
@@ -2840,37 +2840,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: Role deleted
   /v1/roles/permissions/user/{userId}:
@@ -2893,37 +2893,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: User permissions returned successfully
           content:
@@ -2953,37 +2953,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: User permissions returned successfully
           content:
@@ -3023,37 +3023,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Permission check completed
           content:
@@ -3090,37 +3090,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Permission check completed
           content:
@@ -3146,37 +3146,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Role returned successfully
           content:
@@ -3202,37 +3202,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Role returned successfully
           content:
@@ -3270,37 +3270,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Role assignments returned successfully
           content:
@@ -3340,37 +3340,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Role assignments returned successfully
           content:
@@ -3399,37 +3399,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3456,37 +3456,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3513,37 +3513,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3570,37 +3570,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3626,37 +3626,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3682,37 +3682,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3738,37 +3738,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3796,37 +3796,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3849,37 +3849,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3900,37 +3900,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -3957,37 +3957,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -4016,37 +4016,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: OK
           content:
@@ -4083,37 +4083,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: "Forbidden: authorization decision permission required"
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Authorization decision returned
           content:
@@ -4151,37 +4151,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Review cases returned successfully
           content:
@@ -4210,37 +4210,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Review case returned successfully
           content:
@@ -4266,37 +4266,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Validation result returned
           content:
@@ -4322,37 +4322,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Token invalid or expired
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: userId extracted successfully
           content:
@@ -4378,37 +4378,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Token invalid or expired
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Subject extracted successfully
           content:
@@ -4434,37 +4434,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Token invalid or expired
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Roles extracted successfully
           content:
@@ -4493,37 +4493,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Token invalid or expired
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Authorities extracted successfully
           content:
@@ -4553,37 +4553,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Pricing snapshot returned successfully
           content:
@@ -4610,37 +4610,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Audit event returned successfully
           content:
@@ -4680,37 +4680,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid endDate
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: Role assignment revoked
   /v1/roles/assignments/{assignmentId}:
@@ -4746,37 +4746,37 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid endDate
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: Role assignment revoked
   /v1/auth/revoke:
@@ -4798,70 +4798,95 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Conflict
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Bad Request
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "500":
           description: Internal Server Error
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "204":
           description: Token revoked successfully
 components:
   schemas:
-    ErrorResponse:
+    ApiError:
       type: object
-      description: Standardized error response with correlation ID
+      description: Standard error response envelope returned by all Durion backend
+        APIs
       properties:
         code:
           type: string
-          description: Error code for client processing
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
         message:
           type: string
           description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
         status:
           type: integer
           format: int32
           description: HTTP status code
+          example: 404
         timestamp:
           type: string
-          description: ISO 8601 timestamp
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17T14:30:00.000Z
         correlationId:
           type: string
-          description: Unique request correlation ID for tracking
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related
+            errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all
+            other error types
+          items:
+            $ref: "#/components/schemas/FieldError"
         referenceId:
           type: string
-          description: "Workflow or review-case reference identifier, when available"
+          description: "Workflow or review-case reference identifier, when applicable"
         nextAction:
           type: string
-          description: "Recommended next step for the caller, when available"
+          description: "Recommended next step for the caller, when applicable"
         supportAction:
           type: string
-          description: "Support/admin investigation guidance, when available"
+          description: "Support or admin investigation guidance, when applicable"
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
     UserDto:
       type: object
       properties:

@@ -30,39 +30,37 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Workorder Picked Items", description = "Browser-facing picked items and consume endpoints for workorder fulfillment")
 public class WorkorderPickedItemsController {
 
-    private final WorkorderPickFacadeService workorderPickFacadeService;
+  private final WorkorderPickFacadeService workorderPickFacadeService;
 
-    public WorkorderPickedItemsController(WorkorderPickFacadeService workorderPickFacadeService) {
-        this.workorderPickFacadeService = workorderPickFacadeService;
-    }
+  public WorkorderPickedItemsController(WorkorderPickFacadeService workorderPickFacadeService) {
+    this.workorderPickFacadeService = workorderPickFacadeService;
+  }
 
-    @GetMapping("/picked-items")
-    @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-    @Operation(summary = "Get picked items for workorder")
-    @ApiResponse(responseCode = "200", description = "Picked items retrieved successfully", content = @Content(schema = @Schema(implementation = WorkorderPickedItemResponse.class)))
-    @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<List<WorkorderPickedItemResponse>> getPickedItems(
-            @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
-            @PathVariable @NonNull UUID workorderId) {
+  @GetMapping("/picked-items")
+  @PreAuthorize("hasAuthority('inventory:pick_list:view')")
+  @Operation(summary = "Get picked items for workorder")
+  @ApiResponse(responseCode = "200", description = "Picked items retrieved successfully", content = @Content(schema = @Schema(implementation = WorkorderPickedItemResponse.class)))
+  @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
+  public ResponseEntity<List<WorkorderPickedItemResponse>> getPickedItems(
+      @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId) {
 
-        List<WorkorderPickedItemResponse> response = workorderPickFacadeService.getPickedItemsForWorkorder(workorderId);
-        return ResponseEntity.ok(response);
-    }
+    List<WorkorderPickedItemResponse> response = workorderPickFacadeService.getPickedItemsForWorkorder(workorderId);
+    return ResponseEntity.ok(response);
+  }
 
-    @PostMapping("/picked-items:consume")
-    @PreAuthorize("hasAuthority('workorder:parts:consume')")
-    @EmitEvent(id = "WORKORDER_PICKED_ITEMS_CONSUME", apiVersion = "1")
-    @Operation(summary = "Consume picked items into workorder")
-    @ApiResponse(responseCode = "200", description = "Picked items consumed successfully", content = @Content(schema = @Schema(implementation = ConsumePickedItemsResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<ConsumePickedItemsResponse> consumePickedItems(
-            @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
-            @PathVariable @NonNull UUID workorderId,
-            @RequestBody @Valid ConsumePickedItemsRequest request) {
+  @PostMapping("/picked-items:consume")
+  @PreAuthorize("hasAuthority('workorder:parts:consume')")
+  @EmitEvent(id = "WORKORDER_PICKED_ITEMS_CONSUME", apiVersion = "1")
+  @Operation(summary = "Consume picked items into workorder")
+  @ApiResponse(responseCode = "200", description = "Picked items consumed successfully", content = @Content(schema = @Schema(implementation = ConsumePickedItemsResponse.class)))
+  @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content(schema = @Schema(implementation = ApiError.class)))
+  @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
+  @ApiResponse(responseCode = "404", description = "Workorder not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
+  public ResponseEntity<ConsumePickedItemsResponse> consumePickedItems(
+      @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId,
+      @RequestBody @Valid ConsumePickedItemsRequest request) {
 
-        ConsumePickedItemsResponse response = workorderPickFacadeService.consumePickedItems(workorderId, request);
-        return ResponseEntity.ok(response);
-    }
+    ConsumePickedItemsResponse response = workorderPickFacadeService.consumePickedItems(workorderId, request);
+    return ResponseEntity.ok(response);
+  }
 }
