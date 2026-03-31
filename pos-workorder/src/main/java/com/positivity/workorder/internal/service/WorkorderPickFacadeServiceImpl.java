@@ -211,8 +211,8 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
           })
           .toList();
 
-      InventoryConsumeItemsRequest consumeRequest =
-          new InventoryConsumeItemsRequest(workorderId, pickList.pickListId(), inventoryItems);
+      InventoryConsumeItemsRequest consumeRequest = new InventoryConsumeItemsRequest(workorderId, pickList.pickListId(),
+          inventoryItems);
 
       InventoryConsumptionDto consumptionDto = inventoryPickClient.consumePickedItems(consumeRequest);
 
@@ -267,7 +267,8 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
 
   private WorkorderPickTaskResponse mapPickTask(InventoryPickTaskDto task) {
     int remainingQty = task.quantityRequired() - task.quantityPicked();
-    // version: reserved for future optimistic locking; always 0L until pos-inventory exposes a version field.
+    // version: reserved for future optimistic locking; always 0L until
+    // pos-inventory exposes a version field.
     long version = 0L;
 
     return WorkorderPickTaskResponse.builder()

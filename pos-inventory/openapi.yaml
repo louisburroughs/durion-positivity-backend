@@ -157,30 +157,30 @@ paths:
               $ref: "#/components/schemas/ReturnItemsRequest"
         required: true
       responses:
-        "403":
-          description: User lacks required return authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "422":
-          description: Return quantity exceeds allowable amount
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "201":
           description: Return recorded
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReturnResponse"
+        "403":
+          description: User lacks required return authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Return quantity exceeds allowable amount
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/reservations:
     post:
       tags:
@@ -197,30 +197,30 @@ paths:
               $ref: "#/components/schemas/CreateReservationRequest"
         required: true
       responses:
-        "422":
-          description: Business rule validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "201":
           description: Reservation created or updated
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReservationResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required reservation authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Business rule validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/reservations/{allocationId}/promote:
     post:
       tags:
@@ -244,36 +244,36 @@ paths:
               $ref: "#/components/schemas/PromoteAllocationRequest"
         required: true
       responses:
-        "422":
-          description: Insufficient ATP or business rule validation failed
+        "404":
+          description: Allocation or reservation not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required reservation authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Allocation promoted
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReservationResponse"
-        "404":
-          description: Allocation or reservation not found
+        "422":
+          description: Insufficient ATP or business rule validation failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required reservation authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/replenishment/policies:
     get:
       tags:
@@ -331,12 +331,12 @@ paths:
               $ref: "#/components/schemas/CreateReceivingSessionRequest"
         required: true
       responses:
-        "404":
-          description: Source document not found
+        "400":
+          description: Validation failure or source document already fully received
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: Receiving session created
           content:
@@ -348,13 +348,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure or source document already fully received
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Source document not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/receiving/sessions/{sessionId}/receive:
     post:
       tags:
@@ -379,30 +379,30 @@ paths:
               $ref: "#/components/schemas/ReceiveItemsRequest"
         required: true
       responses:
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Receiving session not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required receiving:complete authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Items received successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReceiveItemsResponse"
+        "404":
+          description: Receiving session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/receiving/sessions/{sessionId}/lines/{lineId}/cross-dock:
     post:
       tags:
@@ -434,30 +434,30 @@ paths:
               $ref: "#/components/schemas/CrossDockRequest"
         required: true
       responses:
-        "404":
-          description: Receiving session or line not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Cross-dock completed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CrossDockResponse"
-        "403":
-          description: User lacks required authority or part-match override permission
+        "404":
+          description: Receiving session or line not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Invalid request or closed workorder
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required authority or part-match override permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/putaway/tasks/{taskId}/execute:
     post:
       tags:
@@ -486,6 +486,12 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
+        "200":
+          description: Putaway executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PutawayExecutionResponse"
         "404":
           description: Putaway task not found
           content:
@@ -496,12 +502,6 @@ paths:
           description: Forbidden - insufficient authority
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/PutawayExecutionResponse"
-        "200":
-          description: Putaway executed successfully
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/PutawayExecutionResponse"
         "400":
@@ -551,18 +551,18 @@ paths:
               $ref: "#/components/schemas/GeneratePutawayTasksRequest"
         required: true
       responses:
-        "400":
-          description: Validation failure
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PutawayTaskResponse"
         "201":
           description: Putaway tasks generated
           content:
             application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PutawayTaskResponse"
+        "400":
+          description: Validation failure
+          content:
+            '*/*':
               schema:
                 type: array
                 items:
@@ -597,7 +597,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
     post:
       tags:
       - Purchase Orders
@@ -611,24 +611,24 @@ paths:
               $ref: "#/components/schemas/CreatePurchaseOrderRequest"
         required: true
       responses:
-        "403":
-          description: User lacks required purchase order create authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "201":
           description: Purchase order created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PurchaseOrderResponse"
+        "403":
+          description: User lacks required purchase order create authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Validation failure
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/purchase-orders/{poId}/revisions:
     post:
       tags:
@@ -651,36 +651,36 @@ paths:
               $ref: "#/components/schemas/RevisePurchaseOrderRequest"
         required: true
       responses:
-        "403":
-          description: User lacks required purchase order create authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Purchase order not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "409":
           description: Purchase order is in a conflicting state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required purchase order create authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Purchase order revised
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PurchaseOrderResponse"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Purchase order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/purchase-orders/{poId}/receive:
     post:
       tags:
@@ -704,12 +704,6 @@ paths:
               $ref: "#/components/schemas/ReceivePurchaseOrderRequest"
         required: true
       responses:
-        "404":
-          description: Purchase order not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Purchase order received
           content:
@@ -721,19 +715,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: User lacks required purchase order receive authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Purchase order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/purchase-orders/{poId}/cancel:
     post:
       tags:
@@ -750,30 +750,30 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Purchase order not found
+        "409":
+          description: Purchase order is in a conflicting state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Purchase order cancelled
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PurchaseOrderResponse"
-        "409":
-          description: Purchase order is in a conflicting state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required purchase order approval authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Purchase order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/purchase-orders/{poId}/approve:
     post:
       tags:
@@ -796,36 +796,36 @@ paths:
               $ref: "#/components/schemas/ApprovePurchaseOrderRequest"
         required: true
       responses:
-        "404":
-          description: Purchase order not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "409":
           description: Purchase order is in a conflicting state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: User lacks required purchase order approval authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Purchase order approved
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PurchaseOrderResponse"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Purchase order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/pickingLists/{id}/confirm:
     post:
       tags:
@@ -870,7 +870,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Pick lists returned
           content:
@@ -884,7 +884,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
     post:
       tags:
       - Pick Lists
@@ -899,24 +899,24 @@ paths:
               $ref: "#/components/schemas/CreatePickListRequest"
         required: true
       responses:
-        "403":
-          description: User lacks required pick list authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "201":
           description: Pick list created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PickListResponse"
+        "403":
+          description: User lacks required pick list authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/pick-lists/{pickListId}/tasks/{taskId}/confirm:
     post:
       tags:
@@ -952,31 +952,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Pick list or pick task not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "422":
           description: Pick confirmation failed business validation
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Pick task confirmed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PickTaskResponse"
+        "404":
+          description: Pick list or pick task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/pick-lists/{pickListId}/release:
     post:
       tags:
@@ -993,24 +993,24 @@ paths:
           type: string
           format: uuid
       responses:
+        "404":
+          description: Pick list not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: User lacks required pick list authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Pick list released
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PickListResponse"
-        "404":
-          description: Pick list not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/locations/{locationId}/deactivate:
     post:
       tags:
@@ -1034,16 +1034,16 @@ paths:
             schema:
               $ref: "#/components/schemas/DeactivateLocationRequest"
       responses:
-        "400":
-          description: Bad request - invalid parameters or destination required
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DeactivateLocationResponse"
         "200":
           description: Deactivation completed
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/DeactivateLocationResponse"
+        "400":
+          description: Bad request - invalid parameters or destination required
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/DeactivateLocationResponse"
         "404":
@@ -1073,36 +1073,36 @@ paths:
               $ref: "#/components/schemas/CreateGoodsReceiptRequest"
         required: true
       responses:
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Referenced source document not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "409":
-          description: Goods receipt conflict
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required goods receipt create authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "201":
           description: Goods receipt created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/GoodsReceiptResponse"
+        "409":
+          description: Goods receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Referenced source document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/cycleCountPlans:
     post:
       tags:
@@ -1117,6 +1117,12 @@ paths:
               $ref: "#/components/schemas/CreateCycleCountPlanRequest"
         required: true
       responses:
+        "201":
+          description: Cycle count plan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleCountPlanResponse"
         "400":
           description: Validation failure
           content:
@@ -1127,12 +1133,6 @@ paths:
           description: User lacks required permission
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/CycleCountPlanResponse"
-        "201":
-          description: Cycle count plan created
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
   /v1/inventory/cycleCountAdjustments:
@@ -1339,16 +1339,16 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CountResponse"
-        "200":
-          description: Recount submitted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CountResponse"
         "403":
           description: Insufficient permission
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CountResponse"
+        "200":
+          description: Recount submitted successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CountResponse"
   /v1/inventory/consumption:
@@ -1366,30 +1366,30 @@ paths:
               $ref: "#/components/schemas/ConsumeItemsRequest"
         required: true
       responses:
-        "403":
-          description: User lacks required consumption authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "422":
-          description: Consumption business rule validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "201":
           description: Consumption recorded
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConsumptionResponse"
+        "403":
+          description: User lacks required consumption authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Consumption business rule validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/availability/{productId}:
     get:
       tags:
@@ -1406,18 +1406,18 @@ paths:
           type: string
           format: uuid
       responses:
-        "400":
-          description: Invalid product identifier
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LocationAvailabilityDto"
         "200":
           description: Availability returned
           content:
             application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationAvailabilityDto"
+        "400":
+          description: Invalid product identifier
+          content:
+            '*/*':
               schema:
                 type: array
                 items:
@@ -1469,30 +1469,30 @@ paths:
               $ref: "#/components/schemas/CreateAsnRequest"
         required: true
       responses:
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "409":
-          description: ASN conflict (duplicate or state conflict)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "201":
           description: ASN created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AsnResponse"
+        "409":
+          description: ASN conflict (duplicate or state conflict)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: User lacks required ASN create authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/allocations/shortages/resolve:
     post:
       tags:
@@ -1508,6 +1508,12 @@ paths:
               $ref: "#/components/schemas/ShortageResolutionRequest"
         required: true
       responses:
+        "422":
+          description: Unable to resolve shortage under current constraints
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Resolution options returned
           content:
@@ -1519,19 +1525,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: Validation failure
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "422":
-          description: Unable to resolve shortage under current constraints
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/allocations/reallocate:
     post:
       tags:
@@ -1547,6 +1547,18 @@ paths:
               $ref: "#/components/schemas/ReallocateRequest"
         required: true
       responses:
+        "422":
+          description: Reallocation failed business validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required reallocation authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Reallocation completed
           content:
@@ -1558,19 +1570,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required reallocation authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "422":
-          description: Reallocation failed business validation
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/adjustments:
     post:
       tags:
@@ -1586,24 +1586,24 @@ paths:
               $ref: "#/components/schemas/CreateAdjustmentRequestDto"
         required: true
       responses:
-        "403":
-          description: User lacks required create permission
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "201":
           description: Adjustment request created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentRequestResponse"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required create permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/adjustments/{adjustmentRequestId}/approve:
     post:
       tags:
@@ -1620,38 +1620,38 @@ paths:
           type: string
           format: uuid
       responses:
-        "422":
-          description: Business rule validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "200":
-          description: Adjustment approved
         "403":
           description: User lacks required approval permission
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: Adjustment request is in a conflicting state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "200":
+          description: Adjustment approved
         "404":
           description: Referenced resource not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Business rule validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/pick-lists/{pickListId}/status:
     patch:
       tags:
@@ -1675,30 +1675,30 @@ paths:
               $ref: "#/components/schemas/UpdatePickListStatusRequest"
         required: true
       responses:
-        "403":
-          description: User lacks required pick list authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "404":
           description: Pick list not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required pick list authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Pick list status updated
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PickListResponse"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/replenishment/tasks:
     get:
       tags:
@@ -1731,24 +1731,24 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: User lacks required receiving:view authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Receiving session not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Receiving session found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReceivingSessionResponse"
+        "403":
+          description: User lacks required receiving:view authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Receiving session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/putaway/tasks:
     get:
       tags:
@@ -1792,13 +1792,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: User lacks required purchase order view authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/pick-lists/{pickListId}:
     get:
       tags:
@@ -1815,6 +1815,12 @@ paths:
           type: string
           format: uuid
       responses:
+        "404":
+          description: Pick list not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Pick list returned
           content:
@@ -1826,13 +1832,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Pick list not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
     delete:
       tags:
       - Pick Lists
@@ -1848,20 +1848,20 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: User lacks required pick list authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "204":
-          description: Pick list cancelled
         "404":
           description: Pick list not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "204":
+          description: Pick list cancelled
+        "403":
+          description: User lacks required pick list authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/pick-lists/{pickListId}/tasks:
     get:
       tags:
@@ -1878,18 +1878,18 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: User lacks required pick list authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "404":
           description: Pick list not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required pick list authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Pick tasks returned
           content:
@@ -1942,24 +1942,24 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: User lacks required goods receipt view authority
+        "404":
+          description: Goods receipt not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Goods receipt returned
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/GoodsReceiptResponse"
-        "404":
-          description: Goods receipt not found
+        "403":
+          description: User lacks required goods receipt view authority
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/cycleCountPlans/{planId}:
     get:
       tags:
@@ -2064,16 +2064,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Task retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CycleCountTaskResponse"
         "404":
           description: Task not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CycleCountTaskResponse"
+        "200":
+          description: Task retrieved successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountTaskResponse"
   /v1/inventory/cycleCount/task/{taskId}/history:
@@ -2153,36 +2153,36 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Product SKU or location not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "400":
           description: Invalid request parameters
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Availability view returned
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AvailabilityView"
-        "403":
-          description: User lacks required read permission
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "500":
           description: Unexpected server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required read permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Product SKU or location not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/availability/lead-time:
     get:
       tags:
@@ -2211,31 +2211,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required read permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Lead-time data not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: Lead-time view returned
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LeadTimeView"
-        "404":
-          description: Lead-time data not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required read permission
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "500":
-          description: Unexpected server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
   /v1/inventory/asns/{asnId}:
     get:
       tags:
@@ -2257,7 +2257,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
         "200":
           description: ASN returned
           content:
@@ -2269,7 +2269,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
   /v1/inventory/reservations/{workorderLineId}:
     delete:
       tags:
@@ -2289,18 +2289,18 @@ paths:
       responses:
         "204":
           description: Reservation cancelled
-        "403":
-          description: User lacks required reservation authority
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "404":
           description: Reservation not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User lacks required reservation authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     RecordMovementRequest:
@@ -2364,25 +2364,6 @@ components:
       - items
       - returnReason
       - workorderId
-    InventoryErrorResponse:
-      type: object
-      properties:
-        timestamp:
-          type: string
-          description: Timestamp when the error occurred
-          example: 2026-02-24T17:25:43.511Z
-        code:
-          type: string
-          description: Stable error code
-          example: VALIDATION_ERROR
-        message:
-          type: string
-          description: Human-readable error message
-          example: reasonCode must not be blank
-        context:
-          type: object
-          additionalProperties: {}
-          description: Optional structured context for specific business errors
     ReturnResponse:
       type: object
       properties:
@@ -2405,6 +2386,60 @@ components:
           items:
             type: string
             format: uuid
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend
+        APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17T14:30:00.000Z
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related
+            errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all
+            other error types
+          items:
+            $ref: "#/components/schemas/FieldError"
+        referenceId:
+          type: string
+          description: "Workflow or review-case reference identifier, when applicable"
+        nextAction:
+          type: string
+          description: "Recommended next step for the caller, when applicable"
+        supportAction:
+          type: string
+          description: "Support or admin investigation guidance, when applicable"
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
     CreateReservationRequest:
       type: object
       properties:
