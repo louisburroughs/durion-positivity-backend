@@ -9,8 +9,10 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
+import org.springframework.stereotype.Component;
 
 @Slf4j
+@Component
 public class WorkorderPickEventTypeInitializer implements ApplicationRunner {
 
   private static final String SERVICE_NAME = "pos-workorder";
