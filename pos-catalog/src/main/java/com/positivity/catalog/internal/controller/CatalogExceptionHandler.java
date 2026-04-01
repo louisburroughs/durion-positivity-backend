@@ -9,7 +9,9 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.Clock;
 import java.time.Instant;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +20,11 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(basePackages = "com.positivity.catalog.internal.controller")
+@RequiredArgsConstructor
 public class CatalogExceptionHandler {
 
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
+    private final Clock clock;
 
     @ExceptionHandler(CatalogNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(CatalogNotFoundException ex, HttpServletRequest request) {
@@ -69,7 +73,7 @@ public class CatalogExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(
-                ApiError.of(code, message, status.value(), Instant.now().toString(), correlationId),
+                ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId),
                 headers, status);
     }
 

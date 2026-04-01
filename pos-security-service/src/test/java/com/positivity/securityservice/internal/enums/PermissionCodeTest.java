@@ -15,12 +15,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>
  * Verifies:
  * <ul>
- * <li>Catalog contains exactly 215 permissions matching
+ * <li>Catalog contains exactly 221 permissions matching
  * {@code scripts/permissions-aggregate.yaml}.</li>
- * <li>Each bit index in the range [0, 214] is assigned exactly once (no gaps,
+ * <li>Each bit index in the range [0, 220] is assigned exactly once (no gaps,
  * no reuse).</li>
  * <li>Each canonical code string is unique across all enum constants.</li>
- * <li>{@code CATALOG_VERSION = 1} constant is declared and accessible.</li>
+ * <li>{@code CATALOG_VERSION = 2} constant is declared and accessible.</li>
  * <li>{@code fromCode(String)} provides a safe O(1) round-trip lookup.</li>
  * </ul>
  *
@@ -33,17 +33,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PermissionCodeTest {
 
     // -------------------------------------------------------------------------
-    // AC-1: Catalog size — 215 entries
+    // AC-1: Catalog size — 221 entries
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("catalog contains exactly 215 permissions")
-    void catalogContainsExactly215Permissions() {
-        assertThat(PermissionCode.values()).hasSize(215);
+    @DisplayName("catalog contains exactly 221 permissions")
+    void catalogContainsExactly221Permissions() {
+        assertThat(PermissionCode.values()).hasSize(221);
     }
 
     // -------------------------------------------------------------------------
-    // AC-3 / AC-6: Bit index uniqueness and sequential coverage [0, 214]
+    // AC-3 / AC-6: Bit index uniqueness and sequential coverage [0, 220]
     // -------------------------------------------------------------------------
 
     @Test
@@ -53,17 +53,17 @@ class PermissionCodeTest {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        assertThat(bitIndexes).hasSize(215);
+        assertThat(bitIndexes).hasSize(221);
     }
 
     @Test
-    @DisplayName("bit indexes span from 0 to 214 with no gaps")
-    void bitIndexesSpanFrom0To214WithNoGaps() {
+    @DisplayName("bit indexes span from 0 to 220 with no gaps")
+    void bitIndexesSpanFrom0To220WithNoGaps() {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        // Issue PERM-001: every index 0..214 must be present
-        for (int i = 0; i < 215; i++) {
+        // Issue PERM-001: every index 0..220 must be present
+        for (int i = 0; i < 221; i++) {
             assertThat(bitIndexes)
                     .as("bit index %d must be assigned", i)
                     .contains(i);
@@ -81,7 +81,7 @@ class PermissionCodeTest {
                 .map(PermissionCode::code)
                 .collect(Collectors.toSet());
         // Issue PERM-001: no two enum constants may share a canonical code string
-        assertThat(codes).hasSize(215);
+        assertThat(codes).hasSize(221);
     }
 
     // -------------------------------------------------------------------------
@@ -89,9 +89,9 @@ class PermissionCodeTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("CATALOG_VERSION is 1")
-    void catalogVersionIsOne() {
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(1);
+    @DisplayName("CATALOG_VERSION is 2")
+    void catalogVersionIsTwo() {
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(2);
     }
 
     // -------------------------------------------------------------------------
@@ -124,12 +124,12 @@ class PermissionCodeTest {
     }
 
     @Test
-    @DisplayName("known last permission 'workorder:wip:view_all_locations' has bit index 214")
-    void knownLastPermissionHasBitIndex214() {
-        // Issue PERM-001: workorder:wip:view_all_locations must be last entry assigned
-        // bit index 214
-        Optional<PermissionCode> perm = PermissionCode.fromCode("workorder:wip:view_all_locations");
+    @DisplayName("known last permission 'security:token:issue_internal' has bit index 220")
+    void knownLastPermissionHasBitIndex220() {
+        // Issue PERM-001: security:token:issue_internal must be last entry assigned
+        // bit index 220
+        Optional<PermissionCode> perm = PermissionCode.fromCode("security:token:issue_internal");
         assertThat(perm).isPresent();
-        assertThat(perm.get().bitIndex()).isEqualTo(214);
+        assertThat(perm.get().bitIndex()).isEqualTo(220);
     }
 }

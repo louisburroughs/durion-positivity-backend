@@ -134,7 +134,7 @@ class APPaymentControllerTest {
                                         .header("X-User", "test-user"))
                                         // Then: Should return 400 Bad Request
                                         .andExpect(status().isBadRequest())
-                                        .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"))
+                                        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                                         .andExpect(jsonPath("$.message", containsString("1-100 characters")));
 
                         verify(apPaymentService, never()).getPaymentByRef(any());
