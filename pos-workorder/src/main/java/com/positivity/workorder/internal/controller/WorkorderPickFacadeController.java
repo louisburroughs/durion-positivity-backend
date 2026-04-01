@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.dto.pick.WorkorderPickTaskResponse;
 import com.positivity.workorder.service.WorkorderPickFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -55,7 +56,12 @@ public class WorkorderPickFacadeController {
   @GetMapping("/pick-list/tasks")
   @PreAuthorize("hasAuthority('inventory:pick_list:view')")
   @Operation(summary = "Get pick tasks for workorder")
-  @ApiResponse(responseCode = "200", description = "Pick tasks retrieved successfully", content = @Content(schema = @Schema(implementation = WorkorderPickTaskResponse.class)))
+  @ApiResponse(
+      responseCode = "200",
+      description = "Pick tasks retrieved successfully",
+      content = @Content(
+          mediaType = "application/json",
+          array = @ArraySchema(schema = @Schema(implementation = WorkorderPickTaskResponse.class))))
   @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
   @ApiResponse(responseCode = "404", description = "Workorder not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
   public ResponseEntity<List<WorkorderPickTaskResponse>> getPickTasks(
@@ -76,6 +82,9 @@ public class WorkorderPickFacadeController {
   public ResponseEntity<ResolveScanResponse> resolveScan(
       @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId,
       @Parameter(description = "Pick task ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable @NonNull UUID pickTaskId,
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(
+          required = true,
+          content = @Content(schema = @Schema(implementation = ResolveScanRequest.class)))
       @RequestBody @Valid ResolveScanRequest request) {
 
     ResolveScanResponse response = workorderPickFacadeService.resolveScan(workorderId, pickTaskId, request);
@@ -90,10 +99,14 @@ public class WorkorderPickFacadeController {
   @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content(schema = @Schema(implementation = ApiError.class)))
   @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class)))
   @ApiResponse(responseCode = "404", description = "Workorder, pick task, or pick line not found", content = @Content(schema = @Schema(implementation = ApiError.class)))
+  @ApiResponse(responseCode = "422", description = "Scan mismatch or domain validation error from pos-inventory", content = @Content(schema = @Schema(implementation = ApiError.class)))
   public ResponseEntity<WorkorderPickTaskResponse> confirmPickLine(
       @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId,
       @Parameter(description = "Pick task ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable @NonNull UUID pickTaskId,
       @Parameter(description = "Pick line ID", required = true, example = "550e8400-e29b-41d4-a716-446655440002") @PathVariable @NonNull UUID pickLineId,
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(
+          required = true,
+          content = @Content(schema = @Schema(implementation = ConfirmPickLineRequest.class)))
       @RequestBody @Valid ConfirmPickLineRequest request) {
 
     WorkorderPickTaskResponse response = workorderPickFacadeService.confirmPickLine(
@@ -114,9 +127,14 @@ public class WorkorderPickFacadeController {
   public ResponseEntity<WorkorderPickTaskResponse> completePickTask(
       @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId,
       @Parameter(description = "Pick task ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable @NonNull UUID pickTaskId,
-      @RequestBody CompletePickTaskRequest request) {
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(
+          required = false,
+          description = "Completion details; omit or send {} if no reason is provided",
+          content = @Content(schema = @Schema(implementation = CompletePickTaskRequest.class)))
+      @RequestBody(required = false) @Valid CompletePickTaskRequest request) {
 
-    WorkorderPickTaskResponse response = workorderPickFacadeService.completePickTask(workorderId, pickTaskId, request);
+    WorkorderPickTaskResponse response = workorderPickFacadeService.completePickTask(
+        workorderId, pickTaskId, request != null ? request : new CompletePickTaskRequest());
     return ResponseEntity.ok(response);
   }
 }

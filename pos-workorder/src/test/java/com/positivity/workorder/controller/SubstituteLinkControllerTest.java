@@ -1,11 +1,11 @@
 package com.positivity.workorder.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.dto.CreateSubstituteLinkRequest;
-import com.positivity.workorder.dto.SubstituteLinkResponse;
-import com.positivity.workorder.dto.UpdateSubstituteLinkRequest;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.controller.SubstituteLinkController;
+import com.positivity.workorder.internal.dto.pick.CreateSubstituteLinkRequest;
+import com.positivity.workorder.internal.dto.pick.SubstituteLinkResponse;
+import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
 import com.positivity.workorder.internal.enums.SubstituteType;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;

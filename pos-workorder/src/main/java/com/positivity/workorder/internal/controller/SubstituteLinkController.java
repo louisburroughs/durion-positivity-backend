@@ -1,9 +1,9 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.workorder.dto.CreateSubstituteLinkRequest;
-import com.positivity.workorder.dto.SubstituteLinkResponse;
-import com.positivity.workorder.dto.UpdateSubstituteLinkRequest;
+import com.positivity.workorder.internal.dto.pick.CreateSubstituteLinkRequest;
+import com.positivity.workorder.internal.dto.pick.SubstituteLinkResponse;
+import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
 import com.positivity.workorder.service.SubstituteLinkService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

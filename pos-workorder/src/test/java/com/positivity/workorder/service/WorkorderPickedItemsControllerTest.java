@@ -15,6 +15,7 @@ import com.positivity.workorder.internal.controller.WorkorderPickedItemsControll
 import com.positivity.workorder.internal.dto.pick.ConsumePickedItemsRequest;
 import com.positivity.workorder.internal.dto.pick.ConsumePickedItemsResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickedItemResponse;
+import com.positivity.workorder.internal.enums.ConsumeItemStatus;
 
 import java.util.List;
 import java.util.UUID;
@@ -128,7 +129,7 @@ class WorkorderPickedItemsControllerTest {
     var result = ConsumePickedItemsResponse.ConsumedItemResult.builder()
         .pickTaskId(PICK_TASK_ID)
         .quantityConsumed(3)
-        .status("CONSUMED")
+        .status(ConsumeItemStatus.SUCCESS)
         .build();
     var response = ConsumePickedItemsResponse.builder()
         .workorderId(WORKORDER_ID)
@@ -144,7 +145,7 @@ class WorkorderPickedItemsControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.workorderId").value(WORKORDER_ID.toString()))
         .andExpect(jsonPath("$.totalItemsConsumed").value(3))
-        .andExpect(jsonPath("$.results[0].status").value("CONSUMED"));
+        .andExpect(jsonPath("$.results[0].status").value("SUCCESS"));
   }
 
   // -------------------------------------------------------------------------

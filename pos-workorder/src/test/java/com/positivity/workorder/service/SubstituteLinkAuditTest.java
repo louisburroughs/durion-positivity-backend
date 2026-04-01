@@ -1,8 +1,8 @@
 package com.positivity.workorder.service;
 
 import com.positivity.security.common.GatewaySecurityConstants;
-import com.positivity.workorder.dto.CreateSubstituteLinkRequest;
-import com.positivity.workorder.dto.UpdateSubstituteLinkRequest;
+import com.positivity.workorder.internal.dto.pick.CreateSubstituteLinkRequest;
+import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
 import com.positivity.workorder.internal.entity.SubstituteAudit;
 import com.positivity.workorder.internal.entity.SubstituteLink;
 import com.positivity.workorder.internal.enums.SubstituteType;
