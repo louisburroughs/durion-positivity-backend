@@ -83,8 +83,8 @@ class InvoicePaymentControllerIntegrationTest extends BaseIntegrationTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.error.code").value("ARGUMENT_NOT_VALID"))
-        .andExpect(jsonPath("$.error.message").value("workorderId is required"));
+        .andExpect(jsonPath("$.code").value("ARGUMENT_NOT_VALID"))
+        .andExpect(jsonPath("$.message").value("workorderId is required"));
   }
 
   @Test
@@ -107,7 +107,7 @@ class InvoicePaymentControllerIntegrationTest extends BaseIntegrationTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.errorCode").value("REQUEST_FAILED"))
+        .andExpect(jsonPath("$.code").value("REQUEST_FAILED"))
         .andExpect(jsonPath("$.message").value("Workorder not found"));
   }
 }

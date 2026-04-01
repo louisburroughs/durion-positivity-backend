@@ -97,7 +97,8 @@ class AdminAccountStateControllerTest {
         void unlock_adminRole_returns204() throws Exception {
             doNothing().when(adminAccountStateService).unlock(USER_ID);
 
-            mockMvc.perform(post("/v1/users/{id}/unlock", USER_ID).with(user("admin-user").roles("ADMIN")))
+            mockMvc.perform(post("/v1/users/{id}/unlock", USER_ID)
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -130,7 +131,8 @@ class AdminAccountStateControllerTest {
         void enable_adminRole_returns204() throws Exception {
             doNothing().when(adminAccountStateService).enable(USER_ID);
 
-            mockMvc.perform(post("/v1/users/{id}/enable", USER_ID).with(user("admin-user").roles("ADMIN")))
+            mockMvc.perform(post("/v1/users/{id}/enable", USER_ID)
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -164,7 +166,8 @@ class AdminAccountStateControllerTest {
         void disable_adminRole_returns204() throws Exception {
             doNothing().when(adminAccountStateService).disable(USER_ID);
 
-            mockMvc.perform(post("/v1/users/{id}/disable", USER_ID).with(user("admin-user").roles("ADMIN")))
+            mockMvc.perform(post("/v1/users/{id}/disable", USER_ID)
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -197,7 +200,8 @@ class AdminAccountStateControllerTest {
         void expireAccount_adminRole_returns204() throws Exception {
             doNothing().when(adminAccountStateService).expireAccount(USER_ID);
 
-            mockMvc.perform(post("/v1/users/{id}/expire-account", USER_ID).with(user("admin-user").roles("ADMIN")))
+            mockMvc.perform(post("/v1/users/{id}/expire-account", USER_ID)
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -230,7 +234,8 @@ class AdminAccountStateControllerTest {
         void expireCredentials_adminRole_returns204() throws Exception {
             doNothing().when(adminAccountStateService).expireCredentials(USER_ID);
 
-            mockMvc.perform(post("/v1/users/{id}/expire-credentials", USER_ID).with(user("admin-user").roles("ADMIN")))
+            mockMvc.perform(post("/v1/users/{id}/expire-credentials", USER_ID)
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -271,7 +276,8 @@ class AdminAccountStateControllerTest {
                     .build();
             when(adminAccountStateService.getAccountState(USER_ID)).thenReturn(response);
 
-                mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID).with(user("admin-user").roles("ADMIN")))
+                mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID)
+                                .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.userId").value(USER_ID.toString()));
         }
@@ -285,7 +291,8 @@ class AdminAccountStateControllerTest {
             when(adminAccountStateService.getAccountState(USER_ID))
                     .thenThrow(new UserNotFoundException("User not found: " + USER_ID));
 
-            mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID).with(user("admin-user").roles("ADMIN")))
+            mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID)
+                            .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
                     .andExpect(status().isNotFound());
         }
 

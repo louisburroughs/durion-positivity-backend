@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,7 @@ public class AuditTrailController {
 
     private final AuditTrailService auditService;
     private final AuditTrailQueryService queryService;
+    private final Clock clock;
 
     /**
      * Record a price override.
@@ -241,7 +243,7 @@ public class AuditTrailController {
                 "message", message,
                 "error", message,
                 "status", status.value(),
-                "timestamp", Instant.now().toString(),
+                "timestamp", Instant.now(clock).toString(),
                 "correlationId", correlationId);
     }
 

@@ -75,7 +75,7 @@ public class FinancialReportingController {
                 // Use IllegalArgumentException for validation errors to leverage the module's
                 // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
                 // Request
-                // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
+                // with a consistent ApiError format (code: "VALIDATION_ERROR").
                 // This maintains the accounting domain's standard error contract across all
                 // endpoints.
                 if (endDate.isBefore(startDate)) {
@@ -125,7 +125,7 @@ public class FinancialReportingController {
                 // Use IllegalArgumentException for validation errors to leverage the module's
                 // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
                 // Request
-                // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
+                // with a consistent ApiError format (code: "VALIDATION_ERROR").
                 // This maintains the accounting domain's standard error contract across all
                 // endpoints.
 
@@ -159,7 +159,7 @@ public class FinancialReportingController {
                 // Use IllegalArgumentException for validation errors to leverage the module's
                 // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
                 // Request
-                // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
+                // with a consistent ApiError format (code: "VALIDATION_ERROR").
                 // This maintains the accounting domain's standard error contract across all
                 // endpoints.
 

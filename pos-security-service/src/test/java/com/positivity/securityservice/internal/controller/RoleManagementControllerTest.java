@@ -121,7 +121,7 @@ class RoleManagementControllerTest {
      * <p>Status: <strong>GREEN</strong> — {@code POST /v1/roles} exists and returns 201.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:create")
     @DisplayName("SC1 (GREEN): POST /v1/roles → 201 Created with role JSON")
     void createRole_validName_returns201() throws Exception {
         RoleDto dto = RoleDto.builder()
@@ -151,7 +151,7 @@ class RoleManagementControllerTest {
      * is mapped to 409 by the {@code GlobalExceptionHandler}.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:create")
     @DisplayName("SC2 (GREEN-after-scaffold): POST /v1/roles duplicate name → 409 Conflict")
     void createRole_duplicateName_returns409() throws Exception {
         when(roleManagementService.createRole(anyString(), any()))
@@ -171,7 +171,7 @@ class RoleManagementControllerTest {
      * <p>Status: <strong>GREEN</strong> — endpoint exists.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:view")
     @DisplayName("SC3 (GREEN): GET /v1/roles → 200 with role list")
     void getAllRoles_returns200() throws Exception {
         RoleDto dto = RoleDto.builder().id(ROLE_ID).name("Dispatcher").build();
@@ -190,7 +190,7 @@ class RoleManagementControllerTest {
      * <p>Story mapping: Functional Behavior 1 — view a specific role by UUID.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:view")
     @DisplayName("GET /v1/roles/{id} → 200 with role JSON")
     void getRoleById_existingId_returns200() throws Exception {
         RoleDto dto = RoleDto.builder().id(ROLE_ID).name("ShopManager").build();
@@ -207,7 +207,7 @@ class RoleManagementControllerTest {
      * SC5: GET /v1/roles/{id} for a non-existent UUID returns 404 Not Found.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:view")
     @DisplayName("GET /v1/roles/{unknown-id} → 404 Not Found")
     void getRoleById_nonExistentId_returns404() throws Exception {
         when(roleManagementService.getRoleById(any(UUID.class))).thenReturn(Optional.empty());
@@ -227,7 +227,7 @@ class RoleManagementControllerTest {
      * <p>Expected failure: {@code expected 204 but was 404}.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:delete")
     @DisplayName("DELETE /v1/roles/{id} → 204 No Content")
     void deleteRole_returns204() throws Exception {
         mockMvc.perform(delete("/v1/roles/{id}", ROLE_ID))
@@ -247,7 +247,7 @@ class RoleManagementControllerTest {
      * variable permission segment).
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:edit")
     @DisplayName("PUT /v1/roles/{id}/permissions/{permKey} → 204 No Content")
     void assignPermission_returns204() throws Exception {
         mockMvc.perform(put("/v1/roles/{id}/permissions/{permKey}", ROLE_ID, PERMISSION_KEY))
@@ -265,7 +265,7 @@ class RoleManagementControllerTest {
      * <p>Expected failure: {@code expected 204 but was 200}.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:edit")
     @DisplayName("DELETE /v1/roles/{id}/permissions/{permKey} → 204 No Content")
     void revokePermission_returns204() throws Exception {
         mockMvc.perform(delete("/v1/roles/{id}/permissions/{permKey}", ROLE_ID, PERMISSION_KEY))
@@ -281,7 +281,7 @@ class RoleManagementControllerTest {
      * <p>Status: <strong>GREEN</strong> — {@link UserRoleController#assignRoleToUser} returns 201.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:assign")
     @DisplayName("SC9 (GREEN): PUT /v1/users/{userId}/roles/{roleId} → 201 Created")
     void assignRoleToUser_returns201() throws Exception {
         mockMvc.perform(put("/v1/users/{userId}/roles/{roleId}", USER_ID, ROLE_ID))
@@ -297,7 +297,7 @@ class RoleManagementControllerTest {
      * <p>Status: <strong>GREEN</strong> — {@link UserRoleController#revokeRoleFromUser} returns 204.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:assign")
     @DisplayName("DELETE /v1/users/{userId}/roles/{roleId} → 204 No Content")
     void revokeRoleFromUser_returns204() throws Exception {
         mockMvc.perform(delete("/v1/users/{userId}/roles/{roleId}", USER_ID, ROLE_ID))
@@ -314,7 +314,7 @@ class RoleManagementControllerTest {
      * with the user's effective permission set.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:permission:view")
     @DisplayName("GET /v1/users/{userId}/permissions → 200 effective permissions")
     void getEffectivePermissions_returns200() throws Exception {
         when(roleManagementService.getUserPermissions(USER_ID))
@@ -347,7 +347,8 @@ class RoleManagementControllerTest {
      * ADR-0017 / SC13: Authenticated caller without ADMIN role returns 403 Forbidden.
      *
      * <p>Story mapping: Alternate Flow — "Unauthorized Management → system must deny access".
-     * {@code @PreAuthorize("hasRole('ADMIN')")} enforces ADMIN-only access on
+     * {@code @PreAuthorize("hasAuthority('security:role:create')")} enforces
+     * fine-grained authorization on
      * {@code POST /v1/roles}.
      */
     @Test
