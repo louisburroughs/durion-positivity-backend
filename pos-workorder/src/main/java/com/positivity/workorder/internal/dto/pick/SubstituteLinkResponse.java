@@ -1,4 +1,4 @@
-package com.positivity.workorder.dto;
+package com.positivity.workorder.internal.dto.pick;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.workorder.internal.enums.SubstituteType;

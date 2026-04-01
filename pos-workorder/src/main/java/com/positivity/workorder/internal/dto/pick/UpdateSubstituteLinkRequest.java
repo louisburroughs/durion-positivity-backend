@@ -1,4 +1,4 @@
-package com.positivity.workorder.dto;
+package com.positivity.workorder.internal.dto.pick;
 
 import com.positivity.workorder.internal.enums.SubstituteType;
 import lombok.AllArgsConstructor;
@@ -7,18 +7,16 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreateSubstituteLinkRequest {
-    private UUID productId;
-    private UUID substitutePartId;
+public class UpdateSubstituteLinkRequest {
     private SubstituteType substituteType;
     private Integer priority;
     private Boolean isAutoSuggest;
     private Instant effectiveFrom;
     private Instant effectiveTo;
+    private int version;
 }

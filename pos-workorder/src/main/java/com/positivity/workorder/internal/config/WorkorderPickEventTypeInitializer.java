@@ -8,11 +8,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.stereotype.Component;
 
-@Component
 @Slf4j
+@Component
 public class WorkorderPickEventTypeInitializer implements ApplicationRunner {
 
   private static final String SERVICE_NAME = "pos-workorder";
