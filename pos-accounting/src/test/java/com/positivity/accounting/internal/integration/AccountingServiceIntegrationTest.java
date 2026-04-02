@@ -140,7 +140,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content("{}"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.error.code").value("ARGUMENT_NOT_VALID"));
+        .andExpect(jsonPath("$.code").value("ARGUMENT_NOT_VALID"));
   }
 
   @Test
@@ -249,7 +249,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
         .andExpect(status().isUnprocessableContent())
-        .andExpect(jsonPath("$.error.code").value("UNBALANCED_ENTRY"));
+        .andExpect(jsonPath("$.code").value("UNBALANCED_ENTRY"));
   }
 
   @Test
@@ -337,7 +337,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     // Try to post again
     mockMvc.perform(withAuth(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.error.code").value("ENTRY_ALREADY_POSTED"));
+        .andExpect(jsonPath("$.code").value("ENTRY_ALREADY_POSTED"));
   }
 
   // ============================================
@@ -587,7 +587,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(eventPayload))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.error.code").value("DUPLICATE_EVENT"));
+        .andExpect(jsonPath("$.code").value("DUPLICATE_EVENT"));
   }
 
   // ============================================

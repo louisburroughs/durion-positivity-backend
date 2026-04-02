@@ -219,7 +219,7 @@ class PermissionBitIndexTest {
         }
 
         @Test
-        @DisplayName("all 215 catalog permissions get correct bitIndex when registered via service")
+        @DisplayName("all 221 catalog permissions get correct bitIndex when registered via service")
         void allCatalogPermissionsGetCorrectBitIndexWhenRegistered() {
             List<PermissionRegistrationRequest.PermissionDefinition> defs = Arrays.stream(PermissionCode.values())
                     .map(pc -> new PermissionRegistrationRequest.PermissionDefinition(pc.code(),
@@ -231,8 +231,8 @@ class PermissionBitIndexTest {
             PermissionRegistrationResponse response = permissionRegistryService.registerPermissions(request);
 
             assertThat(response.getRegisteredPermissions())
-                    .as("All 215 catalog permissions should be registered (0 failures)")
-                    .isEqualTo(215);
+                    .as("All 221 catalog permissions should be registered (0 failures)")
+                    .isEqualTo(221);
 
             for (PermissionCode pc : PermissionCode.values()) {
                 Optional<Permission> perm = permissionRepository.findByName(pc.code());

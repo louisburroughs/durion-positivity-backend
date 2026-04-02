@@ -52,10 +52,10 @@ class PermissionBitsetCodecTest {
     @Test
     @DisplayName("encode a permission set spanning multiple bytes produces Base64URL without padding")
     void encodeProducesBase64UrlWithoutPadding() {
-        // Issue PERM-003: bit 0 (first) + bit 214 (last) — spans all 215 bits
+        // Issue PERM-003: bit 0 (first) + bit 220 (last) — spans all 221 bits
         Set<PermissionCode> perms = EnumSet.of(
                 PermissionCode.ACCOUNTING__JE__VIEW, // bit 0
-                PermissionCode.WORKORDER__WIP__VIEW_ALL_LOCATIONS // bit 214
+                PermissionCode.SECURITY__TOKEN__ISSUE_INTERNAL // bit 220
         );
         String encoded = PermissionBitsetCodec.encode(perms);
         assertThat(encoded)
@@ -98,7 +98,7 @@ class PermissionBitsetCodecTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("round-trip all 215 permissions returns identical set")
+    @DisplayName("round-trip all 221 permissions returns identical set")
     void roundTripAllPermissions() {
         // Issue PERM-003: encode → decodeToPermissions must be lossless for full
         // catalog
@@ -130,7 +130,8 @@ class PermissionBitsetCodecTest {
         // Issue PERM-003: bit 11 (catalog:product:view)
         Set<PermissionCode> single = Set.of(PermissionCode.CATALOG__PRODUCT__VIEW);
         String encoded = PermissionBitsetCodec.encode(single);
-        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(encoded, 1);
+        Set<PermissionCode> decoded = PermissionBitsetCodec.decodeToPermissions(encoded,
+                PermissionCode.CATALOG_VERSION);
         assertThat(decoded).containsExactlyInAnyOrderElementsOf(single);
     }
 
@@ -139,20 +140,21 @@ class PermissionBitsetCodecTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("decodeToPermissions silently ignores bits beyond catalog max (bit 215+)")
+    @DisplayName("decodeToPermissions silently ignores bits beyond catalog max (bit 221+)")
     void decodeToPermissionsIgnoresUnknownBitsGracefully() {
-        // Construct a byte array with bit 215 set (the first bit beyond the catalog).
-        // BitSet.valueOf uses little-endian within bytes, so bit 215 = byte[26] | 0x80
-        // (215 / 8 = 26, 215 % 8 = 7 → bit 7 of byte 26 → 0x80)
+        // Construct a byte array with bit 221 set (the first bit beyond the catalog).
+        // BitSet.valueOf uses little-endian within bytes, so bit 221 = byte[27] | 0x20
+        // (221 / 8 = 27, 221 % 8 = 5 → bit 5 of byte 27 → 0x20)
         // Also set bit 0 (accounting:je:view) to have a known valid permission present.
-        byte[] bytes = new byte[27]; // 27 bytes covers bits 0..215
+        byte[] bytes = new byte[28]; // 28 bytes covers bits 0..221
         bytes[0] = (byte) 0x01; // bit 0
-        bytes[26] = (byte) 0x80; // bit 215 (beyond catalog, should be ignored)
+        bytes[27] = (byte) 0x20; // bit 221 (beyond catalog, should be ignored)
         String encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
-        Set<PermissionCode> result = PermissionBitsetCodec.decodeToPermissions(encoded, 1);
+        Set<PermissionCode> result = PermissionBitsetCodec.decodeToPermissions(encoded,
+                PermissionCode.CATALOG_VERSION);
 
-        // Only the known permission should be present; bit 215 must be silently ignored
+        // Only the known permission should be present; bit 221 must be silently ignored
         assertThat(result).containsExactly(PermissionCode.ACCOUNTING__JE__VIEW);
     }
 
@@ -196,12 +198,12 @@ class PermissionBitsetCodecTest {
     }
 
     @Test
-    @DisplayName("hasPermission correctly handles the last bit (bit 214)")
+    @DisplayName("hasPermission correctly handles the last bit (bit 220)")
     void hasPermissionWorksForLastBit() {
-        // Issue PERM-003: boundary check — bit 214 is the highest defined catalog bit
+        // Issue PERM-003: boundary check — bit 220 is the highest defined catalog bit
         String encoded = PermissionBitsetCodec.encode(
-                Set.of(PermissionCode.WORKORDER__WIP__VIEW_ALL_LOCATIONS)); // bit 214
-        assertThat(PermissionBitsetCodec.hasPermission(encoded, PermissionCode.WORKORDER__WIP__VIEW_ALL_LOCATIONS))
+                Set.of(PermissionCode.SECURITY__TOKEN__ISSUE_INTERNAL)); // bit 220
+        assertThat(PermissionBitsetCodec.hasPermission(encoded, PermissionCode.SECURITY__TOKEN__ISSUE_INTERNAL))
                 .isTrue();
         assertThat(PermissionBitsetCodec.hasPermission(encoded, PermissionCode.ACCOUNTING__JE__VIEW))
                 .isFalse();
