@@ -98,7 +98,7 @@ class FinancialReportingControllerTest {
                                         .param("endDate", END_DATE.toString()))
                                         // Then: Should return 400 Bad Request
                                         .andExpect(status().isBadRequest())
-                                        .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"))
+                                        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                                         .andExpect(jsonPath("$.message",
                                                         containsString("Invalid statement line code format")));
 
@@ -145,7 +145,7 @@ class FinancialReportingControllerTest {
                                         .param("endDate", END_DATE.toString()))
                                         // Then: Should return 400 Bad Request
                                         .andExpect(status().isBadRequest())
-                                        .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+                                        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
                         verify(financialReportingService, never()).drilldownToAccounts(any(), any(), any());
                 }
@@ -165,7 +165,7 @@ class FinancialReportingControllerTest {
                                         .param("endDate", END_DATE.toString()))
                                         // Then: Should return 400 Bad Request
                                         .andExpect(status().isBadRequest())
-                                        .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+                                        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
                         verify(financialReportingService, never()).drilldownToAccounts(any(), any(), any());
                 }
@@ -241,7 +241,7 @@ class FinancialReportingControllerTest {
                                         .param("endDate", invalidEndDate.toString()))
                                         // Then: Should return 400 Bad Request
                                         .andExpect(status().isBadRequest())
-                                        .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"))
+                                        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                                         .andExpect(jsonPath("$.message", containsString("End date cannot be before")));
 
                         verify(financialReportingService, never()).drilldownToAccounts(any(), any(), any());

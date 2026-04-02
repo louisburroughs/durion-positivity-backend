@@ -5,9 +5,11 @@ import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -15,7 +17,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = NltiController.class)
+@RequiredArgsConstructor
 class NltiExceptionHandler {
+
+    private final Clock clock;
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> handleValidation(
@@ -29,7 +34,7 @@ class NltiExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
                 .body(ApiError.withFieldErrors("VALIDATION_ERROR", "Request validation failed",
-                        HttpStatus.BAD_REQUEST.value(), Instant.now().toString(),
+                        HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(),
                         correlationId.toString(), fieldErrors));
     }
 
@@ -41,7 +46,7 @@ class NltiExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
                 .body(ApiError.of("VALIDATION_ERROR", ex.getMessage(),
-                        HttpStatus.BAD_REQUEST.value(), Instant.now().toString(), correlationId.toString()));
+                        HttpStatus.BAD_REQUEST.value(), Instant.now(clock).toString(), correlationId.toString()));
     }
 
     @ExceptionHandler(RateLimitExceededException.class)
@@ -52,7 +57,7 @@ class NltiExceptionHandler {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
                 .body(ApiError.of("RATE_LIMIT_EXCEEDED", ex.getMessage(),
-                        HttpStatus.TOO_MANY_REQUESTS.value(), Instant.now().toString(), correlationId.toString()));
+                        HttpStatus.TOO_MANY_REQUESTS.value(), Instant.now(clock).toString(), correlationId.toString()));
     }
 
     @ExceptionHandler(SessionOwnershipViolationException.class)
@@ -63,7 +68,7 @@ class NltiExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
                 .body(ApiError.of("SESSION_ACCESS_DENIED", ex.getMessage(),
-                        HttpStatus.FORBIDDEN.value(), Instant.now().toString(), correlationId.toString()));
+                        HttpStatus.FORBIDDEN.value(), Instant.now(clock).toString(), correlationId.toString()));
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)
@@ -74,6 +79,6 @@ class NltiExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
                 .body(ApiError.of("NOT_IMPLEMENTED", ex.getMessage(),
-                        HttpStatus.NOT_IMPLEMENTED.value(), Instant.now().toString(), correlationId.toString()));
+                        HttpStatus.NOT_IMPLEMENTED.value(), Instant.now(clock).toString(), correlationId.toString()));
     }
 }

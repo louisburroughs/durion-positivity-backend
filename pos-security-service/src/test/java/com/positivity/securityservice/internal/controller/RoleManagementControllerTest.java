@@ -53,35 +53,92 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 /**
  * Story #62 controller slice tests for {@link RoleController}.
  *
- * <p>All 13 acceptance criteria from the Story #62 spec. Tests are
+ * <p>
+ * All 13 acceptance criteria from the Story #62 spec. Tests are
  * {@link WebMvcTest} slices — service logic is
  * fully mocked; no database or full-context boot required.
  *
  * <h3>Status Summary</h3>
  * <table>
- *   <tr><th>SC</th><th>Path</th><th>Status</th></tr>
- *   <tr><td>SC1</td><td>POST /v1/roles → 201</td><td>Covered</td></tr>
- *   <tr><td>SC2</td><td>POST /v1/roles → 409 duplicate</td><td>Covered</td></tr>
- *   <tr><td>SC3</td><td>GET /v1/roles → 200</td><td>Covered</td></tr>
- *   <tr><td>SC4</td><td>GET /v1/roles/{id} → 200</td><td>Covered</td></tr>
- *   <tr><td>SC5</td><td>GET /v1/roles/{id} → 404</td><td>Covered</td></tr>
- *   <tr><td>SC6</td><td>DELETE /v1/roles/{id} → 204</td><td>Covered</td></tr>
- *   <tr><td>SC7</td><td>PUT /v1/roles/{id}/permissions/{p} → 204</td><td>Covered</td></tr>
- *   <tr><td>SC8</td><td>DELETE /v1/roles/{id}/permissions/{p} → 204</td><td>Covered</td></tr>
- *   <tr><td>SC9</td><td>PUT /v1/users/{u}/roles/{r} → 201</td><td>Covered</td></tr>
- *   <tr><td>SC10</td><td>DELETE /v1/users/{u}/roles/{r} → 204</td><td>Covered</td></tr>
- *   <tr><td>SC11</td><td>GET /v1/users/{u}/permissions → 200</td><td>Covered</td></tr>
- *   <tr><td>SC12</td><td>Unauthenticated → 401</td><td>Covered</td></tr>
- *   <tr><td>SC13</td><td>VIEWER role → 403</td><td>Covered</td></tr>
+ * <tr>
+ * <th>SC</th>
+ * <th>Path</th>
+ * <th>Status</th>
+ * </tr>
+ * <tr>
+ * <td>SC1</td>
+ * <td>POST /v1/roles → 201</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC2</td>
+ * <td>POST /v1/roles → 409 duplicate</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC3</td>
+ * <td>GET /v1/roles → 200</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC4</td>
+ * <td>GET /v1/roles/{id} → 200</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC5</td>
+ * <td>GET /v1/roles/{id} → 404</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC6</td>
+ * <td>DELETE /v1/roles/{id} → 204</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC7</td>
+ * <td>PUT /v1/roles/{id}/permissions/{p} → 204</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC8</td>
+ * <td>DELETE /v1/roles/{id}/permissions/{p} → 204</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC9</td>
+ * <td>PUT /v1/users/{u}/roles/{r} → 201</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC10</td>
+ * <td>DELETE /v1/users/{u}/roles/{r} → 204</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC11</td>
+ * <td>GET /v1/users/{u}/permissions → 200</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC12</td>
+ * <td>Unauthenticated → 401</td>
+ * <td>Covered</td>
+ * </tr>
+ * <tr>
+ * <td>SC13</td>
+ * <td>VIEWER role → 403</td>
+ * <td>Covered</td>
+ * </tr>
  * </table>
  */
 @WebMvcTest({ RoleController.class, UserRoleController.class })
 @DisplayName("RoleManagementControllerTest — Story #62")
 class RoleManagementControllerTest {
 
-    private static final Clock  TEST_CLOCK     = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
-    private static final UUID   ROLE_ID        = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID   USER_ID        = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final UUID ROLE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     private static final String PERMISSION_KEY = "securityrolescreate"; // no colons to avoid URL encoding complexity
 
     @Autowired
@@ -100,7 +157,8 @@ class RoleManagementControllerTest {
 
     /**
      * Make the mocked JWT filter a passthrough so it does not swallow requests.
-     * {@code @WithMockUser} directly populates the {@link org.springframework.security.core.context.SecurityContext}
+     * {@code @WithMockUser} directly populates the
+     * {@link org.springframework.security.core.context.SecurityContext}
      * before the filter chain runs, so no real token processing is needed.
      */
     @BeforeEach
@@ -116,12 +174,17 @@ class RoleManagementControllerTest {
     /**
      * SC1: A valid role name returns 201 Created with the new Role JSON.
      *
-     * <p>Story mapping: Functional Behavior 1 — create role.
-     * <p>ADR-0017: Success response for POST is 201 Created with the created resource body.
-     * <p>Status: <strong>GREEN</strong> — {@code POST /v1/roles} exists and returns 201.
+     * <p>
+     * Story mapping: Functional Behavior 1 — create role.
+     * <p>
+     * ADR-0017: Success response for POST is 201 Created with the created resource
+     * body.
+     * <p>
+     * Status: <strong>GREEN</strong> — {@code POST /v1/roles} exists and returns
+     * 201.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:create")
     @DisplayName("SC1 (GREEN): POST /v1/roles → 201 Created with role JSON")
     void createRole_validName_returns201() throws Exception {
         RoleDto dto = RoleDto.builder()
@@ -133,8 +196,8 @@ class RoleManagementControllerTest {
         when(roleManagementService.createRole("ShopManager", null)).thenReturn(dto);
 
         mockMvc.perform(post("/v1/roles")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"ShopManager\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"ShopManager\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(ROLE_ID.toString()))
                 .andExpect(jsonPath("$.name").value("ShopManager"));
@@ -145,21 +208,25 @@ class RoleManagementControllerTest {
     /**
      * SC2: A duplicate (case-insensitive) role name returns 409 Conflict.
      *
-     * <p>Story mapping: Alternate Flow — "Duplicate Role Creation → 409".
-     * <p>ADR-0017: 409 Conflict for uniqueness-constraint violations.
-     * <p>Status: <strong>GREEN</strong> after scaffold — {@link DuplicateRoleNameException}
+     * <p>
+     * Story mapping: Alternate Flow — "Duplicate Role Creation → 409".
+     * <p>
+     * ADR-0017: 409 Conflict for uniqueness-constraint violations.
+     * <p>
+     * Status: <strong>GREEN</strong> after scaffold —
+     * {@link DuplicateRoleNameException}
      * is mapped to 409 by the {@code GlobalExceptionHandler}.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:create")
     @DisplayName("SC2 (GREEN-after-scaffold): POST /v1/roles duplicate name → 409 Conflict")
     void createRole_duplicateName_returns409() throws Exception {
         when(roleManagementService.createRole(anyString(), any()))
                 .thenThrow(new DuplicateRoleNameException("Role already exists: ShopManager"));
 
         mockMvc.perform(post("/v1/roles")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"ShopManager\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"ShopManager\"}"))
                 .andExpect(status().isConflict());
     }
 
@@ -168,10 +235,11 @@ class RoleManagementControllerTest {
     /**
      * SC3: GET /v1/roles returns 200 OK with the list of all roles.
      *
-     * <p>Status: <strong>GREEN</strong> — endpoint exists.
+     * <p>
+     * Status: <strong>GREEN</strong> — endpoint exists.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:view")
     @DisplayName("SC3 (GREEN): GET /v1/roles → 200 with role list")
     void getAllRoles_returns200() throws Exception {
         RoleDto dto = RoleDto.builder().id(ROLE_ID).name("Dispatcher").build();
@@ -187,10 +255,11 @@ class RoleManagementControllerTest {
     /**
      * SC4: GET /v1/roles/{id} by UUID returns 200 with the Role JSON.
      *
-     * <p>Story mapping: Functional Behavior 1 — view a specific role by UUID.
+     * <p>
+     * Story mapping: Functional Behavior 1 — view a specific role by UUID.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:view")
     @DisplayName("GET /v1/roles/{id} → 200 with role JSON")
     void getRoleById_existingId_returns200() throws Exception {
         RoleDto dto = RoleDto.builder().id(ROLE_ID).name("ShopManager").build();
@@ -207,7 +276,7 @@ class RoleManagementControllerTest {
      * SC5: GET /v1/roles/{id} for a non-existent UUID returns 404 Not Found.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:view")
     @DisplayName("GET /v1/roles/{unknown-id} → 404 Not Found")
     void getRoleById_nonExistentId_returns404() throws Exception {
         when(roleManagementService.getRoleById(any(UUID.class))).thenReturn(Optional.empty());
@@ -219,15 +288,20 @@ class RoleManagementControllerTest {
     // ── SC6: DELETE /v1/roles/{id} → 204 ─────────────────────────────────────
 
     /**
-     * SC6: DELETE /v1/roles/{id} deletes the role (cascade) and returns 204 No Content.
+     * SC6: DELETE /v1/roles/{id} deletes the role (cascade) and returns 204 No
+     * Content.
      *
-     * <p><strong>RED</strong>: No {@code DELETE /v1/roles/{id}} (single segment) endpoint
-     * exists. Existing DELETE endpoints require more path segments or start with "assignments".
+     * <p>
+     * <strong>RED</strong>: No {@code DELETE /v1/roles/{id}} (single segment)
+     * endpoint
+     * exists. Existing DELETE endpoints require more path segments or start with
+     * "assignments".
      *
-     * <p>Expected failure: {@code expected 204 but was 404}.
+     * <p>
+     * Expected failure: {@code expected 204 but was 404}.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:delete")
     @DisplayName("DELETE /v1/roles/{id} → 204 No Content")
     void deleteRole_returns204() throws Exception {
         mockMvc.perform(delete("/v1/roles/{id}", ROLE_ID))
@@ -237,17 +311,20 @@ class RoleManagementControllerTest {
     // ── SC7: PUT /v1/roles/{id}/permissions/{permId} → 204 ───────────────────
 
     /**
-     * SC7: PUT /v1/roles/{id}/permissions/{permissionId} assigns a permission; returns 204.
+     * SC7: PUT /v1/roles/{id}/permissions/{permissionId} assigns a permission;
+     * returns 204.
      *
-     * <p><strong>RED</strong>: Only {@code PUT /{roleId}/permissions/grant} exists
+     * <p>
+     * <strong>RED</strong>: Only {@code PUT /{roleId}/permissions/grant} exists
      * (literal "grant" path segment, body-based). The Story #62 spec requires the
      * permission key in the path and a 204 response.
      *
-     * <p>Expected failure: {@code expected 204 but was 404} (no match for path with
+     * <p>
+     * Expected failure: {@code expected 204 but was 404} (no match for path with
      * variable permission segment).
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:edit")
     @DisplayName("PUT /v1/roles/{id}/permissions/{permKey} → 204 No Content")
     void assignPermission_returns204() throws Exception {
         mockMvc.perform(put("/v1/roles/{id}/permissions/{permKey}", ROLE_ID, PERMISSION_KEY))
@@ -257,15 +334,20 @@ class RoleManagementControllerTest {
     // ── SC8: DELETE /v1/roles/{id}/permissions/{permKey} → 204 ───────────────
 
     /**
-     * SC8: DELETE /v1/roles/{id}/permissions/{permKey} revokes a permission; returns 204.
+     * SC8: DELETE /v1/roles/{id}/permissions/{permKey} revokes a permission;
+     * returns 204.
      *
-     * <p><strong>RED</strong>: Existing {@code DELETE /{roleId}/permissions/{permissionKey}}
-     * returns HTTP 200 with a {@link RoleDto} body. Story #62 requires 204 No Content.
+     * <p>
+     * <strong>RED</strong>: Existing
+     * {@code DELETE /{roleId}/permissions/{permissionKey}}
+     * returns HTTP 200 with a {@link RoleDto} body. Story #62 requires 204 No
+     * Content.
      *
-     * <p>Expected failure: {@code expected 204 but was 200}.
+     * <p>
+     * Expected failure: {@code expected 204 but was 200}.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:edit")
     @DisplayName("DELETE /v1/roles/{id}/permissions/{permKey} → 204 No Content")
     void revokePermission_returns204() throws Exception {
         mockMvc.perform(delete("/v1/roles/{id}/permissions/{permKey}", ROLE_ID, PERMISSION_KEY))
@@ -275,13 +357,17 @@ class RoleManagementControllerTest {
     // ── SC9: PUT /v1/users/{userId}/roles/{roleId} → 204 ─────────────────────
 
     /**
-     * SC9: PUT /v1/users/{userId}/roles/{roleId} assigns a role to a user; returns 201 Created.
+     * SC9: PUT /v1/users/{userId}/roles/{roleId} assigns a role to a user; returns
+     * 201 Created.
      *
-     * <p>ADR-0017: resource creation via PUT returns 201 Created.
-     * <p>Status: <strong>GREEN</strong> — {@link UserRoleController#assignRoleToUser} returns 201.
+     * <p>
+     * ADR-0017: resource creation via PUT returns 201 Created.
+     * <p>
+     * Status: <strong>GREEN</strong> — {@link UserRoleController#assignRoleToUser}
+     * returns 201.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:assign")
     @DisplayName("SC9 (GREEN): PUT /v1/users/{userId}/roles/{roleId} → 201 Created")
     void assignRoleToUser_returns201() throws Exception {
         mockMvc.perform(put("/v1/users/{userId}/roles/{roleId}", USER_ID, ROLE_ID))
@@ -291,13 +377,17 @@ class RoleManagementControllerTest {
     // ── SC10: DELETE /v1/users/{userId}/roles/{roleId} → 204 ─────────────────
 
     /**
-     * SC10: DELETE /v1/users/{userId}/roles/{roleId} revokes a role from a user; returns 204.
+     * SC10: DELETE /v1/users/{userId}/roles/{roleId} revokes a role from a user;
+     * returns 204.
      *
-     * <p>ADR-0017: resource deletion returns 204 No Content.
-     * <p>Status: <strong>GREEN</strong> — {@link UserRoleController#revokeRoleFromUser} returns 204.
+     * <p>
+     * ADR-0017: resource deletion returns 204 No Content.
+     * <p>
+     * Status: <strong>GREEN</strong> —
+     * {@link UserRoleController#revokeRoleFromUser} returns 204.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:role:assign")
     @DisplayName("DELETE /v1/users/{userId}/roles/{roleId} → 204 No Content")
     void revokeRoleFromUser_returns204() throws Exception {
         mockMvc.perform(delete("/v1/users/{userId}/roles/{roleId}", USER_ID, ROLE_ID))
@@ -307,14 +397,18 @@ class RoleManagementControllerTest {
     // ── SC11: GET /v1/users/{userId}/permissions → 200 ───────────────────────
 
     /**
-     * SC11: GET /v1/users/{userId}/permissions returns 200 with the effective permissions.
+     * SC11: GET /v1/users/{userId}/permissions returns 200 with the effective
+     * permissions.
      *
-     * <p>ADR-0017: successful read returns 200 OK.
-     * <p>Status: <strong>GREEN</strong> — {@link UserRoleController#getEffectivePermissions} returns 200
+     * <p>
+     * ADR-0017: successful read returns 200 OK.
+     * <p>
+     * Status: <strong>GREEN</strong> —
+     * {@link UserRoleController#getEffectivePermissions} returns 200
      * with the user's effective permission set.
      */
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(authorities = "security:permission:view")
     @DisplayName("GET /v1/users/{userId}/permissions → 200 effective permissions")
     void getEffectivePermissions_returns200() throws Exception {
         when(roleManagementService.getUserPermissions(USER_ID))
@@ -329,25 +423,31 @@ class RoleManagementControllerTest {
     /**
      * ADR-0017 / SC12: All unauthenticated requests return 401 Unauthorized.
      *
-     * <p>Story mapping: Alternate Flow — "Unauthorized Management → system must deny access".
+     * <p>
+     * Story mapping: Alternate Flow — "Unauthorized Management → system must deny
+     * access".
      * Spring Security enforces authentication for all {@code /v1/**} paths.
      */
     @Test
     @DisplayName("SC12: unauthenticated POST /v1/roles → 401 Unauthorized")
     void createRole_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/v1/roles")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"TestRole\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"TestRole\"}"))
                 .andExpect(status().isUnauthorized());
     }
 
     // ── SC13: Insufficient authority → 403 ───────────────────────────────────
 
     /**
-     * ADR-0017 / SC13: Authenticated caller without ADMIN role returns 403 Forbidden.
+     * ADR-0017 / SC13: Authenticated caller lacking the
+     * {@code security:role:create} authority receives 403 Forbidden.
      *
-     * <p>Story mapping: Alternate Flow — "Unauthorized Management → system must deny access".
-     * {@code @PreAuthorize("hasRole('ADMIN')")} enforces ADMIN-only access on
+     * <p>
+     * Story mapping: Alternate Flow — "Unauthorized Management → system must deny
+     * access".
+     * {@code @PreAuthorize("hasAuthority('security:role:create')")} enforces
+     * fine-grained authorization on
      * {@code POST /v1/roles}.
      */
     @Test
@@ -355,8 +455,8 @@ class RoleManagementControllerTest {
     @DisplayName("SC13: VIEWER on POST /v1/roles → 403 Forbidden")
     void createRole_viewerRole_returns403() throws Exception {
         mockMvc.perform(post("/v1/roles")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"TestRole\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"TestRole\"}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -366,7 +466,10 @@ class RoleManagementControllerTest {
     @EnableMethodSecurity(prePostEnabled = true)
     static class SliceTestConfig {
 
-        /** Provides the Clock bean required by {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler}. */
+        /**
+         * Provides the Clock bean required by
+         * {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler}.
+         */
         @Bean
         Clock clock() {
             return TEST_CLOCK;
@@ -379,10 +482,14 @@ class RoleManagementControllerTest {
     }
 
     /**
-     * Minimal security exception handler for the MVC slice — translates Spring Security
-     * exceptions to 401 / 403 HTTP status codes. {@code @Order(HIGHEST_PRECEDENCE)} ensures
-     * this advice is consulted before the production {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler}
-     * which has a catch-all {@code @ExceptionHandler(Exception.class)} that would otherwise
+     * Minimal security exception handler for the MVC slice — translates Spring
+     * Security
+     * exceptions to 401 / 403 HTTP status codes. {@code @Order(HIGHEST_PRECEDENCE)}
+     * ensures
+     * this advice is consulted before the production
+     * {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler}
+     * which has a catch-all {@code @ExceptionHandler(Exception.class)} that would
+     * otherwise
      * return 500 for security exceptions.
      */
     @ControllerAdvice
@@ -402,8 +509,10 @@ class RoleManagementControllerTest {
         }
 
         /**
-         * Returns 404 for requests to endpoints that do not yet exist (RED scaffold tests).
-         * Without this, Spring's unhandled {@code NoResourceFoundException} falls through to
+         * Returns 404 for requests to endpoints that do not yet exist (RED scaffold
+         * tests).
+         * Without this, Spring's unhandled {@code NoResourceFoundException} falls
+         * through to
          * {@code GlobalExceptionHandler.handleException(Exception)} and returns 500.
          */
         @ExceptionHandler(NoResourceFoundException.class)

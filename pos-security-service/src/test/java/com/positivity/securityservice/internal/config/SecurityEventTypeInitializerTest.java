@@ -81,15 +81,15 @@ class SecurityEventTypeInitializerTest {
     // =========================================================
 
     @Nested
-    @DisplayName("T_SETI1: run() registers all 29 event types")
+    @DisplayName("T_SETI1: run() registers all 31 event types")
     class RegistersAllEventTypes {
 
         @Test
-        @DisplayName("T_SETI1 — SecurityEventTypes.all() defines exactly 29 entries")
-        void securityEventTypes_definesExactly29Types() {
+        @DisplayName("T_SETI1 — SecurityEventTypes.all() defines exactly 31 entries")
+        void securityEventTypes_definesExactly31Types() {
             assertThat(SecurityEventTypes.all())
-                    .as("SecurityEventTypes.all() must define exactly 29 event type registrations")
-                    .hasSize(29);
+                    .as("SecurityEventTypes.all() must define exactly 31 event type registrations")
+                    .hasSize(31);
         }
 
         @Test
@@ -164,7 +164,7 @@ class SecurityEventTypeInitializerTest {
 
             assertThatNoException().isThrownBy(() -> sut.run(null));
 
-            // All 29 PUT requests were still attempted despite the first failure
+            // All 31 PUT requests were still attempted despite the first failure
             int expectedCount = SecurityEventTypes.all().size();
             verify(restClient, times(expectedCount)).put();
         }
