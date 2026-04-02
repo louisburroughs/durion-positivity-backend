@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.exception.AuditTrailAuthorizationExcep
 import com.positivity.accounting.service.AuditTrailQueryService;
 import com.positivity.accounting.service.AuditTrailService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -27,7 +28,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -62,14 +62,16 @@ public class AuditTrailController {
     @PostMapping("/price-override")
     @EmitEvent(id = "ACCOUNTING_AUDIT_PRICE_OVERRIDE", apiVersion = "1")
     @PreAuthorize("hasAuthority('accounting:events:submit')")
-    public ResponseEntity<Object> recordPriceOverride(@Valid @RequestBody PriceOverrideRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<Object> recordPriceOverride(@Valid @RequestBody PriceOverrideRequest request,
+            HttpServletRequest httpRequest) {
         try {
             AuditTrailResponse response = auditService.recordPriceOverride(request);
             return ResponseEntity.status(HttpStatus.CREATED).body((Object) response);
         } catch (AuditTrailAuthorizationException e) {
             log.warn("Price override authorization denied: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(buildErrorResponse(AUTHORIZATION_DENIED_CODE, e.getMessage(), HttpStatus.FORBIDDEN, httpRequest));
+                    .body(buildErrorResponse(AUTHORIZATION_DENIED_CODE, e.getMessage(), HttpStatus.FORBIDDEN,
+                            httpRequest));
         } catch (Exception e) {
             log.error("Error recording price override", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -95,14 +97,16 @@ public class AuditTrailController {
     @PostMapping("/refund")
     @EmitEvent(id = "ACCOUNTING_AUDIT_REFUND", apiVersion = "1")
     @PreAuthorize("hasAuthority('accounting:events:submit')")
-    public ResponseEntity<Object> recordRefund(@Valid @RequestBody RefundRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<Object> recordRefund(@Valid @RequestBody RefundRequest request,
+            HttpServletRequest httpRequest) {
         try {
             AuditTrailResponse response = auditService.recordRefund(request);
             return ResponseEntity.status(HttpStatus.CREATED).body((Object) response);
         } catch (AuditTrailAuthorizationException e) {
             log.warn("Refund authorization denied: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(buildErrorResponse(AUTHORIZATION_DENIED_CODE, e.getMessage(), HttpStatus.FORBIDDEN, httpRequest));
+                    .body(buildErrorResponse(AUTHORIZATION_DENIED_CODE, e.getMessage(), HttpStatus.FORBIDDEN,
+                            httpRequest));
         } catch (Exception e) {
             log.error("Error recording refund", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -127,7 +131,8 @@ public class AuditTrailController {
     @PostMapping("/cancellation")
     @EmitEvent(id = "ACCOUNTING_AUDIT_CANCELLATION", apiVersion = "1")
     @PreAuthorize("hasAuthority('accounting:events:submit')")
-    public ResponseEntity<Object> recordCancellation(@Valid @RequestBody CancellationRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<Object> recordCancellation(@Valid @RequestBody CancellationRequest request,
+            HttpServletRequest httpRequest) {
         try {
             AuditTrailResponse response = auditService.recordCancellation(request);
             return ResponseEntity.status(HttpStatus.CREATED).body((Object) response);
@@ -151,7 +156,7 @@ public class AuditTrailController {
             @ApiResponse(responseCode = "404", description = "Order not found"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
-    @GetMapping({"/order/{orderId}", "/by-order/{orderId}"})
+    @GetMapping({ "/order/{orderId}", "/by-order/{orderId}" })
     @PreAuthorize("hasAuthority('accounting:events:view')")
     public ResponseEntity<List<AuditTrailResponse>> getByOrderId(
             @Parameter(description = "Order ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID orderId) {
@@ -233,18 +238,12 @@ public class AuditTrailController {
         return ResponseEntity.ok(entries);
     }
 
-    private Map<String, Object> buildErrorResponse(String code, String message, HttpStatus status, HttpServletRequest request) {
+    private ApiError buildErrorResponse(String code, String message, HttpStatus status, HttpServletRequest request) {
         String correlationId = request.getHeader(X_CORRELATION_ID);
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
-        return Map.of(
-                "code", code,
-                "message", message,
-                "error", message,
-                "status", status.value(),
-                "timestamp", Instant.now(clock).toString(),
-                "correlationId", correlationId);
+        return ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId);
     }
 
 }

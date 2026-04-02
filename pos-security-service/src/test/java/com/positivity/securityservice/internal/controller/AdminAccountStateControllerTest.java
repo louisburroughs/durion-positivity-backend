@@ -42,9 +42,12 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * Controller slice tests for {@link AdminAccountStateController} — AUTH-006.
  *
- * <p>Verifies that the admin account-state endpoints enforce ADMIN authorization,
- * return the correct HTTP status codes (ADR-0017), and route to the service layer.
- * All service calls are mocked — no database or full application context is loaded.
+ * <p>
+ * Verifies that the admin account-state endpoints enforce ADMIN authorization,
+ * return the correct HTTP status codes (ADR-0017), and route to the service
+ * layer.
+ * All service calls are mocked — no database or full application context is
+ * loaded.
  *
  * Issue: AUTH-006
  */
@@ -54,10 +57,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @DisplayName("AdminAccountStateControllerTest — AUTH-006")
 class AdminAccountStateControllerTest {
 
-    private static final Clock TEST_CLOCK =
-            Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneOffset.UTC);
-    private static final UUID USER_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Autowired
     private MockMvc mockMvc;
@@ -93,12 +94,12 @@ class AdminAccountStateControllerTest {
          * ADR-0017: successful void mutation returns 204 No Content.
          */
         @Test
-        @DisplayName("ADMIN POST /v1/users/{id}/unlock → 204 No Content")
-        void unlock_adminRole_returns204() throws Exception {
+        @DisplayName("manage-authority POST /v1/users/{id}/unlock → 204 No Content")
+        void unlock_manageAuthority_returns204() throws Exception {
             doNothing().when(adminAccountStateService).unlock(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/unlock", USER_ID)
-                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -127,12 +128,12 @@ class AdminAccountStateControllerTest {
          * ADR-0017: successful void mutation returns 204 No Content.
          */
         @Test
-        @DisplayName("ADMIN POST /v1/users/{id}/enable → 204 No Content")
-        void enable_adminRole_returns204() throws Exception {
+        @DisplayName("manage-authority POST /v1/users/{id}/enable → 204 No Content")
+        void enable_manageAuthority_returns204() throws Exception {
             doNothing().when(adminAccountStateService).enable(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/enable", USER_ID)
-                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -162,12 +163,12 @@ class AdminAccountStateControllerTest {
          * from security context (ADR-0018).
          */
         @Test
-        @DisplayName("ADMIN POST /v1/users/{id}/disable (no body) → 204 No Content")
-        void disable_adminRole_returns204() throws Exception {
+        @DisplayName("manage-authority POST /v1/users/{id}/disable → 204 No Content")
+        void disable_manageAuthority_returns204() throws Exception {
             doNothing().when(adminAccountStateService).disable(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/disable", USER_ID)
-                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -196,12 +197,12 @@ class AdminAccountStateControllerTest {
          * ADR-0017: successful void mutation returns 204 No Content.
          */
         @Test
-        @DisplayName("ADMIN POST /v1/users/{id}/expire-account → 204 No Content")
-        void expireAccount_adminRole_returns204() throws Exception {
+        @DisplayName("manage-authority POST /v1/users/{id}/expire-account → 204 No Content")
+        void expireAccount_manageAuthority_returns204() throws Exception {
             doNothing().when(adminAccountStateService).expireAccount(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/expire-account", USER_ID)
-                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -230,12 +231,12 @@ class AdminAccountStateControllerTest {
          * ADR-0017: successful void mutation returns 204 No Content.
          */
         @Test
-        @DisplayName("ADMIN POST /v1/users/{id}/expire-credentials → 204 No Content")
-        void expireCredentials_adminRole_returns204() throws Exception {
+        @DisplayName("manage-authority POST /v1/users/{id}/expire-credentials → 204 No Content")
+        void expireCredentials_manageAuthority_returns204() throws Exception {
             doNothing().when(adminAccountStateService).expireCredentials(USER_ID);
 
             mockMvc.perform(post("/v1/users/{id}/expire-credentials", USER_ID)
-                            .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
+                    .with(user("admin-user").authorities(() -> "security:user_account_state:manage")))
                     .andExpect(status().isNoContent());
         }
 
@@ -249,7 +250,8 @@ class AdminAccountStateControllerTest {
         @Test
         @DisplayName("non-ADMIN POST /v1/users/{id}/expire-credentials → 403 Forbidden")
         void expireCredentials_nonAdminRole_returns403() throws Exception {
-            mockMvc.perform(post("/v1/users/{id}/expire-credentials", USER_ID).with(user("viewer-user").roles("VIEWER")))
+            mockMvc.perform(
+                    post("/v1/users/{id}/expire-credentials", USER_ID).with(user("viewer-user").roles("VIEWER")))
                     .andExpect(status().isForbidden());
         }
     }
@@ -264,8 +266,8 @@ class AdminAccountStateControllerTest {
          * ADR-0017: successful read returns 200 OK with JSON body.
          */
         @Test
-        @DisplayName("ADMIN GET /v1/users/{id}/account-state → 200 with JSON body containing userId")
-        void getAccountState_adminRole_returns200WithUserId() throws Exception {
+        @DisplayName("view-authority GET /v1/users/{id}/account-state → 200 with userId")
+        void getAccountState_viewAuthority_returns200WithUserId() throws Exception {
             AccountStateResponse response = AccountStateResponse.builder()
                     .userId(USER_ID)
                     .enabled(true)
@@ -276,8 +278,8 @@ class AdminAccountStateControllerTest {
                     .build();
             when(adminAccountStateService.getAccountState(USER_ID)).thenReturn(response);
 
-                mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID)
-                                .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
+            mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID)
+                    .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.userId").value(USER_ID.toString()));
         }
@@ -286,13 +288,13 @@ class AdminAccountStateControllerTest {
          * ADR-0017: missing resource returns 404 Not Found.
          */
         @Test
-        @DisplayName("ADMIN GET /v1/users/{unknown-id}/account-state when not found → 404")
+        @DisplayName("view-authority GET /v1/users/{unknown-id}/account-state when not found → 404")
         void getAccountState_userNotFound_returns404() throws Exception {
             when(adminAccountStateService.getAccountState(USER_ID))
                     .thenThrow(new UserNotFoundException("User not found: " + USER_ID));
 
             mockMvc.perform(get("/v1/users/{id}/account-state", USER_ID)
-                            .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
+                    .with(user("admin-user").authorities(() -> "security:user_account_state:view")))
                     .andExpect(status().isNotFound());
         }
 
@@ -324,7 +326,10 @@ class AdminAccountStateControllerTest {
     @EnableMethodSecurity(prePostEnabled = true)
     static class SliceTestConfig {
 
-        /** Provides the Clock bean required by {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler}. */
+        /**
+         * Provides the Clock bean required by
+         * {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler}.
+         */
         @Bean
         Clock clock() {
             return TEST_CLOCK;
