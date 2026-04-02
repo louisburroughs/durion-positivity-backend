@@ -1,0 +1,170 @@
+name: Build and Push to ECR
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "pos-*/**"
+      - "pom.xml"
+      - ".github/workflows/build-push-ecr.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ecr-push-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write   # Required for OIDC authentication
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  JAVA_VERSION: "21"
+  JAVA_DISTRIBUTION: temurin
+  MAVEN_OPTS: -Xmx3072m
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 1: Build all JARs with Maven and upload as a shared artifact
+  # ─────────────────────────────────────────────────────────────────────────
+  build-jars:
+    name: Maven Package (all modules)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: Build all JARs (skip tests — tested separately in ci.yml)
+        run: ./mvnw package -B -DskipTests -q
+
+      - name: Upload JAR artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-jars
+          path: "**/target/*.jar"
+          retention-days: 1
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2: Build and push one Docker image per service (parallel matrix)
+  # ─────────────────────────────────────────────────────────────────────────
+  push-images:
+    name: Push ${{ matrix.service }}
+    needs: build-jars
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - pos-accounting
+          - pos-api-gateway
+          - pos-catalog
+          - pos-customer
+          - pos-event-receiver
+          - pos-image
+          - pos-inventory
+          - pos-invoice
+          - pos-location
+          - pos-people
+          - pos-price
+          - pos-security-service
+          - pos-service-discovery
+          - pos-shop-manager
+          - pos-vehicle-inventory
+          - pos-workorder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: service-jars
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          IMAGE_TAG="sha-${SHORT_SHA}"
+          SERVICE="${{ matrix.service }}"
+          # pos-service-discovery builds the eureka-server image — ECR repo must match compose service name
+          if [[ "$SERVICE" == "pos-service-discovery" ]]; then
+            ECR_REPO_NAME="durion/eureka-server"
+          else
+            ECR_REPO_NAME="durion/${SERVICE}"
+          fi
+          FULL_IMAGE="${{ steps.login-ecr.outputs.registry }}/${ECR_REPO_NAME}:${IMAGE_TAG}"
+          LATEST_IMAGE="${{ steps.login-ecr.outputs.registry }}/${ECR_REPO_NAME}:latest"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "full_image=${FULL_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "latest_image=${LATEST_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "Image: ${FULL_IMAGE}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.full_image }}
+            ${{ steps.meta.outputs.latest_image }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          provenance: false
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 3: Write a deployment summary after all images are pushed
+  # ─────────────────────────────────────────────────────────────────────────
+  deployment-summary:
+    name: Deployment Summary
+    needs: push-images
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Write summary
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          IMAGE_TAG="sha-${SHORT_SHA}"
+
+          echo "## Backend Images Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "All service images pushed with tag: \`${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Service | ECR Repository |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for SERVICE in \
+            pos-accounting pos-api-gateway pos-catalog pos-customer \
+            pos-event-receiver pos-image pos-inventory pos-invoice \
+            pos-location pos-people pos-price pos-security-service \
+            pos-service-discovery pos-shop-manager pos-vehicle-inventory pos-workorder; do
+            echo "| \`${SERVICE}\` | \`durion/${SERVICE}:${IMAGE_TAG}\` |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Use \`${IMAGE_TAG}\` as **BACKEND_TAG** in \`docker-compose.prod.yml\` for deployment." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
