@@ -5,7 +5,7 @@ info:
     support
   contact:
     name: Durion Team
-    email: platform@durion.com
+    email: platform@durionpos.org
   version: "1.0"
 servers:
 - url: http://localhost:8086

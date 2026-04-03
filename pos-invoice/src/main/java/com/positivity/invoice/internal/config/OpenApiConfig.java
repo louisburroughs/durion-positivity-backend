@@ -18,6 +18,6 @@ public class OpenApiConfig {
                         .description("API documentation for invoice and billing rules management")
                         .contact(new Contact()
                                 .name("Durion Team")
-                                .email("platform@durion.com")));
+                                .email("platform@durionpos.org")));
     }
 }
