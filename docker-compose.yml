@@ -460,6 +460,7 @@ services:
     ports:
       - "8086:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: docker
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
@@ -472,7 +473,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      pos-api-gateway:
+      eureka-server:
         condition: service_healthy
     networks:
       - pos-network
