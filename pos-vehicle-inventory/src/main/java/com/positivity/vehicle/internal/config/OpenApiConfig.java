@@ -18,6 +18,6 @@ public class OpenApiConfig {
                         .description("API for managing vehicle inventory in the POS system")
                         .contact(new Contact()
                                 .name("Durion Team")
-                                .email("platform@durion.com")));
+                                .email("platform@durionpos.org")));
     }
 }

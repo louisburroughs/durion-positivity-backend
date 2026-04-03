@@ -4,7 +4,7 @@ info:
   description: API for vehicle fitment data in the POS system
   contact:
     name: Durion Team
-    email: platform@durion.com
+    email: platform@durionpos.org
   version: "1.0"
 servers:
 - url: http://localhost:8086
