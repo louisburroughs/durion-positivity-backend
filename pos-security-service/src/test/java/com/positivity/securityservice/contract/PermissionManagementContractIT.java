@@ -60,6 +60,9 @@ import com.positivity.shared.id.UUIDv7Generator;
 @WithMockUser(username = "system-admin", roles = { "ADMIN" })
 @DisplayName("Issue #2: Permission Management Contract Behavior")
 class PermissionManagementContractIT extends BaseContractIntegrationTest {
+    private static final String ROLE_ASSIGN_AUTH = "ROLE_ADMIN,security:role:assign";
+    private static final String AUTHZ_DECISION_AUTH = "ROLE_ADMIN,security:authorization:decide";
+    private static final String AUDIT_VIEW_AUTH = "ROLE_ADMIN,security:audit:view";
 
     @MockitoBean
     private TokenRevocationManager tokenRevocationManager;
@@ -187,7 +190,7 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
                 get("/v1/users/authorization/decision")
                         .param("principalId", managerPrincipal)
                         .param("permission", "order:refund:approve"),
-                "ROLE_ADMIN"))
+                AUTHZ_DECISION_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.decision").value("allow"));
     }
@@ -216,7 +219,7 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
                 get("/v1/users/authorization/decision")
                         .param("principalId", unprivilegedPrincipal)
                         .param("permission", "order:refund:approve"),
-                "ROLE_ADMIN"))
+                AUTHZ_DECISION_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.decision").value("deny"));
     }
@@ -238,7 +241,7 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
         // When: Admin assigns testRole to subjectUser
         mockMvc.perform(withAuth(
                 put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
-                "ROLE_ADMIN"))
+                ROLE_ASSIGN_AUTH))
                 .andExpect(status().isCreated());
 
         // Then: a RoleAssignedToUser audit event must be persisted
@@ -289,7 +292,7 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
         // Given: subjectUser has testRole assigned
         mockMvc.perform(withAuth(
                 put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
-                "ROLE_ADMIN"))
+                ROLE_ASSIGN_AUTH))
                 .andExpect(status().isCreated());
 
         // Clear any events from the assignment setup to isolate the revocation assertion
@@ -298,7 +301,7 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
         // When: Admin revokes testRole from subjectUser
         mockMvc.perform(withAuth(
                 delete("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
-                "ROLE_ADMIN"))
+                ROLE_ASSIGN_AUTH))
                 .andExpect(status().isNoContent());
 
         // Then: a RoleRevokedFromUser audit event must be persisted
@@ -343,7 +346,7 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
         // Given: a role assignment has occurred
         mockMvc.perform(withAuth(
                 put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
-                "ROLE_ADMIN"))
+                ROLE_ASSIGN_AUTH))
                 .andExpect(status().isCreated());
 
         // When: Security Officer queries audit events by eventType
@@ -351,7 +354,7 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
         mockMvc.perform(withAuth(
                 get("/v1/audit/events")
                         .param("eventType", "RoleAssignedToUser"),
-                "ROLE_ADMIN"))
+                AUDIT_VIEW_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(1))
