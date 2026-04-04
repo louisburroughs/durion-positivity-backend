@@ -741,7 +741,7 @@ services:
       pos-api-gateway:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/', r => process.exit(r.statusCode >= 200 && r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1));"]
+      test: ["CMD", "node", "-e", "const net=require('net');const s=net.connect(4000,'127.0.0.1',()=>{s.end();process.exit(0)});s.setTimeout(2000,()=>{s.destroy();process.exit(1)});s.on('error',()=>process.exit(1));"]
       interval: 5s
       timeout: 3s
       retries: 20
