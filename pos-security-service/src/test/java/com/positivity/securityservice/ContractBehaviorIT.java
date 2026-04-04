@@ -228,7 +228,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 // Verify compact PERM-004 access token claims.
                 assertThat(accessClaims)
                                 .containsKey(JwtService.PERM_BITS)
-                                .containsEntry(JwtService.PERM_VER, 1)
+                                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
                                 .containsEntry(JwtService.UID, TEST_USER_ID.toString())
                                 .containsEntry(JwtService.USERNAME, TEST_SUBJECT)
                                 .doesNotContainKeys(JwtService.ROLES, JwtService.AUTHORITIES);
@@ -509,7 +509,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .parseSignedClaims(response.token()).getPayload();
                 assertThat(claims)
                                 .containsKey(JwtService.PERM_BITS)
-                                .containsEntry(JwtService.PERM_VER, 1);
+                                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION);
         }
 
         /**

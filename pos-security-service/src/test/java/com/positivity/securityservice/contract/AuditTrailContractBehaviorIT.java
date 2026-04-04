@@ -43,7 +43,7 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
         private MockHttpServletRequestBuilder withAuditAdminAuth(MockHttpServletRequestBuilder builder) {
                 return withAuth(builder,
-                                "ROLE_ADMIN,security:audit:events:create,security:audit:events:view,security:audit:snapshots:create,security:audit:snapshots:view");
+                                "ROLE_ADMIN,security:audit:create,security:audit:view");
         }
 
         // Issue #41: AC1 validates audit event append-only create endpoint contract.
