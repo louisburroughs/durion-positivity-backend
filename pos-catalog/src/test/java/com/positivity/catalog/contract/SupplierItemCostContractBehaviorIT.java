@@ -36,7 +36,7 @@ class SupplierItemCostContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(overlappingPayload())))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$")
+                                .andExpect(jsonPath("$.message")
                                                 .value(org.hamcrest.Matchers.containsString("INVALID_TIER_STRUCTURE")));
         }
 
@@ -47,7 +47,7 @@ class SupplierItemCostContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(gapPayload())))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$")
+                                .andExpect(jsonPath("$.message")
                                                 .value(org.hamcrest.Matchers.containsString("INVALID_TIER_STRUCTURE")));
         }
 
