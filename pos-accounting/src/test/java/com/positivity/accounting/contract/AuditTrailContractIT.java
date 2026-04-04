@@ -167,7 +167,7 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
                 // Assert — 403 with the AC-prescribed rejection reason
                 .andExpect(status().isForbidden())
                 // Issue #1 AC1: exact message required by story acceptance criteria
-                .andExpect(jsonPath("$.error").value("Authorization threshold exceeded"));
+                .andExpect(jsonPath("$.message").value("Authorization threshold exceeded"));
 
         // AC1: no audit entry must be persisted on rejection
         assertThat(auditRepository.count())
@@ -206,7 +206,7 @@ class AuditTrailContractIT extends BaseContractIntegrationTest {
                         .content(payload))
                 // Issue #1 AC2: expect 403 with category-denial reason
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").value("Pricing below cost not permitted"));
+                .andExpect(jsonPath("$.message").value("Pricing below cost not permitted"));
 
         // No entry should be persisted on forbidden-category rejection
         assertThat(auditRepository.count())
