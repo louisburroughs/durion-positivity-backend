@@ -169,8 +169,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Build module graph for IT dependencies
+        run: ./mvnw -pl ${{ matrix.module }} -am -DskipTests install -T 1C -B -q
+
       - name: Run integration tests
-        run: ./mvnw -pl ${{ matrix.module }} -am -DskipTests failsafe:integration-test failsafe:verify -T 1C -B -q
+        run: ./mvnw -pl ${{ matrix.module }} -DskipTests=false failsafe:integration-test failsafe:verify -T 1C -B -q
 
       - name: Upload integration test results
         if: always()
