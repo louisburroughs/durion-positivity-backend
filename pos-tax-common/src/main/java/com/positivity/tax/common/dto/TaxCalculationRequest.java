@@ -200,5 +200,29 @@ public class TaxCalculationRequest {
          */
         @Schema(type = "string", description = "Secondary address line", example = "\"Suite 200\"")
         private String line2;
+
+        public String getCountryCode() {
+            return countryCode;
+        }
+
+        public String getRegionCode() {
+            return regionCode;
+        }
+
+        public String getCity() {
+            return city;
+        }
+
+        public String getPostalCode() {
+            return postalCode;
+        }
+
+        public String getLine1() {
+            return line1;
+        }
+
+        public String getLine2() {
+            return line2;
+        }
     }
 }

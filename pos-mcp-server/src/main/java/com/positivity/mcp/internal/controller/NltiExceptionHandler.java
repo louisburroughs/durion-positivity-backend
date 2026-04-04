@@ -9,7 +9,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -17,10 +17,13 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = NltiController.class)
-@RequiredArgsConstructor
 class NltiExceptionHandler {
 
     private final Clock clock;
+
+    NltiExceptionHandler(ObjectProvider<Clock> clockProvider) {
+        this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> handleValidation(
