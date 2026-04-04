@@ -30,9 +30,76 @@ env:
   DOCKER_BUILDKIT: 1
 
 jobs:
-  build-and-test:
-    name: Build & Test
+  detect-test-modules:
+    name: Detect Test Modules
     runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.detect.outputs.modules }}
+      has-changes: ${{ steps.detect.outputs.has-changes }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect modules to test
+        id: detect
+        run: |
+          set -euo pipefail
+
+          ALL_MODULES_JSON=$(ls -d pos-* | jq -R -s -c 'split("\n")[:-1]')
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "modules=${ALL_MODULES_JSON}" >> "$GITHUB_OUTPUT"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            echo "workflow_dispatch: testing all modules"
+            exit 0
+          fi
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            DIFF_BASE="origin/${{ github.base_ref }}"
+            DIFF_HEAD="${{ github.sha }}"
+          else
+            DIFF_BASE="${{ github.event.before }}"
+            DIFF_HEAD="${{ github.sha }}"
+            if [[ -z "${DIFF_BASE}" || "${DIFF_BASE}" == "0000000000000000000000000000000000000000" ]]; then
+              DIFF_BASE="$(git rev-parse HEAD~1)"
+            fi
+          fi
+
+          CHANGED_FILES=$(git diff --name-only "${DIFF_BASE}" "${DIFF_HEAD}" || true)
+
+          if echo "${CHANGED_FILES}" | grep -Eq '^(pom\.xml|\.github/workflows/ci\.yml|docker-compose\.yml)$'; then
+            echo "modules=${ALL_MODULES_JSON}" >> "$GITHUB_OUTPUT"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            echo "Core CI/build file changed: testing all modules"
+            exit 0
+          fi
+
+          CHANGED_MODULES_JSON=$(echo "${CHANGED_FILES}" | grep '^pos-' | cut -d'/' -f1 | sort -u | jq -R -s -c 'split("\n")[:-1]')
+
+          if [[ "${CHANGED_MODULES_JSON}" == "[]" ]]; then
+            echo "modules=[]" >> "$GITHUB_OUTPUT"
+            echo "has-changes=false" >> "$GITHUB_OUTPUT"
+            echo "No pos-* module changes detected"
+          else
+            echo "modules=${CHANGED_MODULES_JSON}" >> "$GITHUB_OUTPUT"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            echo "Changed modules: ${CHANGED_MODULES_JSON}"
+          fi
+
+  unit-tests:
+    name: Unit Tests (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    needs: detect-test-modules
+    if: needs.detect-test-modules.outputs.has-changes == 'true'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.detect-test-modules.outputs.modules) }}
 
     steps:
       - name: Checkout code
@@ -58,33 +125,66 @@ jobs:
       - name: Enforce no-arg now() policy
         run: ./scripts/check-noarg-now.sh
 
-      - name: Run tests (unit + integration)
-        run: ./mvnw verify -B -q
+      - name: Run unit tests
+        run: ./mvnw -pl ${{ matrix.module }} -am test -T 1C -B -q
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: unit-test-results-${{ matrix.module }}
           path: |
             **/target/surefire-reports/*.xml
-            **/target/failsafe-reports/*.xml
           retention-days: 30
 
-      - name: Upload build artifacts
+  integration-tests-modules:
+    name: Integration Tests (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    needs: detect-test-modules
+    if: needs.detect-test-modules.outputs.has-changes == 'true'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.detect-test-modules.outputs.modules) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Run integration tests
+        run: ./mvnw -pl ${{ matrix.module }} -am -DskipTests failsafe:integration-test failsafe:verify -T 1C -B -q
+
+      - name: Upload integration test results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: maven-artifacts
+          name: integration-test-results-${{ matrix.module }}
           path: |
-            **/target/*.jar
-            !**/target/*-sources.jar
-            !**/target/*-javadoc.jar
-          retention-days: 7
+            **/target/failsafe-reports/*.xml
+          retention-days: 30
 
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [unit-tests, integration-tests-modules]
     # Only run on main branch pushes or when pom.xml files change (dependency updates)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' || contains(github.event.pull_request.changed_files, 'pom.xml')
 
@@ -114,7 +214,7 @@ jobs:
   docker-build:
     name: Detect Changed Services
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [unit-tests, integration-tests-modules]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       services: ${{ steps.detect-services.outputs.services }}
@@ -166,13 +266,8 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: maven-artifacts
-
       - name: Build service JAR
-        run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -B
+        run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -T 1C -B
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -207,7 +302,7 @@ jobs:
   code-quality:
     name: Code Quality Analysis
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [unit-tests, integration-tests-modules]
 
     steps:
       - name: Checkout code
@@ -253,7 +348,7 @@ jobs:
   integration-test:
     name: Integration Tests with Docker Compose
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [unit-tests, integration-tests-modules]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     env:
