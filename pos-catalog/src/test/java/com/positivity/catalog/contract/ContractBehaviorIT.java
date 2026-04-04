@@ -316,7 +316,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(overlappingTierPayload(supplierId, itemId)))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$")
+                                .andExpect(jsonPath("$.message")
                                                 .value(org.hamcrest.Matchers.containsString("INVALID_TIER_STRUCTURE")));
         }
 
@@ -330,7 +330,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(gapTierPayload(supplierId, itemId)))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$")
+                                .andExpect(jsonPath("$.message")
                                                 .value(org.hamcrest.Matchers
                                                                 .containsString("tier ranges must be contiguous")));
         }
@@ -345,7 +345,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidUnitCostPayload(supplierId, itemId)))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$")
+                                .andExpect(jsonPath("$.message")
                                                 .value(org.hamcrest.Matchers
                                                                 .containsString("unitCost must be positive.")));
         }
@@ -385,7 +385,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001"), 100.00,
                                                 70.00, 75.00)))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$")
+                                .andExpect(jsonPath("$.message")
                                                 .value(org.hamcrest.Matchers.containsString("MIN_MARGIN_VIOLATION")));
         }
 
@@ -404,7 +404,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001"), 100.00,
                                                 50.00, 70.00)))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$")
+                                .andExpect(jsonPath("$.message")
                                                 .value(org.hamcrest.Matchers.containsString("MAX_DISCOUNT_EXCEEDED")));
         }
 
@@ -423,7 +423,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                                 100.00, 50.00, 95.00)))
                                 .andExpect(status().isNotFound())
-                                .andExpect(jsonPath("$")
+                                .andExpect(jsonPath("$.message")
                                                 .value(org.hamcrest.Matchers.containsString("PRODUCT_NOT_FOUND")));
         }
 
@@ -466,7 +466,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(rejectionDecisionPayload(version, approverUserId, "THRESHOLD_EXCEEDED", "")))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("rejectionNotes")));
+                                .andExpect(jsonPath("$.message")
+                                                .value(org.hamcrest.Matchers.containsString("rejectionNotes")));
         }
 
         // ===============================================
