@@ -8,6 +8,12 @@ on:
       - "pom.xml"
       - ".github/workflows/build-push-ecr.yml"
   workflow_dispatch:
+    inputs:
+      deploy_alpha:
+        description: "Deploy to alpha EC2 after pushing images"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ecr-push-backend-${{ github.ref }}
@@ -168,3 +174,75 @@ jobs:
           echo "Use \`${IMAGE_TAG}\` as **BACKEND_TAG** in \`docker-compose.prod.yml\` for deployment." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Commit: \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-alpha:
+    name: Deploy Backend to Alpha
+    needs: [push-images, deployment-summary]
+    runs-on: ubuntu-latest
+    if: >
+      success() &&
+      (
+        (github.event_name == 'workflow_dispatch' && inputs.deploy_alpha) ||
+        vars.AUTO_DEPLOY_ALPHA == 'true'
+      )
+
+    steps:
+      - name: Deploy backend services on alpha host
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ALPHA_EC2_HOST }}
+          username: ${{ secrets.ALPHA_EC2_USER }}
+          key: ${{ secrets.ALPHA_EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            ALPHA_ROOT="/opt/durion/alpha"
+            BACKEND_DIR="${ALPHA_ROOT}/backend"
+            ENV_FILE="${ALPHA_ROOT}/.env"
+            PROD_OVERRIDE="${ALPHA_ROOT}/docker-compose.prod.yml"
+            IMAGE_TAG="sha-${GITHUB_SHA::7}"
+            BACKEND_SERVICES=(
+              eureka-server
+              pos-accounting
+              pos-api-gateway
+              pos-catalog
+              pos-customer
+              pos-event-receiver
+              pos-image
+              pos-inventory
+              pos-invoice
+              pos-location
+              pos-people
+              pos-price
+              pos-security-service
+              pos-shop-manager
+              pos-vehicle-inventory
+              pos-workorder
+            )
+
+            if grep -q '^BACKEND_TAG=' "${ENV_FILE}"; then
+              sed -i "s/^BACKEND_TAG=.*/BACKEND_TAG=${IMAGE_TAG}/" "${ENV_FILE}"
+            else
+              printf '\nBACKEND_TAG=%s\n' "${IMAGE_TAG}" >> "${ENV_FILE}"
+            fi
+
+            cd "${BACKEND_DIR}"
+
+            docker compose \
+              -f docker-compose.yml \
+              -f "${PROD_OVERRIDE}" \
+              --env-file "${ENV_FILE}" \
+              pull "${BACKEND_SERVICES[@]}"
+
+            docker compose \
+              -f docker-compose.yml \
+              -f "${PROD_OVERRIDE}" \
+              --env-file "${ENV_FILE}" \
+              up -d --force-recreate "${BACKEND_SERVICES[@]}"
+
+            docker compose \
+              -f docker-compose.yml \
+              -f "${PROD_OVERRIDE}" \
+              --env-file "${ENV_FILE}" \
+              ps
