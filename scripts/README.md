@@ -4,6 +4,32 @@ Utility scripts for managing the project build, versioning, and deployment.
 
 ## Available Scripts
 
+### `redeploy-backend-tag.sh` - Update Tag + Redeploy Services on EC2
+
+Updates `BACKEND_TAG` in `/opt/durion/alpha/.env`, then runs `docker compose pull` and
+`docker compose up -d --force-recreate` using the alpha compose files.
+
+**Usage:**
+```bash
+./redeploy-backend-tag.sh <backend-tag> [service...]
+```
+
+**Examples:**
+```bash
+# Redeploy one service with a new backend image tag
+./redeploy-backend-tag.sh sha-a20f156 pos-vehicle-inventory
+
+# Same, but pass short commit form (script adds "sha-")
+./redeploy-backend-tag.sh a20f156 pos-security-service pos-api-gateway
+
+# Redeploy all services with the new backend tag
+./redeploy-backend-tag.sh sha-a20f156
+```
+
+**Notes:**
+- Run this on the EC2 host where `/opt/durion/alpha` exists.
+- Supports optional env overrides: `ALPHA_ROOT`, `BACKEND_DIR`, `ENV_FILE`, `PROD_OVERRIDE`, `LOG_TAIL`.
+
 ### `generate-openapi.sh` - Per-Module + Aggregate OpenAPI Generation
 
 Generates `openapi.yaml` for every configured module and then creates an aggregate index spec.
