@@ -552,9 +552,9 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                                 List.of(new PurchaseOrderLineRequest(1, null, "Widget", BigDecimal.ONE, 1_000L, null,
                                                 null))));
 
-                // Omit purchase_order authority — withGatewayAuth only has adjustment/movement
-                // perms
-                mockMvc.perform(withGatewayAuth(
+                // Omit purchase_order:create authority explicitly (view-only authority is
+                // insufficient).
+                mockMvc.perform(withPurchaseOrderViewAuth(
                                 post("/v1/inventory/purchase-orders")
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(requestBody)))
