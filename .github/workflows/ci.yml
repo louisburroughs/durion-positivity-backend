@@ -240,11 +240,18 @@ jobs:
       - name: Detect changed services
         id: detect-services
         run: |
-          # Get all pos-* services that changed since last main commit
-          CHANGED_SERVICES=$(git diff --name-only HEAD~1 HEAD | grep '^pos-' | cut -d'/' -f1 | sort -u)
+          # Get all changed pos-* modules since last main commit
+          CHANGED_MODULES=$(git diff --name-only HEAD~1 HEAD | grep '^pos-' | cut -d'/' -f1 | sort -u || true)
+          # Only containerized modules (have a Dockerfile) should enter Docker matrix
+          CHANGED_SERVICES=$(echo "$CHANGED_MODULES" | while read -r module; do
+            [ -n "$module" ] || continue
+            if [ -f "$module/Dockerfile" ]; then
+              echo "$module"
+            fi
+          done | sort -u)
 
           if [ -z "$CHANGED_SERVICES" ]; then
-            echo "No service changes detected, skipping Docker builds"
+            echo "No containerized service changes detected, skipping Docker builds"
             echo "services=[]" >> $GITHUB_OUTPUT
             echo "has-changes=false" >> $GITHUB_OUTPUT
           else
@@ -391,7 +398,10 @@ jobs:
           fi
 
       - name: Start services with Docker Compose
-        run: $COMPOSE_CMD up -d
+        run: |
+          SERVICES=$($COMPOSE_CMD config --services | grep -v '^pos-frontend$' | tr '\n' ' ')
+          echo "Starting services (excluding pos-frontend): $SERVICES"
+          $COMPOSE_CMD up -d $SERVICES
 
       - name: Wait for services to be healthy
         run: |
