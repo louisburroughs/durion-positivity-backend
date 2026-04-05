@@ -39,6 +39,7 @@ import io.restassured.response.Response;
  */
 @DisplayName("Workorder Idempotent Promotion Contract Behavior Tests (CAP:004, Issue #164)")
 class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegrationTest {
+        private static final String WORKORDER_CREATE_OPERATION = "workorder.create";
 
         @Autowired
         private EstimateRepository estimateRepository;
@@ -94,7 +95,8 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
                 String workorderId = response.path("id");
 
                 // Verify idempotency key was registered
-                IdempotencyKey key = idempotencyKeyRepository.findByKeyValue(idempotencyKey)
+                String scopedIdempotencyKey = WORKORDER_CREATE_OPERATION + ":" + idempotencyKey;
+                IdempotencyKey key = idempotencyKeyRepository.findByKeyValue(scopedIdempotencyKey)
                                 .orElseThrow(() -> new AssertionError("Idempotency key not registered"));
                 org.assertj.core.api.Assertions.assertThat(key.getWorkorderId()).hasToString(workorderId);
         }
