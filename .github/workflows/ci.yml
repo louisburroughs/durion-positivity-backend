@@ -48,6 +48,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          ARCHUNIT_MODULE="pos-archunit"
           ALL_MODULES_JSON=$(ls -d pos-* | jq -R -s -c 'split("\n")[:-1]')
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -79,15 +80,19 @@ jobs:
           fi
 
           CHANGED_MODULES_JSON=$(echo "${CHANGED_FILES}" | grep '^pos-' | cut -d'/' -f1 | sort -u | jq -R -s -c 'split("\n")[:-1]')
+          MATRIX_MODULES_JSON=$(jq -cn \
+            --argjson changed "${CHANGED_MODULES_JSON}" \
+            --arg archunit "${ARCHUNIT_MODULE}" \
+            '$changed + [$archunit] | unique')
 
           if [[ "${CHANGED_MODULES_JSON}" == "[]" ]]; then
-            echo "modules=[]" >> "$GITHUB_OUTPUT"
-            echo "has-changes=false" >> "$GITHUB_OUTPUT"
-            echo "No pos-* module changes detected"
-          else
-            echo "modules=${CHANGED_MODULES_JSON}" >> "$GITHUB_OUTPUT"
+            echo "modules=${MATRIX_MODULES_JSON}" >> "$GITHUB_OUTPUT"
             echo "has-changes=true" >> "$GITHUB_OUTPUT"
-            echo "Changed modules: ${CHANGED_MODULES_JSON}"
+            echo "No pos-* module changes detected; running ${ARCHUNIT_MODULE}"
+          else
+            echo "modules=${MATRIX_MODULES_JSON}" >> "$GITHUB_OUTPUT"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            echo "Changed modules (+${ARCHUNIT_MODULE}): ${MATRIX_MODULES_JSON}"
           fi
 
   unit-tests:
