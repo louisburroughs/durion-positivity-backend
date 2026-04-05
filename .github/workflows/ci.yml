@@ -371,8 +371,19 @@ jobs:
       - name: Build all modules
         run: ./mvnw clean package -DskipTests -DskipITs -B
 
+      - name: Detect Docker Compose command
+        run: |
+          if docker compose version >/dev/null 2>&1; then
+            echo "COMPOSE_CMD=docker compose" >> "$GITHUB_ENV"
+          elif command -v docker-compose >/dev/null 2>&1; then
+            echo "COMPOSE_CMD=docker-compose" >> "$GITHUB_ENV"
+          else
+            echo "Docker Compose is not available on this runner."
+            exit 1
+          fi
+
       - name: Start services with Docker Compose
-        run: docker-compose up -d
+        run: $COMPOSE_CMD up -d
 
       - name: Wait for services to be healthy
         run: |
@@ -391,11 +402,11 @@ jobs:
 
       - name: Show service logs on failure
         if: failure()
-        run: docker-compose logs
+        run: $COMPOSE_CMD logs
 
       - name: Shut down services
         if: always()
-        run: docker-compose down -v
+        run: $COMPOSE_CMD down -v
 
   notify:
     name: Notify Build Status
