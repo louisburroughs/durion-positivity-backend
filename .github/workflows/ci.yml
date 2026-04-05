@@ -130,8 +130,11 @@ jobs:
       - name: Enforce no-arg now() policy
         run: ./scripts/check-noarg-now.sh
 
-      - name: Run unit tests
-        run: ./mvnw -pl ${{ matrix.module }} -am test -T 1C -B -q
+      - name: Build module graph for unit test dependencies
+        run: ./mvnw -pl ${{ matrix.module }} -am -DskipTests install -T 1C -B -q
+
+      - name: Run unit tests (module only)
+        run: ./mvnw -pl ${{ matrix.module }} test -T 1C -B -q
 
       - name: Upload test results
         if: always()
