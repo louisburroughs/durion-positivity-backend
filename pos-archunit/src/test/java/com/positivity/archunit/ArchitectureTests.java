@@ -8,6 +8,7 @@ import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchCondition;
@@ -243,7 +244,7 @@ class ArchitectureTests {
     void dtoSuffixMigrationReport() {
         List<JavaClass> dtoClasses = allClasses.stream()
                 .filter(javaClass -> javaClass.getPackageName().contains(".internal."))
-                .filter(JavaClass::isPublic)
+                .filter(javaClass -> javaClass.getModifiers().contains(JavaModifier.PUBLIC))
                 .filter(javaClass -> javaClass.getSimpleName().endsWith("Dto"))
                 .sorted(Comparator.comparing(JavaClass::getFullName))
                 .toList();
