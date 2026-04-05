@@ -16,6 +16,12 @@ import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +38,7 @@ import org.junit.jupiter.api.Test;
 class ArchitectureTests {
 
     private static JavaClasses allClasses;
+    private static final String DTO_SUFFIX_MAX_PROPERTY = "archunit.dtoSuffix.max";
     private static final DescribedPredicate<JavaCall<?>> NO_ARG_NOW_CALLS = new DescribedPredicate<>(
             "call no-arg Instant/LocalDateTime now methods") {
         @Override
@@ -230,6 +237,37 @@ class ArchitectureTests {
                 .because("time access must use explicit Clock injection or explicit Clock argument");
 
         rule.check(allClasses);
+    }
+
+    @Test
+    void dtoSuffixMigrationReport() {
+        List<JavaClass> dtoClasses = allClasses.stream()
+                .filter(javaClass -> javaClass.getPackageName().contains(".internal."))
+                .filter(JavaClass::isPublic)
+                .filter(javaClass -> javaClass.getSimpleName().endsWith("Dto"))
+                .sorted(Comparator.comparing(JavaClass::getFullName))
+                .toList();
+
+        Map<String, Long> moduleCounts = dtoClasses.stream()
+                .collect(Collectors.groupingBy(
+                        javaClass -> {
+                            String module = moduleName(javaClass.getPackageName());
+                            return module == null ? "unknown" : module;
+                        },
+                        TreeMap::new,
+                        Collectors.counting()));
+
+        System.out.println("[ArchUnit][DTO Migration] Public internal *Dto classes: " + dtoClasses.size());
+        moduleCounts.forEach((module, count) ->
+                System.out.println("[ArchUnit][DTO Migration] module=" + module + " count=" + count));
+
+        int maxAllowed = Integer.getInteger(DTO_SUFFIX_MAX_PROPERTY, Integer.MAX_VALUE);
+        if (maxAllowed != Integer.MAX_VALUE && dtoClasses.size() > maxAllowed) {
+            String message = "DTO suffix count " + dtoClasses.size()
+                    + " exceeds configured max " + maxAllowed
+                    + " (set via -D" + DTO_SUFFIX_MAX_PROPERTY + ")";
+            Assertions.fail(message);
+        }
     }
 
     private static String moduleName(String packageName) {
