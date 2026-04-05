@@ -1,0 +1,88 @@
+name: Nightly Full-Stack Docker Compose
+
+on:
+  schedule:
+    - cron: "0 5 * * *" # Nightly at 05:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-full-stack-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "21"
+  JAVA_DISTRIBUTION: "temurin"
+  MAVEN_OPTS: -Xmx3072m
+  DOCKER_BUILDKIT: 1
+  POSTGRES_USER: positivity
+  POSTGRES_PASSWORD: positivity
+  POSTGRES_DB: positivity
+  SPRING_DATASOURCE_USERNAME: positivity
+  SPRING_DATASOURCE_PASSWORD: positivity
+  SECURITY_JWT_SECRET: ci-jwt-secret-key-0123456789abcdef0123456789
+  STRIPE_API_KEY: sk_test_ci_placeholder_key
+  POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID: 11111111-1111-1111-1111-111111111111
+  POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID: 22222222-2222-2222-2222-222222222222
+  POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID: 33333333-3333-3333-3333-333333333333
+  GF_SECURITY_ADMIN_USER: admin
+  GF_SECURITY_ADMIN_PASSWORD: admin
+  POS_EVENTS_API_SECRET: ci-events-secret
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${{ secrets.GRAFANA_TOKEN }}"
+
+jobs:
+  nightly-full-stack-compose:
+    name: Nightly Full-Stack Compose Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: Build all modules
+        run: ./mvnw clean package -DskipTests -DskipITs -B
+
+      - name: Detect Docker Compose command
+        run: |
+          if docker compose version >/dev/null 2>&1; then
+            echo "COMPOSE_CMD=docker compose" >> "$GITHUB_ENV"
+          elif command -v docker-compose >/dev/null 2>&1; then
+            echo "COMPOSE_CMD=docker-compose" >> "$GITHUB_ENV"
+          else
+            echo "Docker Compose is not available on this runner."
+            exit 1
+          fi
+
+      - name: Start full backend stack with Docker Compose
+        run: |
+          SERVICES=$($COMPOSE_CMD config --services | grep -v '^pos-frontend$' | tr '\n' ' ')
+          echo "Starting nightly full backend stack (excluding pos-frontend): $SERVICES"
+          $COMPOSE_CMD up -d $SERVICES
+
+      - name: Wait for core routing services to be healthy
+        run: |
+          echo "Waiting for Eureka to be ready..."
+          timeout 300 bash -c 'until curl -sf http://localhost:8761/actuator/health; do sleep 5; done'
+          echo "Waiting for API Gateway to be ready..."
+          timeout 300 bash -c 'until curl -sf http://localhost:8080/actuator/health; do sleep 5; done'
+
+      - name: Run smoke checks
+        run: |
+          curl -f http://localhost:8761/actuator/health || exit 1
+          curl -f http://localhost:8080/actuator/health || exit 1
+          echo "Nightly smoke checks passed."
+
+      - name: Show service logs on failure
+        if: failure()
+        run: $COMPOSE_CMD logs
+
+      - name: Shut down services
+        if: always()
+        run: $COMPOSE_CMD down -v
