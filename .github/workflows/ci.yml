@@ -370,6 +370,15 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     env:
+      POSTGRES_USER: positivity
+      POSTGRES_PASSWORD: positivity
+      POSTGRES_DB: positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      POS_EVENTS_API_SECRET: ci-events-secret
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${{ secrets.GRAFANA_TOKEN }}"
 
     steps:
