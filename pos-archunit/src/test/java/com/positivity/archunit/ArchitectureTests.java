@@ -245,7 +245,10 @@ class ArchitectureTests {
         List<JavaClass> dtoClasses = allClasses.stream()
                 .filter(javaClass -> javaClass.getPackageName().contains(".internal."))
                 .filter(javaClass -> javaClass.getModifiers().contains(JavaModifier.PUBLIC))
-                .filter(javaClass -> javaClass.getSimpleName().endsWith("Dto"))
+                .filter(javaClass -> {
+                    String simpleName = javaClass.getSimpleName();
+                    return simpleName.contains("Dto") || simpleName.contains("DTO");
+                })
                 .sorted(Comparator.comparing(JavaClass::getFullName))
                 .toList();
 
@@ -258,7 +261,7 @@ class ArchitectureTests {
                         TreeMap::new,
                         Collectors.counting()));
 
-        System.out.println("[ArchUnit][DTO Migration] Public internal *Dto classes: " + dtoClasses.size());
+        System.out.println("[ArchUnit][DTO Migration] Public internal classes containing Dto/DTO: " + dtoClasses.size());
         moduleCounts.forEach((module, count) ->
                 System.out.println("[ArchUnit][DTO Migration] module=" + module + " count=" + count));
 
