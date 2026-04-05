@@ -4,11 +4,16 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeAll;
@@ -50,11 +55,38 @@ class ArchitectureTests {
 
     @Test
     void internalPackagesShouldNotBeAccessedFromOtherModules() {
-        ArchRule rule = noClasses()
-                .that().resideOutsideOfPackages("..internal..")
-                .and().resideInAPackage("com.positivity.(*)..")
-                .should().dependOnClassesThat()
-                .resideInAPackage("com.positivity.(*).internal..")
+        ArchRule rule = classes()
+                .that().resideInAPackage("com.positivity..")
+                .and().resideOutsideOfPackages("..internal..")
+                .should(new ArchCondition<>("not depend on internal packages of other modules") {
+                    @Override
+                    public void check(JavaClass originClass, ConditionEvents events) {
+                        String originModule = moduleName(originClass.getPackageName());
+                        if (originModule == null) {
+                            return;
+                        }
+
+                        for (Dependency dependency : originClass.getDirectDependenciesFromSelf()) {
+                            JavaClass targetClass = dependency.getTargetClass();
+                            String targetPackage = targetClass.getPackageName();
+                            String targetModule = moduleName(targetPackage);
+
+                            if (targetModule == null) {
+                                continue;
+                            }
+                            if (!targetPackage.contains(".internal.")) {
+                                continue;
+                            }
+                            if (originModule.equals(targetModule)) {
+                                continue;
+                            }
+
+                            events.add(SimpleConditionEvent.violated(
+                                    dependency,
+                                    dependency.getDescription()));
+                        }
+                    }
+                })
                 .because(
                         "internal packages should not be accessed from other modules - only service layer should be exposed");
 
@@ -145,11 +177,37 @@ class ArchitectureTests {
 
     @Test
     void dtosInInternalPackageShouldOnlyBeUsedWithinModule() {
-        ArchRule rule = noClasses()
-                .that().resideInAPackage("com.positivity.(*)..")
-                .and().resideOutsideOfPackages("com.positivity.$1..")
-                .should().dependOnClassesThat()
-                .resideInAPackage("com.positivity.$1.internal.dto..")
+        ArchRule rule = classes()
+                .that().resideInAPackage("com.positivity..")
+                .should(new ArchCondition<>("not depend on internal DTOs of other modules") {
+                    @Override
+                    public void check(JavaClass originClass, ConditionEvents events) {
+                        String originModule = moduleName(originClass.getPackageName());
+                        if (originModule == null) {
+                            return;
+                        }
+
+                        for (Dependency dependency : originClass.getDirectDependenciesFromSelf()) {
+                            JavaClass targetClass = dependency.getTargetClass();
+                            String targetPackage = targetClass.getPackageName();
+                            String targetModule = moduleName(targetPackage);
+
+                            if (targetModule == null) {
+                                continue;
+                            }
+                            if (!targetPackage.contains(".internal.dto.")) {
+                                continue;
+                            }
+                            if (originModule.equals(targetModule)) {
+                                continue;
+                            }
+
+                            events.add(SimpleConditionEvent.violated(
+                                    dependency,
+                                    dependency.getDescription()));
+                        }
+                    }
+                })
                 .because("internal DTOs should not leak across module boundaries");
 
         rule.check(allClasses);
@@ -173,5 +231,18 @@ class ArchitectureTests {
                 .because("time access must use explicit Clock injection or explicit Clock argument");
 
         rule.check(allClasses);
+    }
+
+    private static String moduleName(String packageName) {
+        String prefix = "com.positivity.";
+        if (!packageName.startsWith(prefix)) {
+            return null;
+        }
+        String remainder = packageName.substring(prefix.length());
+        int nextDot = remainder.indexOf('.');
+        if (nextDot < 0) {
+            return remainder;
+        }
+        return remainder.substring(0, nextDot);
     }
 }
