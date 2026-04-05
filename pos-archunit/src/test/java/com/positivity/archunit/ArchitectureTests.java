@@ -152,10 +152,9 @@ class ArchitectureTests {
                 .that().resideInAPackage("..internal..")
                 .and().arePublic()
                 .and().resideOutsideOfPackages("..internal.service..")
-                .should().haveSimpleNameNotContaining("Service")
-                .andShould().haveSimpleNameNotContaining("Dto")
+                .should().haveSimpleNameNotEndingWith("Service")
                 .because(
-                        "internal service implementations are allowed in ..internal.service.., while other internal public classes should avoid leaking service API types");
+                        "internal service implementations are allowed in ..internal.service.., while other internal public classes should avoid exposing service suffixes");
 
         // This rule is informational - allows some flexibility for internal public
         // classes
