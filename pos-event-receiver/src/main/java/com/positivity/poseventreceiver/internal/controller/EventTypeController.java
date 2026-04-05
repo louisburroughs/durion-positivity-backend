@@ -103,10 +103,11 @@ public class EventTypeController {
 
         var eventType = EventTypeMapper.toNewEntity(request.getTypeCode(), request);
         var created = eventDao.saveEventType(eventType);
+        var response = EventTypeMapper.toResponse(created);
         log.info("Event type created successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                created.getId(), created.getApiVersion(), created.getP50Micros(),
-                created.getP95Micros(), created.getP99Micros());
-        return ResponseEntity.status(HttpStatus.CREATED).body(EventTypeMapper.toResponse(created));
+                response.id(), response.apiVersion(), response.p50Micros(),
+                response.p95Micros(), response.p99Micros());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PutMapping("/code/{typeCode}")
@@ -123,18 +124,20 @@ public class EventTypeController {
                 .map(existingType -> {
                     EventTypeMapper.applyRequest(existingType, request);
                     var updated = eventDao.saveEventType(existingType);
+                    var response = EventTypeMapper.toResponse(updated);
                     log.info("Event type updated via upsert: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                            updated.getId(), updated.getApiVersion(), updated.getP50Micros(),
-                            updated.getP95Micros(), updated.getP99Micros());
-                    return ResponseEntity.ok(EventTypeMapper.toResponse(updated));
+                            response.id(), response.apiVersion(), response.p50Micros(),
+                            response.p95Micros(), response.p99Micros());
+                    return ResponseEntity.ok(response);
                 })
                 .orElseGet(() -> {
                     var eventType = EventTypeMapper.toNewEntity(typeCode, request);
                     var created = eventDao.saveEventType(eventType);
+                    var response = EventTypeMapper.toResponse(created);
                     log.info("Event type created via upsert: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                            created.getId(), created.getApiVersion(), created.getP50Micros(),
-                            created.getP95Micros(), created.getP99Micros());
-                    return ResponseEntity.ok(EventTypeMapper.toResponse(created));
+                            response.id(), response.apiVersion(), response.p50Micros(),
+                            response.p95Micros(), response.p99Micros());
+                    return ResponseEntity.ok(response);
                 });
     }
 
@@ -152,10 +155,11 @@ public class EventTypeController {
                 .map(eventType -> {
                     EventTypeMapper.applyRequest(eventType, request);
                     var updated = eventDao.saveEventType(eventType);
+                    var response = EventTypeMapper.toResponse(updated);
                     log.info("Event type updated successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                            id, updated.getApiVersion(), updated.getP50Micros(),
-                            updated.getP95Micros(), updated.getP99Micros());
-                    return ResponseEntity.ok(EventTypeMapper.toResponse(updated));
+                            id, response.apiVersion(), response.p50Micros(),
+                            response.p95Micros(), response.p99Micros());
+                    return ResponseEntity.ok(response);
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
