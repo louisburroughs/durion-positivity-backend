@@ -244,13 +244,15 @@ class ArchitectureTests {
     void dtoSuffixMigrationReport() {
         List<JavaClass> dtoClasses = allClasses.stream()
                 .filter(javaClass -> javaClass.getPackageName().contains(".internal."))
-                .filter(javaClass -> javaClass.getModifiers().contains(JavaModifier.PUBLIC))
                 .filter(javaClass -> {
                     String simpleName = javaClass.getSimpleName();
                     return simpleName.contains("Dto") || simpleName.contains("DTO");
                 })
                 .sorted(Comparator.comparing(JavaClass::getFullName))
                 .toList();
+        long publicCount = dtoClasses.stream()
+                .filter(javaClass -> javaClass.getModifiers().contains(JavaModifier.PUBLIC))
+                .count();
 
         Map<String, Long> moduleCounts = dtoClasses.stream()
                 .collect(Collectors.groupingBy(
@@ -261,7 +263,8 @@ class ArchitectureTests {
                         TreeMap::new,
                         Collectors.counting()));
 
-        System.out.println("[ArchUnit][DTO Migration] Public internal classes containing Dto/DTO: " + dtoClasses.size());
+        System.out.println("[ArchUnit][DTO Migration] Internal classes containing Dto/DTO: " + dtoClasses.size()
+                + " (public=" + publicCount + ")");
         moduleCounts.forEach((module, count) ->
                 System.out.println("[ArchUnit][DTO Migration] module=" + module + " count=" + count));
 
