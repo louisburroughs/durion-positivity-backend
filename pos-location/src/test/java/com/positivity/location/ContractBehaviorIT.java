@@ -41,13 +41,14 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-001: Create location returns 201 with current response shape")
         void testCreateLocation_HappyPath() throws Exception {
                 String locationCode = uniqueCode("MAIN-STORE");
+                String locationName = uniqueName("Main Store");
                 mockMvc.perform(withGatewayAuth(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(createPayload("Main Store", locationCode, "Workshop"))
+                                .content(createPayload(locationName, locationCode, "Workshop"))
                                 .header("X-Correlation-Id", "cp-001")))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.id").exists())
-                                .andExpect(jsonPath("$.name").value("Main Store"))
+                                .andExpect(jsonPath("$.name").value(locationName))
                                 .andExpect(jsonPath("$.code").value(locationCode))
                                 .andExpect(jsonPath("$.active").value(true))
                                 .andExpect(jsonPath("$.type.name").value("Workshop"));
@@ -57,9 +58,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-002: Retrieve created location by ID")
         void testGetLocation_HappyPath() throws Exception {
                 String locationCode = uniqueCode("SECONDARY");
+                String locationName = uniqueName("Secondary Store");
                 MvcResult createResult = mockMvc.perform(withGatewayAuth(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(createPayload("Secondary Store", locationCode, "Warehouse"))
+                                .content(createPayload(locationName, locationCode, "Warehouse"))
                                 .header("X-Correlation-Id", "cp-002-create")))
                                 .andExpect(status().isCreated())
                                 .andReturn();
@@ -71,7 +73,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .header("X-Correlation-Id", "cp-002-get")))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(locationId))
-                                .andExpect(jsonPath("$.name").value("Secondary Store"))
+                                .andExpect(jsonPath("$.name").value(locationName))
                                 .andExpect(jsonPath("$.code").value(locationCode))
                                 .andExpect(jsonPath("$.type.name").value("Warehouse"));
         }
@@ -96,7 +98,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @Test
         @DisplayName("VE-002: Duplicate code returns 409")
         void testCreateLocation_DuplicateCode() throws Exception {
-                String payload = createPayload("Unique Store", "UNIQUE-CODE-001", "Site");
+                String locationName = uniqueName("Unique Store");
+                String payload = createPayload(locationName, "UNIQUE-CODE-001", "Site");
 
                 mockMvc.perform(withGatewayAuth(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -135,6 +138,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 String updatedLocationCode = uniqueCode("UPDATE");
                 String locationType = uniqueType("WAREHOUSE");
                 String sourceName = uniqueName("Update Source");
+                String updatedName = uniqueName("Updated Name");
                 MvcResult createResult = mockMvc.perform(withGatewayAuth(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(createPayload(sourceName, locationCode, locationType))
@@ -147,12 +151,12 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 String updatePayload = """
                                 {
-                                    "name": "Updated Name",
+                                    "name": "%s",
                                         "code": "%s",
                                         "type": { "name": "%s" },
                                     "active": false
                                 }
-                                """.formatted(updatedLocationCode, locationType);
+                                """.formatted(updatedName, updatedLocationCode, locationType);
 
                 mockMvc.perform(withGatewayAuth(put("/v1/locations/{id}", locationId)
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -160,7 +164,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .header("X-Correlation-Id", "cp-003-update")))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(locationId))
-                                .andExpect(jsonPath("$.name").value("Updated Name"))
+                                .andExpect(jsonPath("$.name").value(updatedName))
                                 .andExpect(jsonPath("$.active").value(false));
         }
 
@@ -177,9 +181,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-005: Delete existing location returns 204")
         void testDeleteLocation_returns204() throws Exception {
                 String locationCode = uniqueCode("DELETE");
+                String locationName = uniqueName("To Delete");
                 MvcResult createResult = mockMvc.perform(withGatewayAuth(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(createPayload("To Delete", locationCode, "Bay"))
+                                .content(createPayload(locationName, locationCode, "Bay"))
                                 .header("X-Correlation-Id", "cp-005-create")))
                                 .andExpect(status().isCreated())
                                 .andReturn();
@@ -267,17 +272,14 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         private String uniqueCode(String prefix) {
-                return prefix + "-" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8)
-                                .toUpperCase();
+                return prefix + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
 
         private String uniqueType(String prefix) {
-                return prefix + "-" + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8)
-                                .toUpperCase();
+                return prefix + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
 
         private String uniqueName(String prefix) {
-                return prefix + " " + UUID.fromString("00000000-0000-0000-0000-000000000001").toString().substring(0, 8)
-                                .toUpperCase();
+                return prefix + " " + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
 }
