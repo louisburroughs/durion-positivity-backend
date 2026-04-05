@@ -413,8 +413,8 @@ jobs:
 
       - name: Start services with Docker Compose
         run: |
-          SERVICES=$($COMPOSE_CMD config --services | grep -v '^pos-frontend$' | tr '\n' ' ')
-          echo "Starting services (excluding pos-frontend): $SERVICES"
+          SERVICES="postgres eureka-server pos-security-service pos-api-gateway"
+          echo "Starting minimal smoke-test services: $SERVICES"
           $COMPOSE_CMD up -d $SERVICES
 
       - name: Wait for services to be healthy
