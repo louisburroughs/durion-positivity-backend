@@ -83,7 +83,10 @@ public class WorkexecTimeTrackingController {
                 endDate,
                 zoneId,
                 locationId,
-                technicianIds == null ? Collections.emptyList() : technicianIds);
+                technicianIds == null ? Collections.emptyList() : technicianIds)
+                .stream()
+                .map(this::toJobTimeTotalResponse)
+                .toList();
 
         return ResponseEntity.ok(response);
     }
@@ -108,9 +111,10 @@ public class WorkexecTimeTrackingController {
         }
 
         try {
-            WorkexecTimeTrackingService.LaborPerformedResult result = service.recordLaborPerformed(request,
+            WorkexecTimeTrackingService.LaborPerformedResult result = service.recordLaborPerformed(
+                    toLaborPerformedRequest(request),
                     idempotencyKey);
-            WorkexecLaborPerformedResponse response = result.response();
+            WorkexecLaborPerformedResponse response = toLaborPerformedResponse(result.response());
 
             HttpHeaders headers = new HttpHeaders();
             if (correlationId != null && !correlationId.isBlank()) {
@@ -143,7 +147,9 @@ public class WorkexecTimeTrackingController {
             return badRequest(ERROR_INVALID_REQUEST, USER_ID_REQUIRED_MESSAGE);
         }
 
-        List<WorkexecTimerEntryResponse> active = service.getActiveTimers(mechanicId);
+        List<WorkexecTimerEntryResponse> active = service.getActiveTimers(mechanicId).stream()
+                .map(this::toTimerEntryResponse)
+                .toList();
         return ResponseEntity.ok(active);
     }
 
@@ -167,14 +173,16 @@ public class WorkexecTimeTrackingController {
         }
 
         try {
-            WorkexecTimeTrackingService.TimerStartResult result = service.startTimer(mechanicId, request,
+            WorkexecTimeTrackingService.TimerStartResult result = service.startTimer(
+                    mechanicId,
+                    toTimerStartRequest(request),
                     idempotencyKey);
             HttpHeaders headers = new HttpHeaders();
             if (result.replayed()) {
                 headers.add("Idempotency-Replayed", "true");
-                return new ResponseEntity<>(result.response(), headers, HttpStatus.OK);
+                return new ResponseEntity<>(toTimerEntryResponse(result.response()), headers, HttpStatus.OK);
             }
-            return new ResponseEntity<>(result.response(), headers, HttpStatus.CREATED);
+            return new ResponseEntity<>(toTimerEntryResponse(result.response()), headers, HttpStatus.CREATED);
         } catch (NoSuchElementException ex) {
             return notFound("NOT_FOUND", ex.getMessage());
         } catch (WorkexecTimeTrackingService.WorkexecConflictException ex) {
@@ -197,7 +205,9 @@ public class WorkexecTimeTrackingController {
         }
 
         try {
-            List<WorkexecTimerEntryResponse> stopped = service.stopTimers(mechanicId);
+            List<WorkexecTimerEntryResponse> stopped = service.stopTimers(mechanicId).stream()
+                    .map(this::toTimerEntryResponse)
+                    .toList();
             return ResponseEntity.ok(WorkexecTimerStopResponse.builder().stopped(stopped).build());
         } catch (WorkexecTimeTrackingService.WorkexecConflictException ex) {
             return conflict(ex.getCode(), ex.getMessage());
@@ -224,5 +234,63 @@ public class WorkexecTimeTrackingController {
     private ResponseEntity<Object> notFound(String code, String message) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Map.of(ERROR_CODE_KEY, code, ERROR_MESSAGE_KEY, message));
+    }
+
+    private WorkexecJobTimeTotalResponse toJobTimeTotalResponse(WorkexecTimeTrackingService.JobTimeTotal response) {
+        return WorkexecJobTimeTotalResponse.builder()
+                .technicianId(response.technicianId())
+                .locationId(response.locationId())
+                .localDate(response.localDate())
+                .totalJobMinutes(response.totalJobMinutes())
+                .build();
+    }
+
+    private WorkexecTimeTrackingService.LaborPerformedRequest toLaborPerformedRequest(
+            WorkexecLaborPerformedRequest request) {
+        return new WorkexecTimeTrackingService.LaborPerformedRequest(
+                request.getWorkorderId(),
+                request.getTechnicianId(),
+                request.getPerformedAt(),
+                new WorkexecTimeTrackingService.LaborQuantity(
+                        request.getLabor().getQuantity(),
+                        request.getLabor().getUnit()),
+                new WorkexecTimeTrackingService.SourceReference(
+                        request.getSource().getSystem(),
+                        request.getSource().getSourceReferenceId()));
+    }
+
+    private WorkexecLaborPerformedResponse toLaborPerformedResponse(
+            WorkexecTimeTrackingService.LaborPerformedResponse response) {
+        return WorkexecLaborPerformedResponse.builder()
+                .laborPerformedId(response.laborPerformedId())
+                .workorderId(response.workorderId())
+                .technicianId(response.technicianId())
+                .performedAt(response.performedAt())
+                .quantity(response.quantity())
+                .unit(response.unit())
+                .sourceSystem(response.sourceSystem())
+                .sourceReferenceId(response.sourceReferenceId())
+                .build();
+    }
+
+    private WorkexecTimeTrackingService.TimerStartRequest toTimerStartRequest(WorkexecTimerStartRequest request) {
+        return new WorkexecTimeTrackingService.TimerStartRequest(
+                request.getWorkorderId(),
+                request.getWorkorderItemId(),
+                request.getLaborCode());
+    }
+
+    private WorkexecTimerEntryResponse toTimerEntryResponse(WorkexecTimeTrackingService.TimerEntry response) {
+        return WorkexecTimerEntryResponse.builder()
+                .timeEntryId(response.timeEntryId())
+                .mechanicId(response.mechanicId())
+                .workorderId(response.workorderId())
+                .workorderItemId(response.workorderItemId())
+                .laborCode(response.laborCode())
+                .startTime(response.startTime())
+                .endTime(response.endTime())
+                .durationInSeconds(response.durationInSeconds())
+                .status(response.status())
+                .build();
     }
 }

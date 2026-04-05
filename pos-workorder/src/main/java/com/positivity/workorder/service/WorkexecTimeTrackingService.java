@@ -1,11 +1,9 @@
 package com.positivity.workorder.service;
 
-import com.positivity.workorder.internal.dto.WorkexecJobTimeTotalResponse;
-import com.positivity.workorder.internal.dto.WorkexecLaborPerformedRequest;
-import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
-import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
-import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
@@ -15,7 +13,7 @@ import org.jspecify.annotations.Nullable;
 public interface WorkexecTimeTrackingService {
 
     @NonNull
-    List<WorkexecJobTimeTotalResponse> getJobTimeTotals(
+    List<JobTimeTotal> getJobTimeTotals(
             @NonNull LocalDate startDate,
             @NonNull LocalDate endDate,
             @NonNull ZoneId timezone,
@@ -24,25 +22,75 @@ public interface WorkexecTimeTrackingService {
 
     @NonNull
     LaborPerformedResult recordLaborPerformed(
-            @NonNull WorkexecLaborPerformedRequest request,
+            @NonNull LaborPerformedRequest request,
             @NonNull String idempotencyKey);
 
     @NonNull
-    List<WorkexecTimerEntryResponse> getActiveTimers(@NonNull UUID mechanicId);
+    List<TimerEntry> getActiveTimers(@NonNull UUID mechanicId);
 
     @NonNull
     TimerStartResult startTimer(
             @NonNull UUID mechanicId,
-            @NonNull WorkexecTimerStartRequest request,
+            @NonNull TimerStartRequest request,
             @Nullable String idempotencyKey);
 
     @NonNull
-    List<WorkexecTimerEntryResponse> stopTimers(@NonNull UUID mechanicId);
+    List<TimerEntry> stopTimers(@NonNull UUID mechanicId);
 
-    record LaborPerformedResult(WorkexecLaborPerformedResponse response, boolean replayed) {
+    record JobTimeTotal(
+            UUID technicianId,
+            UUID locationId,
+            LocalDate localDate,
+            Integer totalJobMinutes) {
     }
 
-    record TimerStartResult(WorkexecTimerEntryResponse response, boolean replayed) {
+    record LaborQuantity(BigDecimal quantity, String unit) {
+    }
+
+    record SourceReference(String system, String sourceReferenceId) {
+    }
+
+    record LaborPerformedRequest(
+            UUID workorderId,
+            UUID technicianId,
+            Instant performedAt,
+            LaborQuantity labor,
+            SourceReference source) {
+    }
+
+    record LaborPerformedResponse(
+            UUID laborPerformedId,
+            UUID workorderId,
+            UUID technicianId,
+            Instant performedAt,
+            BigDecimal quantity,
+            String unit,
+            String sourceSystem,
+            String sourceReferenceId) {
+    }
+
+    record LaborPerformedResult(LaborPerformedResponse response, boolean replayed) {
+    }
+
+    record TimerStartRequest(
+            UUID workorderId,
+            UUID workorderItemId,
+            String laborCode) {
+    }
+
+    record TimerEntry(
+            UUID timeEntryId,
+            UUID mechanicId,
+            UUID workorderId,
+            UUID workorderItemId,
+            String laborCode,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            Long durationInSeconds,
+            String status) {
+    }
+
+    record TimerStartResult(TimerEntry response, boolean replayed) {
     }
 
     final class WorkexecConflictException extends RuntimeException {
