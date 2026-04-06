@@ -4,6 +4,21 @@ Utility scripts for managing the project build, versioning, and deployment.
 
 ## Available Scripts
 
+### `check-flyway-hygiene.sh` - Flyway Migration Guardrails
+
+Validates migration hygiene rules across `pos-*` modules.
+
+**Usage:**
+```bash
+./check-flyway-hygiene.sh
+```
+
+**Checks:**
+- Duplicate `V<version>__...` migration numbers in a module
+- Modules with `db/migration/*.sql` but missing Flyway dependencies
+- Non-test runtime configs using `ddl-auto: update` for Flyway-managed modules
+- Migration filenames not matching `V<integer>__<description>.sql` or `R__<description>.sql`
+
 ### `redeploy-backend-tag.sh` - Update Tag + Redeploy Services on EC2
 
 Updates `BACKEND_TAG` in `/opt/durion/alpha/.env`, then runs `docker compose pull` and
