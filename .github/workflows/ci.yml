@@ -130,6 +130,9 @@ jobs:
       - name: Enforce no-arg now() policy
         run: ./scripts/check-noarg-now.sh
 
+      - name: Enforce Flyway migration hygiene
+        run: ./scripts/check-flyway-hygiene.sh
+
       - name: Build module graph for unit test dependencies
         run: ./mvnw -pl ${{ matrix.module }} -am -DskipTests install -T 1C -B -q
 
