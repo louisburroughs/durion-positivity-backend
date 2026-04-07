@@ -1,2 +1,2 @@
-ALTER TABLE workorder ADD COLUMN operational_context_version VARCHAR(255);
-ALTER TABLE workorder ADD COLUMN work_started_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE IF EXISTS workorder ADD COLUMN IF NOT EXISTS operational_context_version VARCHAR(255);
+ALTER TABLE IF EXISTS workorder ADD COLUMN IF NOT EXISTS work_started_at TIMESTAMP WITH TIME ZONE;

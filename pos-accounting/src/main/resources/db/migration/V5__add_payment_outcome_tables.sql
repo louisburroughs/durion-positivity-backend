@@ -9,6 +9,16 @@ CREATE TABLE IF NOT EXISTS reconciliation_records (
     CONSTRAINT uq_reconciliation_invoice_transaction UNIQUE (invoice_id, transaction_id)
 );
 
+CREATE TABLE IF NOT EXISTS invoice_status_views (
+    id UUID PRIMARY KEY,
+    invoice_id UUID NOT NULL UNIQUE,
+    current_status VARCHAR(50) NOT NULL,
+    total_paid NUMERIC(19, 2) NOT NULL DEFAULT 0,
+    invoice_total NUMERIC(19, 2) NOT NULL DEFAULT 0,
+    last_updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    latest_transaction_reference VARCHAR(255)
+);
+
 ALTER TABLE invoice_status_views
     ADD COLUMN IF NOT EXISTS total_amount_minor BIGINT NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS outstanding_amount_minor BIGINT NOT NULL DEFAULT 0,

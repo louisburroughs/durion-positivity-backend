@@ -1,10 +1,15 @@
 ALTER TABLE IF EXISTS inventory_reservation
     ADD COLUMN IF NOT EXISTS stock_item_id UUID;
 
-UPDATE inventory_reservation
-SET stock_item_id = CAST(NULLIF(sku, '') AS UUID)
-WHERE stock_item_id IS NULL
-  AND sku IS NOT NULL;
+DO $$
+BEGIN
+    IF to_regclass('public.inventory_reservation') IS NOT NULL THEN
+        UPDATE inventory_reservation
+        SET stock_item_id = CAST(NULLIF(sku, '') AS UUID)
+        WHERE stock_item_id IS NULL
+          AND sku IS NOT NULL;
+    END IF;
+END $$;
 
 ALTER TABLE IF EXISTS inventory_reservation
     ALTER COLUMN stock_item_id SET NOT NULL;

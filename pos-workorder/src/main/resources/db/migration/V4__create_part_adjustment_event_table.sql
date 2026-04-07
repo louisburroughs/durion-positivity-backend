@@ -2,12 +2,12 @@
 -- Create workorder_part_adjustment_event table and update idempotency_keys
 
 -- Add part_adjustment_event_id to idempotency_keys for adjustment idempotency
-ALTER TABLE idempotency_keys ADD COLUMN part_adjustment_event_id UUID;
+ALTER TABLE IF EXISTS idempotency_keys ADD COLUMN IF NOT EXISTS part_adjustment_event_id UUID;
 
 COMMENT ON COLUMN idempotency_keys.part_adjustment_event_id IS 'ID of the part adjustment event created with this key (nullable)';
 
 -- Create workorder_part_adjustment_event table
-CREATE TABLE workorder_part_adjustment_event (
+CREATE TABLE IF NOT EXISTS workorder_part_adjustment_event (
     id UUID PRIMARY KEY,
     original_part_id UUID NOT NULL,
     workorder_id UUID NOT NULL,
@@ -24,9 +24,9 @@ CREATE TABLE workorder_part_adjustment_event (
 );
 
 -- Indexes for efficient queries
-CREATE INDEX idx_part_adjustment_original_part ON workorder_part_adjustment_event(original_part_id);
-CREATE INDEX idx_part_adjustment_workorder ON workorder_part_adjustment_event(workorder_id);
-CREATE INDEX idx_part_adjustment_performed_at ON workorder_part_adjustment_event(performed_at);
+CREATE INDEX IF NOT EXISTS idx_part_adjustment_original_part ON workorder_part_adjustment_event(original_part_id);
+CREATE INDEX IF NOT EXISTS idx_part_adjustment_workorder ON workorder_part_adjustment_event(workorder_id);
+CREATE INDEX IF NOT EXISTS idx_part_adjustment_performed_at ON workorder_part_adjustment_event(performed_at);
 
 -- Add comments for documentation
 COMMENT ON TABLE workorder_part_adjustment_event IS 'Immutable append-only log of part adjustments (substitutions, returns, corrections) on workorders';

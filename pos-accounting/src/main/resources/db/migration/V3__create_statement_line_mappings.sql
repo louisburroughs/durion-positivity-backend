@@ -1,7 +1,7 @@
 -- Create statement_line_mappings table for financial reporting
 -- CAP-054: Period Close, Adjustments, and Reporting
 
-CREATE TABLE statement_line_mappings (
+CREATE TABLE IF NOT EXISTS statement_line_mappings (
     mapping_id UUID PRIMARY KEY,
     gl_account_id UUID NOT NULL,
     account_name VARCHAR(255),
@@ -16,9 +16,9 @@ CREATE TABLE statement_line_mappings (
 );
 
 -- Create indexes for efficient queries
-CREATE INDEX idx_statement_line_mapping_type ON statement_line_mappings(statement_type);
-CREATE INDEX idx_statement_line_mapping_account ON statement_line_mappings(gl_account_id);
-CREATE INDEX idx_statement_line_mapping_code ON statement_line_mappings(statement_line_code);
+CREATE INDEX IF NOT EXISTS idx_statement_line_mapping_type ON statement_line_mappings(statement_type);
+CREATE INDEX IF NOT EXISTS idx_statement_line_mapping_account ON statement_line_mappings(gl_account_id);
+CREATE INDEX IF NOT EXISTS idx_statement_line_mapping_code ON statement_line_mappings(statement_line_code);
 
 -- Note: Seed data removed - will be added via application bootstrap or separate data migration
 -- Default GAAP-aligned mappings should reference actual GL account UUIDs from your system

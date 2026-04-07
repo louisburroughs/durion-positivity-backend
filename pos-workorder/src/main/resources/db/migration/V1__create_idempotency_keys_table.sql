@@ -3,7 +3,7 @@
 
 CREATE TABLE idempotency_keys (
     id UUID PRIMARY KEY,
-    key_value VARCHAR2(255) NOT NULL UNIQUE,
+    key_value VARCHAR(255) NOT NULL UNIQUE,
     workorder_id UUID,
     change_request_id UUID,
     labor_entry_id UUID,
@@ -25,3 +25,19 @@ COMMENT ON COLUMN idempotency_keys.change_request_id IS 'ID of the change reques
 COMMENT ON COLUMN idempotency_keys.labor_entry_id IS 'ID of the labor entry created with this key (nullable)';
 COMMENT ON COLUMN idempotency_keys.created_at IS 'When the key was first registered';
 COMMENT ON COLUMN idempotency_keys.expires_at IS 'When the key expires (24 hours from creation)';
+
+-- Historical migrations reference these tables early via ALTER/foreign keys.
+-- Create skeletal tables here so fresh empty-db bootstraps do not fail.
+CREATE TABLE IF NOT EXISTS workorder (
+    id UUID PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS workorder_part (
+    id UUID PRIMARY KEY,
+    workorder_id UUID,
+    CONSTRAINT fk_workorder_part_workorder FOREIGN KEY (workorder_id) REFERENCES workorder(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS estimate (
+    id UUID PRIMARY KEY
+);
