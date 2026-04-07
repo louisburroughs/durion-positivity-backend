@@ -1,0 +1,153 @@
+-- Phase 5.3 follow-up: add remaining mapped entity columns for pos-inventory.
+
+ALTER TABLE IF EXISTS asn_line
+    ADD COLUMN IF NOT EXISTS asn_line_id UUID,
+    ADD COLUMN IF NOT EXISTS sku VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS quantity_shipped NUMERIC(18, 6),
+    ADD COLUMN IF NOT EXISTS quantity_received NUMERIC(18, 6);
+
+ALTER TABLE IF EXISTS distributor_normalized_inventory
+    ADD COLUMN IF NOT EXISTS product_id UUID,
+    ADD COLUMN IF NOT EXISTS distributor_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS distributor_sku VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS quantity_available INTEGER,
+    ADD COLUMN IF NOT EXISTS normalization_policy_version VARCHAR(255);
+
+ALTER TABLE IF EXISTS goods_receipt
+    ADD COLUMN IF NOT EXISTS receipt_id UUID,
+    ADD COLUMN IF NOT EXISTS receipt_number VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS location_id UUID,
+    ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
+
+ALTER TABLE IF EXISTS count_entry
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS cycle_count_adjustment
+    ADD COLUMN IF NOT EXISTS adjustment_id UUID,
+    ADD COLUMN IF NOT EXISTS stock_item_id UUID,
+    ADD COLUMN IF NOT EXISTS reason_code VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS quantity_change INTEGER,
+    ADD COLUMN IF NOT EXISTS cost_at_time_of_adjustment NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS quantity_on_hand_before INTEGER,
+    ADD COLUMN IF NOT EXISTS counted_quantity INTEGER,
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS created_by_user_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR(1000),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS error_message VARCHAR(2000);
+
+ALTER TABLE IF EXISTS advance_shipping_notice
+    ADD COLUMN IF NOT EXISTS asn_id UUID,
+    ADD COLUMN IF NOT EXISTS asn_reference_number VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS vendor_id UUID,
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
+
+ALTER TABLE IF EXISTS normalized_availability
+    ADD COLUMN IF NOT EXISTS product_id UUID,
+    ADD COLUMN IF NOT EXISTS manufacturer_id UUID,
+    ADD COLUMN IF NOT EXISTS manufacturer_part_number VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS available_qty INTEGER,
+    ADD COLUMN IF NOT EXISTS uom VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS pack_size INTEGER,
+    ADD COLUMN IF NOT EXISTS as_of TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS received_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS schema_version INTEGER,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_adjustment_request
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_allocation
+    ADD COLUMN IF NOT EXISTS allocation_id UUID,
+    ADD COLUMN IF NOT EXISTS location_id UUID,
+    ADD COLUMN IF NOT EXISTS allocated_quantity INTEGER,
+    ADD COLUMN IF NOT EXISTS allocation_state VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS purchase_order_line
+    ADD COLUMN IF NOT EXISTS line_id UUID,
+    ADD COLUMN IF NOT EXISTS line_number INTEGER,
+    ADD COLUMN IF NOT EXISTS description VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS quantity_decimal NUMERIC(18, 6),
+    ADD COLUMN IF NOT EXISTS unit_cost_minor BIGINT,
+    ADD COLUMN IF NOT EXISTS line_total_minor BIGINT,
+    ADD COLUMN IF NOT EXISTS open_quantity_decimal NUMERIC(18, 6);
+
+ALTER TABLE IF EXISTS distributor_feed_exception
+    ADD COLUMN IF NOT EXISTS distributor_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS reason VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS raw_payload VARCHAR(4000),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_reservation
+    ADD COLUMN IF NOT EXISTS reservation_id UUID,
+    ADD COLUMN IF NOT EXISTS workorder_line_id UUID,
+    ADD COLUMN IF NOT EXISTS required_quantity INTEGER,
+    ADD COLUMN IF NOT EXISTS allocated_quantity INTEGER,
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_return
+    ADD COLUMN IF NOT EXISTS return_id UUID,
+    ADD COLUMN IF NOT EXISTS workorder_id UUID,
+    ADD COLUMN IF NOT EXISTS return_reason VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS total_items_returned INTEGER;
+
+ALTER TABLE IF EXISTS unmapped_manufacturer_part
+    ADD COLUMN IF NOT EXISTS manufacturer_id UUID,
+    ADD COLUMN IF NOT EXISTS manufacturer_part_number VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS first_seen TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS occurrence_count INTEGER,
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS purchase_order
+    ADD COLUMN IF NOT EXISTS purchase_order_id UUID,
+    ADD COLUMN IF NOT EXISTS vendor_id UUID,
+    ADD COLUMN IF NOT EXISTS po_number VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS version_number INTEGER,
+    ADD COLUMN IF NOT EXISTS currency VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS subtotal_minor BIGINT,
+    ADD COLUMN IF NOT EXISTS tax_minor BIGINT,
+    ADD COLUMN IF NOT EXISTS grand_total_minor BIGINT,
+    ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
+
+ALTER TABLE IF EXISTS goods_receipt_line
+    ADD COLUMN IF NOT EXISTS receipt_line_id UUID,
+    ADD COLUMN IF NOT EXISTS sku VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS quantity_received NUMERIC(18, 6),
+    ADD COLUMN IF NOT EXISTS unit_cost_minor BIGINT;
+
+ALTER TABLE IF EXISTS inventory_pick_task
+    ADD COLUMN IF NOT EXISTS sku VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS priority INTEGER,
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64);
+
+ALTER TABLE IF EXISTS approval_threshold_config
+    ADD COLUMN IF NOT EXISTS config_id UUID;
+
+ALTER TABLE IF EXISTS inventory_ledger_entry
+    ADD COLUMN IF NOT EXISTS ledger_entry_id UUID,
+    ADD COLUMN IF NOT EXISTS stock_item_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS event_type VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS change_in_quantity INTEGER,
+    ADD COLUMN IF NOT EXISTS quantity_after INTEGER,
+    ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS transaction_user_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS reason_code VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS source_transaction_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS unit_of_measure VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS notes VARCHAR(2000);
