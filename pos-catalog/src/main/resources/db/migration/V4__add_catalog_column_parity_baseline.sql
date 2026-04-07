@@ -1,0 +1,53 @@
+-- Phase 5.2 bootstrap: add explicit entity-mapped columns for catalog tables.
+
+ALTER TABLE IF EXISTS product
+    ADD COLUMN IF NOT EXISTS product_id UUID,
+    ADD COLUMN IF NOT EXISTS category_id UUID,
+    ADD COLUMN IF NOT EXISTS subcategory_id UUID,
+    ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+ALTER TABLE IF EXISTS product_replacement
+    ADD COLUMN IF NOT EXISTS original_product_id UUID,
+    ADD COLUMN IF NOT EXISTS replacement_product_id UUID;
+
+ALTER TABLE IF EXISTS product_msrp
+    ADD COLUMN IF NOT EXISTS product_id UUID;
+
+ALTER TABLE IF EXISTS price_book_rule
+    ADD COLUMN IF NOT EXISTS price_book_id UUID;
+
+ALTER TABLE IF EXISTS supplier_item_cost
+    ADD COLUMN IF NOT EXISTS supplier_id UUID,
+    ADD COLUMN IF NOT EXISTS item_id UUID,
+    ADD COLUMN IF NOT EXISTS base_cost NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS currency_code VARCHAR(16),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS item_cost
+    ADD COLUMN IF NOT EXISTS item_cost_id UUID,
+    ADD COLUMN IF NOT EXISTS item_id UUID,
+    ADD COLUMN IF NOT EXISTS standard_cost NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS average_cost NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS last_cost NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS qty_on_hand NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS item_cost_audit
+    ADD COLUMN IF NOT EXISTS audit_id UUID,
+    ADD COLUMN IF NOT EXISTS item_id UUID,
+    ADD COLUMN IF NOT EXISTS actor VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS reason_code VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS cost_type_changed VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS old_value NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS new_value NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS change_source_type VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS change_source_id UUID,
+    ADD COLUMN IF NOT EXISTS audit_timestamp TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS cost_tier
+    ADD COLUMN IF NOT EXISTS supplier_item_cost_id UUID,
+    ADD COLUMN IF NOT EXISTS min_quantity NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS max_quantity NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(19, 4);

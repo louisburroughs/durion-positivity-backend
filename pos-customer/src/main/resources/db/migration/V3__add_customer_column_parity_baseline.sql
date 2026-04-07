@@ -1,0 +1,125 @@
+-- Phase 5.2 bootstrap: add explicit entity-mapped columns for customer parity tables.
+
+ALTER TABLE IF EXISTS commercial_party
+    ADD COLUMN IF NOT EXISTS party_id UUID,
+    ADD COLUMN IF NOT EXISTS identifier_value VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS parent_party_id UUID;
+
+ALTER TABLE IF EXISTS communication_preference
+    ADD COLUMN IF NOT EXISTS preference_id UUID,
+    ADD COLUMN IF NOT EXISTS party_id UUID,
+    ADD COLUMN IF NOT EXISTS sms_preference BOOLEAN,
+    ADD COLUMN IF NOT EXISTS email_preference BOOLEAN,
+    ADD COLUMN IF NOT EXISTS phone_preference BOOLEAN,
+    ADD COLUMN IF NOT EXISTS marketing_preference BOOLEAN,
+    ADD COLUMN IF NOT EXISTS flag_value BOOLEAN,
+    ADD COLUMN IF NOT EXISTS update_source VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS preferences_note TEXT,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS version INTEGER;
+
+ALTER TABLE IF EXISTS contact
+    ADD COLUMN IF NOT EXISTS contact_id UUID,
+    ADD COLUMN IF NOT EXISTS person_id UUID,
+    ADD COLUMN IF NOT EXISTS party_id UUID,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS contact_point
+    ADD COLUMN IF NOT EXISTS contact_point_id UUID,
+    ADD COLUMN IF NOT EXISTS person_id UUID,
+    ADD COLUMN IF NOT EXISTS contact_type VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS value VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS is_primary BOOLEAN,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS contact_role_assignment
+    ADD COLUMN IF NOT EXISTS customer_account_id UUID,
+    ADD COLUMN IF NOT EXISTS role_name VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS is_primary BOOLEAN,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS merge_audit
+    ADD COLUMN IF NOT EXISTS merge_audit_id UUID,
+    ADD COLUMN IF NOT EXISTS survivor_party_id UUID,
+    ADD COLUMN IF NOT EXISTS source_party_id UUID,
+    ADD COLUMN IF NOT EXISTS merge_reason TEXT,
+    ADD COLUMN IF NOT EXISTS merged_by_user_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS merged_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS contacts_transferred INTEGER,
+    ADD COLUMN IF NOT EXISTS vehicles_transferred INTEGER,
+    ADD COLUMN IF NOT EXISTS external_ids_merged INTEGER,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS party_alias
+    ADD COLUMN IF NOT EXISTS source_party_id UUID,
+    ADD COLUMN IF NOT EXISTS target_party_id UUID,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS party_note
+    ADD COLUMN IF NOT EXISTS note_id UUID,
+    ADD COLUMN IF NOT EXISTS party_id UUID,
+    ADD COLUMN IF NOT EXISTS note_type VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS note_text TEXT,
+    ADD COLUMN IF NOT EXISTS source_workorder_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS source_event_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS party_relationship
+    ADD COLUMN IF NOT EXISTS party_relationship_id UUID,
+    ADD COLUMN IF NOT EXISTS from_party_id UUID,
+    ADD COLUMN IF NOT EXISTS to_person_id UUID,
+    ADD COLUMN IF NOT EXISTS role_type VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS effective_start_date DATE,
+    ADD COLUMN IF NOT EXISTS effective_end_date DATE,
+    ADD COLUMN IF NOT EXISTS is_primary_billing_contact BOOLEAN,
+    ADD COLUMN IF NOT EXISTS created_by VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS person_party
+    ADD COLUMN IF NOT EXISTS person_id UUID,
+    ADD COLUMN IF NOT EXISTS preferred_contact_method VARCHAR(64);
+
+ALTER TABLE IF EXISTS processing_log
+    ADD COLUMN IF NOT EXISTS event_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS event_type VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS failure_reason TEXT,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS promotion_counter
+    ADD COLUMN IF NOT EXISTS counter_id UUID,
+    ADD COLUMN IF NOT EXISTS promotion_id UUID,
+    ADD COLUMN IF NOT EXISTS total_usage_count INTEGER,
+    ADD COLUMN IF NOT EXISTS version INTEGER;
+
+ALTER TABLE IF EXISTS promotion_redemption
+    ADD COLUMN IF NOT EXISTS promotion_redemption_id UUID,
+    ADD COLUMN IF NOT EXISTS customer_id UUID,
+    ADD COLUMN IF NOT EXISTS promotion_id UUID,
+    ADD COLUMN IF NOT EXISTS promotion_code VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS workorder_id VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS invoice_id UUID,
+    ADD COLUMN IF NOT EXISTS discount_type VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS recorded_by VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS recorded_over_limit BOOLEAN,
+    ADD COLUMN IF NOT EXISTS redemption_timestamp TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS vehicle_projection
+    ADD COLUMN IF NOT EXISTS vehicle_id UUID,
+    ADD COLUMN IF NOT EXISTS vin VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS make VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS model VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS vehicle_year INTEGER,
+    ADD COLUMN IF NOT EXISTS color VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMPTZ;

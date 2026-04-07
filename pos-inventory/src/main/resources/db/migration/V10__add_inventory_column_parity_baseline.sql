@@ -1,0 +1,121 @@
+-- Phase 5.2 bootstrap: add explicit entity-mapped columns for inventory parity tables.
+
+ALTER TABLE IF EXISTS advance_shipping_notice
+    ADD COLUMN IF NOT EXISTS po_id UUID,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255);
+
+ALTER TABLE IF EXISTS asn_line
+    ADD COLUMN IF NOT EXISTS asn_id UUID,
+    ADD COLUMN IF NOT EXISTS po_id UUID,
+    ADD COLUMN IF NOT EXISTS po_line_id UUID,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS purchase_order
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255);
+
+ALTER TABLE IF EXISTS purchase_order_line
+    ADD COLUMN IF NOT EXISTS purchase_order_id UUID,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS goods_receipt
+    ADD COLUMN IF NOT EXISTS asn_id UUID,
+    ADD COLUMN IF NOT EXISTS po_id UUID,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255);
+
+ALTER TABLE IF EXISTS goods_receipt_line
+    ADD COLUMN IF NOT EXISTS receipt_id UUID,
+    ADD COLUMN IF NOT EXISTS po_line_id UUID,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_allocation
+    ADD COLUMN IF NOT EXISTS reservation_id UUID;
+
+ALTER TABLE IF EXISTS inventory_reservation
+    ADD COLUMN IF NOT EXISTS stock_item_id UUID;
+
+ALTER TABLE IF EXISTS inventory_allocation_audit
+    ADD COLUMN IF NOT EXISTS allocation_audit_id UUID,
+    ADD COLUMN IF NOT EXISTS previous_state VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS new_state VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS stock_item_id UUID,
+    ADD COLUMN IF NOT EXISTS trigger_reference_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS reason_code VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS triggered_by VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS occurred_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_ledger_entry
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_pick_list
+    ADD COLUMN IF NOT EXISTS pick_list_id UUID,
+    ADD COLUMN IF NOT EXISTS workorder_id UUID,
+    ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_pick_task
+    ADD COLUMN IF NOT EXISTS pick_task_id UUID,
+    ADD COLUMN IF NOT EXISTS pick_list_id UUID,
+    ADD COLUMN IF NOT EXISTS product_id UUID,
+    ADD COLUMN IF NOT EXISTS workorder_line_id UUID,
+    ADD COLUMN IF NOT EXISTS suggested_location_id UUID,
+    ADD COLUMN IF NOT EXISTS quantity_required NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS quantity_picked NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS sort_order INTEGER,
+    ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_return
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS inventory_return_line
+    ADD COLUMN IF NOT EXISTS return_id UUID;
+
+ALTER TABLE IF EXISTS cycle_count_plan
+    ADD COLUMN IF NOT EXISTS plan_id UUID,
+    ADD COLUMN IF NOT EXISTS plan_name VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS location_id UUID,
+    ADD COLUMN IF NOT EXISTS zone_id UUID,
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS scheduled_date DATE,
+    ADD COLUMN IF NOT EXISTS created_by VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS cycle_count_task
+    ADD COLUMN IF NOT EXISTS task_id UUID,
+    ADD COLUMN IF NOT EXISTS auditor_id UUID,
+    ADD COLUMN IF NOT EXISTS item_sku VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS item_description TEXT,
+    ADD COLUMN IF NOT EXISTS bin_location VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS expected_quantity NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS status VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS count_entries_count INTEGER,
+    ADD COLUMN IF NOT EXISTS latest_count_entry_id UUID,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS count_entry
+    ADD COLUMN IF NOT EXISTS count_entry_id UUID,
+    ADD COLUMN IF NOT EXISTS cycle_count_task_id UUID,
+    ADD COLUMN IF NOT EXISTS auditor_id UUID,
+    ADD COLUMN IF NOT EXISTS expected_quantity NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS actual_quantity NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS variance NUMERIC(19, 4),
+    ADD COLUMN IF NOT EXISTS counted_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS recount_of_count_entry_id UUID,
+    ADD COLUMN IF NOT EXISTS recount_sequence_number INTEGER;
+
+ALTER TABLE IF EXISTS distributor_normalized_inventory
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
