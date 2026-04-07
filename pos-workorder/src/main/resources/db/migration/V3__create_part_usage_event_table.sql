@@ -2,21 +2,21 @@
 -- Create workorder_part_usage_event table and update related tables
 
 -- Add part_usage_event_id to idempotency_keys for parts usage idempotency
-ALTER TABLE idempotency_keys ADD COLUMN part_usage_event_id UUID;
+ALTER TABLE IF EXISTS idempotency_keys ADD COLUMN IF NOT EXISTS part_usage_event_id UUID;
 
 COMMENT ON COLUMN idempotency_keys.part_usage_event_id IS 'ID of the part usage event created with this key (nullable)';
 
 -- Add usage tracking fields to workorder_part
-ALTER TABLE workorder_part ADD COLUMN quantity_issued DECIMAL(19, 4) NOT NULL DEFAULT 0;
-ALTER TABLE workorder_part ADD COLUMN quantity_consumed DECIMAL(19, 4) NOT NULL DEFAULT 0;
-ALTER TABLE workorder_part ADD COLUMN quantity_returned DECIMAL(19, 4) NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS workorder_part ADD COLUMN IF NOT EXISTS quantity_issued DECIMAL(19, 4) NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS workorder_part ADD COLUMN IF NOT EXISTS quantity_consumed DECIMAL(19, 4) NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS workorder_part ADD COLUMN IF NOT EXISTS quantity_returned DECIMAL(19, 4) NOT NULL DEFAULT 0;
 
 COMMENT ON COLUMN workorder_part.quantity_issued IS 'Total quantity issued to workorder (sum of ISSUE events)';
 COMMENT ON COLUMN workorder_part.quantity_consumed IS 'Total quantity consumed on workorder (sum of CONSUME events)';
 COMMENT ON COLUMN workorder_part.quantity_returned IS 'Total quantity returned to inventory (sum of RETURN events)';
 
 -- Create workorder_part_usage_event table
-CREATE TABLE workorder_part_usage_event (
+CREATE TABLE IF NOT EXISTS workorder_part_usage_event (
     id UUID PRIMARY KEY,
     workorder_part_id UUID NOT NULL,
     workorder_id UUID NOT NULL,
@@ -32,9 +32,9 @@ CREATE TABLE workorder_part_usage_event (
 );
 
 -- Indexes for efficient queries
-CREATE INDEX idx_workorder_part_usage_part_id ON workorder_part_usage_event(workorder_part_id);
-CREATE INDEX idx_workorder_part_usage_workorder_id ON workorder_part_usage_event(workorder_id);
-CREATE INDEX idx_workorder_part_usage_performed_at ON workorder_part_usage_event(performed_at);
+CREATE INDEX IF NOT EXISTS idx_workorder_part_usage_part_id ON workorder_part_usage_event(workorder_part_id);
+CREATE INDEX IF NOT EXISTS idx_workorder_part_usage_workorder_id ON workorder_part_usage_event(workorder_id);
+CREATE INDEX IF NOT EXISTS idx_workorder_part_usage_performed_at ON workorder_part_usage_event(performed_at);
 
 -- Add comments for documentation
 COMMENT ON TABLE workorder_part_usage_event IS 'Immutable append-only log of parts usage events (ISSUE, CONSUME, RETURN) on workorders';

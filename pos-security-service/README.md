@@ -56,6 +56,7 @@ Notes:
 ### Flyway Migrations
 
 - Flyway migrations add the new columns to the `users` table with safe defaults; see `src/main/resources/db/migration/` for migration scripts that backfill existing rows.
+- Reference/bootstrap seed data is now managed via repeatable migration `R__seed_reference_security.sql` (generated-source aligned, idempotent `ON CONFLICT` upserts).
 
 ### Metrics
 
