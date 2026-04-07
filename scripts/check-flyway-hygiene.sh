@@ -6,6 +6,17 @@ shopt -s nullglob
 errors=0
 modules_with_migrations=0
 
+has_pattern() {
+  local pattern="$1"
+  local file="$2"
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -q "$pattern" "$file"
+  else
+    grep -Eq "$pattern" "$file"
+  fi
+}
+
 for module_dir in pos-*; do
   [[ -d "$module_dir" ]] || continue
 
@@ -18,12 +29,12 @@ for module_dir in pos-*; do
   modules_with_migrations=$((modules_with_migrations + 1))
   module_name="$(basename "$module_dir")"
 
-  if ! rg -q '<artifactId>flyway-core</artifactId>' "$module_dir/pom.xml"; then
+  if ! has_pattern '<artifactId>flyway-core</artifactId>' "$module_dir/pom.xml"; then
     echo "ERROR: $module_name has db/migration files but missing flyway-core dependency"
     errors=$((errors + 1))
   fi
 
-  if ! rg -q '<artifactId>flyway-database-postgresql</artifactId>' "$module_dir/pom.xml"; then
+  if ! has_pattern '<artifactId>flyway-database-postgresql</artifactId>' "$module_dir/pom.xml"; then
     echo "ERROR: $module_name has db/migration files but missing flyway-database-postgresql dependency"
     errors=$((errors + 1))
   fi
@@ -59,7 +70,7 @@ for module_dir in pos-*; do
         ;;
     esac
 
-    if rg -q 'ddl-auto:[[:space:]]*update' "$app_file"; then
+    if has_pattern 'ddl-auto:[[:space:]]*update' "$app_file"; then
       echo "ERROR: $module_name uses ddl-auto=update in non-test runtime config ($app_name)"
       errors=$((errors + 1))
     fi
