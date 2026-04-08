@@ -92,6 +92,8 @@ import io.jsonwebtoken.Jwts;
 @DisplayName("Security Service Contract Behavior Integration Tests")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
         private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private static final String PERMISSION_REGISTRATION_SECRET_HEADER = "X-Permissions-Api-Secret";
+        private static final String PERMISSION_REGISTRATION_SECRET = "test-permission-secret";
 
         private static final String TEST_SUBJECT = "john.doe";
         private static final UUID TEST_USER_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
@@ -833,6 +835,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 // Act & Assert
                 mockMvc.perform(post("/v1/permissions/register")
                                 .contentType(MediaType.APPLICATION_JSON)
+                                .header(PERMISSION_REGISTRATION_SECRET_HEADER, PERMISSION_REGISTRATION_SECRET)
                                 .content(payload))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.success").isBoolean());
@@ -882,6 +885,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 """;
                 mockMvc.perform(post("/v1/permissions/register")
                                 .contentType(MediaType.APPLICATION_JSON)
+                                .header(PERMISSION_REGISTRATION_SECRET_HEADER, PERMISSION_REGISTRATION_SECRET)
                                 .content(registerPayload))
                                 .andExpect(status().isOk());
 
@@ -915,6 +919,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 // Act & Assert
                 mockMvc.perform(post("/v1/permissions/register")
                                 .contentType(MediaType.APPLICATION_JSON)
+                                .header(PERMISSION_REGISTRATION_SECRET_HEADER, PERMISSION_REGISTRATION_SECRET)
                                 .content(invalidPayload))
                                 .andExpect(status().isBadRequest());
                 // Note: May return 400 or 200 with success:false depending on implementation

@@ -46,6 +46,8 @@ security:
     enabled: false
 
 pos:
+  security:
+    api-secret: test-permission-secret
   events:
     base-url: http://localhost:1
 
