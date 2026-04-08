@@ -61,6 +61,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
     private final String version;
     private final boolean enabled;
     private final List<PermissionDefinition> manifestPermissions;
+    private final String permissionRegistrationSecret;
 
     /**
      * Create a new permission registration support instance.
@@ -151,6 +152,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
         this.version = version;
         this.enabled = enabled;
         this.manifestPermissions = manifestPermissions == null ? null : List.copyOf(manifestPermissions);
+        this.permissionRegistrationSecret = resolvePermissionRegistrationSecret();
     }
 
     /**
@@ -202,11 +204,17 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
                 PermissionRegistrationRequest request = new PermissionRegistrationRequest(
                         domain, serviceName, permissionDtos, version);
 
-                restClient.post()
+                var registrationRequest = restClient.post()
                         .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
+                        .body(request);
+
+                if (SecurityApiConstants.hasSecret(permissionRegistrationSecret)) {
+                    registrationRequest.header(
+                            SecurityApiConstants.PERMISSION_SECRET_HEADER,
+                            permissionRegistrationSecret);
+                }
+
+                registrationRequest.retrieve().toBodilessEntity();
 
                 logger.info("[{}] Successfully registered {} permissions",
                         serviceName, permissions.size());
@@ -232,6 +240,20 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private String resolvePermissionRegistrationSecret() {
+        String envSecret = System.getenv(SecurityApiConstants.PERMISSION_SECRET_ENV_VAR);
+        if (SecurityApiConstants.hasSecret(envSecret)) {
+            return envSecret;
+        }
+
+        String propertySecret = System.getProperty(SecurityApiConstants.PERMISSION_SECRET_PROPERTY);
+        if (SecurityApiConstants.hasSecret(propertySecret)) {
+            return propertySecret;
+        }
+
+        return "";
     }
 
     /**

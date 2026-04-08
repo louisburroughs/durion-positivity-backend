@@ -4,6 +4,7 @@ x-pos-events-client-env: &pos-events-client-env
 
 x-pos-security-client-env: &pos-security-client-env
   POS_SECURITY_BASE_URL: ${POS_SECURITY_BASE_URL:-http://pos-security-service:8080}
+  POS_SECURITY_API_SECRET: ${POS_SECURITY_API_SECRET}
 
 services:
   # Observability Stack for Local Development
@@ -478,6 +479,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
+      POS_SECURITY_API_SECRET: ${POS_SECURITY_API_SECRET}
       SECURITY_SEED_ADMIN_PASSWORD_HASH: ${SECURITY_SEED_ADMIN_PASSWORD_HASH}
       SECURITY_REDIS_ENABLED: "false"
       MANAGEMENT_HEALTH_REDIS_ENABLED: "false"
