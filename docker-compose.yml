@@ -2,6 +2,9 @@ x-pos-events-client-env: &pos-events-client-env
   POS_EVENTS_BASE_URL: ${POS_EVENTS_BASE_URL:-http://pos-event-receiver:8080}
   POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
 
+x-pos-security-client-env: &pos-security-client-env
+  POS_SECURITY_BASE_URL: ${POS_SECURITY_BASE_URL:-http://pos-security-service:8080}
+
 services:
   # Observability Stack for Local Development
 
@@ -141,7 +144,7 @@ services:
       POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID}
       POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID}
       POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID}
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -169,7 +172,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -197,7 +200,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -231,7 +234,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -261,7 +264,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -313,7 +316,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -339,7 +342,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -367,7 +370,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -421,7 +424,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -447,7 +450,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -479,7 +482,7 @@ services:
       SECURITY_REDIS_ENABLED: "false"
       MANAGEMENT_HEALTH_REDIS_ENABLED: "false"
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -511,7 +514,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -567,7 +570,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -653,7 +656,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
@@ -720,7 +723,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: *pos-events-client-env
+      <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
     depends_on:
       eureka-server:
