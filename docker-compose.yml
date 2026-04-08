@@ -585,9 +585,10 @@ services:
       - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
 
   # pos-vehicle-reference-carapi:
   #   build:
@@ -748,6 +749,7 @@ services:
       PORT: 4000
       NODE_ENV: production
       API_GATEWAY_URL: http://pos-api-gateway:8080
+      NG_ALLOWED_HOSTS: ${NG_ALLOWED_HOSTS}
       OTEL_SERVICE_NAME: pos-frontend
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-group,deployment.environment=pre-production"

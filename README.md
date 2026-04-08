@@ -121,6 +121,17 @@ durion-positivity-backend/
     ./mvnw test
     ```
 
+### Frontend SSR Host Allowlist (Docker Compose)
+
+When running `pos-frontend` via `docker-compose.yml`, set `NG_ALLOWED_HOSTS` in your `.env` file.
+This controls Angular SSR host validation and should be a comma-separated list of allowed hostnames/IPs.
+
+Example:
+
+```bash
+NG_ALLOWED_HOSTS=durionpos.org,www.durionpos.org,34.202.151.97
+```
+
 ### Local Kafka For `pos-workorder`
 
 Start a single-node local Kafka stack (broker + Kafka UI + topic init):
