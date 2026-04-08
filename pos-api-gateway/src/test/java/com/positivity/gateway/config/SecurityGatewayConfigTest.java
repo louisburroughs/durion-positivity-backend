@@ -573,6 +573,30 @@ class SecurityGatewayConfigTest {
         assertThat(downstreamPath.get()).isEqualTo("/security-service/v1/auth/login");
     }
 
+    /** StripPrefix can produce /v1/auth/login before auth filter execution. */
+    @Test
+    void strippedAuthLoginPathWithoutAuthorizationHeader_passesThrough() {
+        GlobalFilter filter = new SecurityGatewayConfig(
+                TEST_SECRET,
+                false,
+                Set.of("HS256"),
+                new GatewayAuthProperties(),
+                new SimpleMeterRegistry())
+                .authFilter();
+        AtomicReference<String> downstreamPath = new AtomicReference<>();
+        GatewayFilterChain chain = ex -> {
+            downstreamPath.set(ex.getRequest().getPath().pathWithinApplication().value());
+            return Mono.empty();
+        };
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/v1/auth/login").build());
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        assertThat(downstreamPath.get()).isEqualTo("/v1/auth/login");
+    }
+
     // ── CORS configurer bean ──────────────────────────────────────────────────
 
     /**
