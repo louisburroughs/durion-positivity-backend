@@ -73,4 +73,36 @@ class ApiVersionHeaderToPathFilterTest {
         assertThat(exchange.getResponse().getStatusCode()).isNull();
         assertThat(downstreamPath.get()).isEqualTo("/actuator/health");
     }
+
+    @Test
+    void shouldBypassAuthLoginPathWithoutVersionHeader() {
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/security-service/v1/auth/login").build());
+        AtomicReference<String> downstreamPath = new AtomicReference<>();
+        GatewayFilterChain chain = chainedExchange -> {
+            downstreamPath.set(chainedExchange.getRequest().getPath().pathWithinApplication().value());
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        assertThat(downstreamPath.get()).isEqualTo("/security-service/v1/auth/login");
+    }
+
+    @Test
+    void shouldNotRewriteAlreadyVersionedPath() {
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/customer/v1/crm/accounts").build());
+        AtomicReference<String> downstreamPath = new AtomicReference<>();
+        GatewayFilterChain chain = chainedExchange -> {
+            downstreamPath.set(chainedExchange.getRequest().getPath().pathWithinApplication().value());
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        assertThat(downstreamPath.get()).isEqualTo("/customer/v1/crm/accounts");
+    }
 }

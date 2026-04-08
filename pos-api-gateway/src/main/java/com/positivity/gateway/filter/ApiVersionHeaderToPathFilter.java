@@ -1,5 +1,7 @@
 package com.positivity.gateway.filter;
 
+import java.util.regex.Pattern;
+
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpStatus;
@@ -35,6 +37,7 @@ import org.slf4j.LoggerFactory;
 public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
 
     private static final String VERSION_HEADER = "X-API-Version";
+    private static final Pattern VERSIONED_SERVICE_PATH = Pattern.compile("^/[^/]+/v\\d+(?:/.*)?$");
     private static final Logger log = LoggerFactory.getLogger(ApiVersionHeaderToPathFilter.class);
 
     @Override
@@ -44,14 +47,13 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
         var req = exchange.getRequest();
         var rawPath = req.getURI().getRawPath();
 
-        // Bypass public paths - no version header required
-        if (rawPath != null && (rawPath.startsWith("/actuator") ||
-                rawPath.contains("/actuator") ||
-                rawPath.startsWith("/swagger-ui") ||
-                rawPath.startsWith("/v3/api-docs") ||
-                rawPath.contains("/v3/api-docs") ||
-                rawPath.startsWith("/swagger-resources") ||
-                rawPath.startsWith("/eureka"))) {
+        // Bypass public paths and auth bootstrap endpoints.
+        if (shouldBypassVersioning(rawPath)) {
+            return chain.filter(exchange);
+        }
+
+        // If caller already provided a versioned service path, do not rewrite again.
+        if (isAlreadyVersionedPath(rawPath)) {
             return chain.filter(exchange);
         }
 
@@ -97,5 +99,24 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
     public int getOrder() {
         // Run EARLY (highest precedence) before other filters
         return Ordered.HIGHEST_PRECEDENCE;
+    }
+
+    private static boolean shouldBypassVersioning(String rawPath) {
+        if (rawPath == null) {
+            return false;
+        }
+        return rawPath.startsWith("/actuator")
+                || rawPath.contains("/actuator")
+                || rawPath.startsWith("/swagger-ui")
+                || rawPath.startsWith("/v3/api-docs")
+                || rawPath.contains("/v3/api-docs")
+                || rawPath.startsWith("/swagger-resources")
+                || rawPath.startsWith("/eureka")
+                || rawPath.equals("/security-service/v1/auth")
+                || rawPath.startsWith("/security-service/v1/auth/");
+    }
+
+    private static boolean isAlreadyVersionedPath(String rawPath) {
+        return rawPath != null && VERSIONED_SERVICE_PATH.matcher(rawPath).matches();
     }
 }

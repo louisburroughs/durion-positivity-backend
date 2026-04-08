@@ -6,9 +6,11 @@ A lightweight authentication/authorization filter enriches requests with user id
 
 ### API Versioning & Routing
 
-- **X-API-Version Header (REQUIRED)**: All API calls must include the `X-API-Version` header with a simple integer version (e.g., `1`, `2`, `3`).
+- **X-API-Version Header (REQUIRED)**: API calls must include the `X-API-Version` header with a simple integer version (e.g., `1`, `2`, `3`), except for explicit public bootstrap endpoints.
   - Header format: `X-API-Version: 1`
   - Missing or invalid header returns `400 Bad Request`
+  - Public auth bootstrap paths under `/security-service/v1/auth/**` are exempt from version-header enforcement
+  - Already versioned service paths (for example `/customer/v1/...`) are forwarded as-is and not rewritten again
   - Gateway rewrites request path: `/{domain}/{resource}` + header `X-API-Version: 1` → `/{domain}/v1/{resource}`
   - Example: `GET /customer/crm/accounts` with header `X-API-Version: 1` → routes to `GET /customer/v1/crm/accounts`
 - **Path Format**: Clients call `http://localhost:8080/{domain}/{resource}` with the version header; gateway inserts `/v{version}` after `{domain}`
@@ -27,7 +29,7 @@ A lightweight authentication/authorization filter enriches requests with user id
   - `X-User`: token subject (`sub`)
   - `X-User-Id`: token `personId` claim when present
   - `X-API-Version`: forwarded from client request (enables per-endpoint versioning)
-- Public paths bypass authentication: `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/swagger-resources/**`, `/eureka/**`
+- Public paths bypass authentication: `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/swagger-resources/**`, `/eureka/**`, `/security-service/v1/auth/**`
 
 Source:
 
