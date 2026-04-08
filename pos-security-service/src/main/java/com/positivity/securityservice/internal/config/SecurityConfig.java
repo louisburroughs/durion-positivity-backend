@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.config;
 
 import com.positivity.securityservice.internal.security.GatewayHeaderAuthenticationFilter;
+import com.positivity.securityservice.internal.security.PermissionRegistrationSecretFilter;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
     private final JsonAuthenticationEntryPoint jsonAuthenticationEntryPoint;
     private final JsonAccessDeniedHandler jsonAccessDeniedHandler;
+    private final PermissionRegistrationSecretFilter permissionRegistrationSecretFilter;
 
     @Bean
     public GatewayHeaderAuthenticationFilter gatewayHeaderAuthenticationFilter() {
@@ -52,6 +54,7 @@ public class SecurityConfig {
                             .permitAll()
                             .anyRequest().authenticated())
                     .userDetailsService(userDetailsService)
+                    .addFilterBefore(permissionRegistrationSecretFilter, UsernamePasswordAuthenticationFilter.class)
                     .addFilterBefore(gatewayHeaderAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                     .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                     .exceptionHandling(ex -> ex
@@ -87,6 +90,7 @@ public class SecurityConfig {
                             .requestMatchers("/actuator/health").permitAll()
                             .requestMatchers(HttpMethod.GET, "/v1/permissions/catalog-version").permitAll()
                             .anyRequest().authenticated())
+                    .addFilterBefore(permissionRegistrationSecretFilter, UsernamePasswordAuthenticationFilter.class)
                     .addFilterBefore(gatewayHeaderAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                     .exceptionHandling(ex -> ex
                             .authenticationEntryPoint(jsonAuthenticationEntryPoint)
