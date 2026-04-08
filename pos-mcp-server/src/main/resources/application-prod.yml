@@ -6,7 +6,7 @@ spring:
     password: ${POS_MCP_DB_PASSWORD:password}
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     properties:
       hibernate:
         jdbc:
