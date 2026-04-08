@@ -2,7 +2,7 @@ name: Build and Push to ECR
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - "pos-*/**"
       - "pom.xml"
@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  id-token: write   # Required for OIDC authentication
+  id-token: write # Required for OIDC authentication
   contents: read
 
 env:
@@ -188,6 +188,8 @@ jobs:
 
     steps:
       - name: Deploy backend services on alpha host
+        env:
+          SECURITY_SEED_ADMIN_PASSWORD_HASH: ${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.ALPHA_EC2_HOST }}
@@ -225,6 +227,17 @@ jobs:
               sed -i "s/^BACKEND_TAG=.*/BACKEND_TAG=${IMAGE_TAG}/" "${ENV_FILE}"
             else
               printf '\nBACKEND_TAG=%s\n' "${IMAGE_TAG}" >> "${ENV_FILE}"
+            fi
+
+            if [[ -z "${SECURITY_SEED_ADMIN_PASSWORD_HASH:-}" ]]; then
+              echo "SECURITY_SEED_ADMIN_PASSWORD_HASH is required for seeded admin password migration."
+              exit 1
+            fi
+
+            if grep -q '^SECURITY_SEED_ADMIN_PASSWORD_HASH=' "${ENV_FILE}"; then
+              sed -i "s|^SECURITY_SEED_ADMIN_PASSWORD_HASH=.*|SECURITY_SEED_ADMIN_PASSWORD_HASH=${SECURITY_SEED_ADMIN_PASSWORD_HASH}|" "${ENV_FILE}"
+            else
+              printf 'SECURITY_SEED_ADMIN_PASSWORD_HASH=%s\n' "${SECURITY_SEED_ADMIN_PASSWORD_HASH}" >> "${ENV_FILE}"
             fi
 
             cd "${BACKEND_DIR}"

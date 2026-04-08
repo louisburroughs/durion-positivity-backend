@@ -44,7 +44,7 @@ ON CONFLICT (name) DO NOTHING;
 
 -- Users
 INSERT INTO users (id, username, password, enabled)
-VALUES ('d981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, 'admin.alpha', '$2a$12$replace_with_real_hash', TRUE) 
+VALUES ('d981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, 'admin.alpha', '${seed_admin_password_hash}', TRUE) 
 ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled;
 
 -- Permissions (derived from permissions.yaml)

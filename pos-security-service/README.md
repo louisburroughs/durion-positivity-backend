@@ -57,6 +57,7 @@ Notes:
 
 - Flyway migrations add the new columns to the `users` table with safe defaults; see `src/main/resources/db/migration/` for migration scripts that backfill existing rows.
 - Reference/bootstrap seed data is now managed via repeatable migration `R__seed_reference_security.sql` (generated-source aligned, idempotent `ON CONFLICT` upserts).
+- Seeded admin password hash is supplied at runtime via Flyway placeholder `seed_admin_password_hash`, backed by environment variable `SECURITY_SEED_ADMIN_PASSWORD_HASH` (do not commit real hashes in SQL).
 
 ### Metrics
 
