@@ -71,6 +71,8 @@ public class SecurityGatewayConfig {
     private static final String UNKNOWN_JTI = "unknown";
     private static final String AUTH_PATH_PREFIX = "/security-service/v1/auth/";
     private static final String AUTH_PATH_ROOT = "/security-service/v1/auth";
+    private static final String STRIPPED_AUTH_PATH_PREFIX = "/v1/auth/";
+    private static final String STRIPPED_AUTH_PATH_ROOT = "/v1/auth";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Logger LOG = LoggerFactory.getLogger(SecurityGatewayConfig.class);
 
@@ -409,7 +411,9 @@ public class SecurityGatewayConfig {
                 || path.startsWith("/swagger-resources")
                 || path.startsWith("/eureka")
                 || path.equals(AUTH_PATH_ROOT)
-                || path.startsWith(AUTH_PATH_PREFIX);
+                || path.startsWith(AUTH_PATH_PREFIX)
+                || path.equals(STRIPPED_AUTH_PATH_ROOT)
+                || path.startsWith(STRIPPED_AUTH_PATH_PREFIX);
     }
 
     private Optional<String> jwtPreValidationRejectionReason(String token) {
