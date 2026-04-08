@@ -470,6 +470,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      POS_EVENTS_BASE_URL: http://pos-event-receiver:8080
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
       SECURITY_SEED_ADMIN_PASSWORD_HASH: ${SECURITY_SEED_ADMIN_PASSWORD_HASH}
       SECURITY_REDIS_ENABLED: "false"
@@ -483,6 +484,8 @@ services:
       postgres:
         condition: service_healthy
       eureka-server:
+        condition: service_healthy
+      pos-event-receiver:
         condition: service_healthy
     networks:
       - pos-network
