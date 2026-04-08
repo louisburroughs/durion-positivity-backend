@@ -13,6 +13,10 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate
+  flyway:
+    placeholders:
+      # Injected via env var at runtime/deploy time; do not commit real hash in SQL.
+      seed_admin_password_hash: ${SECURITY_SEED_ADMIN_PASSWORD_HASH:$2a$12$replace_with_real_hash}
 
 server:
   port: 8086
