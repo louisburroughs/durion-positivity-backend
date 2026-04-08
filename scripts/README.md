@@ -19,6 +19,10 @@ Validates migration hygiene rules across `pos-*` modules.
 - Non-test runtime configs using `ddl-auto: update` for Flyway-managed modules
 - Migration filenames not matching `V<integer>__<description>.sql` or `R__<description>.sql`
 
+**Temporary rollout note:**
+- `ddl-auto: update` currently emits a warning by default (non-blocking).
+- Set `ENFORCE_DDL_AUTO_UPDATE_CHECK=true` to make it fail the script again.
+
 ### `redeploy-backend-tag.sh` - Update Tag + Redeploy Services on EC2
 
 Updates `BACKEND_TAG` in `/opt/durion/alpha/.env`, then runs `docker compose pull` and
