@@ -15,10 +15,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.positivity.vehicle.internal.dao.VehicleDao;
-import com.positivity.vehicle.internal.dto.VehicleLegacyMapper;
 import com.positivity.vehicle.internal.dto.VehicleLegacyRequest;
 import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
+import com.positivity.vehicle.service.VehicleLegacyService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -34,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 @PreAuthorize("isAuthenticated()")
 @RequestMapping("/v1/vehicles-legacy")
 public class VehicleController {
-    private final VehicleDao vehicleDao;
+    private final VehicleLegacyService vehicleLegacyService;
 
     @Operation(summary = "Create a new vehicle", description = "Add a new vehicle to the inventory.")
     @ApiResponse(responseCode = "200", description = "Vehicle created successfully.")
@@ -42,9 +41,12 @@ public class VehicleController {
     @PostMapping
     public ResponseEntity<VehicleLegacyResponse> createVehicle(
             @Parameter(description = "Vehicle object to be created") @RequestBody VehicleLegacyRequest vehicle) {
-        var saved = vehicleDao.save(VehicleLegacyMapper.toEntity(vehicle));
-        log.info("Created legacy vehicle");
-        return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
+        try {
+            return ResponseEntity.ok(vehicleLegacyService.createVehicle(vehicle));
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid create vehicle request: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     @Operation(summary = "Get vehicle by ID", description = "Retrieve a vehicle by its unique ID.")
@@ -53,8 +55,7 @@ public class VehicleController {
     @GetMapping("/{id}")
     public ResponseEntity<VehicleLegacyResponse> getVehicle(
             @Parameter(description = "ID of the vehicle to retrieve", example = "1") @PathVariable UUID id) {
-        return vehicleDao.findById(id)
-                .map(VehicleLegacyMapper::toResponse)
+        return vehicleLegacyService.getVehicle(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -63,9 +64,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "200", description = "List of vehicles returned successfully.")
     @GetMapping
     public List<VehicleLegacyResponse> getAllVehicles() {
-        return vehicleDao.findAll().stream()
-                .map(VehicleLegacyMapper::toResponse)
-                .toList();
+        return vehicleLegacyService.getAllVehicles();
     }
 
     @Operation(summary = "Update vehicle by ID", description = "Update an existing vehicle's details by its ID.")
@@ -76,15 +75,14 @@ public class VehicleController {
     public ResponseEntity<VehicleLegacyResponse> updateVehicle(
             @Parameter(description = "ID of the vehicle to update", example = "1") @PathVariable UUID id,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
-        var existing = vehicleDao.findById(id);
-        if (existing.isEmpty()) {
-            return ResponseEntity.notFound().build();
+        try {
+            return vehicleLegacyService.updateVehicle(id, updated)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid update request for vehicle id {}: {}", id, e.getMessage());
+            return ResponseEntity.badRequest().build();
         }
-        var vehicle = existing.get();
-        VehicleLegacyMapper.applyCoreFields(vehicle, updated);
-        var saved = vehicleDao.save(vehicle);
-        log.info("Updated legacy vehicle with id {}", id);
-        return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
     @Operation(summary = "Delete vehicle by ID", description = "Delete a vehicle from the inventory by its ID.")
@@ -94,12 +92,15 @@ public class VehicleController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteVehicle(
             @Parameter(description = "ID of the vehicle to delete", example = "1") @PathVariable UUID id) {
-        if (vehicleDao.findById(id).isEmpty()) {
-            return ResponseEntity.notFound().build();
+        try {
+            if (!vehicleLegacyService.deleteVehicle(id)) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid delete request for vehicle id {}: {}", id, e.getMessage());
+            return ResponseEntity.badRequest().build();
         }
-        vehicleDao.deleteById(id);
-        log.info("Deleted vehicle with id {}", id);
-        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Create vehicle by VIN", description = "Add a new vehicle to the inventory using its VIN.")
@@ -108,12 +109,12 @@ public class VehicleController {
     @PostMapping("/vin")
     public ResponseEntity<VehicleLegacyResponse> createVehicleByVIN(
             @Parameter(description = "Vehicle object to be created") @RequestBody VehicleLegacyRequest vehicle) {
-        if (vehicle.getVin() == null || vehicle.getVin().isBlank()) {
+        try {
+            return ResponseEntity.ok(vehicleLegacyService.createVehicleByVin(vehicle));
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid create-by-vin request: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
         }
-        var saved = vehicleDao.save(VehicleLegacyMapper.toEntity(vehicle));
-        log.info("Created legacy vehicle with VIN {}", vehicle.getVin());
-        return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
     @Operation(summary = "Get vehicle by VIN", description = "Retrieve a vehicle by its VIN.")
@@ -122,10 +123,14 @@ public class VehicleController {
     @GetMapping("/vin/{vin}")
     public ResponseEntity<VehicleLegacyResponse> getVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable String vin) {
-        return vehicleDao.findByVIN(vin)
-                .map(VehicleLegacyMapper::toResponse)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        try {
+            return vehicleLegacyService.getVehicleByVin(vin)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid VIN lookup request: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     @Operation(summary = "Update vehicle by VIN", description = "Update an existing vehicle's details by its VIN.")
@@ -136,15 +141,14 @@ public class VehicleController {
     public ResponseEntity<VehicleLegacyResponse> updateVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to update", example = "1HGCM82633A004352") @PathVariable String vin,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
-        var existing = vehicleDao.findByVIN(vin);
-        if (existing.isEmpty()) {
-            return ResponseEntity.notFound().build();
+        try {
+            return vehicleLegacyService.updateVehicleByVin(vin, updated)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid update-by-vin request for VIN {}: {}", vin, e.getMessage());
+            return ResponseEntity.badRequest().build();
         }
-        var vehicle = existing.get();
-        VehicleLegacyMapper.applyCoreFields(vehicle, updated);
-        var saved = vehicleDao.save(vehicle);
-        log.info("Updated legacy vehicle with VIN {}", vin);
-        return ResponseEntity.ok(VehicleLegacyMapper.toResponse(saved));
     }
 
     @Operation(summary = "Delete vehicle by VIN", description = "Delete a vehicle from the inventory by its VIN.")
@@ -154,11 +158,14 @@ public class VehicleController {
     @DeleteMapping("/vin/{vin}")
     public ResponseEntity<Void> deleteVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to delete", example = "1HGCM82633A004352") @PathVariable String vin) {
-        if (vehicleDao.findByVIN(vin).isEmpty()) {
-            return ResponseEntity.notFound().build();
+        try {
+            if (!vehicleLegacyService.deleteVehicleByVin(vin)) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid delete-by-vin request for VIN {}: {}", vin, e.getMessage());
+            return ResponseEntity.badRequest().build();
         }
-        vehicleDao.deleteByVIN(vin);
-        log.info("Deleted vehicle with VIN {}", vin);
-        return ResponseEntity.noContent().build();
     }
 }

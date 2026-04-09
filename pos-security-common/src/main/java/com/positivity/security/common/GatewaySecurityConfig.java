@@ -1,13 +1,25 @@
 package com.positivity.security.common;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -37,9 +49,19 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * <li>CSRF disabled (stateless API, protected by JWT)</li>
  * <li>Gateway authorities filter for reading X-Authorities header</li>
  * <li>Method-level security enabled (@PreAuthorize, @Secured)</li>
- * <li>Public access to actuator, swagger, and OpenAPI endpoints</li>
+ * <li>Public access only to actuator health endpoints used by container health checks</li>
+ * <li>Basic-auth protected access to actuator Prometheus metrics endpoint</li>
+ * <li>No access to other actuator endpoints by default</li>
+ * <li>Public access to swagger and OpenAPI endpoints</li>
  * <li>All other endpoints require authentication</li>
  * </ul>
+ *
+ * <p>
+ * Production guidance: pair this with service configuration
+ * {@code management.endpoint.health.show-details=never} (or
+ * {@code when-authorized}) to avoid leaking internals from public health
+ * responses.
+ * </p>
  *
  * @see GatewayAuthoritiesFilter
  */
@@ -47,6 +69,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
 public class GatewaySecurityConfig {
+        private static final GrantedAuthority ACTUATOR_METRICS_ROLE = new SimpleGrantedAuthority(
+                        "ROLE_ACTUATOR_METRICS");
 
         /**
          * Creates the gateway authorities filter bean.
@@ -67,7 +91,9 @@ public class GatewaySecurityConfig {
         @Order(1)
         @SuppressWarnings("java:S4502") // CSRF not needed: stateless API, JWT in headers (not cookies)
         public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
-                        GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
+                        GatewayAuthoritiesFilter gatewayAuthoritiesFilter,
+                        @Value("${pos.security.metrics-scrape.username:prometheus}") String metricsUsername,
+                        @Value("${pos.security.metrics-scrape.password:prometheus-scrape}") String metricsPassword) {
                 http
                                 // Disable CSRF - stateless API protected by JWT at gateway
                                 // Safe because: no cookies, JWT tokens require explicit headers, SOP prevents
@@ -80,8 +106,14 @@ public class GatewaySecurityConfig {
 
                                 // Authorization rules - using String patterns (Spring Security 7.0+)
                                 .authorizeHttpRequests(auth -> auth
-                                                // Public endpoints - health checks, metrics, API docs
-                                                .requestMatchers("/actuator/**").permitAll()
+                                                // Public endpoints - health checks and API docs
+                                                .requestMatchers("/actuator/health", "/actuator/health/**")
+                                                .permitAll()
+                                                // Prometheus scraping uses dedicated machine credentials
+                                                .requestMatchers("/actuator/prometheus")
+                                                .hasRole("ACTUATOR_METRICS")
+                                                // Deny all other actuator endpoints by default
+                                                .requestMatchers("/actuator/**").denyAll()
                                                 .requestMatchers("/swagger-ui/**").permitAll()
                                                 .requestMatchers("/swagger-ui.html").permitAll()
                                                 .requestMatchers("/v3/api-docs", "/v3/api-docs/**",
@@ -100,9 +132,46 @@ public class GatewaySecurityConfig {
                                 .exceptionHandling(handler -> handler
                                                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 
+                                .httpBasic(Customizer.withDefaults())
+                                .authenticationProvider(
+                                                prometheusScrapeAuthenticationProvider(metricsUsername, metricsPassword))
+
                                 // Add gateway authorities filter before username/password filter
                                 .addFilterBefore(gatewayAuthoritiesFilter, UsernamePasswordAuthenticationFilter.class);
 
                 return http.build();
+        }
+
+        private AuthenticationProvider prometheusScrapeAuthenticationProvider(
+                        String metricsUsername,
+                        String metricsPassword) {
+                return new AuthenticationProvider() {
+                        @Override
+                        public Authentication authenticate(Authentication authentication) {
+                                String username = authentication.getName();
+                                String password = authentication.getCredentials() == null
+                                                ? ""
+                                                : authentication.getCredentials().toString();
+                                if (!constantTimeEquals(username, metricsUsername)
+                                                || !constantTimeEquals(password, metricsPassword)) {
+                                        throw new BadCredentialsException("Invalid Prometheus scrape credentials");
+                                }
+                                return UsernamePasswordAuthenticationToken.authenticated(
+                                                username,
+                                                null,
+                                                List.of(ACTUATOR_METRICS_ROLE));
+                        }
+
+                        @Override
+                        public boolean supports(Class<?> authentication) {
+                                return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);
+                        }
+                };
+        }
+
+        private boolean constantTimeEquals(String left, String right) {
+                byte[] leftBytes = left == null ? new byte[0] : left.getBytes(StandardCharsets.UTF_8);
+                byte[] rightBytes = right == null ? new byte[0] : right.getBytes(StandardCharsets.UTF_8);
+                return MessageDigest.isEqual(leftBytes, rightBytes);
         }
 }

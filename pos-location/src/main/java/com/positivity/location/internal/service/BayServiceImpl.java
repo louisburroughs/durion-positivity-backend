@@ -224,39 +224,64 @@ public class BayServiceImpl implements BayService {
             throw new IllegalArgumentException("service capabilities are not configured");
         }
 
+        NormalizedServiceCapabilities normalized = normalizeServiceCapabilityIds(serviceCapabilityIds);
+        throwIfInvalidServiceCapabilityIds(normalized.invalidCodes());
+
+        Set<String> requestedCodes = new LinkedHashSet<>(normalized.normalizedCodes());
+        Set<String> foundCodes = findServiceCapabilityCodes(requestedCodes);
+        Set<String> missingCodes = findMissingServiceCapabilityCodes(requestedCodes, foundCodes);
+        throwIfInvalidServiceCapabilityIds(missingCodes);
+
+        return normalized.normalizedCodes();
+    }
+
+    private NormalizedServiceCapabilities normalizeServiceCapabilityIds(List<String> serviceCapabilityIds) {
         List<String> normalizedCodes = new ArrayList<>();
         Set<String> invalidCodes = new LinkedHashSet<>();
         for (String serviceCapabilityId : serviceCapabilityIds) {
-            String normalized = serviceCapabilityId == null ? "" : serviceCapabilityId.trim().toUpperCase(Locale.ROOT);
+            String normalized = normalizeServiceCapabilityId(serviceCapabilityId);
             if (normalized.isBlank()) {
                 invalidCodes.add("<blank>");
-            } else {
-                normalizedCodes.add(normalized);
+                continue;
             }
+            normalizedCodes.add(normalized);
         }
-        if (!invalidCodes.isEmpty()) {
-            throw new IllegalArgumentException("Invalid serviceCapabilityIds: " + String.join(", ", invalidCodes));
-        }
+        return new NormalizedServiceCapabilities(normalizedCodes, invalidCodes);
+    }
 
-        Set<String> requestedCodes = new LinkedHashSet<>(normalizedCodes);
+    private String normalizeServiceCapabilityId(String serviceCapabilityId) {
+        return serviceCapabilityId == null ? "" : serviceCapabilityId.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private Set<String> findServiceCapabilityCodes(Set<String> requestedCodes) {
         Set<String> foundCodes = new LinkedHashSet<>();
         List<ServiceLocationCapabilityEntity> found = serviceLocationCapabilityRepository.findByCodeIn(requestedCodes);
-        if (found != null) {
-            for (ServiceLocationCapabilityEntity capability : found) {
-                if (capability.getCode() != null) {
-                    foundCodes.add(capability.getCode().trim().toUpperCase(Locale.ROOT));
-                }
-            }
+        if (found == null) {
+            return foundCodes;
         }
+        for (ServiceLocationCapabilityEntity capability : found) {
+            if (capability.getCode() == null) {
+                continue;
+            }
+            foundCodes.add(capability.getCode().trim().toUpperCase(Locale.ROOT));
+        }
+        return foundCodes;
+    }
+
+    private Set<String> findMissingServiceCapabilityCodes(Set<String> requestedCodes, Set<String> foundCodes) {
+        Set<String> missingCodes = new LinkedHashSet<>();
         for (String requestedCode : requestedCodes) {
             if (!foundCodes.contains(requestedCode)) {
-                invalidCodes.add(requestedCode);
+                missingCodes.add(requestedCode);
             }
         }
+        return missingCodes;
+    }
+
+    private void throwIfInvalidServiceCapabilityIds(Set<String> invalidCodes) {
         if (!invalidCodes.isEmpty()) {
             throw new IllegalArgumentException("Invalid serviceCapabilityIds: " + String.join(", ", invalidCodes));
         }
-        return normalizedCodes;
     }
 
     private DuplicateResourceException toBayConflictException(DataIntegrityViolationException exception) {
@@ -301,5 +326,8 @@ public class BayServiceImpl implements BayService {
                 .createdAt(entity.getCreatedAt())
                 .lastModifiedAt(entity.getUpdatedAt())
                 .build();
+    }
+
+    private record NormalizedServiceCapabilities(List<String> normalizedCodes, Set<String> invalidCodes) {
     }
 }

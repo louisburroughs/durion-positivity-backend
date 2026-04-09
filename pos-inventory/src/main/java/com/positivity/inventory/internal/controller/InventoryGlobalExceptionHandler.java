@@ -2,7 +2,6 @@ package com.positivity.inventory.internal.controller;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -59,6 +58,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class InventoryGlobalExceptionHandler {
 
+    private static final String NOT_FOUND = "NOT_FOUND";
+    private static final String FORBIDDEN = "FORBIDDEN";
+    private static final String CONFLICT = "CONFLICT";
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
@@ -86,43 +88,43 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex) {
-        return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage());
+        return build(HttpStatus.CONFLICT, CONFLICT, ex.getMessage());
     }
 
     @ExceptionHandler(PurchaseOrderNotApprovedException.class)
     public ResponseEntity<ApiError> handlePurchaseOrderNotApproved(PurchaseOrderNotApprovedException ex) {
-        return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage());
+        return build(HttpStatus.CONFLICT, CONFLICT, ex.getMessage());
     }
 
     @ExceptionHandler(InvalidPoReferenceException.class)
     public ResponseEntity<ApiError> handleInvalidPoReference(InvalidPoReferenceException ex) {
-        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage());
+        return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage());
     }
 
     @ExceptionHandler(DuplicateAsnException.class)
     public ResponseEntity<ApiError> handleDuplicateAsn(DuplicateAsnException ex) {
-        return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage());
+        return build(HttpStatus.CONFLICT, CONFLICT, ex.getMessage());
     }
 
     @ExceptionHandler(OverReceiptNotPermittedException.class)
     public ResponseEntity<ApiError> handleOverReceiptNotPermitted(OverReceiptNotPermittedException ex) {
-        return build(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage());
+        return build(HttpStatus.FORBIDDEN, FORBIDDEN, ex.getMessage());
     }
 
     @ExceptionHandler(TaskNotFoundException.class)
     public ResponseEntity<ApiError> handleTaskNotFound(TaskNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(CycleCountPlanNotFoundException.class)
     public ResponseEntity<ApiError> handleCycleCountPlanNotFound(CycleCountPlanNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler({ ResourceNotFoundException.class, ProductNotFoundException.class,
             LocationNotFoundException.class })
     public ResponseEntity<ApiError> handleResourceNotFound(RuntimeException ex) {
-        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(InvalidCountQuantityException.class)
@@ -142,7 +144,7 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(InsufficientPermissionException.class)
     public ResponseEntity<ApiError> handleInsufficientPermission(InsufficientPermissionException ex) {
-        return build(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage());
+        return build(HttpStatus.FORBIDDEN, FORBIDDEN, ex.getMessage());
     }
 
     @ExceptionHandler(InsufficientAtpException.class)
@@ -185,7 +187,7 @@ public class InventoryGlobalExceptionHandler {
             ReceivingSessionNotFoundException.class
     })
     public ResponseEntity<ApiError> handleReceivingNotFound(RuntimeException ex) {
-        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(SourceDocumentAlreadyReceivedException.class)
@@ -196,7 +198,7 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex) {
-        return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+        return build(HttpStatus.FORBIDDEN, FORBIDDEN, "Access denied");
     }
 
     @ExceptionHandler(WorkorderClosedException.class)
@@ -239,13 +241,4 @@ public class InventoryGlobalExceptionHandler {
         }
         return UUIDv7Generator.generate().toString();
     }
-
-    private String safe(UUID value) {
-        return value == null ? "" : value.toString();
-    }
-
-    private String safe(String value) {
-        return value == null ? "" : value;
-    }
 }
-

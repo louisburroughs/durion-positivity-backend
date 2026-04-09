@@ -52,7 +52,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
          */
         @Query("SELECT vb FROM VendorBill vb " +
                         "WHERE vb.vendorId = :vendorId " +
-                        "AND vb.status IN (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED, com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_REVIEW) "
+                        "AND vb.status IN (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED, com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH) "
                         +
                         "ORDER BY vb.dueDate ASC")
         List<VendorBill> findUnpaidBillsForVendor(UUID vendorId);
@@ -62,7 +62,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
          */
         @Query("SELECT COALESCE(SUM(vb.totalAmount), 0) FROM VendorBill vb " +
                         "WHERE vb.vendorId = :vendorId " +
-                        "AND vb.status IN (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED, com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_REVIEW)")
+                        "AND vb.status IN (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED, com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH)")
         BigDecimal getTotalOwedToVendor(UUID vendorId);
 
         /**
@@ -77,7 +77,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
         /**
          * Find bill by origin event ID (for idempotency checks in event-driven
          * workflow).
-         * 
+         *
          * @param originEventId UUID of the originating event (e.g., GoodsReceivedEvent)
          * @return Optional containing the bill if found
          */
@@ -88,13 +88,13 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
          * Guarantees unique, monotonically increasing bill numbers across service
          * restarts
          * and multi-instance deployments.
-         * 
+         *
          * Note: Requires 'bill_number_seq' sequence to exist in the database:
          * CREATE SEQUENCE IF NOT EXISTS bill_number_seq
          * START WITH 1
          * INCREMENT BY 1
          * NO CYCLE;
-         * 
+         *
          * @return Next sequence value for bill number generation
          */
         @Query(value = "SELECT nextval('bill_number_seq')", nativeQuery = true)

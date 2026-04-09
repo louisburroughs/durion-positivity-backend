@@ -1,16 +1,19 @@
 package com.positivity.poseventreceiver.internal.controller;
 
-import com.positivity.poseventreceiver.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
+import com.positivity.poseventreceiver.services.EmitEventService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -43,10 +46,11 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RequiredArgsConstructor
 @RestController
+@Validated
 @RequestMapping("/v1/events")
 @Tag(name = "Event Emission", description = "Receive and persist emitted events from internal services")
 public class EmitEventController {
-    private final EventDao eventDao;
+    private final EmitEventService emitEventService;
 
     /**
      * ⚠️ CRITICAL: DO NOT ADD @EmitEvent TO ANY METHOD IN THIS CONTROLLER! ⚠️
@@ -68,11 +72,15 @@ public class EmitEventController {
     @ApiResponse(responseCode = "400", description = "Event type ID is not preregistered")
     // @EmitEvent - FORBIDDEN: See warning above. Would cause infinite recursion.
     public ResponseEntity<String> receiveEvent(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event payload to persist", required = true, content = @Content(schema = @Schema(implementation = EmitEventRequest.class))) @RequestBody EmitEventRequest request) {
-        if (!eventDao.isPreregistered(request.id())) {
-            return ResponseEntity.badRequest().body("ID not preregistered");
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event payload to persist", required = true, content = @Content(schema = @Schema(implementation = EmitEventRequest.class))) @Valid @NotNull @RequestBody EmitEventRequest request) {
+        try {
+            if (!emitEventService.receiveEvent(request)) {
+                return ResponseEntity.badRequest().body("ID not preregistered");
+            }
+            return ResponseEntity.ok("Event stored");
+        } catch (IllegalArgumentException e) {
+            log.warn("Rejected emitted event payload: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
-        eventDao.saveEmittedEvent(request);
-        return ResponseEntity.ok("Event stored");
     }
 }

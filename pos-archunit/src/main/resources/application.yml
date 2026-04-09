@@ -29,4 +29,4 @@ management:
         include: health,info,metrics,modulith
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized

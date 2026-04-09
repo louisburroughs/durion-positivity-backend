@@ -1,6 +1,7 @@
 package com.positivity.poseventreceiver.services;
 
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
+import org.jspecify.annotations.NonNull;
 
 public interface EmitEventService {
 
@@ -10,6 +11,16 @@ public interface EmitEventService {
      *
      * @param request The event request containing id and timestamp
      */
-    void onEventEmitted(EmitEventRequest request);
+    default void onEventEmitted(@NonNull EmitEventRequest request) {
+        receiveEvent(request);
+    }
+
+    /**
+     * Validates and persists an emitted event request.
+     *
+     * @param request The event request containing id and timing metadata
+     * @return {@code true} when the event id is preregistered and the event is queued
+     */
+    boolean receiveEvent(@NonNull EmitEventRequest request);
 
 }

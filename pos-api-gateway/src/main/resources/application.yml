@@ -131,12 +131,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: "*"
+        include: health,info,prometheus
   endpoint:
     gateway:
       access: unrestricted
     health:
-      show-details: always
+      show-details: when-authorized
       access: unrestricted
 
 eureka:
@@ -149,7 +149,7 @@ pos:
     security:
       # Keep false for local/dev tests. Set true in production to block obviously
       # unsafe/synthetic bearer token patterns before introspection.
-      strict-jwt-header-validation: false
+      strict-jwt-header-validation: true
       # Allowed JWT 'alg' values when strict header validation is enabled.
       allowed-jwt-algorithms: HS256
 
@@ -161,6 +161,11 @@ auth:
   strip-inbound-identity-headers: true
   # Reject requests that arrive with inbound identity headers (strict mode). Enable after strip is stable.
   reject-header-token-mismatch: false
+  # Public auth route roots/prefixes that bypass JWT auth checks.
+  auth-path-root: /security-service/v1/auth
+  auth-path-prefix: /security-service/v1/auth/
+  stripped-auth-path-root: /v1/auth
+  stripped-auth-path-prefix: /v1/auth/
 
 springdoc:
   api-docs:
@@ -223,8 +228,3 @@ spring:
   config:
     activate:
       on-profile: prod
-pos:
-  gateway:
-    security:
-      strict-jwt-header-validation: true
-      allowed-jwt-algorithms: HS256
