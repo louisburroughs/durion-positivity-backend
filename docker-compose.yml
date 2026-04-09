@@ -5,6 +5,9 @@ x-pos-events-client-env: &pos-events-client-env
 x-pos-security-client-env: &pos-security-client-env
   POS_SECURITY_BASE_URL: ${POS_SECURITY_BASE_URL:-http://pos-security-service:8080}
   POS_SECURITY_API_SECRET: ${POS_SECURITY_API_SECRET}
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+  SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
+  SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT: 30000
 
 services:
   # Observability Stack for Local Development
