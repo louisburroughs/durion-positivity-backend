@@ -38,7 +38,8 @@ public class VehicleEventTypeInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        initializerSupport.registerEventTypes(VehicleEventTypes.all(), this::registerViaHttp);
+        Thread.ofVirtual().name("vehicle-event-type-init").start(
+                () -> initializerSupport.registerEventTypes(VehicleEventTypes.all(), this::registerViaHttp));
     }
 
     private void registerViaHttp(EventTypeRegistration registration) {
