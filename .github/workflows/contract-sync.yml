@@ -10,7 +10,7 @@
 # - This workflow is intentionally conservative; it only enforces the link requirement
 #   when contract-relevant files change.
 
-name: contract-sync
+name: Contract Sync Enforcement
 
 on:
   pull_request:

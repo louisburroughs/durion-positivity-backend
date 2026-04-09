@@ -435,9 +435,14 @@ jobs:
 
       - name: Start services with Docker Compose
         run: |
-          SERVICES="postgres eureka-server pos-security-service pos-api-gateway"
-          echo "Starting minimal smoke-test services: $SERVICES"
-          $COMPOSE_CMD up -d $SERVICES
+          BASE_SERVICES="postgres eureka-server"
+          APP_SERVICES="pos-security-service pos-api-gateway"
+
+          echo "Starting base smoke-test services: $BASE_SERVICES"
+          $COMPOSE_CMD up -d $BASE_SERVICES
+
+          echo "Starting application smoke-test services without transitive dependencies: $APP_SERVICES"
+          $COMPOSE_CMD up -d --no-deps $APP_SERVICES
 
       - name: Wait for services to be healthy
         run: |
