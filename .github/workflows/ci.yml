@@ -402,7 +402,7 @@ jobs:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       POS_EVENTS_API_SECRET: ci-events-secret
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${{ secrets.GRAFANA_TOKEN }}"
       OTEL_TRACES_EXPORTER: none
       OTEL_METRICS_EXPORTER: none

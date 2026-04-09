@@ -20,7 +20,7 @@ otel:
   exporter:
     otlp:
       # Endpoint for OTLP exporter (Grafana Cloud)
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:https://otlp-gateway-prod-us-east-3.grafana.net/otlp}
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4318}
       protocol: ${OTEL_EXPORTER_OTLP_PROTOCOL:http/protobuf}
       # Headers must be set at runtime with your Grafana Cloud API key
       # Example: OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64-encoded-instance-id:api-key>"
