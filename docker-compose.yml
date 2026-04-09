@@ -129,7 +129,7 @@ services:
     networks:
       - pos-network
     healthcheck: # Optional but recommended for sequential startup
-      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20 # Give it enough time to start
@@ -162,7 +162,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -190,7 +190,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -220,7 +220,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -254,7 +254,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -282,7 +282,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -308,7 +308,7 @@ services:
   #   networks:
   #     - pos-network
   #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
   #     interval: 5s
   #     timeout: 3s
   #     retries: 20
@@ -334,7 +334,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -360,7 +360,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -388,7 +388,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -414,7 +414,7 @@ services:
   #   networks:
   #     - pos-network
   #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
   #     interval: 5s
   #     timeout: 3s
   #     retries: 20
@@ -442,7 +442,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -468,7 +468,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -505,7 +505,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -533,7 +533,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -561,7 +561,7 @@ services:
   #   networks:
   #     - pos-network
   #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
   #     interval: 5s
   #     timeout: 3s
   #     retries: 20
@@ -591,7 +591,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -620,7 +620,7 @@ services:
   #   networks:
   #     - pos-network
   #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
   #     interval: 5s
   #     timeout: 3s
   #     retries: 20
@@ -648,7 +648,7 @@ services:
   #   networks:
   #     - pos-network
   #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
   #     interval: 5s
   #     timeout: 3s
   #     retries: 20
@@ -676,7 +676,7 @@ services:
     networks:
       - pos-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -714,7 +714,7 @@ services:
   #   networks:
   #     - pos-network
   #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
   #     interval: 30s
   #     timeout: 10s
   #     retries: 3
@@ -739,7 +739,7 @@ services:
       eureka-server:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
