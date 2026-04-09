@@ -2,6 +2,13 @@
 
 MCP server for Durion Positivity. Discovers backend services via Eureka, registers their REST APIs as MCP tools, and stores system prompts.
 
+## Schema management
+
+Flyway manages runtime schema for this module.
+
+- Baseline migration: `src/main/resources/db/migration/V1__baseline_mcp_schema.sql`
+- Runtime JPA mode: `spring.jpa.hibernate.ddl-auto=validate` (default, preprod, prod)
+
 ## Runtime configuration
 
 Preprod/Prod profiles use PostgreSQL. Set these environment variables in the deployment manifest or process env:
