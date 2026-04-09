@@ -28,7 +28,6 @@ env:
   GF_SECURITY_ADMIN_PASSWORD: admin
   POS_EVENTS_API_SECRET: ci-events-secret
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-  OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${{ secrets.GRAFANA_TOKEN }}"
 
 jobs:
   nightly-full-stack-compose:

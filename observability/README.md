@@ -50,10 +50,10 @@ docker-compose up -d jaeger prometheus grafana otel-collector
 - **Grafana**: <http://localhost:3000>
   - Username: `admin`
   - Password: `admin`
-  
+
 - **Jaeger UI**: <http://localhost:16686>
   - View distributed traces across services
-  
+
 - **Prometheus**: <http://localhost:9090>
   - Query metrics and explore targets
 
@@ -156,8 +156,8 @@ All service Dockerfiles include the Grafana OpenTelemetry Java Agent:
 
 ```dockerfile
 # Download agent
-RUN curl -L -o /opt/grafana-opentelemetry-java.jar \
-    https://github.com/grafana/grafana-opentelemetry-java/releases/download/v2.9.0/grafana-opentelemetry-java.jar
+ARG GRAFANA_OTEL_AGENT_VERSION=v2.9.0
+ADD https://github.com/grafana/grafana-opentelemetry-java/releases/download/${GRAFANA_OTEL_AGENT_VERSION}/grafana-opentelemetry-java.jar /opt/grafana-opentelemetry-java.jar
 
 # Run with agent
 ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar <service>.jar"]
@@ -182,14 +182,14 @@ Services can expose custom metrics using Micrometer:
 @Service
 public class OrderService {
     private final Counter orderCounter;
-    
+
     public OrderService(MeterRegistry registry) {
         this.orderCounter = Counter.builder("pos.orders.created")
             .description("Total orders created")
             .tag("service", "pos-order")
             .register(registry);
     }
-    
+
     public void createOrder() {
         // Business logic
         orderCounter.increment();
@@ -220,13 +220,13 @@ import io.opentelemetry.api.trace.Tracer;
 @Service
 public class PaymentService {
     private final Tracer tracer;
-    
+
     public void processPayment(Order order) {
         Span span = tracer.spanBuilder("processPayment")
             .setAttribute("order.id", order.getId())
             .setAttribute("amount", order.getTotal())
             .startSpan();
-        
+
         try {
             // Payment processing logic
         } finally {
@@ -328,11 +328,11 @@ Grafana is automatically configured with:
 
 ## Production Considerations
 
-### Grafana Cloud Integration
+### Remote OTLP Export (Optional)
 
-To send telemetry to Grafana Cloud:
+The default setup sends telemetry to the local OTEL Collector (`otel-collector:4318`), which fans out to local Jaeger, Prometheus, and Grafana. To additionally or alternatively send telemetry to a remote endpoint (e.g., Grafana Cloud):
 
-1. **Update docker-compose.yml**:
+1. **Override environment variables in docker-compose.yml or .env**:
 
    ```yaml
    environment:
@@ -397,6 +397,6 @@ For issues or questions:
 
 ---
 
-**Last Updated**: January 2026  
-**Version**: 1.0.0  
+**Last Updated**: January 2026
+**Version**: 1.0.0
 **Maintainer**: Durion Platform Team

@@ -12,8 +12,8 @@ ENV OTEL_RESOURCE_ATTRIBUTES="service.name=DURION-POSITIVITY-BACKEND,service.nam
 ENV OTEL_SERVICE_NAME=pos-invoice
 ENV OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
 ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-# IMPORTANT: Set OTEL_EXPORTER_OTLP_HEADERS at runtime with your Grafana Cloud API key
-# Example: -e OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64-encoded-instance-id:api-key>"
+# Optional: Set OTEL_EXPORTER_OTLP_HEADERS at runtime if your OTLP endpoint requires authentication
+# Default endpoint (otel-collector:4318) does not require authentication
 
 COPY target/pos-invoice-*.jar pos-invoice.jar
 EXPOSE 9006

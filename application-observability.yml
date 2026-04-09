@@ -7,7 +7,7 @@ otel:
   # SDK Configuration
   sdk:
     disabled: false
-  
+
   # Resource Attributes (can be overridden by environment variables)
   resource:
     attributes:
@@ -15,32 +15,32 @@ otel:
       service.namespace: durion-group
       service.version: ${project.version:0.0.1-SNAPSHOT}
       deployment.environment: ${DEPLOYMENT_ENVIRONMENT:development}
-  
+
   # Exporter Configuration
   exporter:
     otlp:
-      # Endpoint for OTLP exporter (Grafana Cloud)
+      # Endpoint for OTLP exporter (defaults to local collector)
       endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4318}
       protocol: ${OTEL_EXPORTER_OTLP_PROTOCOL:http/protobuf}
-      # Headers must be set at runtime with your Grafana Cloud API key
-      # Example: OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64-encoded-instance-id:api-key>"
+      # Optional: Set OTEL_EXPORTER_OTLP_HEADERS if your endpoint requires authentication
+      # The default local collector does not require authentication
       headers: ${OTEL_EXPORTER_OTLP_HEADERS:}
       compression: gzip
       timeout: 10s
-  
+
   # Trace Configuration
   traces:
     exporter: otlp
     sampler:
       # Sample all traces in development, adjust for production
       probability: ${OTEL_TRACES_SAMPLER_PROBABILITY:1.0}
-  
+
   # Metrics Configuration
   metrics:
     exporter: otlp
     export:
       interval: 60s
-  
+
   # Logs Configuration
   logs:
     exporter: otlp
@@ -60,7 +60,7 @@ management:
       enabled: true
     prometheus:
       enabled: true
-  
+
   # Metrics Configuration
   metrics:
     export:
@@ -69,14 +69,14 @@ management:
     tags:
       application: ${spring.application.name}
       environment: ${DEPLOYMENT_ENVIRONMENT:development}
-    
+
     # Micrometer-based metrics
     distribution:
       percentiles-histogram:
         http.server.requests: true
       slo:
         http.server.requests: 100ms,200ms,400ms,800ms,1600ms
-  
+
   # Tracing Configuration (Spring Boot 4.0.x native support)
   tracing:
     enabled: true
@@ -94,10 +94,10 @@ logging:
     # OpenTelemetry logging levels
     io.opentelemetry: INFO
     io.micrometer: INFO
-    
+
     # Spring Cloud logging
     org.springframework.cloud: INFO
-    
+
     # HTTP client logging for debugging
     org.springframework.web.client: DEBUG
 
@@ -123,7 +123,7 @@ logging:
 otel:
   traces:
     sampler:
-      probability: 1.0  # Sample all traces in development
+      probability: 1.0 # Sample all traces in development
 
 ---
 # Production Profile - Optimized for production workloads
@@ -140,8 +140,8 @@ logging:
 otel:
   traces:
     sampler:
-      probability: 0.1  # Sample 10% of traces in production
-  
+      probability: 0.1 # Sample 10% of traces in production
+
   metrics:
     export:
       interval: 60s
@@ -149,4 +149,4 @@ otel:
 management:
   endpoint:
     health:
-      show-details: when-authorized  # Restrict health details in production
+      show-details: when-authorized # Restrict health details in production
