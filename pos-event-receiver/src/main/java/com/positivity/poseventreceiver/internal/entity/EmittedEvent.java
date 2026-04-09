@@ -13,7 +13,10 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.Data;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entity representing an emitted event stored in the database.
@@ -21,28 +24,35 @@ import lombok.Data;
  */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Data
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "emitted_event")
 public class EmittedEvent {
     @Id
     @GeneratedValue
     @UUIDv7Id
-    @Column(columnDefinition = "UUID")
+    @Column(name = "event_id", columnDefinition = "UUID")
     private UUID eventId;
     /** The event type identifier (e.g., ORDER_ORDER_CREATE) */
-    private final String id;
+    @Column
+    private String id;
 
     /** API version that triggered this event */
-    private final String apiVersion;
+    @Column(name = "api_version")
+    private String apiVersion;
 
     /** Timestamp when the event completed */
-    private final long timestamp;
+    @Column
+    private long timestamp;
 
     /** Elapsed time in milliseconds for the operation */
-    private final long elapsedMs;
+    @Column(name = "elapsed_ms")
+    private long elapsedMs;
 
     /** When the event was published */
-    private final Instant publishedAt;
+    @Column(name = "published_at")
+    private Instant publishedAt;
 
     public EmittedEvent(String id, String apiVersion, long timestamp, long elapsedMs, Instant publishedAt) {
         this.id = id;
