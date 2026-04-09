@@ -38,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SelfRegistrationServiceImpl implements SelfRegistrationService {
 
+    private static final String USER_PERSON_LINK_CONFLICT = "USER_PERSON_LINK_CONFLICT";
     private static final String DEFAULT_SELF_REGISTRATION_ROLE = "SELF_SERVICE_CUSTOMER";
 
     private final UserRepository userRepository;
@@ -69,8 +70,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 normalizedIdpSubject);
 
         if (idempotencyKey != null) {
-            Optional<SelfRegistrationAttempt> existingAttempt =
-                    selfRegistrationAttemptService.findByIdempotencyKey(idempotencyKey);
+            Optional<SelfRegistrationAttempt> existingAttempt = selfRegistrationAttemptService
+                    .findByIdempotencyKey(idempotencyKey);
             if (existingAttempt.isPresent()) {
                 return replayAttempt(existingAttempt.get(), requestFingerprint);
             }
@@ -132,12 +133,13 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 normalizedFirstName,
                 normalizedLastName);
 
-        PeopleResolvePersonResponse resolvedPerson = peopleRegistrationClient.resolvePerson(PeopleResolvePersonRequest.builder()
-                .email(normalizedEmail)
-                .phone(normalizedPhone)
-                .firstName(normalizedFirstName)
-                .lastName(normalizedLastName)
-                .build());
+        PeopleResolvePersonResponse resolvedPerson = peopleRegistrationClient
+                .resolvePerson(PeopleResolvePersonRequest.builder()
+                        .email(normalizedEmail)
+                        .phone(normalizedPhone)
+                        .firstName(normalizedFirstName)
+                        .lastName(normalizedLastName)
+                        .build());
         enforceCrmConflictRules(resolvedPerson, crmSignalAssessment, normalizedEmail, chosenUsername);
 
         enforceLinkedUserRules(resolvedPerson.personId(), normalizedEmail, chosenUsername);
@@ -154,7 +156,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
             userRepository.deleteById(createdUser.getId());
             UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
                     .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
-                    .reasonCode("USER_PERSON_LINK_CONFLICT")
+                    .reasonCode(USER_PERSON_LINK_CONFLICT)
                     .reasonMessage("User was created but could not be linked to the resolved person")
                     .email(normalizedEmail)
                     .requestedUsername(chosenUsername)
@@ -162,7 +164,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                     .notes("User creation succeeded but link-to-person compensation was required")
                     .build());
             throw new SelfRegistrationConflictException(
-                    "USER_PERSON_LINK_CONFLICT",
+                    USER_PERSON_LINK_CONFLICT,
                     "User was created but could not be linked to the resolved person",
                     referenceId);
         }
@@ -242,7 +244,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
             UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
                     .caseType(SelfRegistrationCaseType.ACCOUNT_RECOVERY)
                     .reasonCode("ACCOUNT_RECOVERY_REQUIRED")
-                    .reasonMessage("An existing inactive account must be recovered instead of creating a second account")
+                    .reasonMessage(
+                            "An existing inactive account must be recovered instead of creating a second account")
                     .email(normalizedEmail)
                     .requestedUsername(username)
                     .personId(existing.get().getPersonId())
@@ -261,11 +264,11 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         for (UUID linkedUserId : linkedUserIds) {
             User linkedUser = userRepository.findById(linkedUserId)
                     .orElseThrow(() -> new SelfRegistrationConflictException(
-                            "USER_PERSON_LINK_CONFLICT",
+                            USER_PERSON_LINK_CONFLICT,
                             "Resolved person has an inconsistent existing user link",
                             selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
                                     .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
-                                    .reasonCode("USER_PERSON_LINK_CONFLICT")
+                                    .reasonCode(USER_PERSON_LINK_CONFLICT)
                                     .reasonMessage("Resolved person has an inconsistent existing user link")
                                     .email(normalizedEmail)
                                     .requestedUsername(chosenUsername)
@@ -333,15 +336,15 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         boolean exactNameMatch = crmMatches.stream()
                 .anyMatch(match -> hasMatchingName(match, normalizedFirstName, normalizedLastName));
 
-        int individualCustomerCandidateCount = (int) crmMatches.stream()
+        int individualCustomerCandidateCount = Math.toIntExact(crmMatches.stream()
                 .filter(CustomerPersonSearchResponse::individualCustomer)
-                .count();
-        int commercialContactCandidateCount = (int) crmMatches.stream()
+                .count());
+        int commercialContactCandidateCount = Math.toIntExact(crmMatches.stream()
                 .filter(CustomerPersonSearchResponse::commercialContact)
-                .count();
-        int sharedIdentityCandidateCount = (int) crmMatches.stream()
+                .count());
+        int sharedIdentityCandidateCount = Math.toIntExact(crmMatches.stream()
                 .filter(match -> match.individualCustomer() && match.commercialContact())
-                .count();
+                .count());
 
         boolean reviewRequired = !crmMatches.isEmpty()
                 && (exactEmailMatch || (exactPhoneMatch && exactNameMatch) || sharedIdentityCandidateCount > 0);

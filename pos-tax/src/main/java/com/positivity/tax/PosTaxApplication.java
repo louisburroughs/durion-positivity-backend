@@ -2,6 +2,7 @@ package com.positivity.tax;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 /**
@@ -9,12 +10,13 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
  * <p>
  * This service provides tax calculation capabilities with:
  * <ul>
- *   <li>External tax service API passthrough for production</li>
- *   <li>Test mode with configurable calculation logic for development/testing</li>
- *   <li>Event emission for audit and observability</li>
+ * <li>External tax service API passthrough for production</li>
+ * <li>Test mode with configurable calculation logic for
+ * development/testing</li>
+ * <li>Event emission for audit and observability</li>
  * </ul>
  */
-@SpringBootApplication
+@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
 @EnableDiscoveryClient
 public class PosTaxApplication {
 

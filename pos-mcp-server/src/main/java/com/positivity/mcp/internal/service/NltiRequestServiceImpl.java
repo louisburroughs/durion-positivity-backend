@@ -88,23 +88,17 @@ public class NltiRequestServiceImpl implements NltiRequestService {
         try {
             requestCount.increment();
 
-            String subjectId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+            @NonNull String subjectId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
             UUID effectiveCorrelationId = (correlationId != null) ? correlationId : UUIDv7Generator.generate();
             UUID resolvedSessionId = resolveSession(request.sessionId(), subjectId);
 
             Span currentSpan = Span.current();
-            AttributeKey<String> correlationIdKey = Objects.requireNonNull(
-                    NltiSpanAttributes.NLT_CORRELATION_ID,
-                    "NLT_CORRELATION_ID must not be null");
-            String correlationIdValue = Objects.requireNonNull(
-                    effectiveCorrelationId.toString(),
-                    "correlationId attribute must not be null");
-            AttributeKey<String> userIdKey = Objects.requireNonNull(
-                    NltiSpanAttributes.NLT_USER_ID,
-                    "NLT_USER_ID must not be null");
-            String userIdValue = Objects.requireNonNull(subjectId, "subjectId must not be null");
-            currentSpan.setAttribute(correlationIdKey, correlationIdValue);
-            currentSpan.setAttribute(userIdKey, userIdValue);
+            @NonNull AttributeKey<String> correlationIdKey = NltiSpanAttributes.NLT_CORRELATION_ID;
+            @NonNull String correlationIdValue = effectiveCorrelationId.toString();
+            @NonNull AttributeKey<String> userIdKey = NltiSpanAttributes.NLT_USER_ID;
+            @NonNull String userIdValue = subjectId;
+            setNonNullSpanAttribute(currentSpan, correlationIdKey, correlationIdValue);
+            setNonNullSpanAttribute(currentSpan, userIdKey, userIdValue);
 
             AtomicInteger count = sessionRequestCounts().get(resolvedSessionId, key -> new AtomicInteger(0));
             if (count.incrementAndGet() > perSessionRateLimit) {
@@ -122,20 +116,12 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             nltiRequest.setPromptHash(promptHash);
             requestRepository.save(nltiRequest);
 
-            AttributeKey<String> requestIdKey = Objects.requireNonNull(
-                    NltiSpanAttributes.NLT_REQUEST_ID,
-                    "NLT_REQUEST_ID must not be null");
-            String requestIdValue = Objects.requireNonNull(
-                    newRequestId.toString(),
-                    "requestId attribute must not be null");
-            AttributeKey<String> sessionIdKey = Objects.requireNonNull(
-                    NltiSpanAttributes.NLT_SESSION_ID,
-                    "NLT_SESSION_ID must not be null");
-            String sessionIdValue = Objects.requireNonNull(
-                    resolvedSessionId.toString(),
-                    "sessionId attribute must not be null");
-            currentSpan.setAttribute(requestIdKey, requestIdValue);
-            currentSpan.setAttribute(sessionIdKey, sessionIdValue);
+            @NonNull AttributeKey<String> requestIdKey = NltiSpanAttributes.NLT_REQUEST_ID;
+            @NonNull String requestIdValue = newRequestId.toString();
+            @NonNull AttributeKey<String> sessionIdKey = NltiSpanAttributes.NLT_SESSION_ID;
+            @NonNull String sessionIdValue = resolvedSessionId.toString();
+            setNonNullSpanAttribute(currentSpan, requestIdKey, requestIdValue);
+            setNonNullSpanAttribute(currentSpan, sessionIdKey, sessionIdValue);
 
             return new NltiResponseV1(newRequestId, effectiveCorrelationId, resolvedSessionId, "ACCEPTED", null, null);
         } catch (Exception exception) {
@@ -144,6 +130,11 @@ public class NltiRequestServiceImpl implements NltiRequestService {
         } finally {
             sample.stop(requestLatency);
         }
+    }
+
+    @SuppressWarnings("null")
+    private static void setNonNullSpanAttribute(Span span, AttributeKey<String> key, String value) {
+        span.setAttribute(key, value);
     }
 
     private @NonNull UUID resolveSession(@Nullable UUID providedSessionId, @NonNull String subjectId) {

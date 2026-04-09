@@ -10,6 +10,8 @@ import com.positivity.securityservice.service.LockoutService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -27,8 +29,24 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Internal implementation of {@link AuthenticationService} that coordinates
+ * Spring Security authentication, lockout policy bookkeeping, and JWT token
+ * issuance.
+ *
+ * Operational notes:
+ * <p>
+ * - Uses repository pre-flight lookup to attach lockout bookkeeping to a stable
+ * user ID when available.
+ * - Records reason-tagged login failure metrics for observability dashboards and
+ * alerting.
+ * - Issues access/refresh token pairs only after principal type validation.
+ * </p>
+ */
 @Service
 public class AuthenticationServiceImpl implements AuthenticationService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthenticationServiceImpl.class);
 
     private static final String COUNTER_AUTH_SUCCESS = "auth.login.success";
     private static final String COUNTER_AUTH_FAILURE = "auth.login.failure";
@@ -76,16 +94,24 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     @Override
     @NonNull
     public TokenPairResponse login(@NonNull LoginRequest request) {
+        log.debug("Login attempt received for username={}", request.username());
         // Pre-flight: resolve userId for lockout bookkeeping. If the user is not
         // found in the repository (e.g. unknown username), skip lockout checks —
         // AuthenticationManager will reject the credentials regardless.
         Optional<User> userEntityOpt = userRepository.findByUsername(request.username());
         final UUID userIdForLockout = userEntityOpt.map(User::getId).orElse(null);
+        if (userIdForLockout == null) {
+            log.debug(
+                    "No local user entity found for username={}; proceeding to AuthenticationManager",
+                    request.username());
+        }
 
         if (userIdForLockout != null) {
             lockoutService.unlockIfCooldownExpired(userIdForLockout);
             if (lockoutService.isLockedOut(userIdForLockout)) {
                 incrementFailureCounter(REASON_ACCOUNT_LOCKED);
+                log.warn("Login rejected due to active lockout. username={}, userId={}",
+                        request.username(), userIdForLockout);
                 throw new LockedException("Account is locked");
             }
         }
@@ -95,7 +121,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.username(), request.password()));
         } catch (AuthenticationException ex) {
-            handleAuthenticationFailure(ex, userIdForLockout);
+            handleAuthenticationFailure(ex, userIdForLockout, request.username());
             throw ex;
         }
 
@@ -106,6 +132,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // fail fast rather than silently issuing a token bound to an untrackable
         // identity.
         if (!(authentication.getPrincipal() instanceof CustomUserDetailsService.SecurityUserPrincipal p)) {
+            log.error("Authenticated principal type mismatch for username={}. principalType={}",
+                    username, authentication.getPrincipal().getClass().getName());
             throw new IllegalStateException(
                     "Unexpected principal type: " + authentication.getPrincipal().getClass().getName());
         }
@@ -122,32 +150,51 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         JwtService.TokenPair pair = jwtService.generateTokenPair(username, userId, p.personId(), roleNames);
         incrementSuccessCounter();
+        log.info("Login succeeded. username={}, userId={}, rolesCount={}", username, userId, roleNames.size());
         return TokenPairResponse.of(pair.accessToken(), pair.refreshToken());
     }
 
+    /**
+     * Increments successful login metric.
+     */
     private void incrementSuccessCounter() {
         authSuccessCounter.increment();
     }
 
-    private void handleAuthenticationFailure(@NonNull AuthenticationException ex, UUID userIdForLockout) {
+    /**
+     * Records lockout bookkeeping, failure metrics, and reason-specific logs for
+     * authentication failures.
+     */
+    private void handleAuthenticationFailure(
+            @NonNull AuthenticationException ex,
+            UUID userIdForLockout,
+            @NonNull String username) {
         if (userIdForLockout != null && ex instanceof BadCredentialsException) {
             lockoutService.recordFailedAttempt(userIdForLockout);
             incrementFailureCounter(REASON_BAD_CREDENTIALS);
+            log.warn("Login failed: bad credentials. username={}, userId={}", username, userIdForLockout);
         }
         if (ex instanceof LockedException) {
             incrementFailureCounter(REASON_ACCOUNT_LOCKED);
+            log.warn("Login failed: account locked. username={}, userId={}", username, userIdForLockout);
         }
         if (ex instanceof DisabledException) {
             incrementFailureCounter(REASON_ACCOUNT_DISABLED);
+            log.warn("Login failed: account disabled. username={}, userId={}", username, userIdForLockout);
         }
         if (ex instanceof AccountExpiredException) {
             incrementFailureCounter(REASON_ACCOUNT_EXPIRED);
+            log.warn("Login failed: account expired. username={}, userId={}", username, userIdForLockout);
         }
         if (ex instanceof CredentialsExpiredException) {
             incrementFailureCounter(REASON_CREDENTIALS_EXPIRED);
+            log.warn("Login failed: credentials expired. username={}, userId={}", username, userIdForLockout);
         }
     }
 
+    /**
+     * Increments reason-tagged authentication failure metrics.
+     */
     private void incrementFailureCounter(@NonNull String reason) {
         switch (reason) {
             case REASON_BAD_CREDENTIALS -> badCredentialsCounter.increment();

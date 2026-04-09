@@ -31,6 +31,26 @@ public class GatewayAuthProperties {
      */
     private boolean rejectHeaderTokenMismatch = false;
 
+    /**
+     * Root auth endpoint path that should bypass JWT auth checks.
+     */
+    private String authPathRoot;
+
+    /**
+     * Auth endpoint prefix that should bypass JWT auth checks.
+     */
+    private String authPathPrefix;
+
+    /**
+     * Root stripped auth endpoint path that should bypass JWT auth checks.
+     */
+    private String strippedAuthPathRoot;
+
+    /**
+     * Stripped auth endpoint prefix that should bypass JWT auth checks.
+     */
+    private String strippedAuthPathPrefix;
+
     public boolean isTokenIdentityRequired() {
         return tokenIdentityRequired;
     }
@@ -53,5 +73,37 @@ public class GatewayAuthProperties {
 
     public void setRejectHeaderTokenMismatch(boolean rejectHeaderTokenMismatch) {
         this.rejectHeaderTokenMismatch = rejectHeaderTokenMismatch;
+    }
+
+    public String getAuthPathRoot() {
+        return authPathRoot;
+    }
+
+    public void setAuthPathRoot(String authPathRoot) {
+        this.authPathRoot = authPathRoot;
+    }
+
+    public String getAuthPathPrefix() {
+        return authPathPrefix;
+    }
+
+    public void setAuthPathPrefix(String authPathPrefix) {
+        this.authPathPrefix = authPathPrefix;
+    }
+
+    public String getStrippedAuthPathRoot() {
+        return strippedAuthPathRoot;
+    }
+
+    public void setStrippedAuthPathRoot(String strippedAuthPathRoot) {
+        this.strippedAuthPathRoot = strippedAuthPathRoot;
+    }
+
+    public String getStrippedAuthPathPrefix() {
+        return strippedAuthPathPrefix;
+    }
+
+    public void setStrippedAuthPathPrefix(String strippedAuthPathPrefix) {
+        this.strippedAuthPathPrefix = strippedAuthPathPrefix;
     }
 }

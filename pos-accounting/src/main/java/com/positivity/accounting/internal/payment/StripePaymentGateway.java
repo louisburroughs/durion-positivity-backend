@@ -1,6 +1,6 @@
 package com.positivity.accounting.internal.payment;
 
-import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Optional;
 
 import org.jspecify.annotations.NonNull;
@@ -36,6 +36,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
 
     private final Optional<String> connectAccount;
 
+    @SuppressWarnings("java:S1172")
     public StripePaymentGateway(
             @Value("${stripe.api-key:}") String apiKey,
             @Value("${stripe.connect-account:}") String connectAccount,
@@ -59,10 +60,14 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             throws PaymentGatewayException {
         try {
             log.debug("Executing Stripe payment. Idempotency Key: {}, Amount: {} {}, Method: {}",
-                    request.getIdempotencyKey(), request.getAmount(), request.getCurrency(), request.getPaymentMethod());
+                    request.getIdempotencyKey(), request.getAmount(), request.getCurrency(),
+                    request.getPaymentMethod());
 
-            // Convert BigDecimal amount to cents (Stripe requires integer cents)
-            long amountInCents = request.getAmount().multiply(BigDecimal.valueOf(100)).longValue();
+            // Convert amount to integer cents using explicit rounding (no truncation)
+            long amountInCents = request.getAmount()
+                    .movePointRight(2)
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .longValueExact();
 
             var chargeParams = new java.util.HashMap<String, Object>();
             chargeParams.put("amount", amountInCents);
@@ -101,10 +106,8 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             log.warn("Idempotency conflict for key: {}. Retrieving existing transaction.", request.getIdempotencyKey());
             return handleIdempotencyConflict(request.getIdempotencyKey());
         } catch (StripeException e) {
-            log.error("Stripe payment failed. Idempotency Key: {}, Error: {}", request.getIdempotencyKey(),
-                    e.getMessage(), e);
             throw new PaymentGatewayException(
-                    "Stripe payment failed: " + e.getMessage(),
+                    "Stripe payment failed for idempotency key: " + request.getIdempotencyKey(),
                     e);
         }
     }
@@ -135,10 +138,8 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             log.warn("Stripe charge not found. Charge ID: {}", transactionId);
             return Optional.empty();
         } catch (StripeException e) {
-            log.error("Failed to retrieve Stripe charge status. Charge ID: {}, Error: {}", transactionId,
-                    e.getMessage(), e);
             throw new PaymentGatewayException(
-                    "Failed to retrieve payment status: " + e.getMessage(),
+                    "Failed to retrieve Stripe charge status for charge ID: " + transactionId,
                     e);
         }
     }
@@ -173,17 +174,12 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
      */
     private GatewayPaymentResponse handleIdempotencyConflict(@NonNull String idempotencyKey)
             throws PaymentGatewayException {
-        try {
-            // Stripe returns a 409 with IdempotencyException; we need to retrieve the
-            // charge
-            // by querying the search API or using the saved idempotency response.
-            // For simplicity, we log and re-throw; the service layer should handle retries.
-            throw new PaymentGatewayException(
-                    "Idempotency conflict detected. A transaction with this key already exists. "
-                            + "Use getPaymentStatus() to check its status.");
-        } catch (Exception e) {
-            throw new PaymentGatewayException("Idempotency conflict resolution failed: " + e.getMessage(), e);
-        }
+        // Stripe returns a 409 with IdempotencyException. Until we persist and
+        // resolve original charge IDs by idempotency key, fail with clear context.
+        throw new PaymentGatewayException(
+                "Idempotency conflict detected for key: " + idempotencyKey
+                        + ". A transaction with this key may already exist. "
+                        + "Use getPaymentStatus() to verify status.");
     }
 
     /**

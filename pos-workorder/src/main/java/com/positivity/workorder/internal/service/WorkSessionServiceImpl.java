@@ -134,7 +134,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 .filter(b -> b.getBreakEndAt() != null)
                 .mapToLong(b -> Duration.between(b.getBreakStartAt(), b.getBreakEndAt()).toSeconds())
                 .sum();
-        session.setTotalDurationSeconds((int) Math.max(0, totalSeconds - breakSeconds));
+        session.setTotalDurationSeconds(Math.toIntExact(Math.max(0L, totalSeconds - breakSeconds)));
 
         session = workSessionRepository.save(session);
 

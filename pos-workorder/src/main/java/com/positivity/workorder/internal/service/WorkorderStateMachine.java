@@ -184,8 +184,8 @@ public class WorkorderStateMachine {
                 checklistItems,
                 blockingReasons,
                 unresolvedApprovalGated.size(),
-                (int) nonTerminalServiceItems,
-                (int) nonTerminalPartItems,
+                Math.toIntExact(nonTerminalServiceItems),
+                Math.toIntExact(nonTerminalPartItems),
                 emergencyDenialAcknowledged,
                 hasBillableItems);
     }

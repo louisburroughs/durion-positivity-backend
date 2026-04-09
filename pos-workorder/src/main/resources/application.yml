@@ -24,7 +24,7 @@ management:
         include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
 
 eureka:
   client:
@@ -43,9 +43,6 @@ logging:
     com:
       positivity:
         workorder: INFO
-  endpoint:
-    health:
-      show-details: always
 # workorder:
 #   statemachine:
 #     audit:

@@ -37,6 +37,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class TravelSegmentServiceImpl implements TravelSegmentService {
+    private static final String SYSTEM = "system";
+
     private final Clock clock;
 
     private final TravelSegmentRepository travelSegmentRepository;
@@ -55,7 +57,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
                 request.getMobileWorkAssignmentId(), TravelSegmentStatus.IN_PROGRESS) > 0) {
             throw new TravelSegmentConflictException("An active travel segment already exists for this assignment");
         }
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         TravelSegment segment = TravelSegment.builder()
                 .mobileWorkAssignmentId(request.getMobileWorkAssignmentId())
                 .technicianId(request.getTechnicianId())
@@ -85,9 +87,9 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
         if (segment.getStatus() != TravelSegmentStatus.IN_PROGRESS) {
             throw new TravelSegmentConflictException("Cannot stop a segment that is not IN_PROGRESS");
         }
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         Instant endAt = Instant.now(clock);
-        int minutes = (int) Duration.between(segment.getStartAt(), endAt).toMinutes();
+        int minutes = Math.toIntExact(Duration.between(segment.getStartAt(), endAt).toMinutes());
         segment.setEndAt(endAt);
         if (request.getToLocationId() != null) {
             segment.setToLocationId(request.getToLocationId());
@@ -107,7 +109,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
     @Override
     @Transactional
     public @NonNull List<TravelSegment> submitTravelSegments(@NonNull UUID mobileWorkAssignmentId) {
-        String username = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         UUID technicianId;
         try {
             technicianId = UUID.fromString(username);
@@ -138,7 +140,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
         if (segment.getStatus() != TravelSegmentStatus.APPROVED) {
             throw new TravelSegmentConflictException("Adjustments can only be created for approved segments");
         }
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         TravelSegmentAdjustment adjustment = TravelSegmentAdjustment.builder()
                 .travelSegment(segment)
                 .adjustedStartAt(request.getAdjustedStartAt())

@@ -69,10 +69,6 @@ public class SecurityGatewayConfig {
     private static final String TEST_SIGNATURE_MARKER = "test-signature";
     private static final String HS256 = "HS256";
     private static final String UNKNOWN_JTI = "unknown";
-    private static final String AUTH_PATH_PREFIX = "/security-service/v1/auth/";
-    private static final String AUTH_PATH_ROOT = "/security-service/v1/auth";
-    private static final String STRIPPED_AUTH_PATH_PREFIX = "/v1/auth/";
-    private static final String STRIPPED_AUTH_PATH_ROOT = "/v1/auth";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Logger LOG = LoggerFactory.getLogger(SecurityGatewayConfig.class);
 
@@ -198,16 +194,16 @@ public class SecurityGatewayConfig {
         return Optional.of(authHeader.substring(7));
     }
 
+    /**
+     * iss/aud claims are now emitted by pos-security-service (since
+     * AUTH-HARDENING review).
+     */
     private Optional<Claims> parseVerifiedClaims(String token, AuthRequestContext context) {
         try {
             Jws<Claims> jwsClaims = Jwts.parser()
                     .verifyWith(secretKey)
-                    // iss/aud claims are now emitted by pos-security-service (since
-                    // AUTH-HARDENING review).
-                    // TODO(ADR-0011): Add .requireIssuer("pos-security-service")
-                    // .requireAudience("api-gateway")
-                    // to the parser once gateway integration tests are updated for the
-                    // new claims.
+                    .requireIssuer("pos-security-service")
+                    .requireAudience("api-gateway")
                     .build()
                     .parseSignedClaims(token);
             return Optional.of(jwsClaims.getPayload());
@@ -404,16 +400,20 @@ public class SecurityGatewayConfig {
         return Optional.of(normalizedAuthorities);
     }
 
-    private static boolean isPublicPath(String path) {
+    private boolean isPublicPath(String path) {
         return path.startsWith("/actuator")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-resources")
                 || path.startsWith("/eureka")
-                || path.equals(AUTH_PATH_ROOT)
-                || path.startsWith(AUTH_PATH_PREFIX)
-                || path.equals(STRIPPED_AUTH_PATH_ROOT)
-                || path.startsWith(STRIPPED_AUTH_PATH_PREFIX);
+                || isPathMatch(path, authProperties.getAuthPathRoot(), authProperties.getAuthPathPrefix())
+                || isPathMatch(path, authProperties.getStrippedAuthPathRoot(),
+                        authProperties.getStrippedAuthPathPrefix());
+    }
+
+    private static boolean isPathMatch(String path, String root, String prefix) {
+        return (StringUtils.hasText(root) && path.equals(root))
+                || (StringUtils.hasText(prefix) && path.startsWith(prefix));
     }
 
     private Optional<String> jwtPreValidationRejectionReason(String token) {

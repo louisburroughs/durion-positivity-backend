@@ -9,4 +9,3 @@ public class PosApiGatewayApplication {
         SpringApplication.run(PosApiGatewayApplication.class, args);
     }
 }
-
