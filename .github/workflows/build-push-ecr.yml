@@ -19,10 +19,6 @@ concurrency:
   group: ecr-push-backend-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  id-token: write # Required for OIDC authentication
-  contents: read
-
 env:
   AWS_REGION: us-east-1
   JAVA_VERSION: "21"
@@ -36,6 +32,8 @@ jobs:
   build-jars:
     name: Maven Package (all modules)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -66,6 +64,9 @@ jobs:
     name: Push ${{ matrix.service }}
     needs: build-jars
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # Required for OIDC authentication
+      contents: read
 
     strategy:
       fail-fast: false

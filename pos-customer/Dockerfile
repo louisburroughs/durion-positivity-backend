@@ -1,13 +1,9 @@
 FROM eclipse-temurin:21-jdk-alpine
 VOLUME /tmp
 
-# Install curl for downloading the agent
-RUN apk add --no-cache curl
-
 # Download Grafana OpenTelemetry Java Agent
 ARG GRAFANA_OTEL_AGENT_VERSION=v2.9.0
-RUN curl -L -o /opt/grafana-opentelemetry-java.jar \
-    https://github.com/grafana/grafana-opentelemetry-java/releases/download/${GRAFANA_OTEL_AGENT_VERSION}/grafana-opentelemetry-java.jar
+ADD https://github.com/grafana/grafana-opentelemetry-java/releases/download/${GRAFANA_OTEL_AGENT_VERSION}/grafana-opentelemetry-java.jar /opt/grafana-opentelemetry-java.jar
 
 # OpenTelemetry configuration (override at runtime as needed)
 ARG JAVA_OPTS
