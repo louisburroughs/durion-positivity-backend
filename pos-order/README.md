@@ -26,10 +26,12 @@ The service implements role-based access control with the following permissions:
 ### Business Rules
 
 **Automatic Approval Thresholds:**
+
 - Discount percentage ≤ 10%
 - Discount amount ≤ $50
 
 **Validation Rules:**
+
 - Override price cannot exceed original price
 - Override price must be non-negative
 - Reason code is required
@@ -57,10 +59,12 @@ Content-Type: application/json
 ```
 
 **Idempotency behavior:**
+
 - Reusing the same `idempotencyKey` with the same payload returns the original result.
 - Reusing the same `idempotencyKey` with a different payload returns HTTP `409 Conflict` with code `ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT`.
 
 **Response (Auto-approved):**
+
 ```json
 {
   "overrideId": 1,
@@ -182,20 +186,12 @@ Authorization: Bearer {token}
 
 ## Configuration
 
-Application properties for development (H2 in-memory database):
+Runtime schema management is Flyway-first:
 
-```properties
-spring.application.name=pos-order
-server.port=8084
+- Baseline migration: `src/main/resources/db/migration/V1__baseline_order_schema.sql`
+- Runtime JPA mode in `application.yml`: `spring.jpa.hibernate.ddl-auto=validate`
 
-# Database Configuration (H2)
-spring.datasource.url=jdbc:h2:mem:posorder
-spring.jpa.hibernate.ddl-auto=create-drop
-
-# Security
-spring.security.user.name=admin
-spring.security.user.password=admin
-```
+Local OpenAPI profile still uses in-memory H2 and temporary Hibernate update mode only for spec generation.
 
 ## Testing
 
@@ -209,6 +205,7 @@ The service includes comprehensive integration tests covering:
 - Audit trail creation
 
 Run tests with:
+
 ```bash
 mvn test -pl pos-order
 ```
@@ -216,11 +213,13 @@ mvn test -pl pos-order
 ## Deployment
 
 Build the service:
+
 ```bash
 mvn clean package -pl pos-order -am
 ```
 
 Run standalone:
+
 ```bash
 java -jar pos-order/target/pos-order-0.0.1-SNAPSHOT.jar
 ```
@@ -248,6 +247,7 @@ All price override operations are fully audited with:
 - IP address tracking for security audit
 
 This audit trail supports:
+
 - SOX compliance
 - Internal control requirements
 - Fraud detection

@@ -12,7 +12,7 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
   flyway:
     placeholders:
       # Injected via env var at runtime/deploy time; do not commit real hash in SQL.

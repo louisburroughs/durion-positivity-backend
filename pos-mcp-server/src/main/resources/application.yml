@@ -10,7 +10,7 @@ spring:
     password: ""
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         jdbc:
@@ -69,8 +69,8 @@ management:
       show-details: when-authorized
   prometheus:
     metrics:
-        export:
-            enabled: true
+      export:
+        enabled: true
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
