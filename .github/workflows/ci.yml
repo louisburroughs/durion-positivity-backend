@@ -213,8 +213,24 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
+      - name: Cache OWASP dependency-check data
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp
+          key: ${{ runner.os }}-owasp-dc-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-owasp-dc-
+
       - name: Run OWASP Dependency Check
-        run: ./mvnw org.owasp:dependency-check-maven:check -B
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          if [ -n "${NVD_API_KEY}" ]; then
+            ./mvnw org.owasp:dependency-check-maven:check -DnvdApiKey="${NVD_API_KEY}" -B
+          else
+            echo "NVD_API_KEY is not configured; dependency-check NVD updates may be slow."
+            ./mvnw org.owasp:dependency-check-maven:check -B
+          fi
         continue-on-error: true
 
       - name: Upload dependency check report
@@ -374,10 +390,10 @@ jobs:
 
     env:
       POSTGRES_USER: positivity
-      POSTGRES_PASSWORD: positivity
+      POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
       POSTGRES_DB: positivity
       SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
       SECURITY_JWT_SECRET: ci-jwt-secret-key-0123456789abcdef0123456789
       STRIPE_API_KEY: sk_test_ci_placeholder_key
       POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID: 11111111-1111-1111-1111-111111111111
