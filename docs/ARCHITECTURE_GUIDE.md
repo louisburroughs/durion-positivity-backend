@@ -102,7 +102,7 @@ eureka:
 All services use this pattern:
 
 ```dockerfile
-FROM openjdk:21-jdk-alpine
+FROM eclipse-temurin:25-jdk-alpine
 VOLUME /tmp
 ARG JAVA_OPTS
 ENV JAVA_OPTS=$JAVA_OPTS
@@ -143,7 +143,7 @@ pos-catalog:
 
 ### Key Features
 
-- **Lightweight Base Image**: `openjdk:21-jdk-alpine`
+- **Lightweight Base Image**: `eclipse-temurin:25-jdk-alpine`
 - **JAVA_OPTS Support**: Runtime JVM tuning
 - **Health Checks**: Configured per service
 - **Service Discovery**: Eureka for all internal communication
@@ -313,7 +313,7 @@ All requests should include correlation IDs for distributed tracing.
 public ResponseEntity<?> createResource(
     @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId,
     @RequestBody ResourceRequest request) {
-    
+
     log.info("Create resource requested. correlationId={}", correlationId);
     return ResponseEntity.ok(resourceService.create(request, correlationId));
 }
@@ -327,7 +327,7 @@ public class ErrorResponse {
     private String message;
     private String correlationId;
     private Instant timestamp;
-    
+
     public ErrorResponse(String errorCode, String message, String correlationId) {
         this.errorCode = errorCode;
         this.message = message;

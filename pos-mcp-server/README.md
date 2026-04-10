@@ -44,3 +44,13 @@ Compile-only NLTI API surface has been scaffolded in this module.
 - Service interfaces exposed for API wiring are in `src/main/java/com/positivity/mcp/service`
 
 These controller methods are now implemented and wired to their corresponding services; behavior is governed by the underlying service implementations.
+
+## LLM orchestration draft
+
+The first-pass LLM/tool orchestration specification lives in [docs/llm-tool-orchestration-spec.md](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/docs/llm-tool-orchestration-spec.md).
+
+It is designed to work with the existing [docs/tool-registry-implementation.md](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/docs/tool-registry-implementation.md) guide:
+
+- the tool registry narrows candidates before model planning
+- local development defaults to Ollama in `application.yml`
+- preprod and prod keep provider-driven overrides through profile configuration

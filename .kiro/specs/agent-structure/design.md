@@ -16,7 +16,7 @@ The design follows a modular, extensible architecture that allows for easy addit
 - **GitHub-First Automation**: Webhook-driven issue detection with Redis-backed build queues and agent registry
 - **Performance-First**: All agent responses delivered within specified timeframes (2-5 seconds for 95% of requests)
 - **Security-by-Design**: JWT integration, secure API communication, and comprehensive access control
-- **Code Generation Standards**: All code generation uses Java 21 as target version for microservices compatibility
+- **Code Generation Standards**: All code generation uses Java 25 as target version for microservices compatibility
 - **Agent Implementation Location**: All agent framework implementation classes located in `positivity/pos-agent-framework/src/main/java`, test classes in `positivity/pos-agent-framework/src/test/java/`
 
 ## Architecture

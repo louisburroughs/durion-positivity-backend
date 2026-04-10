@@ -4,7 +4,7 @@
 
 - **Spring Boot 4.0.2** - Primary application framework for microservices
 - **Spring Cloud 2023.0.1** - Microservices infrastructure and patterns
-- **Java 21** - Modern Java runtime with latest features
+- **Java 25** - Modern Java runtime with latest features
 - **Maven** - Build system and dependency management
 - **Lombok** - Code generation for reducing boilerplate
 
@@ -134,7 +134,7 @@ java -jar pos-catalog/target/pos-catalog-*.jar
 
 ## Runtime Requirements
 
-- **Java 21+** - Required runtime version
+- **Java 25+** - Required runtime version
 - **4GB+ RAM** - Recommended for development (multiple services)
 - **Docker & Docker Compose** - For containerized development
 - **PostgreSQL/MySQL** - For production deployments

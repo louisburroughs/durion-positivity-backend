@@ -10,10 +10,10 @@ modules: ["pos-security-service", "pos-api-gateway"]
 
 ## Product Requirements Document — Spring Authentication and Account State Hardening
 
-**Capability ID:** AUTH-HARDENING  
+**Capability ID:** AUTH-HARDENING
 **Module Scope:** `pos-security-service` authentication, user state management,
-and JWT issuance; `pos-api-gateway` JWT enforcement alignment  
-**Platform:** Java 21, Spring Boot 4.x, Spring Security, JPA, JWT  
+and JWT issuance; `pos-api-gateway` JWT enforcement alignment
+**Platform:** Java 25, Spring Boot 4.x, Spring Security, JPA, JWT
 **Priority:** Critical
 
 ## Executive Summary

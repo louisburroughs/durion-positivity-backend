@@ -2,15 +2,15 @@
 
 ## Project Overview
 
-POS backend microservice suite for Durion. Multi-module Maven project containing gateway + `pos-*` services (Spring Boot 4.0.x, Java 21).
+POS backend microservice suite for Durion. Multi-module Maven project containing gateway + `pos-*` services (Spring Boot 4.0.x, Java 25).
 
 ## Quick Prerequisites
 
-- Java 21+ (Use [SDKMAN!](https://sdkman.io/) - the project includes `.sdkmanrc` for automatic version switching)
+- Java 25+ (Use [SDKMAN!](https://sdkman.io/) - the project includes `.sdkmanrc` for automatic version switching)
 - Maven (use `./mvnw` wrapper)
 - Docker for local test stacks
 
-**Note**: This project uses SDKMAN! for Java version management. When you `cd` into the project directory, SDKMAN! will automatically switch to Java 21.0.5-tem if you have it configured with `sdk_auto_env=true` in `~/.sdkman/etc/config`.
+**Note**: This project uses SDKMAN! for Java version management. When you `cd` into the project directory, SDKMAN! will automatically switch to Java 25.0.2-tem if you have it configured with `sdk_auto_env=true` in `~/.sdkman/etc/config`.
 
 ## Setup & Build
 
@@ -42,7 +42,6 @@ cd durion-positivity-backend
 ./mvnw -pl pos-order -am test
 ```
 
-
 ## Module Conventions & Intermodule Communication
 
 Treat each `pos-*` directory as a standard Spring Boot service using existing module patterns:
@@ -68,6 +67,7 @@ Treat each `pos-*` directory as a standard Spring Boot service using existing mo
 - This encapsulation prevents tight coupling and ensures modules remain independently deployable and maintainable
 
 **Package structure example:**
+
 ```
 com.positivity.accounting/
 ├── PosAccountingApplication.java  ← Spring Boot main class (root level)
@@ -105,9 +105,10 @@ com.positivity.accounting/
 - **NO direct repository calls** from external services
 
 Example ArchUnit test pattern:
+
 ```java
 @ArchTest
-static final ArchRule controllers_should_not_access_repositories_directly = 
+static final ArchRule controllers_should_not_access_repositories_directly =
     noClasses()
         .that().resideInAPackage("..internal.controller..")
         .should().dependOnClassesThat().resideInAPackage("..internal.repository..")

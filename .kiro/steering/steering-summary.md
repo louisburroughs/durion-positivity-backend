@@ -9,6 +9,7 @@ This document consolidates all steering guidance for the Positivity POS system d
 **Positivity** is a modular Point of Sale (POS) system designed for infinite scaling with a "pay as you grow" model. Built using Spring Boot microservices architecture, it provides enterprise-grade functionality for retail, automotive, and service-based businesses.
 
 ### Core Business Domains
+
 - **Catalog & Inventory** - Product management, stock tracking, vehicle-specific inventory
 - **Customer & Orders** - Customer profiles, order processing, invoicing, payments
 - **Automotive Services** - Vehicle fitment, parts compatibility, reference data integration
@@ -18,12 +19,14 @@ This document consolidates all steering guidance for the Positivity POS system d
 ## Technology Stack
 
 ### Core Framework
+
 - **Spring Boot 4.0.2** - Primary microservices framework
 - **Spring Cloud 2023.0.1** - Microservices infrastructure
-- **Java 21** - Modern runtime with latest features
+- **Java 25** - Modern runtime with latest features
 - **Maven** - Build system and dependency management
 
 ### Infrastructure
+
 - **Spring Cloud Gateway** - API Gateway for routing
 - **Spring Cloud Netflix Eureka** - Service discovery
 - **Spring Security + JWT** - Authentication and authorization
@@ -31,6 +34,7 @@ This document consolidates all steering guidance for the Positivity POS system d
 - **Apache Kafka/RabbitMQ** - Event streaming and messaging
 
 ### Development & Deployment
+
 - **Docker + Docker Compose** - Containerization and orchestration
 - **Spring Boot Actuator** - Health checks and metrics
 - **Micrometer + Prometheus** - Observability and monitoring
@@ -39,6 +43,7 @@ This document consolidates all steering guidance for the Positivity POS system d
 ## Project Structure
 
 ### Root Layout
+
 ```
 positivity/
 ├── pos-api-gateway/           # API Gateway service
@@ -67,7 +72,9 @@ positivity/
 ```
 
 ### Microservice Structure
+
 Each service follows standard Spring Boot patterns:
+
 - **Controller Layer** - REST API endpoints
 - **Service Layer** - Business logic implementation
 - **Repository Layer** - Data access with Spring Data JPA
@@ -79,48 +86,58 @@ Each service follows standard Spring Boot patterns:
 ### Core Development Agents
 
 #### **microservices-architect** - System Architect
+
 - **Purpose**: Service boundaries, integration patterns, system design
 - **Use For**: Service decomposition, inter-service communication, architectural decisions
 
 #### **spring-boot-developer** - Primary Implementation Agent
+
 - **Purpose**: Spring Boot microservice development and implementation
 - **Pairing**: Works with **spring-boot-pair-navigator** for loop detection and quality
 - **Use For**: Service implementation, REST APIs, business logic, data access
 
 #### **spring-boot-pair-navigator** - Pairing & Quality Agent
+
 - **Purpose**: Loop detection, architectural drift prevention, simplification guidance
 - **Stop-Phrases**: Uses mandatory interruption phrases for problematic patterns
 - **Use For**: Complex implementations, refactoring decisions, quality improvement
 
 #### **api-gateway-specialist** - Gateway Expert
+
 - **Purpose**: API Gateway configuration, routing, cross-cutting concerns
 - **Use For**: Gateway routing, authentication filters, API management
 
 ### Infrastructure & Operations Agents
 
 #### **containerization-specialist** - DevOps Engineer
+
 - **Purpose**: Docker containerization, orchestration, deployment
 - **Use For**: Container optimization, Docker Compose, Kubernetes deployment
 
 #### **database-per-service-specialist** - Database Expert
+
 - **Purpose**: Database design per service, data consistency patterns
 - **Use For**: Schema design, migrations, data consistency, performance optimization
 
 #### **observability-engineer** - Monitoring & Reliability
+
 - **Purpose**: Microservices monitoring, tracing, reliability
 - **Use For**: Distributed tracing, metrics collection, monitoring setup
 
 ### Quality & Security Agents
 
 #### **microservices-testing-specialist** - Testing Expert
+
 - **Purpose**: Microservices testing strategy and implementation
 - **Use For**: Unit tests, integration tests, contract testing, TestContainers
 
 #### **security-specialist** - Security Expert
+
 - **Purpose**: JWT authentication, Spring Security, service-to-service security
 - **Use For**: Authentication implementation, security configuration, token management
 
 #### **event-driven-specialist** - Event Architecture Expert
+
 - **Purpose**: Event-driven architecture, messaging, async communication
 - **Use For**: Event schemas, Kafka/RabbitMQ patterns, event sourcing
 
@@ -129,47 +146,58 @@ Each service follows standard Spring Boot patterns:
 ### Technology-Specific Instructions
 
 #### **spring-boot-microservices.instructions**
+
 - **Scope**: `**/*.java`, `**/application.yml`, `**/pom.xml`
-- **Guidelines**: Java 21 features, Spring Boot conventions, dependency injection, JPA, error handling
+- **Guidelines**: Java 25 features, Spring Boot conventions, dependency injection, JPA, error handling
 
 #### **spring-cloud-patterns.instructions**
+
 - **Scope**: `**/*.java`, `**/bootstrap.yml`, `**/docker-compose.yml`
 - **Guidelines**: Service discovery, API Gateway, circuit breakers, distributed config, tracing
 
 #### **jpa-hibernate.instructions**
+
 - **Scope**: `**/entity/*.java`, `**/repository/*.java`, `**/migration/*.sql`
 - **Guidelines**: JPA entities, repository patterns, migrations, database-per-service, query optimization
 
 #### **angular-frontend.instructions**
+
 - **Scope**: `**/*.ts`, `**/*.html`, `**/*.scss`
 - **Guidelines**: Angular 17+, reactive forms, Material UI, NgRx, accessibility
 
 ### Cross-Cutting Instructions
 
 #### **microservices-security.instructions**
+
 - **Scope**: All files
 - **Guidelines**: JWT authentication, service-to-service security, HTTPS, input validation, secrets management
 
 #### **microservices-performance.instructions**
+
 - **Scope**: All files
 - **Guidelines**: Connection pooling, async processing, caching, database optimization, event-driven architecture
 
 #### **spring-boot-quality.instructions**
+
 - **Scope**: All files
 - **Guidelines**: Spring Boot conventions, testing, static analysis, exception handling, logging, clean code
 
 ### Specialized Instructions
 
 #### **event-driven-architecture.instructions**
+
 - **Guidelines**: Event schemas, idempotent handlers, Kafka/RabbitMQ, error handling, event sourcing
 
 #### **containerization.instructions**
+
 - **Guidelines**: Docker optimization, health checks, Kubernetes, security, resource management
 
 #### **api-documentation.instructions**
+
 - **Guidelines**: OpenAPI 3.0, API versioning, examples, Spring REST Docs
 
 #### **automotive-domain.instructions**
+
 - **Guidelines**: Vehicle fitment, pricing scenarios, work orders, customer hierarchies
 
 ## Agent Collaboration Patterns
@@ -214,30 +242,35 @@ Each service follows standard Spring Boot patterns:
 ## Best Practices Summary
 
 ### Service Design
+
 - Follow database-per-service principle
 - Use event-driven communication between services
 - Implement proper service boundaries and domain isolation
 - Design for failure with circuit breakers and timeouts
 
 ### Security
+
 - Implement JWT authentication with Spring Security
 - Use service-to-service authentication with JWT tokens
 - Enforce HTTPS communication between all services
 - Follow OWASP guidelines for API security
 
 ### Performance
+
 - Implement connection pooling for databases and HTTP clients
 - Use async processing with Spring WebFlux where appropriate
 - Implement proper caching strategies (Redis, Caffeine)
 - Monitor and optimize database queries and indexes
 
 ### Quality
+
 - Follow Spring Boot coding conventions and best practices
 - Implement comprehensive unit and integration testing
 - Use static code analysis with SonarQube
 - Ensure proper exception handling and structured logging
 
 ### Deployment
+
 - Create optimized Docker images with multi-stage builds
 - Implement proper health checks and readiness probes
 - Use Kubernetes ConfigMaps and Secrets for configuration
@@ -246,6 +279,7 @@ Each service follows standard Spring Boot patterns:
 ## Quick Reference Commands
 
 ### Development
+
 ```bash
 # Build all services
 mvn clean install
@@ -261,6 +295,7 @@ mvn clean package spring-boot:build-image
 ```
 
 ### Service Management
+
 ```bash
 # View service logs
 docker-compose logs -f pos-api-gateway

@@ -12,7 +12,7 @@ The Positivity POS system follows comprehensive development instructions for Spr
 
 - **Scope**: `**/*.java`, `**/application.yml`, `**/pom.xml`
 - **Key Guidelines**:
-  - Use Java 21 features (Records, Pattern Matching, Virtual Threads)
+  - Use Java 25 features (Records, Pattern Matching, Virtual Threads)
   - Follow Spring Boot conventions for package structure and naming
   - Implement proper dependency injection with constructor injection
   - Use Spring Data JPA with proper entity relationships

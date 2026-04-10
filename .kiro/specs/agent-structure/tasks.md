@@ -15,7 +15,7 @@
 **CRITICAL**: All implementation code goes in `pos-agent-framework/src/main/java/`. Only registry files, test specs, and configuration go in `.kiro/` directories.
 
 ### Checkpoint 0.0: Pre-Execution Validation
-- [x] Verify Java 21 JDK is installed and configured
+- [x] Verify Java 25 JDK is installed and configured
 - [x] Confirm Maven build configuration supports Spring Boot 4.0.x
 - [x] Verify Redis availability for build queue and agent registry
 - [x] Confirm GitHub webhook endpoint is configured and accessible
@@ -36,7 +36,7 @@
   - `com/example/posagents/agents/support/` - Support/assistance agents
 - [x] Configure Maven build (pom.xml)
   - Ensure Spring Boot 4.0.x dependencies
-  - Add Java 21 compiler configuration
+  - Add Java 25 compiler configuration
   - Add test framework: JUnit 5
   - Add property-based testing: quicktheories or jqwik
   - Add clean task with startup validation
@@ -729,7 +729,7 @@
 
 ### Task 8.2: Prepare Docker & Kubernetes Deployment
 - [ ] Create Dockerfile for agent framework
-  - Multi-stage build for Java 21
+  - Multi-stage build for Java 25
   - Spring Boot embedded configuration
   - Health check endpoints
 - [ ] Create Kubernetes manifests
@@ -862,7 +862,7 @@
 ## Notes
 
 - **Test Framework**: JUnit 5 with property-based testing (quicktheories or jqwik)
-- **Build Tool**: Maven with Java 21 compilation target
+- **Build Tool**: Maven with Java 25 compilation target
 - **Repository Target**: https://github.com/louisburroughs/durion-positivity-backend.git
 - **Code Style**: Follow Spring Boot conventions and POS domain standards
 - **Requirements Mapping**: All tasks map to requirements REQ-001 through REQ-019

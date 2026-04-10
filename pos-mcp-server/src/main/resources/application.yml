@@ -27,20 +27,55 @@ mcp:
     open-api-path: /v3/api-docs
     discovery-timeout: 5s
   llm:
+    runtime:
+      provider: ollama
+      default-api-id: ollama-chat
+      embedding-api-id: ollama-embedding
+      max-tool-iterations: 4
+      degrade-on-provider-failure: true
+      connect-timeout: 2s
+      read-timeout: 30s
+      system-prompt: |
+        You are the Durion POS MCP orchestrator.
+        Use only the provided candidate tools.
+        Prefer a direct answer when no tool is required.
     apis:
-      - id: openai
+      - id: ollama-chat
+        model: llama3.1:8b
+        base-url: ${OLLAMA_CHAT_URL:http://localhost:11434/api/chat}
+        api-key: ""
+        headers: {}
+      - id: ollama-embedding
+        model: nomic-embed-text
+        base-url: ${OLLAMA_EMBEDDING_URL:http://localhost:11434/api/embeddings}
+        api-key: ""
+        headers: {}
+      - id: openai-chat
         model: gpt-4.1
         base-url: https://api.openai.com/v1/chat/completions
         api-key: ${OPENAI_API_KEY:}
         headers:
           Authorization: Bearer ${OPENAI_API_KEY:}
           Content-Type: application/json
-      - id: azure-openai
+      - id: openai-embedding
+        model: text-embedding-3-small
+        base-url: https://api.openai.com/v1/embeddings
+        api-key: ${OPENAI_API_KEY:}
+        headers:
+          Authorization: Bearer ${OPENAI_API_KEY:}
+          Content-Type: application/json
+      - id: azure-openai-chat
         model: gpt-4o
         base-url: ${AZURE_OPENAI_CHAT_COMPLETIONS_URL:https://example.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-01-preview}
         api-key: ${AZURE_OPENAI_API_KEY:}
         headers:
           api-key: ${AZURE_OPENAI_API_KEY:}
+  registry:
+    enabled: true
+    semantic-top-k: 10
+    returned-candidates: 5
+    deterministic-fallback-enabled: true
+    default-workflow-state: IDLE
 
 server:
   port: 8086

@@ -1,6 +1,6 @@
 # Durion Positivity Backend
 
-The **Durion Positivity Backend** is the server-side microservice suite for the Durion platform. Built on **Java 21** and **Spring Boot 4.0.x**, it provides the core business logic, data persistence, and API gateway capabilities for the Point of Sale (POS) system.
+The **Durion Positivity Backend** is the server-side microservice suite for the Durion platform. Built on **Java 25** and **Spring Boot 4.0.x**, it provides the core business logic, data persistence, and API gateway capabilities for the Point of Sale (POS) system.
 
 This repository works in tandem with Durion frontend applications and is governed by the workspace-level policies in the [Durion](../durion/README.md) root repository.
 
@@ -60,7 +60,7 @@ The backend follows a domain-driven microservices architecture. Each bounded con
 
 ## Technology Stack
 
-- **Language**: Java 21 (LTS)
+- **Language**: Java 25
 - **Framework**: Spring Boot 4.0.x
 - **Build System**: Maven (via `./mvnw` wrapper)
 - **Database**: PostgreSQL (Each service owns its own schema/database)
@@ -89,34 +89,40 @@ durion-positivity-backend/
 
 ### Prerequisites
 
-- **Java 21+** (Recommended: Use [SDKMAN!](https://sdkman.io/) for automatic version management)
+- **Java 25+** (Recommended: Use [SDKMAN!](https://sdkman.io/) for automatic version management)
+
   ```bash
   # Install SDKMAN! (if not already installed)
   curl -s "https://get.sdkman.io" | bash
-  
+
   # After installation, cd into the project directory
-  # SDKMAN! will automatically switch to Java 21.0.5-tem based on .sdkmanrc
+  # SDKMAN! will automatically switch to Java 25.0.2-tem based on .sdkmanrc
   cd durion-positivity-backend
   sdk env install  # Install the required Java version if needed
   ```
+
 - **Docker** (for running databases/infrastructure)
 - **Maven** (optional, wrapper provided)
 
 ### Build & Run
 
-1.  **Build the entire suite**:
+1. **Build the entire suite**:
+
     ```bash
     ./mvnw clean package
     ```
 
-2.  **Run a specific service** (e.g., Order Service):
+2. **Run a specific service** (e.g., Order Service):
+
     ```bash
     cd pos-order
     ../mvnw spring-boot:run
     ```
+
     *Note: Ensure dependent infrastructure (PostgreSQL, Registry, etc.) is running via Docker.*
 
-3.  **Run Tests**:
+3. **Run Tests**:
+
     ```bash
     ./mvnw test
     ```
@@ -147,6 +153,7 @@ Run `pos-workorder` against local Kafka:
 ```
 
 Useful endpoints:
+
 - Kafka bootstrap server: `localhost:9092`
 - Kafka UI: `http://localhost:8098`
 
@@ -161,14 +168,17 @@ For detailed agent commands and local stack setup, refer to [AGENTS.md](AGENTS.m
 ## Known Issues & Migration Notes
 
 ### Spring Boot 4.0.2+ MockMvc Import Change
+
 **Issue**: The `@AutoConfigureMockMvc` annotation has moved in Spring Boot 4.0.2+.
 
 **Old Import** (Spring Boot 3.4.x and earlier):
+
 ```java
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 ```
 
 **New Import** (Spring Boot 4.0.2+):
+
 ```java
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 ```

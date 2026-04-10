@@ -1,6 +1,6 @@
 # Compact Permission Bitset Authorization Design
 
-**Target Platform:** Java 21, Spring Boot 4.0.3
+**Target Platform:** Java 25, Spring Boot 4.0.3
 **Architecture Context:** JWT-based stateless authorization with API gateway enforcement
 
 ---

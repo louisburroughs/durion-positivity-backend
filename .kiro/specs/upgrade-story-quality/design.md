@@ -677,7 +677,7 @@ This feature should follow the code organization patterns established in the exi
 
 Based on the reference implementation, this feature should use:
 
-- **Java 21**: Consistent with existing workspace-agents codebase
+- **Java 25**: Consistent with existing workspace-agents codebase
 - **Maven**: Build system matching the reference implementation
 - **JUnit 5**: Unit testing framework
 - **Mockito**: Mock framework

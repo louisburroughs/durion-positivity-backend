@@ -10,9 +10,9 @@ modules: ["pos-security-service", "pos-people", "pos-customer"]
 
 ## Product Requirements Document — Self-Registration with User-Person Orchestration
 
-**Capability ID:** SELF-REG-001  
-**Module Scope:** `pos-security-service` self-registration and duplicate-account enforcement; `pos-people` person resolution, creation, and linking; `pos-customer` customer/contact identity lookup  
-**Platform:** Java 21, Spring Boot 4.x, Spring Security, JPA, internal REST/event orchestration  
+**Capability ID:** SELF-REG-001
+**Module Scope:** `pos-security-service` self-registration and duplicate-account enforcement; `pos-people` person resolution, creation, and linking; `pos-customer` customer/contact identity lookup
+**Platform:** Java 25, Spring Boot 4.x, Spring Security, JPA, internal REST/event orchestration
 **Priority:** High
 
 ## Executive Summary

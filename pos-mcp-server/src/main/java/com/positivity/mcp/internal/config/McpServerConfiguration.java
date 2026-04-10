@@ -14,7 +14,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
-@EnableConfigurationProperties({ McpServerProperties.class, LlmApiProperties.class })
+@EnableConfigurationProperties({
+        McpServerProperties.class,
+        LlmApiProperties.class,
+        LlmRuntimeProperties.class,
+        ToolRegistryProperties.class
+})
 public class McpServerConfiguration {
 
     @Bean

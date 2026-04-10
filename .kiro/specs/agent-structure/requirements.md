@@ -282,7 +282,7 @@ When implementing or modifying agents, always reference and update code in this 
 - Auto-scaling configuration and capacity planning
 
 ### Code Quality Agent
-- Java 21 code formatting and style enforcement with Checkstyle and SpotBugs
+- Java 25 code formatting and style enforcement with Checkstyle and SpotBugs
 - Static analysis with SonarQube and security vulnerability scanning
 - Code review guidelines and technical debt identification
 - Refactoring strategies and clean code principles

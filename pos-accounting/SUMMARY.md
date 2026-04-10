@@ -1,7 +1,7 @@
 # Integration Test Coverage Analysis - Executive Summary
 
-**Module:** pos-accounting  
-**Date:** February 12, 2026  
+**Module:** pos-accounting
+**Date:** February 12, 2026
 **Status:** 🔴 CRITICAL - All tests failing due to infrastructure issues
 
 ---
@@ -47,6 +47,7 @@
 ### 🔴 Issue #1: MockMvc Bean Not Available
 
 **Problem:** All tests fail with:
+
 ```
 No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' available
 ```
@@ -62,6 +63,7 @@ No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' availa
 **Problem:** Two tests use `@AutoConfigureMockMvc` annotation that doesn't exist in Spring Boot 4.0
 
 **Affected Files:**
+
 - `EventIngestionContractBehaviorIT.java`
 - `JournalEntryContractBehaviorIT.java`
 
@@ -69,10 +71,10 @@ No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' availa
 
 ### ⚠️ Issue #3: Java Version Mismatch
 
-**Required:** Java 21  
+**Required:** Java 25
 **Current:** Java 17
 
-**Fix:** Use Java 21 already installed at `/usr/lib/jvm/temurin-21-jdk-amd64`
+**Fix:** Use Java 25 installed via SDKMAN! (`sdk install java 25.0.2-tem`)
 
 ---
 
@@ -102,26 +104,28 @@ No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' availa
 
 ### Phase 1: Fix Infrastructure (URGENT - 2-4 hours)
 
-**Priority:** 🔴 CRITICAL  
-**Effort:** 2-4 hours  
+**Priority:** 🔴 CRITICAL
+**Effort:** 2-4 hours
 **Blocking:** All 99 tests
 
 **Tasks:**
+
 1. Create `BaseIntegrationTest` class
 2. Update all 11 `*ContractBehaviorIT` tests to extend base class
 3. Remove `@AutoConfigureMockMvc` from 2 files
-4. Verify Java 21 configuration
+4. Verify Java 25 configuration
 5. Run tests and confirm 100% pass rate
 
 **Success Criteria:** All 99 tests pass
 
 ### Phase 2: Add Missing Tests (HIGH - 16-22 hours)
 
-**Priority:** 🟠 HIGH  
-**Effort:** 16-22 hours  
+**Priority:** 🟠 HIGH
+**Effort:** 16-22 hours
 **Deliverables:** 2 new test classes, 20+ new tests
 
 **Tasks:**
+
 1. Create `AuditTrailContractBehaviorIT` (8-10 tests, 4-6 hours)
 2. Create `InvoicePaymentContractBehaviorIT` (10-12 tests, 6-8 hours)
 3. Enhance `PostingRuleContractBehaviorIT` (when implemented, 6-8 hours)
@@ -130,11 +134,12 @@ No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' availa
 
 ### Phase 3: Improve Infrastructure (MEDIUM - 8-12 hours)
 
-**Priority:** 🟡 MEDIUM  
-**Effort:** 8-12 hours  
+**Priority:** 🟡 MEDIUM
+**Effort:** 8-12 hours
 **Deliverables:** Test utilities, coverage reporting
 
 **Tasks:**
+
 1. Extract `TestAuthHelper` utility class
 2. Create `TestDataFactory` for common test entities
 3. Add TestContainers for PostgreSQL
@@ -145,11 +150,12 @@ No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' availa
 
 ### Phase 4: Enhance Scenarios (MEDIUM - 12-16 hours)
 
-**Priority:** 🟡 MEDIUM  
-**Effort:** 12-16 hours  
+**Priority:** 🟡 MEDIUM
+**Effort:** 12-16 hours
 **Deliverables:** 30+ new test scenarios
 
 **Tasks:**
+
 1. Add 5+ concurrency tests
 2. Add 3+ performance tests
 3. Add 10+ negative scenario tests
@@ -159,11 +165,12 @@ No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' availa
 
 ### Phase 5: Documentation (LOW - 4-6 hours)
 
-**Priority:** 🟢 LOW  
-**Effort:** 4-6 hours  
+**Priority:** 🟢 LOW
+**Effort:** 4-6 hours
 **Deliverables:** Updated documentation
 
 **Tasks:**
+
 1. Add test coverage badge to README
 2. Create troubleshooting guide
 3. Document CI/CD integration
@@ -183,31 +190,35 @@ No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' availa
 | **Phase 4** | Weeks 5-6 | 6 weeks | 120+ tests |
 | **Phase 5** | Week 7 | 7 weeks | Complete docs |
 
-**Total Timeline:** 7 weeks  
+**Total Timeline:** 7 weeks
 **Total Effort:** 40-56 hours
 
 ---
 
 ## Test Execution Commands
 
-### Setup Java 21
+### Setup Java 25
+
 ```bash
-export JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64
-export PATH=$JAVA_HOME/bin:$PATH
+sdk install java 25.0.2-tem
+sdk use java 25.0.2-tem
 ```
 
 ### Run All Integration Tests
+
 ```bash
 cd pos-accounting
 ../mvnw test -Dtest="*IT"
 ```
 
 ### Run Specific Test
+
 ```bash
 ../mvnw test -Dtest=APPaymentContractBehaviorIT
 ```
 
 ### Run with Coverage (after JaCoCo setup)
+
 ```bash
 ../mvnw clean test jacoco:report
 open target/site/jacoco/index.html
@@ -234,5 +245,5 @@ open target/site/jacoco/index.html
 
 ---
 
-**Contact:** QA Software Engineer Agent  
+**Contact:** QA Software Engineer Agent
 **Last Updated:** February 12, 2026

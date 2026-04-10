@@ -112,7 +112,7 @@ Content-Type: application/json
 POST /api/audit/cancellation
 Content-Type: application/json
 
- 
+
   "cancellationType": "ORDER_CANCELLED",
   "beforeSnapshot": "{\"total\": 100.00, \"status\": \"CONFIRMED\"}",
   "afterSnapshot": "{\"total\": 0.00, \"status\": \"CANCELLED\"}",
@@ -288,7 +288,7 @@ Default refund policy:
 
 ### Prerequisites
 
-- Java 21
+- Java 25
 - Maven 3.9+ (or use the included Maven wrapper)
 - H2 (embedded) or PostgreSQL
 

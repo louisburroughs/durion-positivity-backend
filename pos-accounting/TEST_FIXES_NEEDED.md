@@ -2,8 +2,8 @@
 
 ## 🔴 URGENT: All Integration Tests Are Currently FAILING
 
-**Status:** 99 tests run, 60 errors, 1 failure (61% failure rate)  
-**Root Cause:** MockMvc bean not available in Spring context  
+**Status:** 99 tests run, 60 errors, 1 failure (61% failure rate)
+**Root Cause:** MockMvc bean not available in Spring context
 **Impact:** Cannot validate any accounting functionality via integration tests
 
 ---
@@ -31,15 +31,15 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 public abstract class BaseIntegrationTest {
-    
+
     @Autowired
     protected WebApplicationContext context;
-    
+
     protected MockMvc mockMvc;
-    
+
     @Autowired
     protected ObjectMapper objectMapper;
-    
+
     @BeforeEach
     void baseSetup() {
         this.mockMvc = MockMvcBuilders
@@ -55,6 +55,7 @@ public abstract class BaseIntegrationTest {
 For **each** of these files, make these changes:
 
 **Files to update:**
+
 - `APPaymentContractBehaviorIT.java`
 - `ContractBehaviorIT.java`
 - `CreditMemoContractBehaviorIT.java`
@@ -70,6 +71,7 @@ For **each** of these files, make these changes:
 **Changes for each file:**
 
 1. **Remove these annotations from the class:**
+
    ```java
    @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
    @ActiveProfiles("test")
@@ -77,20 +79,23 @@ For **each** of these files, make these changes:
    ```
 
 2. **Extend BaseIntegrationTest:**
+
    ```java
    public class APPaymentContractBehaviorIT extends BaseIntegrationTest {
    ```
 
 3. **Remove these fields (already in base class):**
+
    ```java
    @Autowired
    private MockMvc mockMvc;  // ❌ Remove
-   
+
    @Autowired
    private ObjectMapper objectMapper;  // ❌ Remove
    ```
 
 4. **Remove import for @AutoConfigureMockMvc if present:**
+
    ```java
    // ❌ Remove this import:
    import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -120,20 +125,17 @@ Remove the manual MockMvc field (inherited from base).
 
 This test has custom security setup in `@BeforeEach`, so keep it as-is or optionally extend the base class but override `baseSetup()`.
 
-### Step 5: Verify Java 21
+### Step 5: Verify Java 25
 
 ```bash
-export JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64
-export PATH=$JAVA_HOME/bin:$PATH
-java -version  # Should show 21.0.10
+sdk use java 25.0.2-tem
+java -version  # Should show 25.0.2
 ```
 
 ### Step 6: Run Tests
 
 ```bash
 cd pos-accounting
-export JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64
-export PATH=$JAVA_HOME/bin:$PATH
 ../mvnw clean test -Dtest="*IT"
 ```
 
@@ -146,6 +148,7 @@ export PATH=$JAVA_HOME/bin:$PATH
 ### 1. Add Missing Controller Tests (HIGH PRIORITY)
 
 **Missing:**
+
 - ❌ `AuditTrailContractBehaviorIT` - Audit trail is critical for compliance
 - ❌ `InvoicePaymentContractBehaviorIT` - Core accounting functionality
 
@@ -169,36 +172,36 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @DisplayName("Audit Trail Backend Contract Behavioral Tests")
 public class AuditTrailContractBehaviorIT extends BaseIntegrationTest {
-    
+
     @Autowired
     private AuditTrailRepository auditTrailRepository;
-    
+
     private static final String API_V1_AUDIT_TRAIL = "/v1/accounting/audit-trail";
     private static final String TEST_USER = "testuser";
     private static final String TEST_AUTHORITIES = "accounting:audit:view";
-    
+
     @BeforeEach
     void setUp() {
         auditTrailRepository.deleteAll();
     }
-    
+
     @AfterEach
     void tearDown() {
         auditTrailRepository.deleteAll();
     }
-    
+
     private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
         return builder
             .header("X-User", TEST_USER)
             .header("X-Authorities", TEST_AUTHORITIES);
     }
-    
+
     @Test
     @DisplayName("CP-AT-001: List audit trail entries with pagination")
     void testListAuditTrailWithPagination() throws Exception {
         // Arrange: Create test audit entries
         // ...
-        
+
         // Act & Assert
         mockMvc.perform(withAuth(get(API_V1_AUDIT_TRAIL))
             .param("page", "0")
@@ -208,7 +211,7 @@ public class AuditTrailContractBehaviorIT extends BaseIntegrationTest {
             .andExpect(jsonPath("$.content").isArray())
             .andExpect(jsonPath("$.totalElements").value(5));
     }
-    
+
     // Add more tests...
 }
 ```
@@ -240,6 +243,7 @@ Add to `pom.xml`:
 ```
 
 Run with coverage:
+
 ```bash
 ../mvnw clean test jacoco:report
 open target/site/jacoco/index.html
@@ -255,9 +259,9 @@ package com.positivity.accounting.util;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 public class TestAuthHelper {
-    
+
     public static final String DEFAULT_TEST_USER = "testuser";
-    
+
     public static MockHttpServletRequestBuilder withAuth(
         MockHttpServletRequestBuilder builder,
         String... authorities
@@ -266,7 +270,7 @@ public class TestAuthHelper {
             .header("X-User", DEFAULT_TEST_USER)
             .header("X-Authorities", String.join(",", authorities));
     }
-    
+
     public static MockHttpServletRequestBuilder withAuthUser(
         MockHttpServletRequestBuilder builder,
         String user,
@@ -280,10 +284,11 @@ public class TestAuthHelper {
 ```
 
 Then in tests:
+
 ```java
 import static com.positivity.accounting.util.TestAuthHelper.withAuth;
 
-mockMvc.perform(withAuth(post("/v1/accounting/gl-accounts"), 
+mockMvc.perform(withAuth(post("/v1/accounting/gl-accounts"),
     "accounting:coa:create"))
 ```
 
@@ -304,7 +309,7 @@ mockMvc.perform(withAuth(post("/v1/accounting/gl-accounts"),
 - [ ] Updated `contract/MappingKeyContractBehaviorIT.java`
 - [ ] Updated `contract/PostingCategoryContractBehaviorIT.java`
 - [ ] Updated `integration/PaymentApplicationControllerIntegrationTest.java`
-- [ ] Verified Java 21 setup
+- [ ] Verified Java 25 setup
 - [ ] Ran all tests and confirmed they pass
 - [ ] Created `AuditTrailContractBehaviorIT.java` (new)
 - [ ] Created `InvoicePaymentContractBehaviorIT.java` (new)
@@ -318,6 +323,7 @@ mockMvc.perform(withAuth(post("/v1/accounting/gl-accounts"),
 ### Issue: Tests still fail with security errors
 
 **Solution:** Verify `GatewayAuthoritiesFilter` is configured in test profile:
+
 ```yaml
 # src/test/resources/application-test.yml
 spring:
@@ -329,6 +335,7 @@ spring:
 ### Issue: Database connection failures
 
 **Solution:** Add TestContainers for PostgreSQL:
+
 ```xml
 <dependency>
     <groupId>org.testcontainers</groupId>
@@ -338,6 +345,7 @@ spring:
 ```
 
 Then in `BaseIntegrationTest`:
+
 ```java
 @Testcontainers
 public abstract class BaseIntegrationTest {
@@ -352,7 +360,7 @@ public abstract class BaseIntegrationTest {
 ## Questions?
 
 Refer to:
+
 - Full analysis: `INTEGRATION_TEST_COVERAGE_ANALYSIS.md`
 - Contract testing guide: `CONTRACT_TESTING.md`
 - Working example: `integration/AccountingServiceIntegrationTest.java`
-

@@ -10,9 +10,9 @@ modules: ["pos-security-service", "pos-api-gateway"]
 
 ## Product Requirements Document — Compact Permission Bitset Encoding
 
-**Capability ID:** PERM  
-**Module Scope:** `pos-security-service` (token issuance) · `pos-api-gateway` (token enforce)  
-**Platform:** Java 21 · Spring Boot 4.0.3 · Spring Cloud Gateway (WebFlux)  
+**Capability ID:** PERM
+**Module Scope:** `pos-security-service` (token issuance) · `pos-api-gateway` (token enforce)
+**Platform:** Java 25 · Spring Boot 4.0.3 · Spring Cloud Gateway (WebFlux)
 **Priority:** Critical — Security Infrastructure
 
 ---
@@ -350,11 +350,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-001 — Define PermissionCode Enum
 
-**As a** platform security engineer,  
-**I want** a `PermissionCode` enum that maps all 215 current permissions to permanent bit indexes,  
+**As a** platform security engineer,
+**I want** a `PermissionCode` enum that maps all 215 current permissions to permanent bit indexes,
 **so that** the bitset encoding contract is captured in code and enforced at compile time.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - Enum covers all 215 permissions from `scripts/permissions-aggregate.yaml`
 - Each entry: `ENUM_CONSTANT(bitIndex, "domain:resource:action")`
@@ -369,11 +369,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-002 — Add bitIndex to Permission Entity
 
-**As a** platform security engineer,  
-**I want** the `Permission` database entity to record its bit index from `PermissionCode`,  
+**As a** platform security engineer,
+**I want** the `Permission` database entity to record its bit index from `PermissionCode`,
 **so that** the registry can validate catalog completeness and bootstrap initial bitset assignments.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - `Permission.bitIndex` (Integer, nullable, unique when non-null)
 - Flyway migration auto-populates `bit_index` for all existing rows where `name` matches a `PermissionCode`
@@ -386,11 +386,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-003 — Implement PermissionBitsetCodec
 
-**As a** platform security engineer,  
-**I want** a tested codec for encoding and decoding permission bitsets,  
+**As a** platform security engineer,
+**I want** a tested codec for encoding and decoding permission bitsets,
 **so that** the JWT token issuance and gateway decoding are correct and symmetric.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - `encode(Set<PermissionCode>)` → Base64URL without padding
 - `decode(String)` → `BitSet`
@@ -405,11 +405,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-004 — Update JWT Token Generation with perm_bits + perm_ver
 
-**As a** platform security engineer,  
-**I want** the access token to contain `perm_bits` and `perm_ver` instead of role/authority string lists,  
+**As a** platform security engineer,
+**I want** the access token to contain `perm_bits` and `perm_ver` instead of role/authority string lists,
 **so that** tokens are compact and permissions are self-contained in the signed payload.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - `generateTokenPair()` resolves effective permissions via `PermissionRegistryService`
 - Access token includes `perm_bits` (Base64URL), `perm_ver` (integer), `uid` (UUID string), `username`
@@ -424,11 +424,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-005 — Permission Catalog Versioning and Diagnostics
 
-**As a** platform operator,  
-**I want** the security service to expose its catalog version and support permission decoding for debugging,  
+**As a** platform operator,
+**I want** the security service to expose its catalog version and support permission decoding for debugging,
 **so that** I can diagnose authorization issues without needing raw JWT secrets.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - `GET /v1/permissions/catalog-version` returns `{ "version": 1, "permissionCount": 215 }` (no auth required — informational endpoint)
 - `POST /v1/permissions/decode` accepts `{ "perm_bits": "...", "perm_ver": 1 }`, returns `{ "permissions": ["workorder:estimate:approve", ...] }` (requires `security:permission:view` authority)
@@ -441,11 +441,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-006 — Gateway Local JWT Validation
 
-**As a** gateway operator,  
-**I want** the gateway to validate JWTs locally without calling security-service,  
+**As a** gateway operator,
+**I want** the gateway to validate JWTs locally without calling security-service,
 **so that** auth latency is eliminated and the gateway operates independently of security-service availability.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - `SecurityGatewayConfig.authFilter()` validates JWT signature using local HMAC-SHA256 secret
 - No `WebClient` calls to security-service during request processing (bean may remain until PERM-007)
@@ -461,11 +461,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-007 — Gateway Bitset Decode and Authority Mapping
 
-**As a** gateway operator,  
-**I want** the gateway to decode `perm_bits` from validated tokens and produce Spring Security authorities,  
+**As a** gateway operator,
+**I want** the gateway to decode `perm_bits` from validated tokens and produce Spring Security authorities,
 **so that** downstream services receive correct authority strings without security-service involvement.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - Gateway extracts `perm_bits` and `perm_ver` from validated token payload
 - Rejects token if `perm_ver` != gateway's `PermissionCode.CATALOG_VERSION` (returns 401)
@@ -481,11 +481,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-008 — Header Trust Boundary Hardening
 
-**As a** security engineer,  
-**I want** the gateway to strip inbound identity headers and regenerate them from verified token claims only,  
+**As a** security engineer,
+**I want** the gateway to strip inbound identity headers and regenerate them from verified token claims only,
 **so that** downstream services cannot be identity-spoofed by a caller bypassing the gateway.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - `X-User`, `X-User-Id`, `X-Authorities`, `X-Roles` stripped from ALL inbound requests before any processing
 - Strip occurs both on public paths and authenticated paths
@@ -499,11 +499,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-009 — Feature Flags and Rollout Controls
 
-**As a** platform operator,  
-**I want** feature flags to control staged migration from legacy header-trust to bitset-claim-based auth,  
+**As a** platform operator,
+**I want** feature flags to control staged migration from legacy header-trust to bitset-claim-based auth,
 **so that** the rollout can be staged safely and rolled back without code changes.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - Three properties configurable via `application.yml` and environment variables:
   - `auth.token-identity-required` (default: `false`)
@@ -519,11 +519,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-010 — Gateway Auth Observability
 
-**As a** platform operator,  
-**I want** micrometer metrics and structured logs for all auth failure modes,  
+**As a** platform operator,
+**I want** micrometer metrics and structured logs for all auth failure modes,
 **so that** I can detect authorization anomalies and debug failures without inspecting token payloads.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - Five counters registered (see FR-10 table)
 - All counters use tag key `reason` to distinguish failure sub-types
@@ -537,11 +537,11 @@ All auth failures MUST emit a structured log event (Slf4j MDC) at WARN level inc
 
 ### PERM-011 — Security Regression Test Suite
 
-**As a** QA engineer,  
-**I want** a comprehensive test suite covering every specified auth failure and success path,  
+**As a** QA engineer,
+**I want** a comprehensive test suite covering every specified auth failure and success path,
 **so that** no regression can silently re-enable legacy header trust or disable permission enforcement.
 
-**Acceptance criteria:**  
+**Acceptance criteria:**
 
 - Unit tests: bitset encode/decode round-trip for all 215 permissions; catalog version check
 - Integration tests (WebTestClient, mock gateway):

@@ -13,7 +13,7 @@ This document covers development workflows, build configuration, OpenAPI documen
 
 ---
 
-## Java Version Management with SDKMAN!
+## Java Version Management with SDKMAN
 
 This project uses **SDKMAN!** to manage Java versions consistently across development environments.
 
@@ -25,11 +25,12 @@ This project uses **SDKMAN!** to manage Java versions consistently across develo
 
 ### Required Java Version
 
-This project requires **Java 21.0.5-tem** (Eclipse Temurin 21.0.5), as specified in `.sdkmanrc`.
+This project requires **Java 25.0.2-tem** (Eclipse Temurin 25.0.2), as specified in `.sdkmanrc`.
 
 ### Installation & Setup
 
 1. **Install SDKMAN!** (one-time setup):
+
    ```bash
    curl -s "https://get.sdkman.io" | bash
    source "$HOME/.sdkman/bin/sdkman-init.sh"
@@ -37,21 +38,25 @@ This project requires **Java 21.0.5-tem** (Eclipse Temurin 21.0.5), as specified
 
 2. **Enable automatic environment switching**:
    Edit `~/.sdkman/etc/config` and set:
+
    ```properties
    sdkman_auto_env=true
    ```
 
 3. **Install the required Java version**:
+
    ```bash
    cd durion-positivity-backend
    sdk env install
    ```
-   This reads `.sdkmanrc` and installs Java 21.0.5-tem if not already present.
+
+   This reads `.sdkmanrc` and installs Java 25.0.2-tem if not already present.
 
 4. **Verify the version**:
+
    ```bash
    java -version
-   # Should output: openjdk version "21.0.5"
+   # Should output: openjdk version "25.0.2"
    ```
 
 ### Usage
@@ -60,15 +65,16 @@ With `sdkman_auto_env=true`, SDKMAN! automatically switches to the correct Java 
 
 ```bash
 cd durion-positivity-backend
-# SDKMAN! activates Java 21.0.5-tem automatically
+# SDKMAN! activates Java 25.0.2-tem automatically
 
 java -version
-# openjdk version "21.0.5" 2026-10-15
+# openjdk version "25.0.2" 2026-10-15
 ```
 
 ### Manual Switching
 
 If automatic switching is disabled, use:
+
 ```bash
 sdk env
 ```
@@ -76,12 +82,14 @@ sdk env
 ### Troubleshooting
 
 **Problem**: "SDK version not available"
+
 ```bash
 sdk list java           # View available versions
-sdk install java 21.0.5-tem
+sdk install java 25.0.2-tem
 ```
 
 **Problem**: Wrong Java version active
+
 ```bash
 sdk env                 # Force environment switch
 sdk current java        # Check active version
@@ -99,7 +107,7 @@ All dependency versions are centralized in the root `pom.xml`:
 
 ```xml
 <properties>
-    <java.version>21</java.version>
+    <java.version>25</java.version>
     <spring-cloud.version>2025.1.1</spring-cloud.version>
     <junit5.version>5.10.1</junit5.version>
     <mockito.version>5.8.0</mockito.version>
@@ -332,7 +340,7 @@ public record EventEmitted(
 ```java
 @Service
 public class OrderService {
-    
+
     @EmitEvent(id = "ORDER_CREATE", apiVersion = "1")
     public Order createOrder(OrderRequest request) {
         // Business logic
@@ -346,7 +354,7 @@ public class OrderService {
 ```java
 @Component
 public class OrderEventListener {
-    
+
     @EventListener
     public void handleOrderEvent(EventEmitted event) {
         log.info("Event received: {} at {}", event.eventId(), event.publishedAt());
@@ -390,6 +398,7 @@ The library uses Spring Boot auto-configuration — no manual setup required. Co
 ### Current State
 
 **Completed (Phase 1-2):**
+
 - ✅ Spring Boot: 3.4.2 → 4.0.1
 - ✅ Spring Cloud: 2024.0.0 → 2025.1.1
 - ✅ RestTemplate → RestClient migration (15 files, 8 modules)
@@ -399,12 +408,14 @@ The library uses Spring Boot auto-configuration — no manual setup required. Co
 - ✅ Test infrastructure updated
 
 **Deferred (Future Work):**
+
 - ⏳ Jackson 3.0 code migration (tools.jackson.* group ID)
 - ⏳ Spring Security 7.0 refactoring
 
 ### Critical Version Enforcement
 
 **Required Versions:**
+
 - Spring Boot: 4.0.1
 - Spring Cloud: 2025.1.1 (minimum)
 - Java: 21 LTS
