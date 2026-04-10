@@ -5,6 +5,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
+import java.util.List;
 
 @ConfigurationProperties(prefix = "mcp.server")
 public record McpServerProperties(
@@ -12,7 +13,9 @@ public record McpServerProperties(
         @NonNull String messageEndpoint,
         @NonNull String sseEndpoint,
         @NonNull String openApiPath,
-        Duration discoveryTimeout
+        Duration discoveryTimeout,
+        @NonNull List<String> includedServices,
+        @NonNull List<String> includedPathPrefixes
 ) {
     public McpServerProperties {
         if (baseUrl == null) {
@@ -30,5 +33,27 @@ public record McpServerProperties(
         if (discoveryTimeout == null) {
             discoveryTimeout = Duration.ofSeconds(5);
         }
+        if (includedServices == null) {
+            includedServices = List.of();
+        }
+        if (includedPathPrefixes == null) {
+            includedPathPrefixes = List.of();
+        }
+    }
+
+    public boolean includesService(@NonNull String serviceId) {
+        if (includedServices.isEmpty()) {
+            return true;
+        }
+        return includedServices.stream()
+                .anyMatch(candidate -> candidate.equalsIgnoreCase(serviceId));
+    }
+
+    public boolean includesPath(@NonNull String path) {
+        if (includedPathPrefixes.isEmpty()) {
+            return true;
+        }
+        return includedPathPrefixes.stream()
+                .anyMatch(path::startsWith);
     }
 }

@@ -13,6 +13,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
@@ -25,9 +26,12 @@ public class OpenApiToolMapper {
 
     private static final String OBJECT = "object";
     private static final String DESCRIPTION = "description";
+    private final McpServerProperties properties;
     private final OperationProxyFactory proxyFactory;
 
-    public OpenApiToolMapper(@NonNull OperationProxyFactory proxyFactory) {
+    public OpenApiToolMapper(@NonNull McpServerProperties properties,
+            @NonNull OperationProxyFactory proxyFactory) {
+        this.properties = properties;
         this.proxyFactory = proxyFactory;
     }
 
@@ -41,6 +45,9 @@ public class OpenApiToolMapper {
         }
 
         openApi.getPaths().forEach((path, pathItem) -> {
+            if (!properties.includesPath(path)) {
+                return;
+            }
             addOperation(specs, serviceId, baseUri, path, pathItem.getGet(), HttpMethod.GET);
             addOperation(specs, serviceId, baseUri, path, pathItem.getPost(), HttpMethod.POST);
             addOperation(specs, serviceId, baseUri, path, pathItem.getPut(), HttpMethod.PUT);

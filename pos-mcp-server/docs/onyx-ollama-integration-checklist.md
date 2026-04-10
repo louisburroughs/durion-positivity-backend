@@ -17,21 +17,153 @@ Reference sample compose file:
 
 ## Important note
 
-The exact Onyx container image name, environment variables, and MCP connector configuration must be confirmed against the specific Onyx version you deploy.
+The official Onyx local Docker docs use an install-script flow rather than asking you to hand-write an Onyx image block in this backend repo.
 
-This checklist and compose file are intentionally opinionated templates, not a guarantee of Onyx-specific key names.
+The current documented flow includes:
 
-Recommended local startup command:
+- `onyx/deployment/docker_compose`
+- `./install.sh`
+- generated deployment files under `onyx_data/deployment`
+- generated runtime env at `onyx_data/deployment/.env`
+- generated main compose file at `onyx_data/deployment/docker-compose.yml`
+- `docker compose up -d` from that generated deployment directory
+
+Recommended local startup commands:
 
 ```bash
 ./mvnw -pl pos-mcp-server -am package -DskipTests
 docker compose -f docker-compose.yml -f docker-compose.onyx.yml up -d
 ```
 
+Then follow the official Onyx Docker steps from the Onyx repo/docs to install and run Onyx itself.
+
 Current caveats:
 
 - `pos-mcp-server` is now built locally by the root override, so the module jar must exist in `pos-mcp-server/target/` before `docker compose up`.
-- The exact Onyx image name and environment variables still need to be confirmed for your chosen Onyx version.
+- the official Onyx deployment must still be configured to reach the MCP server and Ollama endpoints exposed by the backend companion stack
+
+## Recommended operating model
+
+Use two separate runtimes:
+
+- this backend repo runs the companion services:
+  - `pos-mcp-server`
+  - `ollama`
+- the official Onyx deployment runs from its generated `onyx_data/deployment` directory
+
+That means:
+
+- keep backend companion wiring in this repo
+- keep Onyx platform settings in `onyx_data/deployment/.env`
+- finish model and tool integration through the local Onyx UI after startup
+
+This is the practical sequence:
+
+1. build and start the backend companion stack
+2. install and start Onyx from `onyx_data/deployment`
+3. open the local Onyx instance in the browser
+4. log in with the local admin/basic auth flow
+5. configure Ollama and MCP connectivity in Onyx
+6. validate one low-risk tool call end to end
+
+## Bring-up sequence
+
+### Step 1: Build and start backend companion services
+
+From the backend repo:
+
+```bash
+./mvnw -pl pos-mcp-server -am package -DskipTests
+docker compose -f docker-compose.yml -f docker-compose.onyx.yml up -d
+```
+
+Confirm the companion endpoints:
+
+- `pos-mcp-server` health at `http://localhost:8094/actuator/health`
+- `ollama` API at `http://localhost:11434/api/tags`
+
+If Ollama is empty, pull the model you want before moving on.
+
+Example:
+
+```bash
+docker exec -it ollama ollama pull llama3.1:8b
+```
+
+### Step 2: Install and start the official Onyx deployment
+
+Follow the official Onyx Docker instructions from the Onyx repo or docs.
+
+The important file locations after install are:
+
+- `onyx_data/deployment/.env`
+- `onyx_data/deployment/docker-compose.yml`
+
+Start Onyx from that generated deployment directory:
+
+```bash
+cd onyx_data/deployment
+docker compose up -d
+```
+
+### Step 3: Log into the local Onyx instance
+
+After startup:
+
+- open the local Onyx URL in the browser
+- log in using the local auth flow configured by the generated Onyx deployment
+- complete any first-run admin or user setup required by the local instance
+
+This is where I would expect most application-level configuration to happen.
+
+### Step 4: Configure Ollama inside Onyx
+
+In the local Onyx admin or model settings:
+
+- choose the Ollama provider if supported by the installed Onyx version
+- point it at the reachable Ollama endpoint
+- use a model name that exactly matches what Ollama has pulled
+
+Typical local endpoint choices:
+
+- `http://host.docker.internal:11434` if Onyx runs in a separate Docker stack and needs to reach the host-mapped port
+- another Docker-reachable address if both stacks share a network by design
+
+Validation target:
+
+- Onyx can complete a simple test prompt using the configured Ollama model
+
+### Step 5: Configure MCP access inside Onyx
+
+In the local Onyx MCP, tools, or connector configuration area:
+
+- add the Durion MCP server
+- point it at the reachable `pos-mcp-server` endpoint
+- use the transport expected by the installed Onyx version
+
+Typical local endpoint:
+
+- `http://host.docker.internal:8094`
+
+If the selected Onyx version expects a specific MCP path such as SSE, use the exact reachable MCP endpoint exposed by `pos-mcp-server`.
+
+Validation target:
+
+- Onyx can discover the Durion tool set from `pos-mcp-server`
+- tool names and schemas render correctly
+
+### Step 6: Run one small end-to-end test
+
+Use one safe, read-only tool first.
+
+Recommended first test:
+
+1. ask a question that should use a simple lookup tool
+2. confirm Onyx selects the tool
+3. confirm `pos-mcp-server` receives the request
+4. confirm a valid response returns to the Onyx UI
+
+Do not start with broad write-capable tools.
 
 ## Phase 1: Confirm integration surface
 
@@ -39,15 +171,15 @@ Current caveats:
 - Verify whether Onyx supports MCP over SSE using `pos-mcp-server` endpoints.
 - Verify how Onyx authenticates to MCP servers, if authentication is required.
 - Verify how Onyx expects tool server metadata to be registered.
-- Verify whether Ollama configuration is direct environment-based or stored through Onyx admin setup.
+- Verify how the official Onyx Docker deployment configures Ollama and MCP server connectivity.
 
 Exit criteria:
 
-- You know the exact Onyx image tag to use.
-- You know the exact Onyx config keys for Ollama and MCP server registration.
+- You know exactly where to set Onyx MCP and Ollama settings in the official deployment.
 
 ## Phase 2: Stand up local dependencies
 
+- Follow the official Onyx install flow from its docs and generated deployment directory.
 - Start `ollama`.
 - Pull the target chat model, such as `llama3.1:8b`.
 - Pull the target embedding model if Onyx uses one, such as `nomic-embed-text`.
@@ -57,8 +189,8 @@ Exit criteria:
 
 Validation:
 
-- `curl http://localhost:8086/actuator/health`
-- verify the SSE endpoint resolves at `http://localhost:8086/mcp/sse`
+- `curl http://localhost:8094/actuator/health`
+- verify the MCP endpoint using the reachable host-mapped address exposed by your local stack
 
 ## Phase 3: Verify Ollama connectivity
 
@@ -75,7 +207,7 @@ Validation:
 ## Phase 4: Register pos-mcp-server with Onyx
 
 - Configure Onyx to connect to `pos-mcp-server`.
-- Use the internal container hostname when running on the same Docker network.
+- Use whichever address is reachable from the official Onyx deployment, for example a host-mapped port if the stacks run separately.
 - Confirm Onyx can list tools from the MCP server.
 - Confirm tool schemas render correctly inside Onyx.
 
@@ -132,11 +264,12 @@ Validation:
 
 ## Suggested first acceptance test
 
-1. Start the stack with the sample compose file adapted to your Onyx version.
-2. Ask Onyx a question that should trigger a safe read-only MCP tool.
-3. Confirm the tool is invoked through `pos-mcp-server`.
-4. Confirm the response returned to the user includes tool-derived data.
-5. Confirm the request is visible in logs and trace metadata.
+1. Start the backend companion stack from this repo.
+2. Start the official Onyx deployment from `onyx_data/deployment`.
+3. Log into the local Onyx UI.
+4. Configure Ollama in Onyx and validate a plain model response.
+5. Configure `pos-mcp-server` in Onyx and validate one safe read-only tool.
+6. Confirm the request is visible in logs and trace metadata.
 
 ## Suggested follow-up decisions
 
@@ -148,7 +281,7 @@ Validation:
 
 My recommendation is to make the first milestone boring on purpose:
 
-- one Onyx image version
+- one official Onyx deployment version
 - one Ollama chat model
 - one embedding model only if Onyx actually requires it immediately
 - three to five low-risk MCP tools

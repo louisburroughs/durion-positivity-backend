@@ -10,11 +10,7 @@ spring:
     properties:
       hibernate:
         jdbc:
-          time_zone: UTC
-  h2:
-    console:
-      enabled: false
-
+          "[time_zone]": UTC
 eureka:
   client:
     enabled: false

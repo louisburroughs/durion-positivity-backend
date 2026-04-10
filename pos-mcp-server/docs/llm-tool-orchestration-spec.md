@@ -22,6 +22,7 @@ This specification complements, and does not replace, [tool-registry-implementat
 - Onyx is the LLM-facing orchestration layer.
 - Ollama is the model-serving layer.
 - `pos-mcp-server` is the tool-serving layer.
+- Onyx should be deployed using its official Docker Compose flow rather than a hand-authored image definition in this backend repo.
 
 ### Responsibilities
 
@@ -151,7 +152,7 @@ Under the Onyx architecture, the registry has three viable roles:
 
 The minimum deployment shape should include:
 
-- an Onyx container
+- an official Onyx Docker deployment
 - an Ollama container or host-level Ollama runtime
 - a reachable `pos-mcp-server` endpoint
 - environment-driven configuration for model selection and MCP connectivity
@@ -159,27 +160,15 @@ The minimum deployment shape should include:
 Illustrative shape:
 
 ```yaml
-services:
-  onyx:
-    image: <onyx-image>
-    ports:
-      - "3000:3000"
-    environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      MCP_SERVER_URL: http://pos-mcp-server:8086
+backend companion stack:
+  - pos-mcp-server
+  - ollama
 
-  ollama:
-    image: ollama/ollama
-    ports:
-      - "11434:11434"
-
-  pos-mcp-server:
-    image: <durion-pos-mcp-server-image>
-    ports:
-      - "8086:8086"
+onyx official stack:
+  - provisioned via Onyx install script and generated compose files
 ```
 
-This is illustrative only. The real Onyx configuration contract should be confirmed against the version we deploy.
+The current Onyx docs indicate a flow centered on `onyx/deployment/docker_compose/install.sh`, followed by startup from `onyx_data/deployment`. We should align to that flow rather than maintaining a parallel Onyx container definition here.
 
 ## Security requirements
 

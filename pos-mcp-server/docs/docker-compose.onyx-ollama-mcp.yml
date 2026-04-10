@@ -1,23 +1,4 @@
 services:
-  onyx:
-    image: onyxdotapp/onyx:latest
-    container_name: onyx
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      ONYX_OLLAMA_BASE_URL: http://ollama:11434
-      ONYX_MCP_SERVER_URL: http://pos-mcp-server:8086
-      ONYX_MCP_SSE_PATH: /mcp/sse
-      ONYX_MCP_MESSAGE_PATH: /mcp/message
-      ONYX_DEFAULT_MODEL: llama3.1:8b
-      ONYX_DEFAULT_EMBEDDING_MODEL: nomic-embed-text
-    depends_on:
-      - ollama
-      - pos-mcp-server
-    networks:
-      - onyx-mcp
-
   ollama:
     image: ollama/ollama:latest
     container_name: ollama

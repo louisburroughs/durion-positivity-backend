@@ -14,11 +14,7 @@ spring:
     properties:
       hibernate:
         jdbc:
-          time_zone: UTC
-  h2:
-    console:
-      enabled: false
-
+          "[time_zone]": UTC
 mcp:
   server:
     base-url: http://localhost:${server.port}
@@ -26,6 +22,10 @@ mcp:
     sse-endpoint: /mcp/sse
     open-api-path: /v3/api-docs
     discovery-timeout: 5s
+    included-services:
+      - event-receiver
+    included-path-prefixes:
+      - /v1/events/summary
 
 server:
   port: 8086

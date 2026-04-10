@@ -15,8 +15,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 @Service
 public class EmitEventServiceImpl implements EmitEventService {
-    private static final Pattern EVENT_ID_PATTERN = Pattern.compile("^[A-Z0-9_]+$");
-    private static final Pattern API_VERSION_PATTERN = Pattern.compile("^[0-9]+$");
+    private static final Pattern EVENT_ID_PATTERN = Pattern.compile("^[A-Z\\d_]+$");
+    private static final Pattern API_VERSION_PATTERN = Pattern.compile("^\\d+$");
 
     private final EventDao eventDao;
 
