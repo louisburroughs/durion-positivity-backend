@@ -258,7 +258,7 @@
 		<spring-cloud.version>2025.1.1</spring-cloud.version>
 		<archunit.version>1.4.1</archunit.version>
 		<postgresql.version>42.7.9</postgresql.version>
-		<tomcat.version>10.1.28</tomcat.version>
+		<tomcat.version>10.1.52</tomcat.version>
 		<!-- Test Dependencies - JUnit managed by Spring Boot -->
 		<mockito.version>5.9.0</mockito.version>
 		<assertj.version>3.27.7</assertj.version>
