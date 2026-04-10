@@ -106,7 +106,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 workorderRepository.findById(workorderId).orElseThrow();
 
                 // Count total workorder items (labor + parts)
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
@@ -173,7 +173,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 UUID workorderId = UUID.fromString(workorderIdStr);
 
                 // Then: Verify all items were copied
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
@@ -231,7 +231,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 UUID workorderId = UUID.fromString(workorderIdStr);
 
                 // Then: Verify financial snapshot matches approved items only
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
@@ -239,7 +239,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
 
                 // Verify each workorder item corresponds to an approved estimate item
-                for (com.positivity.workorder.internal.entity.WorkorderService laborItem : laborItems) {
+                for (com.positivity.workorder.internal.entity.WorkorderServiceLine laborItem : laborItems) {
                         EstimateItem sourceItem = approvedItems.stream()
                                         .filter(ei -> ei.getId().equals(laborItem.getOriginEstimateItemId()))
                                         .findFirst()
@@ -291,14 +291,14 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 UUID workorderId = UUID.fromString(workorderIdStr);
 
                 // Then: Verify all workorder items trace back to approved estimate items only
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
 
                 List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
 
-                for (com.positivity.workorder.internal.entity.WorkorderService laborItem : laborItems) {
+                for (com.positivity.workorder.internal.entity.WorkorderServiceLine laborItem : laborItems) {
                         assertThat(approvedItemIds).contains(laborItem.getOriginEstimateItemId());
                 }
 

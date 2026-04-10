@@ -5,7 +5,7 @@ import java.time.Clock;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
-import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
@@ -170,7 +170,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                 .longValue();
                 LocalDateTime startTime = endTime.minusSeconds(secondsWorked);
 
-                WorkorderService workorderService = resolveOrCreateWorkorderService(
+                WorkorderServiceLine workorderService = resolveOrCreateWorkorderService(
                                 workorder,
                                 null,
                                 request.technicianId());
@@ -254,7 +254,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                                         "Mechanic already has an active timer");
                 }
 
-                WorkorderService workorderService = resolveOrCreateWorkorderService(
+                WorkorderServiceLine workorderService = resolveOrCreateWorkorderService(
                                 workorder,
                                 request.workorderItemId(),
                                 mechanicId);
@@ -337,12 +337,12 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
         }
 
         @NonNull
-        private WorkorderService resolveOrCreateWorkorderService(
+        private WorkorderServiceLine resolveOrCreateWorkorderService(
                         @NonNull Workorder workorder,
                         @Nullable UUID requestedWorkorderItemId,
                         @Nullable UUID technicianId) {
                 if (requestedWorkorderItemId != null) {
-                        WorkorderService service = workorderServiceRepository.findById(requestedWorkorderItemId)
+                        WorkorderServiceLine service = workorderServiceRepository.findById(requestedWorkorderItemId)
                                         .orElseThrow(() -> new NoSuchElementException(
                                                         "Workorder service not found: " + requestedWorkorderItemId));
                         if (service.getWorkOrder() != null
@@ -356,7 +356,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
 
                 return workorderServiceRepository.findByWorkOrder_Id(workorder.getId()).stream()
                                 .findFirst()
-                                .orElseGet(() -> workorderServiceRepository.save(WorkorderService.builder()
+                                .orElseGet(() -> workorderServiceRepository.save(WorkorderServiceLine.builder()
                                                 .workOrder(workorder)
                                                 .serviceEntityId(UUID.nameUUIDFromBytes(
                                                                 ("workexec-auto-service:" + workorder.getId())

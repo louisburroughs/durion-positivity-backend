@@ -152,7 +152,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     private Optional<Workorder> getExistingIdempotentWorkorder(String idempotencyKey) {
         Optional<UUID> existingWorkorderId = idempotencyService
-            .getExistingWorkorderId(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey);
+                .getExistingWorkorderId(IDEMPOTENCY_OPERATION_WORKORDER_CREATE, idempotencyKey);
         if (existingWorkorderId.isPresent()) {
             log.info("Idempotent request detected for key {}; returning existing workorder {}",
                     idempotencyKey, existingWorkorderId.get());
@@ -258,13 +258,13 @@ public class WorkorderServiceImpl implements WorkorderService {
         log.info("Found {} approved estimate items to copy to workorder {}",
                 estimateItems.size(), workorder.getId());
 
-        List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = new ArrayList<>();
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = new ArrayList<>();
         List<WorkorderPart> partItems = new ArrayList<>();
 
         for (EstimateItem estimateItem : estimateItems) {
             if (estimateItem.getItemType() == EstimateItemType.LABOR) {
-                // Create WorkorderService for LABOR items
-                com.positivity.workorder.internal.entity.WorkorderService workorderService = com.positivity.workorder.internal.entity.WorkorderService
+                // Create WorkorderServiceLine for LABOR items
+                com.positivity.workorder.internal.entity.WorkorderServiceLine workorderService = com.positivity.workorder.internal.entity.WorkorderServiceLine
                         .builder()
                         .workOrder(workorder)
                         .description(estimateItem.getDescription())

@@ -111,7 +111,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         // Create associated work order services
         if (dto.getServices() != null) {
             for (CreateChangeRequestDTO.WorkorderItemDTO serviceDto : dto.getServices()) {
-                com.positivity.workorder.internal.entity.WorkorderService service = createWorkorderServiceEntity(
+                com.positivity.workorder.internal.entity.WorkorderServiceLine service = createWorkorderServiceEntity(
                         workOrder, changeRequest, serviceDto);
                 workOrderServiceRepository.save(service);
             }
@@ -191,8 +191,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 // committed, so the change request should be visible with READ_COMMITTED
                 // isolation.
                 Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(
-                    IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE,
-                    idempotencyKey);
+                        IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE,
+                        idempotencyKey);
                 if (existingChangeRequestId.isPresent()) {
                     log.warn(
                             "Race condition detected: idempotency key {} already registered for change request {}, returning existing change request",
@@ -376,9 +376,9 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         }
 
         // Mark all emergency items as acknowledged
-        List<com.positivity.workorder.internal.entity.WorkorderService> services = workOrderServiceRepository
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services = workOrderServiceRepository
                 .findByChangeRequest_Id(changeRequestId);
-        for (com.positivity.workorder.internal.entity.WorkorderService service : services) {
+        for (com.positivity.workorder.internal.entity.WorkorderServiceLine service : services) {
             if (Boolean.TRUE.equals(service.getIsEmergencySafety())) {
                 service.setCustomerDenialAcknowledged(true);
                 workOrderServiceRepository.save(service);
@@ -420,7 +420,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     }
 
     private boolean hasUnacknowledgedEmergencyServices(UUID changeRequestId) {
-        List<com.positivity.workorder.internal.entity.WorkorderService> services = workOrderServiceRepository
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services = workOrderServiceRepository
                 .findByChangeRequest_Id(changeRequestId);
         return services.stream()
                 .anyMatch(service -> Boolean.TRUE.equals(service.getIsEmergencySafety())
@@ -517,10 +517,10 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         }
     }
 
-    private com.positivity.workorder.internal.entity.WorkorderService createWorkorderServiceEntity(
+    private com.positivity.workorder.internal.entity.WorkorderServiceLine createWorkorderServiceEntity(
             Workorder workOrder, ChangeRequest changeRequest,
             CreateChangeRequestDTO.WorkorderItemDTO dto) {
-        return com.positivity.workorder.internal.entity.WorkorderService.builder()
+        return com.positivity.workorder.internal.entity.WorkorderServiceLine.builder()
                 .workOrder(workOrder)
                 .serviceEntityId(dto.getServiceEntityId())
                 .status(WorkorderItemStatus.PENDING_APPROVAL)
@@ -551,9 +551,9 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
     private void updateItemsStatus(UUID changeRequestId, WorkorderItemStatus newStatus) {
         // Update services
-        List<com.positivity.workorder.internal.entity.WorkorderService> services = workOrderServiceRepository
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services = workOrderServiceRepository
                 .findByChangeRequest_Id(changeRequestId);
-        for (com.positivity.workorder.internal.entity.WorkorderService service : services) {
+        for (com.positivity.workorder.internal.entity.WorkorderServiceLine service : services) {
             service.setStatus(newStatus);
             workOrderServiceRepository.save(service);
         }

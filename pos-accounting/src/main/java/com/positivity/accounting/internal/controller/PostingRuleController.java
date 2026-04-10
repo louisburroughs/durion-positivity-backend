@@ -63,7 +63,7 @@ public class PostingRuleController {
                         @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Sort field") @NotBlank @RequestParam(defaultValue = "createdAt") String sort) {
-                log.info("List posting rule sets - page={}, size={}", page, size);
+                log.info("List posting rule sets");
                 PostingRuleSetListResponse response = postingRuleService.listRuleSetsAsResponse(page, size, sort);
                 return ResponseEntity.ok(response);
         }
@@ -147,7 +147,7 @@ public class PostingRuleController {
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
                         @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "10") int size) {
-                log.info("List posting rule versions - ruleSetId={}, page={}, size={}", postingRuleSetId, page, size);
+                log.info("List posting rule versions");
                 List<PostingRuleVersionResponse> responses = postingRuleService
                                 .listVersionsAsResponse(postingRuleSetId, page, size);
                 return ResponseEntity.ok(responses);

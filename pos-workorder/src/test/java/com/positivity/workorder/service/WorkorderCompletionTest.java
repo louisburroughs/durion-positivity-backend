@@ -334,8 +334,8 @@ class WorkorderCompletionTest {
     }
 
     private void stubCompletionPreconditionsPass() {
-        com.positivity.workorder.internal.entity.WorkorderService billableService = mock(
-                com.positivity.workorder.internal.entity.WorkorderService.class);
+        com.positivity.workorder.internal.entity.WorkorderServiceLine billableService = mock(
+                com.positivity.workorder.internal.entity.WorkorderServiceLine.class);
         when(billableService.getStatus()).thenReturn(WorkorderItemStatus.COMPLETED);
         when(billableService.getLineTotal()).thenReturn(BigDecimal.TEN);
 

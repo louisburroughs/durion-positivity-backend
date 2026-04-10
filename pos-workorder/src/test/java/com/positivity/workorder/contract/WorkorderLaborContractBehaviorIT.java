@@ -30,7 +30,7 @@ import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
-import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
@@ -383,7 +383,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 workorder = workorderRepository.save(workorder);
 
                 // Add service line to workorder
-                WorkorderService service = WorkorderService.builder()
+                WorkorderServiceLine service = WorkorderServiceLine.builder()
                                 .workOrder(workorder)
                                 .description("Brake pad replacement")
                                 .quantity(BigDecimal.valueOf(2.0))
@@ -418,7 +418,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Create active labor entry (started 1 hour ago)
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderService(new WorkorderService(serviceId))
+                                .workorderService(new WorkorderServiceLine(serviceId))
                                 .technicianId(testTechnicianId)
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(1))
                                 .hoursWorked(BigDecimal.ZERO)
@@ -444,7 +444,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Create stopped labor entry (2 hours duration)
                 WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderService(new WorkorderService(serviceId))
+                                .workorderService(new WorkorderServiceLine(serviceId))
                                 .technicianId(testTechnicianId)
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusHours(3))
                                 .endTime(LocalDateTime.now(TEST_CLOCK).minusHours(1))
@@ -471,7 +471,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Create first entry (older)
                 WorkorderLaborEntry entry1 = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderService(new WorkorderService(serviceId))
+                                .workorderService(new WorkorderServiceLine(serviceId))
                                 .technicianId(testTechnicianId)
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusDays(2))
                                 .endTime(LocalDateTime.now(TEST_CLOCK).minusDays(2).plusHours(2))
@@ -485,7 +485,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 // Create second entry (newer)
                 WorkorderLaborEntry entry2 = WorkorderLaborEntry.builder()
                                 .workorder(workorder)
-                                .workorderService(new WorkorderService(serviceId))
+                                .workorderService(new WorkorderServiceLine(serviceId))
                                 .technicianId(testTechnicianId)
                                 .startTime(LocalDateTime.now(TEST_CLOCK).minusDays(1))
                                 .endTime(LocalDateTime.now(TEST_CLOCK).minusDays(1).plusHours(3))

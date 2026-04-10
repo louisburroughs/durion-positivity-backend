@@ -48,7 +48,7 @@ public class WorkorderPart {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "work_order_service_id", nullable = true) // Allow standalone parts not tied to a service
-    private WorkorderService workOrderService;
+    private WorkorderServiceLine workOrderService;
 
     // CAP:004 Story #27 - Add direct workorder reference for standalone parts
     @ManyToOne(fetch = FetchType.LAZY)
