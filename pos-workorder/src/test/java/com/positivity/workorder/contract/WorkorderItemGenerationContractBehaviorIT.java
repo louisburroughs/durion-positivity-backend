@@ -115,7 +115,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 assertThat(workorder.getEstimateId()).isEqualTo(estimateId);
 
                 // Verify labor items (WorkorderService entities)
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
@@ -126,7 +126,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 assertThat(partItems).hasSize(1);
 
                 // Verify financial snapshot for first labor item
-                com.positivity.workorder.internal.entity.WorkorderService laborItem1 = laborItems.get(0);
+                com.positivity.workorder.internal.entity.WorkorderServiceLine laborItem1 = laborItems.get(0);
                 EstimateItem sourceLabor = estimateItems.stream()
                                 .filter(ei -> ei.getId().equals(laborItem1.getOriginEstimateItemId()))
                                 .findFirst()
@@ -175,13 +175,13 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 UUID workorderId = UUID.fromString(workorderIdStr);
 
                 // Then: Verify snapshot fields are exact copies
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
 
                 assertThat(laborItems).hasSize(1);
-                com.positivity.workorder.internal.entity.WorkorderService workorderItem = laborItems.get(0);
+                com.positivity.workorder.internal.entity.WorkorderServiceLine workorderItem = laborItems.get(0);
 
                 // All financial fields must match exactly
                 assertThat(workorderItem.getQuantity()).isEqualByComparingTo(originalItem.getQuantity());
@@ -213,7 +213,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 UUID workorderId = UUID.fromString(workorderIdStr);
 
                 // Then: Verify all workorder items have valid originEstimateItemId
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
@@ -221,7 +221,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
 
                 // Verify each labor item traces back to an estimate item
-                for (com.positivity.workorder.internal.entity.WorkorderService laborItem : laborItems) {
+                for (com.positivity.workorder.internal.entity.WorkorderServiceLine laborItem : laborItems) {
                         assertThat(laborItem.getOriginEstimateItemId()).isNotNull();
                         EstimateItem source = estimateItems.stream()
                                         .filter(ei -> ei.getId().equals(laborItem.getOriginEstimateItemId()))
@@ -259,7 +259,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 UUID workorderId = UUID.fromString(workorderIdStr);
 
                 // Then: Verify all items have initial status OPEN (equivalent to Authorized)
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
@@ -319,7 +319,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 // scenario
                 assertThat(nonApprovedCount).isGreaterThan(0);
 
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
@@ -362,7 +362,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 UUID workorderId = UUID.fromString(workorderIdStr);
 
                 // Count total workorder items (labor + parts)
-                List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems = workorderServiceRepository
                                 .findAll().stream()
                                 .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
                                 .toList();
@@ -374,7 +374,7 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
                 // Verify each workorder item traces back to an APPROVED estimate item
                 List<UUID> approvedItemIds = approvedItems.stream().map(EstimateItem::getId).toList();
-                for (com.positivity.workorder.internal.entity.WorkorderService laborItem : laborItems) {
+                for (com.positivity.workorder.internal.entity.WorkorderServiceLine laborItem : laborItems) {
                         assertThat(approvedItemIds).contains(laborItem.getOriginEstimateItemId());
                 }
                 for (WorkorderPart partItem : partItems) {

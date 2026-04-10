@@ -27,7 +27,7 @@ import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
-import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.entity.WorkorderSnapshot;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
@@ -309,7 +309,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         private void seedServiceItem(UUID workorderId, WorkorderItemStatus status, BigDecimal lineTotal) {
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
-                WorkorderService service = WorkorderService.builder()
+                WorkorderServiceLine service = WorkorderServiceLine.builder()
                                 .workOrder(workorder)
                                 .serviceEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .description("Service line for completion contract test")

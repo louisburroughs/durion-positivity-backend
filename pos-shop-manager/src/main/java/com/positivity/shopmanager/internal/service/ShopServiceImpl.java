@@ -36,7 +36,7 @@ public class ShopServiceImpl implements ShopService {
 
     @Override
     public ServiceEntityDTO getShopServiceDetails(UUID locationId, UUID shopServiceId) {
-        com.positivity.shopmanager.internal.entity.ShopService shopService = shopServiceRepository
+        com.positivity.shopmanager.internal.entity.ShopServiceEntry shopService = shopServiceRepository
                 .findByIdAndShopId(shopServiceId, locationId).orElseThrow();
         if (shopService.getServiceEntityId() == null)
             return null;

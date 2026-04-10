@@ -31,7 +31,7 @@ import java.util.UUID;
  * Represents a labor entry tracking work performed on a workorder service item.
  * Immutable once created, except for endTime and hoursWorked when stopping a
  * session.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #159 - Record Labor Performed
  */
@@ -64,7 +64,7 @@ public class WorkorderLaborEntry {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "workorder_service_id", nullable = false, updatable = false)
     @ToString.Exclude
-    private WorkorderService workorderService;
+    private WorkorderServiceLine workorderService;
 
     @jakarta.persistence.Transient
     public UUID getWorkorderServiceId() {
@@ -73,7 +73,7 @@ public class WorkorderLaborEntry {
 
     @jakarta.persistence.Transient
     public void setWorkorderServiceId(UUID workorderServiceId) {
-        this.workorderService = new WorkorderService(workorderServiceId);
+        this.workorderService = new WorkorderServiceLine(workorderServiceId);
     }
 
     @NonNull
@@ -122,7 +122,7 @@ public class WorkorderLaborEntry {
 
     /**
      * Stop this labor session and calculate hours worked.
-     * 
+     *
      * @param stopTime the time the session ended
      */
     public void stop(@NonNull LocalDateTime stopTime) {
@@ -138,7 +138,7 @@ public class WorkorderLaborEntry {
 
     /**
      * Manually adjust hours worked with a reason.
-     * 
+     *
      * @param hours  the new hours worked value
      * @param reason the reason for adjustment
      */

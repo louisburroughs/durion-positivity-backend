@@ -29,7 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Implementation of WorkorderDetailService for role-based visibility.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #155 - Role-Based Visibility
  */
@@ -132,7 +132,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
         }
 
         private List<WorkorderServiceResponse> buildServiceResponses(
-                        List<com.positivity.workorder.internal.entity.WorkorderService> services,
+                        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services,
                         boolean includeFinancials) {
 
                 if (services == null || services.isEmpty()) {
@@ -172,7 +172,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
         }
 
         private List<WorkorderPartResponse> buildPartResponses(
-                        List<com.positivity.workorder.internal.entity.WorkorderService> services,
+                        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services,
                         boolean includeFinancials) {
 
                 if (services == null || services.isEmpty()) {

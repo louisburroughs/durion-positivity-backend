@@ -44,7 +44,7 @@ public class Shop {
     private List<Technician> technicians;
 
     @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ShopService> services;
+    private List<ShopServiceEntry> services;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

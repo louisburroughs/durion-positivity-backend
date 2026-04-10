@@ -5,8 +5,8 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.positivity.shopmanager.internal.entity.ShopService;
+import com.positivity.shopmanager.internal.entity.ShopServiceEntry;
 
-public interface ShopServiceRepository extends JpaRepository<ShopService, UUID> {
-    Optional<ShopService> findByIdAndShopId(UUID id, UUID shopId);
+public interface ShopServiceRepository extends JpaRepository<ShopServiceEntry, UUID> {
+    Optional<ShopServiceEntry> findByIdAndShopId(UUID id, UUID shopId);
 }

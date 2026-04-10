@@ -25,7 +25,7 @@ import com.positivity.workorder.internal.entity.Vehicle;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderPart;
-import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.CustomerRepository;
@@ -340,7 +340,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                 workorderRepository.save(workorder);
 
                 // Create service line item
-                WorkorderService service = WorkorderService.builder()
+                WorkorderServiceLine service = WorkorderServiceLine.builder()
                                 .workOrder(workorder)
                                 .serviceEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .description("Brake Pad Replacement")
@@ -387,7 +387,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                 Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
                 // Get the first service - need to load it eagerly
-                List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services = workorderServiceRepository
                                 .findAll()
                                 .stream()
                                 .filter(s -> s.getWorkOrder() != null && s.getWorkOrder().getId().equals(workorderId))
@@ -397,7 +397,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                         throw new IllegalStateException("No services found for workorder " + workorderId);
                 }
 
-                com.positivity.workorder.internal.entity.WorkorderService service = services.get(0);
+                com.positivity.workorder.internal.entity.WorkorderServiceLine service = services.get(0);
 
                 // Create labor entry
                 WorkorderLaborEntry laborEntry = WorkorderLaborEntry.builder()
@@ -419,7 +419,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                 UUID workorderId = seedWorkorderWithServicesAndParts();
 
                 // Get services eagerly to avoid lazy initialization
-                List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
+                List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services = workorderServiceRepository
                                 .findAll()
                                 .stream()
                                 .filter(s -> s.getWorkOrder() != null && s.getWorkOrder().getId().equals(workorderId))
@@ -429,7 +429,7 @@ class WorkorderDetailVisibilityContractBehaviorIT extends BaseContractIntegratio
                         throw new IllegalStateException("No services found for workorder " + workorderId);
                 }
 
-                com.positivity.workorder.internal.entity.WorkorderService service = services.get(0);
+                com.positivity.workorder.internal.entity.WorkorderServiceLine service = services.get(0);
 
                 // Get parts for this service
                 List<WorkorderPart> parts = workorderPartRepository.findAll().stream()
