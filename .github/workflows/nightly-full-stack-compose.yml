@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  JAVA_VERSION: "21"
+  JAVA_VERSION: "25"
   JAVA_DISTRIBUTION: "temurin"
   MAVEN_OPTS: -Xmx3072m
   DOCKER_BUILDKIT: 1
