@@ -1,0 +1,68 @@
+services:
+  pos-mcp-server:
+    build:
+      context: ./pos-mcp-server
+      dockerfile: Dockerfile
+    container_name: pos-mcp-server
+    restart: unless-stopped
+    ports:
+      - "${POS_MCP_SERVER_PORT:-8094}:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${POS_MCP_SERVER_PROFILE:-preprod}
+      POS_MCP_DB_HOST: postgres
+      POS_MCP_DB_PORT: 5432
+      POS_MCP_DB_NAME: ${POS_MCP_DB_NAME:-positivity}
+      POS_MCP_DB_USER: ${POS_MCP_DB_USER:-positivity}
+      POS_MCP_DB_PASSWORD: ${POS_MCP_DB_PASSWORD:-your_secure_password_here}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:-http://eureka-server:8761/eureka/}
+      MCP_SERVER_BASE_URL: http://pos-mcp-server:8086
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - pos-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - pos-network
+
+  onyx:
+    # Confirm the exact image/tag and environment contract for the Onyx version you deploy.
+    image: ${ONYX_IMAGE:-onyxdotapp/onyx:latest}
+    container_name: onyx
+    restart: unless-stopped
+    ports:
+      - "${ONYX_PORT:-3001}:3000"
+    environment:
+      ONYX_OLLAMA_BASE_URL: ${ONYX_OLLAMA_BASE_URL:-http://ollama:11434}
+      ONYX_MCP_SERVER_URL: ${ONYX_MCP_SERVER_URL:-http://pos-mcp-server:8086}
+      ONYX_MCP_SSE_PATH: ${ONYX_MCP_SSE_PATH:-/mcp/sse}
+      ONYX_MCP_MESSAGE_PATH: ${ONYX_MCP_MESSAGE_PATH:-/mcp/message}
+      ONYX_DEFAULT_MODEL: ${ONYX_DEFAULT_MODEL:-llama3.1:8b}
+      ONYX_DEFAULT_EMBEDDING_MODEL: ${ONYX_DEFAULT_EMBEDDING_MODEL:-nomic-embed-text}
+    depends_on:
+      pos-mcp-server:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - pos-network
+
+volumes:
+  ollama-data:
+    driver: local

@@ -16,9 +16,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Configuration
 @EnableConfigurationProperties({
         McpServerProperties.class,
-        LlmApiProperties.class,
-        LlmRuntimeProperties.class,
-        ToolRegistryProperties.class
+        LlmApiProperties.class
 })
 public class McpServerConfiguration {
 

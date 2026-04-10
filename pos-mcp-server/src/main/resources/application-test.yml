@@ -1,26 +1,3 @@
-mcp:
-  llm:
-    runtime:
-      provider: disabled
-      default-api-id: fake-llm
-      embedding-api-id: fake-llm
-      max-tool-iterations: 2
-      degrade-on-provider-failure: true
-      connect-timeout: 1s
-      read-timeout: 2s
-      system-prompt: Test prompt
-    apis:
-      - id: fake-llm
-        model: test-model
-        base-url: http://localhost:9999/fake-llm
-        api-key: ""
-  registry:
-    enabled: false
-    semantic-top-k: 3
-    returned-candidates: 3
-    deterministic-fallback-enabled: true
-    default-workflow-state: IDLE
-
 spring:
   datasource:
     url: jdbc:h2:mem:mcp;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
