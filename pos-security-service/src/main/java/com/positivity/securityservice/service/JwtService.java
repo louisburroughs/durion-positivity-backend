@@ -27,8 +27,9 @@ import org.jspecify.annotations.Nullable;
  */
 public interface JwtService {
     /**
-     * Legacy claim key; retained for backward-compatible decoding of old tokens
-     * only. New tokens do not include this claim.
+     * Role claim key.
+     * Access tokens include this claim as informational compatibility data.
+     * Authorization decisions remain driven by {@code perm_bits}/{@code perm_ver}.
      */
     public static final String ROLES = "roles";
     /**

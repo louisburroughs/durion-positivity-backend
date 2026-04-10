@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
@@ -310,14 +311,19 @@ public class JwtServiceImpl implements JwtService {
                 .flatMap(authority -> PermissionCode.fromCode(authority).stream())
                 .collect(Collectors.toUnmodifiableSet());
         String permBits = PermissionBitsetCodec.encode(permCodes);
+        List<String> roleClaims = new ArrayList<>(roles.size());
+        for (String role : roles) {
+            roleClaims.add(role.startsWith("ROLE_") ? role : "ROLE_" + role);
+        }
 
         var accessBuilder = Jwts.builder()
                 .id(accessJti)
                 .subject(username)
-            .issuer(ISSUER)
-            .audience().add(AUDIENCE).and()
+                .issuer(ISSUER)
+                .audience().add(AUDIENCE).and()
                 .claim(UID, userId.toString())
                 .claim(USERNAME, username)
+                .claim(ROLES, roleClaims)
                 .claim(PERM_BITS, permBits)
                 .claim(PERM_VER, PermissionCode.CATALOG_VERSION)
                 .issuedAt(Date.from(now))

@@ -496,14 +496,15 @@ class JwtServiceImplTest {
     }
 
     /**
-     * Verifies that the access token produced by generateTokenPair does NOT
-     * contain the legacy {@code roles} or {@code authorities} list claims.
+     * Verifies that the access token produced by generateTokenPair includes
+     * migration-compatible {@code roles} claim data while keeping legacy
+     * {@code authorities} absent.
      *
      * Issue: PERM-004
      */
     @Test
-    @DisplayName("generateTokenPair access token must NOT include roles or authorities claims")
-    void accessToken_doesNotContainRolesOrAuthorities() {
+    @DisplayName("generateTokenPair access token includes roles claim and excludes authorities claim")
+    void accessToken_containsRolesButNotAuthorities() {
         JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("ADMIN"));
 
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
@@ -512,7 +513,7 @@ class JwtServiceImplTest {
                 .build()
                 .parseSignedClaims(tokenPair.accessToken()).getPayload();
 
-        assertThat(claims.containsKey(JwtService.ROLES)).isFalse();
+        assertThat(claims.get(JwtService.ROLES, List.class)).contains("ROLE_ADMIN");
         assertThat(claims.containsKey(JwtService.AUTHORITIES)).isFalse();
     }
 

@@ -233,7 +233,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
                                 .containsEntry(JwtService.UID, TEST_USER_ID.toString())
                                 .containsEntry(JwtService.USERNAME, TEST_SUBJECT)
-                                .doesNotContainKeys(JwtService.ROLES, JwtService.AUTHORITIES);
+                                .containsKey(JwtService.ROLES)
+                                .doesNotContainKey(JwtService.AUTHORITIES);
 
                 // Verify refresh token type claim
                 assertThat(refreshClaims)
