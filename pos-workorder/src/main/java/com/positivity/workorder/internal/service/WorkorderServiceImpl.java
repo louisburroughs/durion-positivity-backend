@@ -263,7 +263,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         for (EstimateItem estimateItem : estimateItems) {
             if (estimateItem.getItemType() == EstimateItemType.LABOR) {
-                // Create WorkorderService for LABOR items
+                // Create WorkorderServiceLine for LABOR items
                 com.positivity.workorder.internal.entity.WorkorderServiceLine workorderService = com.positivity.workorder.internal.entity.WorkorderServiceLine
                         .builder()
                         .workOrder(workorder)
