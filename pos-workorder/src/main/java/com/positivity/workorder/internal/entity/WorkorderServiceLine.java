@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Table;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -31,12 +32,13 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
+@Table(name = "workorder_service")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class WorkorderService {
+public class WorkorderServiceLine {
     @Id
     @GeneratedValue
     @UUIDv7Id
@@ -148,7 +150,7 @@ public class WorkorderService {
         this.changeRequest = changeRequestId != null ? new ChangeRequest(changeRequestId) : null;
     }
 
-    public WorkorderService(UUID id) {
+    public WorkorderServiceLine(UUID id) {
         this.id = id;
     }
 }

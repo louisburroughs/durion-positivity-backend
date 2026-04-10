@@ -1,6 +1,6 @@
 package com.positivity.workorder.internal.repository;
 
-import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -8,8 +8,8 @@ import java.util.List;
 import java.util.UUID;
 
 @Repository
-public interface WorkorderServiceRepository extends JpaRepository<WorkorderService, UUID> {
-    List<WorkorderService> findByChangeRequest_Id(UUID changeRequestId);
+public interface WorkorderServiceRepository extends JpaRepository<WorkorderServiceLine, UUID> {
+    List<WorkorderServiceLine> findByChangeRequest_Id(UUID changeRequestId);
 
-    List<WorkorderService> findByWorkOrder_Id(UUID workorderId);
+    List<WorkorderServiceLine> findByWorkOrder_Id(UUID workorderId);
 }

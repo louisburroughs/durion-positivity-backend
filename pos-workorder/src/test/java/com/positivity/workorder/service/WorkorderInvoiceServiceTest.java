@@ -34,7 +34,7 @@ import com.positivity.workorder.internal.client.InvoiceClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
-import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -168,7 +168,7 @@ class WorkorderInvoiceServiceTest {
         @DisplayName("generateInvoice converts workorder service and part items to invoice line items")
         void generateInvoice_ConvertsWorkorderItemsToInvoiceLineItems() {
                 Workorder workorder = completedWorkorder();
-                WorkorderService labor = WorkorderService.builder()
+                WorkorderServiceLine labor = WorkorderServiceLine.builder()
                                 .description("Labor - Diagnostics")
                                 .quantity(new BigDecimal("2.0000"))
                                 .unitPrice(new BigDecimal("75.0000"))
@@ -414,7 +414,7 @@ class WorkorderInvoiceServiceTest {
                 Workorder workorder = completedWorkorder();
 
                 // Create billable items
-                WorkorderService completedService = WorkorderService.builder()
+                WorkorderServiceLine completedService = WorkorderServiceLine.builder()
                                 .description("Completed Service")
                                 .quantity(new BigDecimal("1.0000"))
                                 .unitPrice(new BigDecimal("100.0000"))
@@ -431,7 +431,7 @@ class WorkorderInvoiceServiceTest {
                                 .build();
 
                 // Create non-billable (CANCELLED) items
-                WorkorderService cancelledService = WorkorderService.builder()
+                WorkorderServiceLine cancelledService = WorkorderServiceLine.builder()
                                 .description("Cancelled Service")
                                 .quantity(new BigDecimal("1.0000"))
                                 .unitPrice(new BigDecimal("200.0000"))
@@ -549,8 +549,8 @@ class WorkorderInvoiceServiceTest {
                                 .build();
         }
 
-        private WorkorderService serviceLine() {
-                return WorkorderService.builder()
+        private WorkorderServiceLine serviceLine() {
+                return WorkorderServiceLine.builder()
                                 .description("Labor - Inspection")
                                 .quantity(new BigDecimal("1.0000"))
                                 .unitPrice(new BigDecimal("120.0000"))

@@ -21,7 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
@@ -124,8 +124,8 @@ abstract class AbstractWorkexecContractBehaviorIT {
         return seedWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), WorkorderStatus.WORK_IN_PROGRESS);
     }
 
-    protected WorkorderService seedWorkorderService(Workorder workorder, UUID technicianId) {
-        WorkorderService service = WorkorderService.builder()
+    protected WorkorderServiceLine seedWorkorderService(Workorder workorder, UUID technicianId) {
+        WorkorderServiceLine service = WorkorderServiceLine.builder()
                 .workOrder(workorder)
                 .serviceEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .technicianId(technicianId)

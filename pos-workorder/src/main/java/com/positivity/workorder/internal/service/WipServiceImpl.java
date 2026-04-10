@@ -8,7 +8,7 @@ import com.positivity.workorder.internal.dto.WorkorderStatusView;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
-import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -321,13 +321,13 @@ public class WipServiceImpl implements WipService {
         }
 
         private String resolveServiceDescription(UUID workorderId) {
-                List<WorkorderService> services = workorderServiceRepository.findByWorkOrder_Id(workorderId);
+                List<WorkorderServiceLine> services = workorderServiceRepository.findByWorkOrder_Id(workorderId);
                 if (services == null || services.isEmpty()) {
                         return "";
                 }
 
                 List<String> descriptions = services.stream()
-                                .map(WorkorderService::getDescription)
+                                .map(WorkorderServiceLine::getDescription)
                                 .filter(StringUtils::hasText)
                                 .map(String::trim)
                                 .distinct()

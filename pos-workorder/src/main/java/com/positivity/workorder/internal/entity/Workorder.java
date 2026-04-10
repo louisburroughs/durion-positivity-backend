@@ -82,7 +82,7 @@ public class Workorder {
     private WorkorderStatus status = WorkorderStatus.DRAFT;
 
     @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<WorkorderService> services;
+    private List<WorkorderServiceLine> services;
 
     // Approval-related fields
     private Instant approvedAt;

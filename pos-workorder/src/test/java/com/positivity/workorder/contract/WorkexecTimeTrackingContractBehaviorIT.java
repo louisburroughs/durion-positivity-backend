@@ -21,7 +21,7 @@ import org.springframework.context.annotation.Import;
 
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
-import com.positivity.workorder.internal.entity.WorkorderService;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -243,8 +243,8 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
                 laborEntryRepository.save(entry);
         }
 
-        private WorkorderService seedWorkorderService(Workorder workorder, UUID technicianId) {
-                WorkorderService service = WorkorderService.builder()
+        private WorkorderServiceLine seedWorkorderService(Workorder workorder, UUID technicianId) {
+                WorkorderServiceLine service = WorkorderServiceLine.builder()
                                 .workOrder(workorder)
                                 .serviceEntityId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                                 .technicianId(technicianId)

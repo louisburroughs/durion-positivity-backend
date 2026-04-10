@@ -14,7 +14,7 @@ import com.positivity.shopmanager.internal.client.ServiceEntityClient;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.PersonDTO;
 import com.positivity.shopmanager.internal.dto.ServiceEntityDTO;
-import com.positivity.shopmanager.internal.entity.ShopService;
+import com.positivity.shopmanager.internal.entity.ShopServiceEntry;
 import com.positivity.shopmanager.internal.entity.Technician;
 import com.positivity.shopmanager.internal.repository.ShopServiceRepository;
 import com.positivity.shopmanager.internal.repository.TechnicianRepository;
@@ -226,7 +226,7 @@ class InternalServiceImplementationsTest {
                 shopServiceRepository);
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID shopServiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        ShopService shopService = new ShopService();
+        ShopServiceEntry shopService = new ShopServiceEntry();
         shopService.setId(shopServiceId);
         shopService.setServiceEntityId(null);
         when(shopServiceRepository.findByIdAndShopId(shopServiceId, locationId)).thenReturn(Optional.of(shopService));
@@ -242,7 +242,7 @@ class InternalServiceImplementationsTest {
                 shopServiceRepository);
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID shopServiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        ShopService shopService = new ShopService();
+        ShopServiceEntry shopService = new ShopServiceEntry();
         shopService.setId(shopServiceId);
         shopService.setServiceEntityId(77L);
         ServiceEntityDTO expected = new ServiceEntityDTO();
