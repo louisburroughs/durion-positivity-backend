@@ -20,7 +20,7 @@ Access tokens issued by `pos-security-service` include the following required cl
 Notes:
 
 - The token contract is explicit: `perm_bits` and `perm_ver` are required in greenfield PERM mode. `authorities` is not issued by `JwtService` in greenfield mode and should not be relied upon.
-- `roles` or legacy `userId` may be accepted for migration only where explicitly configured, but they are informational and not used for permission resolution.
+- `roles` may be emitted as informational compatibility data for clients, but authorization must use `perm_bits`/`perm_ver`. Legacy `userId` may be accepted for migration where explicitly configured.
 
 ### Authentication Flow
 
