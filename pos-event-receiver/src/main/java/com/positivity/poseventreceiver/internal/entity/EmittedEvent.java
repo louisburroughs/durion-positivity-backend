@@ -34,6 +34,7 @@ public class EmittedEvent {
     @UUIDv7Id
     @Column(name = "event_id", columnDefinition = "UUID")
     private UUID eventId;
+
     /** The event type identifier (e.g., ORDER_ORDER_CREATE) */
     @Column
     private String id;
