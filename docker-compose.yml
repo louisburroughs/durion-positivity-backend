@@ -98,12 +98,12 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U positivity -d positivity"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -143,7 +143,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_accounting_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -176,7 +176,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_catalog_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -204,7 +204,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_customer_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -238,7 +238,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_event_receiver_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -268,7 +268,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_image_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -294,7 +294,7 @@ services:
   #   environment:
   #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
   #     GATEWAY_URL: http://pos-api-gateway:8080
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_inquiry_db
   #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
   #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -320,7 +320,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_inventory_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -346,7 +346,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_invoice_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -374,7 +374,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_location_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -400,7 +400,7 @@ services:
   #   environment:
   #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
   #     GATEWAY_URL: http://pos-api-gateway:8080
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_order_db
   #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
   #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -428,7 +428,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_people_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -454,7 +454,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_price_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -482,7 +482,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_security_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
@@ -519,7 +519,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_shop_manager_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -547,7 +547,7 @@ services:
   #   environment:
   #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
   #     GATEWAY_URL: http://pos-api-gateway:8080
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_vehicle_fitment_db
   #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
   #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -575,7 +575,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_vehicle_inventory_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -606,7 +606,7 @@ services:
   #   environment:
   #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
   #     GATEWAY_URL: http://pos-api-gateway:8080
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_vehicle_reference_carapi_db
   #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
   #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -634,7 +634,7 @@ services:
   #   environment:
   #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
   #     GATEWAY_URL: http://pos-api-gateway:8080
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_vehicle_reference_nhtsa_db
   #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
   #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -662,7 +662,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_workorder_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -692,7 +692,7 @@ services:
   #     GATEWAY_URL: http://pos-api-gateway:8080
   #     SPRING_PROFILES_ACTIVE: dev
   #     # Database
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_agent_framework_db
   #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
   #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
@@ -728,11 +728,7 @@ services:
       - "8080:8080"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [*pos-security-client-env, *pos-events-client-env]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
     depends_on:

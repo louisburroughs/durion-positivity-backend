@@ -32,9 +32,6 @@ cd durion-positivity-backend
 ```bash
 # Build and test a specific module
 ./mvnw -pl pos-order -am clean test
-
-# Build the agent framework
-./mvnw -pl pos-agent-framework -am clean test
 ```
 
 ---
@@ -106,10 +103,10 @@ annotations:
 
 | Dashboard | URL | Credentials |
 |-----------|-----|-------------|
-| Grafana | http://localhost:3000 | admin/admin |
-| Jaeger | http://localhost:16686 | - |
-| Prometheus | http://localhost:9090 | - |
-| Eureka | http://localhost:8761 | - |
+| Grafana | <http://localhost:3000> | admin/admin |
+| Jaeger | <http://localhost:16686> | - |
+| Prometheus | <http://localhost:9090> | - |
+| Eureka | <http://localhost:8761> | - |
 
 ---
 
@@ -127,6 +124,7 @@ annotations:
 ### Service Fails to Start
 
 **Common causes:**
+
 - Missing environment variables
 - Port conflicts
 - Database connectivity issues
@@ -148,6 +146,7 @@ curl -v http://<host>:<port>/actuator/health
 ```
 
 **If DOWN, check:**
+
 - Database connectivity
 - External service dependencies
 - Memory/CPU constraints
@@ -321,14 +320,14 @@ public class CrmPermissionInitializer {
         return args -> {
             try {
                 var request = CrmPermissionRegistry.buildCrmPermissionRegistration();
-                
+
                 restClient.post()
                     .uri(gatewayUrl + "/security-service/v1/permissions/register")
                     .header("X-API-Version", "1")
                     .body(request)
                     .retrieve()
                     .toEntity(Void.class);
-                    
+
                 log.info("✓ CRM permissions registered successfully");
             } catch (Exception e) {
                 log.warn("⚠ Failed to register permissions: {}", e.getMessage());
@@ -344,13 +343,13 @@ public class CrmPermissionInitializer {
 @RestController
 @RequestMapping("/v1/crm")
 public class PartyController {
-    
+
     @GetMapping("/parties")
     @PreAuthorize("hasAuthority('crm:party:view')")
     public List<Party> listParties() {
         // ...
     }
-    
+
     @PostMapping("/parties")
     @PreAuthorize("hasAuthority('crm:party:create')")
     public Party createParty(@RequestBody PartyRequest request) {

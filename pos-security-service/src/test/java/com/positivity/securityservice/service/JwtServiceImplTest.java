@@ -513,7 +513,9 @@ class JwtServiceImplTest {
                 .build()
                 .parseSignedClaims(tokenPair.accessToken()).getPayload();
 
-        assertThat(claims.get(JwtService.ROLES, List.class)).contains("ROLE_ADMIN");
+        @SuppressWarnings("unchecked")
+        List<String> roles = claims.get(JwtService.ROLES, List.class);
+        assertThat(roles).contains("ROLE_ADMIN");
         assertThat(claims.containsKey(JwtService.AUTHORITIES)).isFalse();
     }
 

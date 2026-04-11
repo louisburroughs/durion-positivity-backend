@@ -31,27 +31,27 @@ public class AccountingExceptionHandler {
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
 
-    @AccountingExceptionHandler({ AuthenticationException.class, AuthenticationCredentialsNotFoundException.class })
+    @ExceptionHandler({ AuthenticationException.class, AuthenticationCredentialsNotFoundException.class })
     public ResponseEntity<ApiError> handleAuth(AuthenticationException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Authentication required", request);
     }
 
-    @AccountingExceptionHandler(AccessDeniedException.class)
+    @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", request);
     }
 
-    @AccountingExceptionHandler(DuplicateEventException.class)
+    @ExceptionHandler(DuplicateEventException.class)
     public ResponseEntity<ApiError> handleDuplicateEvent(DuplicateEventException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "DUPLICATE_EVENT", ex.getMessage(), request);
     }
 
-    @AccountingExceptionHandler(UnbalancedEntryException.class)
+    @ExceptionHandler(UnbalancedEntryException.class)
     public ResponseEntity<ApiError> handleUnbalancedEntry(UnbalancedEntryException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "UNBALANCED_ENTRY", ex.getMessage(), request);
     }
 
-    @AccountingExceptionHandler(MethodArgumentNotValidException.class)
+    @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         String fieldName = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
@@ -61,19 +61,19 @@ public class AccountingExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "ARGUMENT_NOT_VALID", message, request);
     }
 
-    @AccountingExceptionHandler(IllegalStateException.class)
+    @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
         String code = resolveStateErrorCode(ex.getMessage());
         return build(HttpStatus.CONFLICT, code, ex.getMessage(), request);
     }
 
-    @AccountingExceptionHandler(DuplicateAccountCodeException.class)
+    @ExceptionHandler(DuplicateAccountCodeException.class)
     public ResponseEntity<ApiError> handleDuplicateAccountCode(DuplicateAccountCodeException ex,
             HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "DUPLICATE_ACCOUNT_CODE", ex.getMessage(), request);
     }
 
-    @AccountingExceptionHandler(ResponseStatusException.class)
+    @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiError> handleResponseStatus(ResponseStatusException ex, HttpServletRequest request) {
         String message = ex.getReason() != null ? ex.getReason() : ex.getMessage();
         String correlationId = resolveCorrelationId(request);
