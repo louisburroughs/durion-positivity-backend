@@ -2,8 +2,8 @@ spring:
   datasource:
     url: jdbc:postgresql://${POS_MCP_DB_HOST:localhost}:${POS_MCP_DB_PORT:5432}/${POS_MCP_DB_NAME:pos_mcp}
     driver-class-name: org.postgresql.Driver
-    username: ${POS_MCP_DB_USER:pos_mcp}
-    password: ${POS_MCP_DB_PASSWORD:password}
+    username: ${POS_MCP_DB_USER:positivity}
+    password: ${POS_MCP_DB_PASSWORD:your_secure_password_here}
   jpa:
     hibernate:
       ddl-auto: validate

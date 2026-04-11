@@ -26,6 +26,8 @@ mcp:
       - event-receiver
     included-path-prefixes:
       - /v1/events/summary
+  security:
+    permit-all-transport: false
 
 server:
   port: 8086

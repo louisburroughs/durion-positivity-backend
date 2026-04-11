@@ -23,17 +23,24 @@ import org.springframework.web.client.RestClient;
 import com.positivity.events.EventsApiConstants;
 
 /**
- * Unit tests for {@link SecurityEventTypeInitializer}.
+ * Unit tests for {@link EventTypeInitializer}.
  *
- * <p>Verifies that all security event types are registered at startup via REST PUT,
- * that the shared API secret header is applied when configured, and that individual
+ * <p>
+ * Verifies that all security event types are registered at startup via REST
+ * PUT,
+ * that the shared API secret header is applied when configured, and that
+ * individual
  * registration failures do not abort the startup sequence.
  *
- * <p>Uses {@link Answers#RETURNS_SELF} for the fluent RestClient chain mock so that
- * {@code uri()}, {@code contentType()}, {@code body()}, and {@code header()} all
+ * <p>
+ * Uses {@link Answers#RETURNS_SELF} for the fluent RestClient chain mock so
+ * that
+ * {@code uri()}, {@code contentType()}, {@code body()}, and {@code header()}
+ * all
  * return the same mock without requiring per-method stubs.
  *
- * <p>Issue: AUTH-008
+ * <p>
+ * Issue: AUTH-008
  *
  * @since AUTH-008
  */
@@ -60,7 +67,7 @@ class SecurityEventTypeInitializerTest {
     private RestClient.ResponseSpec responseSpec;
 
     /** No-secret initializer created in setUp() for basic tests. */
-    private SecurityEventTypeInitializer sut;
+    private EventTypeInitializer sut;
 
     @BeforeEach
     void setUp() {
@@ -73,7 +80,7 @@ class SecurityEventTypeInitializerTest {
         lenient().when(requestBodyUriSpec.retrieve()).thenReturn(responseSpec);
         lenient().when(responseSpec.toBodilessEntity()).thenReturn(null);
 
-        sut = new SecurityEventTypeInitializer(restClientBuilder, "http://localhost:8085", "");
+        sut = new EventTypeInitializer(restClientBuilder, "http://localhost:8085", "");
     }
 
     // =========================================================
@@ -87,7 +94,7 @@ class SecurityEventTypeInitializerTest {
         @Test
         @DisplayName("T_SETI1 — SecurityEventTypes.all() defines exactly 31 entries")
         void securityEventTypes_definesExactly31Types() {
-            assertThat(SecurityEventTypes.all())
+            assertThat(EventTypes.all())
                     .as("SecurityEventTypes.all() must define exactly 31 event type registrations")
                     .hasSize(31);
         }
@@ -97,7 +104,7 @@ class SecurityEventTypeInitializerTest {
         void run_registersAllEventTypes() {
             sut.run(null);
 
-            int expectedCount = SecurityEventTypes.all().size();
+            int expectedCount = EventTypes.all().size();
             verify(restClient, times(expectedCount)).put();
         }
     }
@@ -114,13 +121,14 @@ class SecurityEventTypeInitializerTest {
         @DisplayName("T_SETI3 — run() calls header(SECRET_HEADER, secret) for every event type when secret is set")
         void run_withSecret_setsSecretHeader() {
             String secret = "test-api-secret-value";
-            SecurityEventTypeInitializer sutWithSecret =
-                    new SecurityEventTypeInitializer(restClientBuilder, "http://localhost:8085", secret);
+            EventTypeInitializer sutWithSecret = new EventTypeInitializer(restClientBuilder, "http://localhost:8085",
+                    secret);
 
             sutWithSecret.run(null);
 
-            int expectedCount = SecurityEventTypes.all().size();
-            // Issue AUTH-008: verify that the shared secret header is applied for each registration
+            int expectedCount = EventTypes.all().size();
+            // Issue AUTH-008: verify that the shared secret header is applied for each
+            // registration
             verify(requestBodyUriSpec, times(expectedCount))
                     .header(EventsApiConstants.SECRET_HEADER, secret);
         }
@@ -131,7 +139,8 @@ class SecurityEventTypeInitializerTest {
             // sut was constructed with "" apiSecret in setUp()
             sut.run(null);
 
-            // Issue AUTH-008: secret header must not be sent when no apiSecret is configured
+            // Issue AUTH-008: secret header must not be sent when no apiSecret is
+            // configured
             verify(requestBodyUriSpec, never())
                     .header(eq(EventsApiConstants.SECRET_HEADER), anyString());
         }
@@ -165,7 +174,7 @@ class SecurityEventTypeInitializerTest {
             assertThatNoException().isThrownBy(() -> sut.run(null));
 
             // All 31 PUT requests were still attempted despite the first failure
-            int expectedCount = SecurityEventTypes.all().size();
+            int expectedCount = EventTypes.all().size();
             verify(restClient, times(expectedCount)).put();
         }
     }

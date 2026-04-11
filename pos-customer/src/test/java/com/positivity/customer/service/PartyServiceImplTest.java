@@ -3,7 +3,7 @@ package com.positivity.customer.service;
 import java.time.ZoneOffset;
 import java.time.Clock;
 
-import com.positivity.customer.internal.config.CustomerCacheConfig;
+import com.positivity.customer.internal.config.CacheConfig;
 import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
@@ -98,7 +98,7 @@ class PartyServiceImplTest {
 
     @Test
     void buildSnapshotForParty_returnsNull_whenPartyNotFound() {
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(any())).thenReturn(null);
         when(partyRepository.findByPartyId(any())).thenReturn(null);
 
@@ -112,7 +112,7 @@ class PartyServiceImplTest {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
@@ -139,7 +139,7 @@ class PartyServiceImplTest {
 
         Cache.ValueWrapper wrapper = mock(Cache.ValueWrapper.class);
         when(wrapper.get()).thenReturn(cachedSnapshot);
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(wrapper);
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
@@ -154,7 +154,7 @@ class PartyServiceImplTest {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(null);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
 
@@ -177,7 +177,7 @@ class PartyServiceImplTest {
         c.setEmail("jane@acme.com");
         c.setCommercialParty(p);
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
@@ -203,7 +203,7 @@ class PartyServiceImplTest {
         c.setLastName(null);
         c.setCommercialParty(p);
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
@@ -226,7 +226,7 @@ class PartyServiceImplTest {
         c.setEmail("fallback@acme.com");
         c.setCommercialParty(p);
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
@@ -244,7 +244,7 @@ class PartyServiceImplTest {
         p.setDisplayName(" ");
         p.setLegalName("Legal Corp");
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
@@ -260,7 +260,7 @@ class PartyServiceImplTest {
         CommercialParty p = party(partyId);
         p.setPartyNumber(" ");
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
 
@@ -275,7 +275,7 @@ class PartyServiceImplTest {
         CommercialParty p = party(partyId);
         p.setLegalName(" ");
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
 
@@ -290,7 +290,7 @@ class PartyServiceImplTest {
         CommercialParty p = party(partyId);
         p.setPartyType(null);
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
 
@@ -315,7 +315,7 @@ class PartyServiceImplTest {
                 .year(2024)
                 .build();
 
-        when(cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 
-import com.positivity.workorder.internal.config.WorkorderKafkaCommandListener;
+import com.positivity.workorder.internal.config.KafkaCommandListener;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 
@@ -26,11 +26,11 @@ class WorkorderKafkaCommandListenerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ApplicationEventPublisher eventPublisher = org.mockito.Mockito.mock(ApplicationEventPublisher.class);
 
-    private WorkorderKafkaCommandListener listener;
+    private KafkaCommandListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new WorkorderKafkaCommandListener(FIXED_CLOCK, objectMapper, eventPublisher);
+        listener = new KafkaCommandListener(FIXED_CLOCK, objectMapper, eventPublisher);
     }
 
     @Test

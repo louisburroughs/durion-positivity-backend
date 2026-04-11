@@ -12,16 +12,16 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.positivity.workorder.internal.config.WorkorderKafkaEventRelay;
-import com.positivity.workorder.internal.config.WorkorderKafkaProducer;
+import com.positivity.workorder.internal.config.KafkaEventRelay;
+import com.positivity.workorder.internal.config.KafkaProducer;
 import com.positivity.workorder.internal.domain.WorkSessionStartedEvent;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 
 class WorkorderKafkaEventRelayTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    private final WorkorderKafkaProducer producer = org.mockito.Mockito.mock(WorkorderKafkaProducer.class);
-    private final WorkorderKafkaEventRelay relay = new WorkorderKafkaEventRelay(producer);
+    private final KafkaProducer producer = org.mockito.Mockito.mock(KafkaProducer.class);
+    private final KafkaEventRelay relay = new KafkaEventRelay(producer);
 
     @Test
     @DisplayName("Relays WorkSessionStartedEvent to Kafka with expected event type")

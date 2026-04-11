@@ -6,6 +6,7 @@ import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.transport.HttpServletSseServerTransportProvider;
+import io.modelcontextprotocol.spec.McpSchema;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -31,9 +32,15 @@ public class McpServerConfiguration {
 
     @Bean
     public McpAsyncServer mcpAsyncServer(@NonNull HttpServletSseServerTransportProvider transportProvider) {
-        // Build server with no tools; ToolBootstrapRunner adds them after discovery.
+        // Build server with tool capability enabled; ToolBootstrapRunner adds tools after
+        // discovery.
+        var capabilities = McpSchema.ServerCapabilities.builder()
+                .tools(Boolean.TRUE)
+                .build();
+
         return McpServer.async(transportProvider)
                 .serverInfo("pos-mcp-server", "0.1.0-SNAPSHOT")
+                .capabilities(capabilities)
                 .build();
     }
 

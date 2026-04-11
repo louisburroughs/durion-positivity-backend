@@ -34,7 +34,7 @@ import jakarta.servlet.http.HttpServletResponse;
  *
  * <p>
  * Replaces the production {@link GatewaySecurityConfig} (imported via
- * {@link AccountingSecurityConfig}) to avoid conflicting "any request"
+ * {@link SecurityConfig}) to avoid conflicting "any request"
  * filter chains (Spring Security 6.2+ rejects duplicate catch-all chains).
  * A filter auto-populates the {@link SecurityContextHolder} with a test
  * user so that {@code @PreAuthorize} checks pass.

@@ -20,7 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.client.VehicleInventoryClient;
-import com.positivity.customer.internal.config.CustomerCacheConfig;
+import com.positivity.customer.internal.config.CacheConfig;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -457,7 +457,7 @@ public class PartyServiceImpl implements PartyService {
     @Transactional(readOnly = true)
     public CrmSnapshotDTO buildSnapshotForParty(UUID partyId) {
         log.debug("Building CRM snapshot for party: {}", partyId);
-        Cache snapshotCache = cacheManager.getCache(CustomerCacheConfig.SNAPSHOT_CACHE);
+        Cache snapshotCache = cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE);
         if (snapshotCache != null) {
             Cache.ValueWrapper wrapper = snapshotCache.get(partyId);
             if (wrapper != null) {
