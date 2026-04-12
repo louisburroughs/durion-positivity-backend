@@ -79,14 +79,14 @@ public class APPaymentController {
                         @Valid @RequestBody @NonNull ExecuteAPPaymentRequest request, Authentication authentication) {
 
                 String currentUser = authentication != null ? authentication.getName() : "system";
-                log.info("Executing payment for vendor {} with paymentRef {}", request.getVendorId(),
-                                request.getPaymentRef());
+                log.info("Executing payment for vendor(mask) {} with paymentRef(mask) {}",
+                                maskForLog(request.getVendorId()), maskForLog(request.getPaymentRef()));
 
                 // Check if payment already exists for idempotency
                 Optional<APPaymentResponse> existing = apPaymentService.getPaymentByRef(request.getPaymentRef());
                 if (existing.isPresent()) {
                         // Idempotent replay: validate and return existing payment with 200 OK
-                        log.info("Idempotent replay for paymentRef {}", request.getPaymentRef());
+                        log.info("Idempotent replay for paymentRef(mask) {}", maskForLog(request.getPaymentRef()));
                         APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
                         return ResponseEntity.ok(response);
                 }
@@ -138,5 +138,20 @@ public class APPaymentController {
 
                 List<VendorBillSummaryResponse> bills = apPaymentService.listEligibleBills(vendorId);
                 return ResponseEntity.ok(bills);
+        }
+
+        private String maskForLog(Object value) {
+                if (value == null) {
+                        return "null";
+                }
+                String sanitized = value.toString()
+                                .replace('\r', '_')
+                                .replace('\n', '_')
+                                .replace('\t', '_');
+                int length = sanitized.length();
+                if (length <= 4) {
+                        return "****";
+                }
+                return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
         }
 }

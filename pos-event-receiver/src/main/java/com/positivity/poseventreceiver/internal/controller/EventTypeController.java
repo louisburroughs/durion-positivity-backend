@@ -65,7 +65,7 @@ public class EventTypeController {
     @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<EventTypeResponse> getEventTypeById(
             @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable @NotNull UUID id) {
-        log.info("Fetching event type with id: {}", id);
+        log.info("Fetching event type with id(mask): {}", maskForLog(id));
         return eventTypeService.getEventTypeById(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -77,13 +77,13 @@ public class EventTypeController {
     @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<EventTypeResponse> getEventTypeByCode(
             @Parameter(description = "Event type code", required = true, example = "ORDER_CREATED") @PathVariable @NotBlank String typeCode) {
-        log.info("Fetching event type with code: {}", typeCode);
+        log.info("Fetching event type with code(mask): {}", maskForLog(typeCode));
         try {
             return eventTypeService.getEventTypeByCode(typeCode)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (IllegalArgumentException e) {
-            log.warn("Invalid event type code lookup '{}': {}", typeCode, e.getMessage());
+            log.warn("Invalid event type code lookup(mask) '{}': {}", maskForLog(typeCode), e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -95,11 +95,11 @@ public class EventTypeController {
     @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     public ResponseEntity<EventTypeResponse> createEventType(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @Valid @NotNull @RequestBody EventTypeRequest request) {
-        log.info("Creating new event type: typeCode={}", request.getTypeCode());
+        log.info("Creating new event type: typeCode(mask)={}", maskForLog(request.getTypeCode()));
         try {
             var created = eventTypeService.createEventType(request);
             if (created.isEmpty()) {
-                log.warn("Event type with code already exists: {}", request.getTypeCode());
+                log.warn("Event type with code(mask) already exists: {}", maskForLog(request.getTypeCode()));
                 return ResponseEntity.badRequest().build();
             }
             var response = created.get();
@@ -121,7 +121,7 @@ public class EventTypeController {
     public ResponseEntity<EventTypeResponse> upsertEventType(
             @Parameter(description = "Event type code", required = true, example = "ORDER_ORDER_CREATE") @PathVariable @NotBlank String typeCode,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @Valid @NotNull @RequestBody EventTypeRequest request) {
-        log.info("Upserting event type: typeCode={}", typeCode);
+        log.info("Upserting event type: typeCode(mask)={}", maskForLog(typeCode));
         try {
             var response = eventTypeService.upsertEventType(typeCode, request);
             log.info("Event type upserted successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
@@ -129,7 +129,7 @@ public class EventTypeController {
                     response.p95Micros(), response.p99Micros());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            log.warn("Invalid upsert event type request for code {}: {}", typeCode, e.getMessage());
+            log.warn("Invalid upsert event type request for code(mask) {}: {}", maskForLog(typeCode), e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -142,7 +142,7 @@ public class EventTypeController {
     public ResponseEntity<EventTypeResponse> updateEventType(
             @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable @NotNull UUID id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @Valid @NotNull @RequestBody EventTypeRequest request) {
-        log.info("Updating event type: id={}", id);
+        log.info("Updating event type: id(mask)={}", maskForLog(id));
         try {
             return eventTypeService.updateEventType(id, request)
                     .map(response -> {
@@ -153,7 +153,7 @@ public class EventTypeController {
                     })
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (IllegalArgumentException e) {
-            log.warn("Invalid update event type request for id {}: {}", id, e.getMessage());
+            log.warn("Invalid update event type request for id(mask) {}: {}", maskForLog(id), e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -165,17 +165,32 @@ public class EventTypeController {
     @ApiResponse(responseCode = "404", description = "Event type not found")
     public ResponseEntity<Void> deleteEventType(
             @Parameter(description = "EventType ID to delete", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable @NotNull UUID id) {
-        log.info("Deleting event type: id={}", id);
+        log.info("Deleting event type: id(mask)={}", maskForLog(id));
         try {
             if (!eventTypeService.deleteEventType(id)) {
-                log.warn("Event type not found: id={}", id);
+                log.warn("Event type not found: id(mask)={}", maskForLog(id));
                 return ResponseEntity.notFound().build();
             }
-            log.info("Event type deleted successfully: id={}", id);
+            log.info("Event type deleted successfully: id(mask)={}", maskForLog(id));
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
-            log.warn("Invalid delete event type request for id {}: {}", id, e.getMessage());
+            log.warn("Invalid delete event type request for id(mask) {}: {}", maskForLog(id), e.getMessage());
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 }
