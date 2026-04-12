@@ -87,3 +87,58 @@ Operationally, the expected flow is:
 - install and start Onyx using its official Docker flow
 - use the generated Onyx deployment under `onyx_data/deployment`
 - log into the local Onyx instance and configure Ollama plus MCP connectivity there
+
+## Phase 2 (Wave MCP-2) — Delivery Summary
+
+This module has been extended for Wave MCP-2 (Phase 2). The following are the notable delivery items and runtime behaviour changes developers should know about.
+
+### DB-Backed Tool Registry
+
+- Flyway migrations added:
+  - `V3` — schema: `mcp_tool`, `mcp_role`, `mcp_tool_workflow`, `mcp_tool_role`, `mcp_workflow_state` tables
+  - `V4` — seeds: 16 tools, 5 roles, and workflow mappings
+  - `V5` — corrective migration (Location + ShopManager role mappings)
+- New repository and persistence:
+  - `ToolMetadataRepository` / `ToolMetadataRepositoryImpl` — JDBC-backed storage
+  - Uses `pgvector` column (embedding vector(768)) with cosine-similarity `<=>` queries to find semantically relevant tools
+- Runtime services and loader:
+  - `ToolRegistryService` — deterministic scoring pipeline: role gating → embedding top-K → `ToolScorer` (semantic rank, priority boost, latency/cost penalties)
+  - `ToolRegistryLoader` — now loads registry entries from the DB at startup and resolves `handlerBean` names to actual handler instances via `ApplicationContext.getBean()` (replaces Phase 1 in-memory stub)
+- Domain types: `ToolMetadata`, `ToolSelectionContext` represent persisted metadata and per-request selection inputs
+
+### Full 16-Tool Facade Catalog
+
+Phase 1 exposed `InventoryFacadeTool` and `OrderFacadeTool`. Phase 2 adds the remaining facade tools (total 16):
+
+- `CustomerFacadeTool` — pos-customer (customer)
+- `PricingFacadeTool` — pos-price (pricing)
+- `WorkorderFacadeTool` — pos-workorder (workorder)
+- `CatalogFacadeTool` — pos-catalog (catalog)
+- `VehicleFacadeTool` — pos-catalog (catalog)
+- `AccountingFacadeTool` — pos-accounting (accounting)
+- `InvoiceFacadeTool` — pos-invoice (invoice)
+- `HrFacadeTool` — pos-people (hr)
+- `ReportingFacadeTool` — pos-accounting (reporting)
+- `LocationFacadeTool` — pos-location (location)
+- `ShopManagerFacadeTool` — pos-shop-manager (shop)
+- `TaxFacadeTool` — pos-tax (tax)
+- `AdminFacadeTool` — pos-security-service (admin)
+- `EventsFacadeTool` — pos-event-receiver (events)
+- (plus `InventoryFacadeTool`, `OrderFacadeTool` from Phase 1)
+
+### Role → Tool Mapping Summary
+
+Tool availability is gated by role in the registry. At a high level:
+
+- `ROLE_CASHIER`: Customer, Pricing, Workorder, Catalog, Vehicle, Inventory, Order — core sales operations
+- `ROLE_SERVICE_WRITER`: All `CASHIER` tools + Location, ShopManager, Accounting, Invoice, Tax, Events
+- `ROLE_MANAGER`: All `SERVICE_WRITER` tools + HR, Reporting, Admin tools
+- `ROLE_ADMIN`: All tools
+- `ROLE_SUPPLIER`: Catalog, Vehicle, Inventory subset
+
+### Profile & Test Notes
+
+- `ToolMetadataRepositoryImpl` and `ToolRegistryService` are annotated with `@Profile("!test")`. The `test` profile supplies stubs via `SessionAgentManagerTestConfiguration` to keep tests hermetic.
+- `ToolRegistryLoader` is profile-neutral (no `@Profile`) so the loader runs in all profiles; test configurations provide a `ToolMetadataRepository` stub bean for startup.
+
+If you are extending or testing registry logic, ensure test fixtures provide the expected stub beans or run with a non-test profile against a Postgres test instance seeded with V4 data.

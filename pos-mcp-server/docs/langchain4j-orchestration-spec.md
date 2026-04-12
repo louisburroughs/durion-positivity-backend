@@ -721,17 +721,17 @@ Onyx services, volumes, and network references are removed.
 
 ### Phase 1 — Core Orchestration (MVP)
 
-- [ ] Add LangChain4j dependencies to `pom.xml`
-- [ ] Create `PosAssistant` interface
-- [ ] Create `SessionAgentManager` with Caffeine cache
-- [ ] Create `ExaWebSearchTool`
-- [ ] Create 2–3 facade tools (Inventory, Order, Customer) with `@Tool`
-- [ ] Create `RagConfiguration` with pgvector
-- [ ] Add Flyway migration for pgvector extension
-- [ ] Update `McpChatController` to route through `SessionAgentManager`
-- [ ] Add Ollama Cloud config properties to `application.yml`
-- [ ] Update `docker-compose.onyx.yml` to remove Onyx refs
-- [ ] Verify end-to-end: user message → tool call → response
+- [x] Add LangChain4j dependencies to `pom.xml`
+- [x] Create `PosAssistant` interface
+- [x] Create `SessionAgentManager` with Caffeine cache
+- [x] Create `ExaWebSearchTool`
+- [x] Create 2–3 facade tools (Inventory, Order, Customer) with `@Tool`
+- [x] Create `RagConfiguration` with pgvector
+- [x] Add Flyway migration for pgvector extension
+- [x] Update `McpChatController` to route through `SessionAgentManager`
+- [x] Add Ollama Cloud config properties to `application.yml`
+- [x] Update `docker-compose.onyx.yml` to remove Onyx refs
+- [x] Verify end-to-end: user message → tool call → response
 
 ### Phase 2 — Tool Registry + Role Gating
 
