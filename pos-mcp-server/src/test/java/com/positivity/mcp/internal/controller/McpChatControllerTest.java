@@ -97,6 +97,22 @@ class McpChatControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    @WithMockUser(username = "test-user", roles = "USER")
+    @DisplayName("POST /v1/mcp/chat with blank message returns 400 ApiError envelope")
+    void chat_withBlankMessage_returns400() throws Exception {
+        mockMvc.perform(post("/v1/mcp/chat")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"message\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("message"));
+    }
+
     @TestConfiguration
     @EnableMethodSecurity(prePostEnabled = true)
     static class SliceTestConfig {

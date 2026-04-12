@@ -2,6 +2,8 @@ package com.positivity.mcp.internal.orchestration;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.service.SystemPromptService;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -65,6 +67,8 @@ class SessionAgentManagerTest {
   // Real instance required: Mockito subclasses cause @Tool duplicate registration
   // in LangChain4j
   private ExaWebSearchTool exaWebSearchTool;
+  private InventoryFacadeTool inventoryFacadeTool;
+  private OrderFacadeTool orderFacadeTool;
 
   private SessionAgentManager manager;
 
@@ -74,9 +78,11 @@ class SessionAgentManagerTest {
     // across calls
     when(toolRegistry.resolveToolsForRole(any())).thenAnswer(inv -> new ArrayList<>());
     exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
+    inventoryFacadeTool = new InventoryFacadeTool(RestClient.builder(), "http://localhost/v1/inventory");
+    orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://localhost/v1/orders");
     manager = new SessionAgentManager(
         chatModel, embeddingModel, embeddingStore,
-        toolRegistry, exaWebSearchTool, systemPromptService,
+        toolRegistry, exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, systemPromptService,
         30, 500, 50);
   }
 

@@ -1,6 +1,7 @@
 -- pgvector: PostgreSQL only
 -- Enable pgvector extension (requires superuser or pre-installed extension)
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- RAG document embedding store
 CREATE TABLE mcp_document_embedding (
   embedding_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -2,6 +2,8 @@ package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.mcp.service.AgentOrchestrationService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
@@ -35,7 +37,7 @@ public class McpChatController {
     @PreAuthorize("isAuthenticated()")
     @EmitEvent(id = "MCP_CHAT_EXECUTE", apiVersion = "1")
     public ResponseEntity<ChatResponse> chat(
-            @RequestBody @NonNull ChatRequest request,
+            @RequestBody @Valid @NonNull ChatRequest request,
             @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
         @NonNull
@@ -56,7 +58,7 @@ public class McpChatController {
     }
 
     @Schema(name = "ChatRequest", description = "Chat request payload", example = "{\"message\":\"Hello\"}")
-    public record ChatRequest(@NonNull String message) {
+    public record ChatRequest(@NotBlank @NonNull String message) {
     }
 
     @Schema(name = "ChatResponse", description = "Chat response payload", example = "{\"response\":\"Hi!\"}")
