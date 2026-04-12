@@ -195,26 +195,26 @@ fi
 echo ""
 
 # ==========================================
-# TEST 6: Verify local profile configuration
+# TEST 6: Verify dev profile configuration
 # ==========================================
 echo ""
-echo "TEST 6: Verify gateway local profile"
+echo "TEST 6: Verify gateway dev profile"
 echo "---"
-LOCAL_CONFIG="pos-api-gateway/src/main/resources/application-local.yml"
+DEV_CONFIG="pos-api-gateway/src/main/resources/application-dev.yml"
 
-if grep -q "port: 8080" "$LOCAL_CONFIG"; then
-    echo -e "${GREEN}✓${NC} Local profile: gateway port 8080"
+if grep -q "port: 8080" "$DEV_CONFIG"; then
+    echo -e "${GREEN}✓${NC} Dev profile: gateway port 8080"
     ((TESTS_PASSED++))
 else
-    echo -e "${RED}✗${NC} Local profile: gateway port not configured"
+    echo -e "${RED}✗${NC} Dev profile: gateway port not configured"
     ((TESTS_FAILED++))
 fi
 
-if grep -q "management:" "$LOCAL_CONFIG" && grep -q "port: 0" "$LOCAL_CONFIG"; then
-    echo -e "${GREEN}✓${NC} Local profile: management port segregated (0)"
+if grep -q "management:" "$DEV_CONFIG" && grep -q "port: 0" "$DEV_CONFIG"; then
+    echo -e "${GREEN}✓${NC} Dev profile: management port segregated (0)"
     ((TESTS_PASSED++))
 else
-    echo -e "${RED}✗${NC} Local profile: management port not segregated"
+    echo -e "${RED}✗${NC} Dev profile: management port not segregated"
     ((TESTS_FAILED++))
 fi
 

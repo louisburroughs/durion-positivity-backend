@@ -54,7 +54,7 @@ All downstream services use `server.port: 0`:
 
 ### Profile Configuration
 
-#### Local Development (`application-local.yml`)
+#### Local Development (`application-dev.yml`)
 
 ```yaml
 server:

@@ -1,0 +1,8 @@
+security:
+  jwt:
+    secret: ${SECURITY_JWT_SECRET}
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: ${EUREKA_SERVER_URL}

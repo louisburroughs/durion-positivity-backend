@@ -23,7 +23,7 @@ import java.time.Duration;
 import java.util.List;
 
 @Component
-@Profile("preprod")
+@Profile("alpha")
 public class SessionAgentManager implements AgentOrchestrationService {
 
   private final Cache<String, PosAssistant> agentCache;

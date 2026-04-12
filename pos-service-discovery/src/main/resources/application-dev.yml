@@ -1,7 +1,7 @@
-# Local development profile — dynamic ports
+# Local development profile
 
 server:
-  port: 0  # OS assigns available ephemeral port
+  port: ${SERVER_PORT:8761}  # Stable local default; override when needed
 
 management:
   server:

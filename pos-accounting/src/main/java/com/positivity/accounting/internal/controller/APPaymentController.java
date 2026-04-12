@@ -38,7 +38,7 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * REST controller for AP (Accounts Payable) payment operations.
- * 
+ *
  * <p>
  * Endpoints:
  * <ul>
@@ -46,7 +46,7 @@ import org.springframework.validation.annotation.Validated;
  * <li>GET /v1/accounting/ap/payments/{paymentId} - Get payment details</li>
  * <li>GET /v1/accounting/ap/bills - List eligible vendor bills</li>
  * </ul>
- * 
+ *
  * @see APPaymentService
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
@@ -79,14 +79,14 @@ public class APPaymentController {
                         @Valid @RequestBody @NonNull ExecuteAPPaymentRequest request, Authentication authentication) {
 
                 String currentUser = authentication != null ? authentication.getName() : "system";
-                log.info("Executing payment for vendor {} with paymentRef {}", request.getVendorId(),
-                                request.getPaymentRef());
+                log.info("Executing payment for vendor(mask) {} with paymentRef(mask) {}",
+                                maskForLog(request.getVendorId()), maskForLog(request.getPaymentRef()));
 
                 // Check if payment already exists for idempotency
                 Optional<APPaymentResponse> existing = apPaymentService.getPaymentByRef(request.getPaymentRef());
                 if (existing.isPresent()) {
                         // Idempotent replay: validate and return existing payment with 200 OK
-                        log.info("Idempotent replay for paymentRef {}", request.getPaymentRef());
+                        log.info("Idempotent replay for paymentRef(mask) {}", maskForLog(request.getPaymentRef()));
                         APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
                         return ResponseEntity.ok(response);
                 }
@@ -115,12 +115,7 @@ public class APPaymentController {
         @ApiResponse(responseCode = "404", description = "Payment not found")
         @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<APPaymentResponse> getPaymentByRef(
-                        @PathVariable
-                        @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
-                        @NotBlank
-                        @Size(min = 1, max = 100, message = "Payment reference must be 1-100 characters")
-                        @Pattern(regexp = "^[^\\r\\n]+$", message = "Payment reference must not contain newline characters")
-                        @NonNull String paymentRef) {
+                        @PathVariable @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012") @NotBlank @Size(min = 1, max = 100, message = "Payment reference must be 1-100 characters") @Pattern(regexp = "^[^\\r\\n]+$", message = "Payment reference must not contain newline characters") @NonNull String paymentRef) {
 
                 return apPaymentService.getPaymentByRef(paymentRef)
                                 .map(ResponseEntity::ok)
@@ -138,5 +133,20 @@ public class APPaymentController {
 
                 List<VendorBillSummaryResponse> bills = apPaymentService.listEligibleBills(vendorId);
                 return ResponseEntity.ok(bills);
+        }
+
+        private String maskForLog(Object value) {
+                if (value == null) {
+                        return "null";
+                }
+                String sanitized = value.toString()
+                                .replace('\r', '_')
+                                .replace('\n', '_')
+                                .replace('\t', '_');
+                int length = sanitized.length();
+                if (length <= 4) {
+                        return "****";
+                }
+                return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
         }
 }

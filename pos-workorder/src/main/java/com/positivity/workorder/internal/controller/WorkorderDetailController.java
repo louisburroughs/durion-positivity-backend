@@ -22,7 +22,7 @@ import java.util.UUID;
 
 /**
  * Controller for workorder detail with role-based visibility.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #155 - Role-Based Visibility
  */
@@ -50,7 +50,8 @@ public class WorkorderDetailController {
         // Extract authorities from header
         Set<String> userAuthorities = extractAuthorities(authorities);
 
-        log.debug("Getting workorder detail: workorderId={}, authorities={}", workorderId, userAuthorities);
+        log.debug("Getting workorder detail: workorderId(mask)={}, authorityCount={}",
+                maskForLog(workorderId), userAuthorities.size());
 
         WorkorderDetailResponse response = workorderDetailService.getWorkorderDetail(workorderId, userAuthorities);
 
@@ -62,5 +63,20 @@ public class WorkorderDetailController {
             return Set.of();
         }
         return new HashSet<>(Arrays.asList(authoritiesHeader.split(",")));
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 }

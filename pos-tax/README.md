@@ -50,7 +50,7 @@ The pos-tax service provides tax calculation capabilities for the Durion POS sys
 
 ### Test Mode (Development)
 
-Enable test mode in `application-local.yml`:
+Enable test mode in `application-dev.yml`:
 
 ```yaml
 pos:
@@ -259,7 +259,7 @@ Key dependencies:
 
 ### Adding New Tax Jurisdictions
 
-To add support for new jurisdictions in test mode, update `application-local.yml`:
+To add support for new jurisdictions in test mode, update `application-dev.yml`:
 
 ```yaml
 pos:
@@ -276,7 +276,7 @@ pos:
 
 Tax rates are configured per environment:
 
-- Local development: `application-local.yml`
+- Local development: `application-dev.yml`
 - Testing: `application-test.yml`
 - Production: Environment variables via Kubernetes ConfigMap
 

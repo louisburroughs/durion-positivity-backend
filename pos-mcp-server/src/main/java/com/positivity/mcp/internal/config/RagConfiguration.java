@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Profile;
 import javax.sql.DataSource;
 
 @Configuration
-@Profile("preprod")
+@Profile("alpha")
 public class RagConfiguration {
 
   @Bean

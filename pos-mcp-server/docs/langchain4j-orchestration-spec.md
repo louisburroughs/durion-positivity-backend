@@ -649,7 +649,7 @@ services:
     ports:
       - "${POS_MCP_SERVER_PORT:-8094}:8086"
     environment:
-      SPRING_PROFILES_ACTIVE: ${POS_MCP_SERVER_PROFILE:-preprod}
+      SPRING_PROFILES_ACTIVE: ${POS_MCP_SERVER_PROFILE:-alpha}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POS_MCP_DB_NAME:-positivity}
       SPRING_DATASOURCE_USERNAME: ${POS_MCP_DB_USER:-positivity}
       SPRING_DATASOURCE_PASSWORD: ${POS_MCP_DB_PASSWORD}

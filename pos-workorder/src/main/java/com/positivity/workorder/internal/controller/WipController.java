@@ -60,7 +60,7 @@ public class WipController {
             throw new AccessDeniedException("Missing required permission: " + WIP_VIEW_ALL_LOCATIONS);
         }
 
-        log.debug("WIP list requested: locationId={}, multiLocation={}", locationId, multiLocation);
+        log.debug("WIP list requested: locationId(mask)={}, multiLocation={}", maskForLog(locationId), multiLocation);
 
         Page<WorkorderStatusView> result = wipService.getWipWorkorders(locationId, multiLocation, pageable);
         return ResponseEntity.ok(result);
@@ -73,9 +73,24 @@ public class WipController {
     public ResponseEntity<WorkorderStatusDetail> getWipDetail(
             @Parameter(description = "UUID of the workorder") @PathVariable UUID workorderId) {
 
-        log.debug("WIP detail requested: workorderId={}", workorderId);
+        log.debug("WIP detail requested: workorderId(mask)={}", maskForLog(workorderId));
 
         WorkorderStatusDetail detail = wipService.getWipDetail(workorderId);
         return ResponseEntity.ok(detail);
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 }

@@ -1,11 +1,11 @@
 #!/bin/bash
-# Start all Durion POS microservices in proper order with local profile (H2 databases)
+# Start all Durion POS microservices in proper order with dev profile (H2 databases)
 
 set -e
 
 cd "$(dirname "$0")"
 
-echo "=== Starting Durion POS Microservices (Local Profile - H2) ==="
+echo "=== Starting Durion POS Microservices (Dev Profile - H2) ==="
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -21,21 +21,21 @@ mkdir -p logs
 
 # Start services in order
 echo -e "${YELLOW}Starting Service Discovery (Eureka)...${NC}"
-./mvnw spring-boot:run -pl pos-service-discovery -Dspring-boot.run.arguments="--spring.profiles.active=local" > logs/pos-service-discovery.log 2>&1 &
+./mvnw spring-boot:run -pl pos-service-discovery -Dspring-boot.run.arguments="--spring.profiles.active=dev" > logs/pos-service-discovery.log 2>&1 &
 PID=$!
 echo $PID > logs/pos-service-discovery.pid
 echo -e "${BLUE}  PID: $PID${NC}"
 sleep 20
 
 echo -e "${YELLOW}Starting Security Service...${NC}"
-./mvnw spring-boot:run -pl pos-security-service -Dspring-boot.run.arguments="--spring.profiles.active=local" > logs/pos-security-service.log 2>&1 &
+./mvnw spring-boot:run -pl pos-security-service -Dspring-boot.run.arguments="--spring.profiles.active=dev" > logs/pos-security-service.log 2>&1 &
 PID=$!
 echo $PID > logs/pos-security-service.pid
 echo -e "${BLUE}  PID: $PID${NC}"
 sleep 10
 
 echo -e "${YELLOW}Starting API Gateway...${NC}"
-./mvnw spring-boot:run -pl pos-api-gateway -Dspring-boot.run.arguments="--spring.profiles.active=local" > logs/pos-api-gateway.log 2>&1 &
+./mvnw spring-boot:run -pl pos-api-gateway -Dspring-boot.run.arguments="--spring.profiles.active=dev" > logs/pos-api-gateway.log 2>&1 &
 PID=$!
 echo $PID > logs/pos-api-gateway.pid
 echo -e "${BLUE}  PID: $PID${NC}"
@@ -67,7 +67,7 @@ services=(
 
 for service in "${services[@]}"; do
     echo -e "  ${GREEN}→${NC} Starting $service..."
-    ./mvnw spring-boot:run -pl "$service" -Dspring-boot.run.arguments="--spring.profiles.active=local" > "logs/$service.log" 2>&1 &
+    ./mvnw spring-boot:run -pl "$service" -Dspring-boot.run.arguments="--spring.profiles.active=dev" > "logs/$service.log" 2>&1 &
     PID=$!
     echo $PID > "logs/$service.pid"
     sleep 3

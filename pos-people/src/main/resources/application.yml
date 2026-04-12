@@ -2,10 +2,10 @@ spring:
   application:
     name: people
   datasource:
-    url: jdbc:postgresql://localhost:5432/pos_people_db
-    username: ${SPRING_DATASOURCE_USERNAME:pos_user}
-    password: ${SPRING_DATASOURCE_PASSWORD}
-    driver-class-name: org.postgresql.Driver
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
@@ -28,7 +28,7 @@ management:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_SERVER_URL:}
     fetch-registry: true
     register-with-eureka: true
   instance:
