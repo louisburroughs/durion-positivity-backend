@@ -63,9 +63,13 @@ public final class GatewaySecurityConstants {
      */
     public static final String ROLE_PREFIX = "ROLE_";
 
-    /**
-     * JWT claim and authentication details key for stable user identifier.
-     */
+    /** Primary JWT claim key for stable user identifier. */
+    public static final String CLAIM_UID = "uid";
+
+    /** Legacy JWT claim key for stable user identifier. */
+    public static final String CLAIM_USER_ID_LEGACY = "userId";
+
+    /** Authentication details map key for stable user identifier. */
     public static final String DETAIL_USER_ID = "userId";
 
     /**

@@ -27,7 +27,7 @@ A lightweight authentication/authorization filter enriches requests with user id
 - Injects headers to downstream services:
   - `X-Authorities`: comma-separated authorities (e.g., `PERM_crm:party:view,PERM_crm:vehicle:edit,...`)
   - `X-User`: token subject (`sub`)
-  - `X-User-Id`: token `personId` claim when present
+  - `X-User-Id`: token `uid` claim (legacy `userId` support is compatibility-only downstream)
   - `X-API-Version`: forwarded from client request (enables per-endpoint versioning)
 - Public paths bypass authentication: `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/swagger-resources/**`, `/eureka/**`, `/security-service/v1/auth/**`
 
@@ -57,7 +57,7 @@ Source:
 
 ### Identity Header Hardening
 
-- The gateway strips inbound identity headers (`X-User`, `X-User-Id`, `X-Authorities`, `X-Roles`) and injects trusted headers derived from validated tokens: `X-User` (`sub`), `X-User-Id` (`personId` when present), and `X-Authorities` (canonical authorities list).
+- The gateway strips inbound identity headers (`X-User`, `X-User-Id`, `X-Authorities`, `X-Roles`) and injects trusted headers derived from validated tokens: `X-User` (`sub`), `X-User-Id` (`uid`), and `X-Authorities` (canonical authorities list).
 
 ### Feature Flags (under `auth:` prefix)
 

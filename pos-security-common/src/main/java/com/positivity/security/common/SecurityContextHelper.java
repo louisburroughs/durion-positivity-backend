@@ -19,8 +19,9 @@ import java.util.stream.Collectors;
  * <ul>
  * <li><b>username</b> is the human-readable audit identity from {@code X-User}.
  * Use this for logs, createdBy/updatedBy fields, and operational audit trails.</li>
- * <li><b>userId</b> is the stable UUID identity sourced from JWT claim
- * {@code userId}. Use this only when you must resolve user/person records.</li>
+ * <li><b>userId</b> is the stable UUID identity sourced primarily from JWT claim
+ * {@code uid} (legacy fallback: {@code userId}). Use this only when you must
+ * resolve user/person records.</li>
  * </ul>
  *
  * <p>

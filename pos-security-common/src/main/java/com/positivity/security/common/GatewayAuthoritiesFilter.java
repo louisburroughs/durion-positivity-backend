@@ -138,10 +138,14 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
 
             byte[] payloadBytes = Base64.getUrlDecoder().decode(jwtParts[1]);
             JsonNode payloadNode = objectMapper.readTree(payloadBytes);
-            JsonNode userIdNode = payloadNode.get(GatewaySecurityConstants.DETAIL_USER_ID);
+            JsonNode userIdNode = firstNonBlankClaim(payloadNode,
+                    GatewaySecurityConstants.CLAIM_UID,
+                    GatewaySecurityConstants.CLAIM_USER_ID_LEGACY);
             if (userIdNode == null || userIdNode.asText().isBlank()) {
-                loggr.warn("Missing JWT '{}' claim for user '{}'",
-                        GatewaySecurityConstants.DETAIL_USER_ID, username);
+                loggr.warn("Missing JWT '{}' and legacy '{}' claims for user '{}'",
+                        GatewaySecurityConstants.CLAIM_UID,
+                        GatewaySecurityConstants.CLAIM_USER_ID_LEGACY,
+                        username);
                 return Optional.empty();
             }
 
@@ -150,6 +154,16 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             loggr.warn("Failed to resolve userId from JWT token for user '{}': {}", username, ex.getMessage());
             return Optional.empty();
         }
+    }
+
+    private JsonNode firstNonBlankClaim(JsonNode payloadNode, String... claimNames) {
+        for (String claimName : claimNames) {
+            JsonNode claimNode = payloadNode.get(claimName);
+            if (claimNode != null && !claimNode.asText().isBlank()) {
+                return claimNode;
+            }
+        }
+        return null;
     }
 
     /**

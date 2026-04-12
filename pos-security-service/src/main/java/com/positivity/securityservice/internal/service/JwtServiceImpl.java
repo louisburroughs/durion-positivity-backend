@@ -4,11 +4,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -174,7 +174,10 @@ public class JwtServiceImpl implements JwtService {
             Set<String> roles = new HashSet<>();
             for (Object role : rolesList) {
                 if (role instanceof String str) {
-                    roles.add(str);
+                    String normalizedRole = normalizeRoleClaim(str);
+                    if (!normalizedRole.isBlank()) {
+                        roles.add(normalizedRole);
+                    }
                 }
             }
             return roles;
@@ -311,9 +314,14 @@ public class JwtServiceImpl implements JwtService {
                 .flatMap(authority -> PermissionCode.fromCode(authority).stream())
                 .collect(Collectors.toUnmodifiableSet());
         String permBits = PermissionBitsetCodec.encode(permCodes);
-        List<String> roleClaims = new ArrayList<>(roles.size());
-        for (String role : roles) {
-            roleClaims.add(role.startsWith("ROLE_") ? role : "ROLE_" + role);
+        List<String> roleClaims = roles.stream()
+                .map(this::normalizeRoleClaim)
+                .filter(role -> !role.isBlank())
+                .distinct()
+                .sorted()
+                .toList();
+        if (roleClaims.isEmpty()) {
+            throw new IllegalArgumentException("Roles cannot be blank");
         }
 
         var accessBuilder = Jwts.builder()
@@ -477,5 +485,20 @@ public class JwtServiceImpl implements JwtService {
 
     private Claims getClaims(String token) {
         return jwtParser().parseSignedClaims(token).getPayload();
+    }
+
+    private String normalizeRoleClaim(@NonNull String role) {
+        String trimmed = role.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        if (upper.startsWith("ROLE_") || upper.startsWith("ROLE")) {
+            return upper;
+        }
+        if (upper.isBlank()) {
+            return "";
+        }
+        return "ROLE_" + upper;
     }
 }

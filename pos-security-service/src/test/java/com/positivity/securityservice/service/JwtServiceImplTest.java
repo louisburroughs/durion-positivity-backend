@@ -520,6 +520,28 @@ class JwtServiceImplTest {
     }
 
     @Test
+    @DisplayName("generateTokenPair normalizes role claims without ROLE_ROLE duplicates")
+    void accessToken_normalizesRolesWithoutDoublePrefix() {
+        JwtService.TokenPair tokenPair = sut.generateTokenPair(
+                "alice",
+                UUID.randomUUID(),
+                null,
+                Set.of("admin", "ROLE_ADMIN", "role1", "ROLE1", " shop_mgr "));
+
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        Claims claims = Jwts.parser().verifyWith(key)
+                .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
+                .build()
+                .parseSignedClaims(tokenPair.accessToken()).getPayload();
+
+        @SuppressWarnings("unchecked")
+        List<String> roles = claims.get(JwtService.ROLES, List.class);
+        assertThat(roles).containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE1", "ROLE_SHOP_MGR");
+        assertThat(roles).allMatch(role -> role.equals(role.toUpperCase()));
+        assertThat(roles).noneMatch(role -> role.startsWith("ROLE_ROLE"));
+    }
+
+    @Test
     @DisplayName("generateTokenPair refresh token must NOT include roles or perm_bits claims")
     void refreshToken_doesNotContainRolesOrPermBits() {
         JwtService.TokenPair tokenPair = sut.generateTokenPair("alice", UUID.randomUUID(), null, Set.of("ADMIN"));
@@ -671,13 +693,13 @@ class JwtServiceImplTest {
                 .signWith(key)
                 .compact();
 
-        when(roleAuthorityService.expandRolesToAuthorities(Set.of("ADMIN")))
+        when(roleAuthorityService.expandRolesToAuthorities(Set.of("ROLE_ADMIN")))
                 .thenReturn(Set.of("ORDER:VIEW"));
 
         Set<String> authorities = sut.getAuthoritiesFromToken(legacyToken);
 
         assertThat(authorities).containsExactly("ORDER:VIEW");
-        verify(roleAuthorityService).expandRolesToAuthorities(Set.of("ADMIN"));
+        verify(roleAuthorityService).expandRolesToAuthorities(Set.of("ROLE_ADMIN"));
     }
 
     /**

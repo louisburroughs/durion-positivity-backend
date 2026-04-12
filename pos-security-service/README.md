@@ -11,11 +11,16 @@ compact permission bitset.
 Access tokens issued by `pos-security-service` include the following required claims used by the gateway and services:
 
 - `sub`: subject / username
-- `personId`: user/person UUID (canonical subject identifier for downstream services)
+- `uid`: stable user UUID identifier
 - `jti`: token identifier
 - `iat`, `exp`: issued-at and expiry timestamps
 - `perm_bits`: Base64URL-encoded permission BitSet (Base64URL, no padding)
 - `perm_ver`: integer permission catalog version (gateway verifies this)
+- `roles`: normalized role list for frontend compatibility (`ROLE_` prefix preserved/normalized)
+
+Optional access-token claims:
+
+- `personId`: linked CRM person UUID when available
 
 Notes:
 
@@ -158,7 +163,8 @@ Catalog behavior:
 
 1. Update JWT extraction endpoints.
 
-- Remove `/v1/auth/authorities` in `JwtController` for greenfield mode.
+- Keep `/v1/auth/roles` as the frontend compatibility endpoint.
+- Keep `/v1/auth/authorities` only for controlled legacy compatibility (deprecated for new integrations).
 - Keep `/v1/auth/validate`, `/v1/auth/subject`, and `/v1/auth/person-id`.
 - Add `/v1/auth/permissions` only if explicitly needed for admin/debug use.
 

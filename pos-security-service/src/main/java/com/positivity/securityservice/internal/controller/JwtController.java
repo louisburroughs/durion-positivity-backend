@@ -39,7 +39,8 @@ import java.util.Set;
  * - GET /v1/auth/validate - Validate token
  * - DELETE /v1/auth/revoke - Revoke token
  * - GET /v1/auth/roles - Extract roles from token
- * - GET /v1/auth/authorities - Extract authorities from token
+ * - GET /v1/auth/authorities - Extract authorities from token (legacy
+ * compatibility endpoint; deprecated for new integrations)
  * - GET /v1/auth/subject - Extract subject (username) from token
  * 
  * **Error Handling:**
@@ -266,11 +267,16 @@ public class JwtController {
 
     /**
      * Extracts and returns authorities from a valid JWT token.
+     *
+     * @deprecated Compatibility-only endpoint for legacy callers.
+     *             New integrations should authorize through gateway-derived
+     *             authorities and avoid direct token authorities parsing.
      * 
      * @param token JWT token
      * @return set of authorities or 401 if token invalid
      */
-    @Operation(summary = "Extract authorities from JWT token", description = "Get the authorities claim from a JWT token (expanded by gateway)")
+    @Deprecated(since = "2026-04-12", forRemoval = false)
+    @Operation(summary = "Extract authorities from JWT token (deprecated)", description = "Compatibility endpoint for legacy tokens. New token issuance does not include an authorities claim.")
     @ApiResponse(responseCode = "200", description = "Authorities extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
     @PreAuthorize("isAuthenticated()")

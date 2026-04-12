@@ -4,6 +4,7 @@ import java.time.ZoneOffset;
 import java.time.Clock;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -285,7 +286,12 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .containsKey(JwtService.PERM_BITS)
                                 .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
                                 .containsKey(JwtService.UID)
-                                .doesNotContainKeys("roles", "authorities");
+                                .containsKey(JwtService.ROLES)
+                                .doesNotContainKey(JwtService.AUTHORITIES);
+
+                @SuppressWarnings("unchecked")
+                java.util.List<String> refreshedRoles = refreshedClaims.get(JwtService.ROLES, java.util.List.class);
+                assertThat(refreshedRoles).containsExactlyInAnyOrder("ROLE_SHOP_MGR", "ROLE_INVENTORY_MGR");
         }
 
         /**
@@ -417,7 +423,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .param("token", token))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$").isArray())
-                                .andExpect(jsonPath("$").isEmpty());
+                                .andExpect(jsonPath("$", containsInAnyOrder("ROLE_SHOP_MGR", "ROLE_INVENTORY_MGR")));
         }
 
         /**
@@ -501,7 +507,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 TokenResponse.class);
 
                 Set<String> extractedRoles = jwtService.getRolesFromToken(response.token());
-                assertThat(extractedRoles).isEmpty();
+                assertThat(extractedRoles).containsExactlyInAnyOrder("ROLE1", "ROLE2", "ROLE3");
 
                 SecretKeySpec key = new SecretKeySpec(
                                 jwtSecret.getBytes(StandardCharsets.UTF_8),
@@ -512,7 +518,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .parseSignedClaims(response.token()).getPayload();
                 assertThat(claims)
                                 .containsKey(JwtService.PERM_BITS)
-                                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION);
+                                .containsEntry(JwtService.PERM_VER, PermissionCode.CATALOG_VERSION)
+                                .containsKey(JwtService.ROLES)
+                                .doesNotContainKey(JwtService.AUTHORITIES);
         }
 
         /**
