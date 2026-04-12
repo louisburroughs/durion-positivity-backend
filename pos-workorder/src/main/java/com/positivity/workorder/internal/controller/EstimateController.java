@@ -136,8 +136,8 @@ public class EstimateController {
             @Parameter(description = "Optional idempotency key for safe retries", example = "estimate-create-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         try {
-            log.info("Received create estimate request for customerId={}, vehicleId={}",
-                    request.getCustomerId(), request.getVehicleId());
+            log.info("Received create estimate request for customerId(mask)={}, vehicleId(mask)={}",
+                    maskForLog(request.getCustomerId()), maskForLog(request.getVehicleId()));
 
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
                 var existingEstimateId = idempotencyService.getExistingWorkorderId(
@@ -190,8 +190,8 @@ public class EstimateController {
                     IDEMPOTENCY_OPERATION_ESTIMATE_CREATE,
                     idempotencyKey,
                     estimateId);
-        } catch (DataIntegrityViolationException ignored) {
-            log.debug("Idempotency key {} already registered", idempotencyKey);
+        } catch (DataIntegrityViolationException _) {
+            log.debug("Idempotency key(mask) {} already registered", maskForLog(idempotencyKey));
         }
     }
 
@@ -209,7 +209,7 @@ public class EstimateController {
         final EstimateStatus targetStatus;
         try {
             targetStatus = EstimateStatus.valueOf(statusValue);
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException _) {
             return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
         }
 
@@ -219,9 +219,9 @@ public class EstimateController {
                 case DRAFT -> ResponseEntity.ok(estimateService.reopenEstimate(estimateId));
                 default -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
             };
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException _) {
             return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
-        } catch (IllegalStateException ex) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
         }
     }
@@ -316,7 +316,8 @@ public class EstimateController {
             @Parameter(description = "ID of the estimate to promote", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Idempotency-Key header for safe retries", example = "estimate-promote-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         try {
-            log.info("Promoting estimate {} to workorder (idempotencyKey={})", estimateId, idempotencyKey);
+            log.info("Promoting estimate(mask) {} to workorder (idempotencyKey(mask)={})",
+                    maskForLog(estimateId), maskForLog(idempotencyKey));
 
             ResponseEntity<WorkorderResponse> idempotentResponse = getIdempotentResponseIfPresent(idempotencyKey);
             if (idempotentResponse != null) {
@@ -365,20 +366,20 @@ public class EstimateController {
         }
 
         var existingWorkorderId = idempotencyService.getExistingWorkorderId(
-            IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE,
-            idempotencyKey);
+                IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE,
+                idempotencyKey);
         if (existingWorkorderId.isEmpty()) {
             return null;
         }
 
         UUID workorderId = existingWorkorderId.get();
-        log.info("Idempotency key {} already processed - returning existing workorder {}",
-                idempotencyKey, workorderId);
+        log.info("Idempotency key(mask) {} already processed - returning existing workorder(mask) {}",
+                maskForLog(idempotencyKey), maskForLog(workorderId));
         return loadWorkorderResponse(
                 workorderId,
                 () -> {
-                    log.error("Existing workorder {} not found for idempotency key {} - data inconsistency",
-                            workorderId, idempotencyKey);
+                    log.error("Existing workorder(mask) {} not found for idempotency key(mask) {} - data inconsistency",
+                            maskForLog(workorderId), maskForLog(idempotencyKey));
                     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
                 });
     }
@@ -402,13 +403,14 @@ public class EstimateController {
                     idempotencyKey);
             if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(currentResponse.getId())) {
                 UUID workorderId = existingWorkorderId.get();
-                log.warn("Race condition detected: idempotency key {} already registered for different workorder {}",
-                        idempotencyKey, workorderId);
+                log.warn(
+                        "Race condition detected: idempotency key(mask) {} already registered for different workorder(mask) {}",
+                        maskForLog(idempotencyKey), maskForLog(workorderId));
                 return loadWorkorderResponse(workorderId,
                         () -> ResponseEntity.status(HttpStatus.OK).body(currentResponse));
             }
-            log.debug("Idempotency key {} already registered for current workorder {}",
-                    idempotencyKey, currentResponse.getId());
+            log.debug("Idempotency key(mask) {} already registered for current workorder(mask) {}",
+                    maskForLog(idempotencyKey), maskForLog(currentResponse.getId()));
             return null;
         }
     }
@@ -698,5 +700,20 @@ public class EstimateController {
             log.error("Failed to create snapshot for estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
         }
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 }
