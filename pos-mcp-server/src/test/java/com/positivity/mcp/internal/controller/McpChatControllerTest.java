@@ -88,13 +88,20 @@ class McpChatControllerTest {
     }
 
     @Test
-    @DisplayName("POST /v1/mcp/chat unauthenticated → 401 Unauthorized")
+    @DisplayName("POST /v1/mcp/chat unauthenticated returns 401 ApiError envelope")
     void chat_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/v1/mcp/chat")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"message\":\"test\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message").value("Authentication is required"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
     @Test
@@ -110,7 +117,10 @@ class McpChatControllerTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.fieldErrors[0].field").value("message"));
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("message"))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
     @TestConfiguration

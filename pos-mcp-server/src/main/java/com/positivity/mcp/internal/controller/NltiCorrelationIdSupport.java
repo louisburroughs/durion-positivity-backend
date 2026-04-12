@@ -9,8 +9,7 @@ import org.jspecify.annotations.Nullable;
 final class NltiCorrelationIdSupport {
 
     static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
-    static final String CORRELATION_ID_ATTRIBUTE =
-            NltiCorrelationIdSupport.class.getName() + ".resolvedCorrelationId";
+    static final String CORRELATION_ID_ATTRIBUTE = NltiCorrelationIdSupport.class.getName() + ".resolvedCorrelationId";
 
     private NltiCorrelationIdSupport() {
     }
@@ -19,7 +18,7 @@ final class NltiCorrelationIdSupport {
         if (headerValue != null && !headerValue.isBlank()) {
             try {
                 return UUID.fromString(headerValue);
-            } catch (IllegalArgumentException ignored) {
+            } catch (IllegalArgumentException _) {
                 // fall through to generate
             }
         }
