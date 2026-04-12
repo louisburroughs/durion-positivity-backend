@@ -1,8 +1,8 @@
-# LangChain4j Orchestration Proposal
+# LangChain4j Orchestration SPECIFICATION
 
 ## Status
 
-PROPOSAL — replaces the Onyx-based architecture defined in [llm-tool-orchestration-spec.md](llm-tool-orchestration-spec.md).
+ACCEPTED — replaces the Onyx-based architecture defined in [llm-tool-orchestration-spec.md](llm-tool-orchestration-spec.md).
 
 ## Problem Statement
 
