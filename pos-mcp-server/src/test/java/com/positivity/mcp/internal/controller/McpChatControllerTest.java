@@ -1,13 +1,15 @@
 package com.positivity.mcp.internal.controller;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.spec.McpSchema;
-
+import com.positivity.mcp.service.AgentOrchestrationService;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +23,8 @@ import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -31,15 +35,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
  * Controller slice tests for {@link McpChatController}.
- *
- * <p>
- * Verifies that {@link McpChatController}:
- * <ul>
- * <li>Returns HTTP 200 for authenticated callers with a valid
- * {@code toolName}.</li>
- * <li>Returns HTTP 400 when {@code toolName} is null or blank.</li>
- * <li>Returns HTTP 401 for unauthenticated callers (ADR-0017).</li>
- * </ul>
  */
 @WebMvcTest(McpChatController.class)
 @ActiveProfiles("test")
@@ -49,86 +44,75 @@ class McpChatControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private McpSyncClient mcpSyncClient;
+    private AgentOrchestrationService agentOrchestrationService;
 
-    // ─── AC: POST /v1/mcp/chat with valid toolName → 200 ─────────────────────
-
-    /**
-     * Authenticated caller supplying a valid {@code toolName} must receive HTTP
-     * 200 OK with the MCP tool result.
-     */
     @Test
-    @WithMockUser
-    @DisplayName("POST /v1/mcp/chat with valid toolName → 200 OK")
-    void chat_withValidToolName_returns200() throws Exception {
-        McpSchema.CallToolResult result = McpSchema.CallToolResult.builder()
-                .content(List.of())
-                .isError(false)
-                .build();
-        when(mcpSyncClient.callTool(any())).thenReturn(result);
+    @WithMockUser(username = "test-user", roles = "USER")
+    @DisplayName("POST /v1/mcp/chat with message returns 200 and response payload")
+    void chat_withMessage_returns200() throws Exception {
+        when(agentOrchestrationService.chat(anyString(), anyString(), anyString())).thenReturn("assistant reply");
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(new SimpleGrantedAuthority("ROLE_USER")));
 
         mockMvc.perform(post("/v1/mcp/chat")
+                .principal(authentication)
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"toolName\":\"positivity-ping\",\"arguments\":{}}"))
-                .andExpect(status().isOk());
+                .content("{\"message\":\"test\"}"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.response").value("assistant reply"));
     }
 
-    // ─── AC: POST /v1/mcp/chat with null toolName → 400 ─────────────────────
-
-    /**
-     * A request body with no {@code toolName} field (null after deserialization)
-     * must be rejected with HTTP 400 by the controller guard.
-     */
     @Test
-    @WithMockUser
-    @DisplayName("POST /v1/mcp/chat with missing toolName → 400 Bad Request")
-    void chat_withMissingToolName_returns400() throws Exception {
+    @WithMockUser(username = "test-user", roles = "USER")
+    @DisplayName("POST /v1/mcp/chat orchestration failure returns 500 ApiError envelope")
+    void chat_orchestrationFailure_returns500ApiError() throws Exception {
+        when(agentOrchestrationService.chat(anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("boom"));
+
         mockMvc.perform(post("/v1/mcp/chat")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"arguments\":{}}"))
-                .andExpect(status().isBadRequest());
+                .content("{\"message\":\"test\"}"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.message").value("An unexpected error occurred"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
-    // ─── AC: POST /v1/mcp/chat with blank toolName → 400 ────────────────────
-
-    /**
-     * A request body with a blank {@code toolName} must be rejected with HTTP
-     * 400 by the controller's {@code isBlank()} guard.
-     */
-    @Test
-    @WithMockUser
-    @DisplayName("POST /v1/mcp/chat with blank toolName → 400 Bad Request")
-    void chat_withBlankToolName_returns400() throws Exception {
-        mockMvc.perform(post("/v1/mcp/chat")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"toolName\":\"   \",\"arguments\":{}}"))
-                .andExpect(status().isBadRequest());
-    }
-
-    // ─── ADR-0017: no authentication → 401 ──────────────────────────────────
-
-    /**
-     * An unauthenticated caller must receive HTTP 401 Unauthorized (ADR-0017).
-     */
     @Test
     @DisplayName("POST /v1/mcp/chat unauthenticated → 401 Unauthorized")
     void chat_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/v1/mcp/chat")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"toolName\":\"positivity-ping\",\"arguments\":{}}"))
+                .content("{\"message\":\"test\"}"))
                 .andExpect(status().isUnauthorized());
     }
 
-    // ─── Test slice configuration ────────────────────────────────────────────
+    @Test
+    @WithMockUser(username = "test-user", roles = "USER")
+    @DisplayName("POST /v1/mcp/chat with blank message returns 400 ApiError envelope")
+    void chat_withBlankMessage_returns400() throws Exception {
+        mockMvc.perform(post("/v1/mcp/chat")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"message\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("message"));
+    }
 
-    /**
-     * Minimal test-slice configuration:
-     * <ul>
-     * <li>Enables {@code @PreAuthorize} evaluation so 401 tests function.</li>
-     * <li>Provides {@link SecurityExceptionControllerAdvice} to map Spring Security
-     * exceptions to the correct HTTP status codes (ADR-0017).</li>
-     * </ul>
-     */
     @TestConfiguration
     @EnableMethodSecurity(prePostEnabled = true)
     static class SliceTestConfig {
@@ -139,11 +123,6 @@ class McpChatControllerTest {
         }
     }
 
-    /**
-     * Maps {@link AccessDeniedException} to HTTP 403 and
-     * {@link AuthenticationException}
-     * subtypes to HTTP 401 in the MockMvc test-slice context (ADR-0017).
-     */
     @ControllerAdvice
     static class SecurityExceptionControllerAdvice {
 

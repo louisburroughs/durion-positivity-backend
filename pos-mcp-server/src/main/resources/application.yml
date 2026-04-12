@@ -8,6 +8,8 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
+  flyway:
+    locations: classpath:db/migration/h2
   jpa:
     hibernate:
       ddl-auto: validate
@@ -28,6 +30,32 @@ mcp:
       - /v1/events/summary
   security:
     permit-all-transport: false
+  rag:
+    table-name: mcp_document_embedding
+    dimension: 768
+    index-type: ivfflat
+  agent:
+    cache-ttl-minutes: 30
+    max-cached-agents: 500
+    memory-max-messages: 50
+
+langchain4j:
+  ollama:
+    chat-model:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      temperature: 0.2
+      timeout: 60s
+    embedding-model:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+      timeout: 30s
+
+exa:
+  api-key: ${EXA_API_KEY:}
+  base-url: https://api.exa.ai
+  search-type: auto
+  max-results: 5
 
 server:
   port: 8086
@@ -73,6 +101,10 @@ pos:
     rate-limit:
       per-session: 100
       max-tracked-sessions: 100000
+  inventory:
+    base-url: ${POS_INVENTORY_BASE_URL:http://pos-inventory/v1/inventory}
+  order:
+    base-url: ${POS_ORDER_BASE_URL:http://pos-order/v1/orders}
   show-actuator: true
 
 logging:

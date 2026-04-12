@@ -3,7 +3,9 @@ spring:
     url: jdbc:postgresql://${POS_MCP_DB_HOST:localhost}:${POS_MCP_DB_PORT:5432}/${POS_MCP_DB_NAME:pos_mcp}
     driver-class-name: org.postgresql.Driver
     username: ${POS_MCP_DB_USER:positivity}
-    password: ${POS_MCP_DB_PASSWORD:your_secure_password_here}
+    password: ${POS_MCP_DB_PASSWORD}
+  flyway:
+    locations: classpath:db/migration
   jpa:
     hibernate:
       ddl-auto: validate
@@ -19,3 +21,31 @@ eureka:
 
 server:
   port: 8086
+
+langchain4j:
+  ollama:
+    chat-model:
+      base-url: ${OLLAMA_BASE_URL:http://ollama:11434}
+      model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      temperature: 0.2
+      timeout: 60s
+    embedding-model:
+      base-url: ${OLLAMA_BASE_URL:http://ollama:11434}
+      model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+      timeout: 30s
+
+mcp:
+  rag:
+    table-name: mcp_document_embedding
+    dimension: 768
+    index-type: ivfflat
+  agent:
+    cache-ttl-minutes: 30
+    max-cached-agents: 500
+    memory-max-messages: 50
+
+exa:
+  api-key: ${EXA_API_KEY:}
+  base-url: https://api.exa.ai
+  search-type: auto
+  max-results: 5

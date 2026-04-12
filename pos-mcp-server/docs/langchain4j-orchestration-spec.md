@@ -28,7 +28,7 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
    │       └─ per-session ChatMemory (MessageWindowChatMemory)
    │
    ├─ LangChain4j ─────────────── orchestration runtime
-   │   ├─ OllamaChatModel ──────── Ollama HTTP API (llama3.1 / qwen2.5 / etc.)
+   │   ├─ OllamaChatModel ──────── Ollama Cloud API (llama3.1 / qwen2.5 / etc.)
    │   ├─ OllamaEmbeddingModel ── nomic-embed-text or similar
    │   └─ AiServices proxy ────── handles tool-calling loop, memory, RAG
    │
@@ -52,7 +52,7 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
 | Component | Role | Deployment |
 |-----------|------|------------|
 | pos-mcp-server | Tool host, LLM orchestration, session management, audit | Spring Boot service (existing) |
-| Ollama | Model runtime (chat + embeddings) | Docker container (existing) |
+| Ollama Cloud | Model runtime (chat + embeddings) | External SaaS |
 | PostgreSQL | Tool registry, RAG embeddings, audit, chat memory | Existing shared instance |
 | Exa | Web search API | External SaaS |
 
@@ -90,11 +90,11 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
 ## Dependencies (pom.xml additions)
 
 ```xml
-<!-- LangChain4j core + Ollama integration -->
+<!-- LangChain4j core + Ollama integration (Spring Boot 4 starter) -->
 <dependency>
     <groupId>dev.langchain4j</groupId>
-    <artifactId>langchain4j-ollama-spring-boot-starter</artifactId>
-    <version>${langchain4j.version}</version>
+    <artifactId>langchain4j-ollama-spring-boot4-starter</artifactId>
+    <version>${langchain4j.spring.version}</version>
 </dependency>
 
 <!-- pgvector embedding store for RAG -->
@@ -104,11 +104,11 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
     <version>${langchain4j.version}</version>
 </dependency>
 
-<!-- LangChain4j Spring Boot starter (AiServices, memory, tools) -->
+<!-- LangChain4j Spring Boot 4 starter (AiServices, memory, tools) -->
 <dependency>
     <groupId>dev.langchain4j</groupId>
-    <artifactId>langchain4j-spring-boot-starter</artifactId>
-    <version>${langchain4j.version}</version>
+    <artifactId>langchain4j-spring-boot4-starter</artifactId>
+    <version>${langchain4j.spring.version}</version>
 </dependency>
 
 <!-- Caffeine for per-user agent caching -->
@@ -122,8 +122,10 @@ Property in parent or module POM:
 
 ```xml
 <properties>
-    <langchain4j.version>1.0.0-beta3</langchain4j.version>
-    <!-- Pin to latest stable; check https://docs.langchain4j.dev/ -->
+    <!-- Core LangChain4j library (pgvector, etc.) -->
+    <langchain4j.version>1.13.0</langchain4j.version>
+    <!-- Spring Boot 4 integration starters (separate versioning from core) -->
+    <langchain4j.spring.version>1.13.0-beta23</langchain4j.spring.version>
 </properties>
 ```
 
@@ -132,16 +134,16 @@ Property in parent or module POM:
 ## Configuration (application.yml additions)
 
 ```yaml
-# Ollama connection
+# Ollama Cloud connection
 langchain4j:
   ollama:
     chat-model:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      base-url: ${OLLAMA_BASE_URL}
       model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
       temperature: 0.2
       timeout: 60s
     embedding-model:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      base-url: ${OLLAMA_BASE_URL}
       model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
       timeout: 30s
 
@@ -653,9 +655,10 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POS_MCP_DB_PASSWORD}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       MCP_SERVER_BASE_URL: http://pos-mcp-server:8086
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
       OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.1:8b}
       OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY}
       EXA_API_KEY: ${EXA_API_KEY}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     depends_on:
@@ -663,18 +666,6 @@ services:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
-      ollama:
-        condition: service_started
-    networks:
-      - pos-network
-
-  ollama:
-    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
-    container_name: ollama
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama-data:/root/.ollama
     networks:
       - pos-network
 ```
@@ -702,11 +693,11 @@ Onyx services, volumes, and network references are removed.
 4. agent.chat(message, roleContext) →
    a. LangChain4j prepends system message with role context
    b. RAG retriever fetches relevant docs from pgvector
-   c. Ollama receives: system prompt + RAG context + chat history + user message + tool definitions
-   d. Ollama responds with tool call: InventoryTool.getLocationStock("charlotte-01")
+   c. Ollama Cloud receives: system prompt + RAG context + chat history + user message + tool definitions
+   d. Ollama Cloud responds with tool call: InventoryTool.getLocationStock("charlotte-01")
    e. LangChain4j executes tool call → RestClient → pos-inventory service
-   f. Tool result sent back to Ollama for synthesis
-   g. Ollama generates final answer
+   f. Tool result sent back to Ollama Cloud for synthesis
+   g. Ollama Cloud generates final answer
 5. Response returned: { "response": "Charlotte store has 47 tires in stock: ..." }
 6. NltiAuditEvent logged with tool calls, timings, and outcome
 ```
@@ -722,7 +713,7 @@ Onyx services, volumes, and network references are removed.
 | pgvector cold start (no documents) | RAG returns nothing, model relies solely on tools | Acceptable in Phase 1; seed with product catalogs, SOPs, knowledge base in Phase 2 |
 | Caffeine cache memory pressure | Too many cached agents consume heap | Cap at 500 agents, 30-min TTL; monitor with Micrometer gauge |
 | Exa API key in environment | Key rotation requires restart | Use Spring Cloud Config or Vault for dynamic secret rotation later |
-| Model not pulled in Ollama | Startup failure | Add health check that verifies model availability; document pull step in runbook |
+| Ollama Cloud connectivity/auth issues | Chat and embedding calls fail | Require `OLLAMA_BASE_URL` + `OLLAMA_API_KEY`; add startup health check for model endpoint reachability and alerting on auth failures |
 
 ---
 
@@ -738,7 +729,7 @@ Onyx services, volumes, and network references are removed.
 - [ ] Create `RagConfiguration` with pgvector
 - [ ] Add Flyway migration for pgvector extension
 - [ ] Update `McpChatController` to route through `SessionAgentManager`
-- [ ] Add Ollama config properties to `application.yml`
+- [ ] Add Ollama Cloud config properties to `application.yml`
 - [ ] Update `docker-compose.onyx.yml` to remove Onyx refs
 - [ ] Verify end-to-end: user message → tool call → response
 
@@ -772,7 +763,7 @@ Onyx services, volumes, and network references are removed.
 - [ ] Chat memory summarization for long sessions
 - [ ] Rate limiting per user
 - [ ] Model fallback chain (primary → secondary model)
-- [ ] Secret rotation (Exa key, Ollama auth if added)
+- [ ] Secret rotation (Exa key, Ollama Cloud API key)
 - [ ] Load testing with concurrent users
 
 ---
