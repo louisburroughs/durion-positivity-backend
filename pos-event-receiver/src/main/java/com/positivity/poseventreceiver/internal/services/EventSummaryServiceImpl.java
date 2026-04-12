@@ -1,7 +1,7 @@
 package com.positivity.poseventreceiver.internal.services;
 
 import com.positivity.poseventreceiver.internal.dto.EventSummaryResponse;
-import com.positivity.poseventreceiver.internal.repository.EmittedEventRepository;
+import com.positivity.poseventreceiver.internal.repository.EmittedEventHourlyRepository;
 import com.positivity.poseventreceiver.services.EventSummaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +18,7 @@ import java.util.List;
 @Service
 public class EventSummaryServiceImpl implements EventSummaryService {
 
-  private final EmittedEventRepository emittedEventRepository;
+  private final EmittedEventHourlyRepository emittedEventHourlyRepository;
   private final Clock clock;
 
   @Override
@@ -41,9 +41,9 @@ public class EventSummaryServiceImpl implements EventSummaryService {
 
   private List<EventSummaryResponse> getSummary(Duration window) {
     Instant since = Instant.now(clock).minus(window);
-    List<Object[]> results = emittedEventRepository.countByEventTypeIdSince(since);
+    List<Object[]> results = emittedEventHourlyRepository.summarizeSince(since);
     return results.stream()
-        .map(row -> new EventSummaryResponse((String) row[0], (Long) row[1]))
+        .map(row -> new EventSummaryResponse((String) row[0], ((Number) row[1]).longValue()))
         .toList();
   }
 }
