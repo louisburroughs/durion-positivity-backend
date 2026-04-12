@@ -1,45 +1,36 @@
-#
-# Local companion stack for an official Onyx Docker deployment.
-# Bring this up from the backend repo, then point the Onyx deployment
-# at `http://host.docker.internal:8094` or another reachable MCP endpoint
-# depending on your Docker/network setup.
-#
 services:
   pos-mcp-server:
     build:
       context: ./pos-mcp-server
       dockerfile: Dockerfile
     container_name: pos-mcp-server
-    restart: unless-stopped
     ports:
       - "${POS_MCP_SERVER_PORT:-8094}:8086"
     environment:
       SPRING_PROFILES_ACTIVE: ${POS_MCP_SERVER_PROFILE:-preprod}
-      POS_MCP_DB_HOST: postgres
-      POS_MCP_DB_PORT: 5432
-      POS_MCP_DB_NAME: ${POS_MCP_DB_NAME:-positivity}
-      POS_MCP_DB_USER: ${POS_MCP_DB_USER:-positivity}
-      POS_MCP_DB_PASSWORD: ${POS_MCP_DB_PASSWORD:-your_secure_password_here}
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:-http://eureka-server:8761/eureka/}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POS_MCP_DB_NAME:-positivity}
+      SPRING_DATASOURCE_USERNAME: ${POS_MCP_DB_USER:-positivity}
+      SPRING_DATASOURCE_PASSWORD: ${POS_MCP_DB_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       MCP_SERVER_BASE_URL: http://pos-mcp-server:8086
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.1:8b}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      EXA_API_KEY: ${EXA_API_KEY}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     depends_on:
       postgres:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
+      ollama:
+        condition: service_started
     networks:
       - pos-network
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
 
   ollama:
     image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
     container_name: ollama
-    restart: unless-stopped
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
     volumes:

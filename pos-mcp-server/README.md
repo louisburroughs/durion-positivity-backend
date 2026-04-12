@@ -26,6 +26,21 @@ Profiles:
 - `spring.profiles.active=test` – In-memory H2 for tests
 - default (no profile) – In-memory H2 for local/dev
 
+Facade tool outbound base URLs (LangChain4j orchestration):
+
+- `POS_INVENTORY_BASE_URL` – Inventory facade base URL (default `http://pos-inventory/v1/inventory`)
+- `POS_ORDER_BASE_URL` – Order facade base URL (default `http://pos-order/v1/orders`)
+
+## Known Limitations (Phase 1)
+
+- **Facade tool auth propagation (ADR-0014):** `InventoryFacadeTool` and `OrderFacadeTool` do not
+  propagate the caller's JWT to downstream services. Tool calls will receive 401 from `pos-inventory`
+  and `pos-order` until Phase 2 implements a shared `ClientHttpRequestInterceptor` for auth propagation.
+- **Tool registry is DB-backed only in Phase 2:** `ToolRegistryLoader` is an in-memory stub.
+  Role-to-tool mapping is hardcoded to empty in Phase 1.
+- **RAG store is empty on first deploy:** The pgvector store requires manual document seeding
+  (Phase 2 includes document ingestion API).
+
 ## Quick local run
 
 ```bash

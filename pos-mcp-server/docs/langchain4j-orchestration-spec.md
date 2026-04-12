@@ -90,11 +90,11 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
 ## Dependencies (pom.xml additions)
 
 ```xml
-<!-- LangChain4j core + Ollama integration -->
+<!-- LangChain4j core + Ollama integration (Spring Boot 4 starter) -->
 <dependency>
     <groupId>dev.langchain4j</groupId>
-    <artifactId>langchain4j-ollama-spring-boot-starter</artifactId>
-    <version>${langchain4j.version}</version>
+    <artifactId>langchain4j-ollama-spring-boot4-starter</artifactId>
+    <version>${langchain4j.spring.version}</version>
 </dependency>
 
 <!-- pgvector embedding store for RAG -->
@@ -104,11 +104,11 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
     <version>${langchain4j.version}</version>
 </dependency>
 
-<!-- LangChain4j Spring Boot starter (AiServices, memory, tools) -->
+<!-- LangChain4j Spring Boot 4 starter (AiServices, memory, tools) -->
 <dependency>
     <groupId>dev.langchain4j</groupId>
-    <artifactId>langchain4j-spring-boot-starter</artifactId>
-    <version>${langchain4j.version}</version>
+    <artifactId>langchain4j-spring-boot4-starter</artifactId>
+    <version>${langchain4j.spring.version}</version>
 </dependency>
 
 <!-- Caffeine for per-user agent caching -->
@@ -122,8 +122,10 @@ Property in parent or module POM:
 
 ```xml
 <properties>
-    <langchain4j.version>1.0.0-beta3</langchain4j.version>
-    <!-- Pin to latest stable; check https://docs.langchain4j.dev/ -->
+    <!-- Core LangChain4j library (pgvector, etc.) -->
+    <langchain4j.version>1.13.0</langchain4j.version>
+    <!-- Spring Boot 4 integration starters (separate versioning from core) -->
+    <langchain4j.spring.version>1.13.0-beta23</langchain4j.spring.version>
 </properties>
 ```
 

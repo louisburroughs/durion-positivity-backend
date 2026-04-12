@@ -173,6 +173,24 @@
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
+
+        <!-- LangChain4j core + Ollama integration (Spring Boot 4 starter) -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-ollama-spring-boot4-starter</artifactId>
+        </dependency>
+
+        <!-- pgvector embedding store for RAG -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-pgvector</artifactId>
+        </dependency>
+
+        <!-- LangChain4j Spring Boot 4 starter (AiServices, memory, tools) -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-spring-boot4-starter</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

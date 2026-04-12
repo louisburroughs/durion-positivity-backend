@@ -1,9 +1,15 @@
 spring:
+  autoconfigure:
+    exclude:
+      - dev.langchain4j.ollama.spring.OllamaAutoConfiguration
+      - dev.langchain4j.spring.LangChain4jAutoConfiguration
   datasource:
     url: jdbc:h2:mem:mcp;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
+  flyway:
+    locations: classpath:db/migration/h2
   jpa:
     hibernate:
       ddl-auto: update
