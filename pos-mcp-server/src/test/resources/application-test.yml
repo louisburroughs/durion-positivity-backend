@@ -11,6 +11,8 @@ spring:
             hibernate:
                 jdbc:
                     time_zone: UTC
+    flyway:
+        enabled: false
     h2:
         console:
             enabled: false

@@ -12,6 +12,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    enabled: false
   cloud:
     discovery:
       enabled: false
