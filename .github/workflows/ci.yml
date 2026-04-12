@@ -148,6 +148,16 @@ jobs:
             **/target/surefire-reports/*.xml
           retention-days: 30
 
+      - name: Upload JaCoCo coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-${{ matrix.module }}
+          path: |
+            **/target/site/jacoco/jacoco.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
   integration-tests-modules:
     name: Integration Tests (${{ matrix.module }})
     runs-on: ubuntu-latest
@@ -362,8 +372,6 @@ jobs:
         run: ./mvnw spotbugs:check -B
         continue-on-error: true
 
-      # Uncomment to enable SonarCloud CI-based analysis
-      # This provides deeper analysis than SonarCloud's automatic analysis
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
@@ -371,16 +379,23 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
+      - name: Download JaCoCo coverage reports
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: jacoco-coverage-*
+          path: sonar-coverage
+
       - name: SonarCloud Scan
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # Needed for PR decoration
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} # Get from sonarcloud.io
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           ./mvnw test-compile sonar:sonar -DskipTests -DskipITs \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=**/target/site/jacoco/jacoco.xml
+            -Dsonar.coverage.jacoco.xmlReportPaths=sonar-coverage/**/jacoco.xml,**/target/site/jacoco/jacoco.xml
 
   integration-test:
     name: Integration Tests with Docker Compose
