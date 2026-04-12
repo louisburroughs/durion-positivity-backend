@@ -4,8 +4,6 @@ server:
 spring:
   application:
     name: pos-api-gateway
-  profiles:
-    active: local
   cloud:
     gateway:
       server:
@@ -222,9 +220,3 @@ logging:
     com:
       positivity:
         gateway: DEBUG
-
----
-spring:
-  config:
-    activate:
-      on-profile: prod

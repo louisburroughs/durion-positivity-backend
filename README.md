@@ -149,7 +149,7 @@ Start a single-node local Kafka stack (broker + Kafka UI + topic init):
 Run `pos-workorder` against local Kafka:
 
 ```bash
-./mvnw -pl pos-workorder spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=local-kafka --server.port=8090"
+./mvnw -pl pos-workorder spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=dev,local-kafka --server.port=8090"
 ```
 
 Useful endpoints:

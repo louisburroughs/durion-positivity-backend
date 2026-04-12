@@ -7,11 +7,11 @@ MCP server for Durion Positivity. Discovers backend services via Eureka, registe
 Flyway manages runtime schema for this module.
 
 - Baseline migration: `src/main/resources/db/migration/V1__baseline_mcp_schema.sql`
-- Runtime JPA mode: `spring.jpa.hibernate.ddl-auto=validate` (default, preprod, prod)
+- Runtime JPA mode: `spring.jpa.hibernate.ddl-auto=validate` (`dev`, `alpha`, `prod`)
 
 ## Runtime configuration
 
-Preprod/Prod profiles use PostgreSQL. Set these environment variables in the deployment manifest or process env:
+Alpha/Prod profiles use PostgreSQL. Set these environment variables in the deployment manifest or process env:
 
 - `POS_MCP_DB_HOST` – Postgres host (required)
 - `POS_MCP_DB_PORT` – Postgres port (default `5432`)
@@ -21,10 +21,10 @@ Preprod/Prod profiles use PostgreSQL. Set these environment variables in the dep
 
 Profiles:
 
-- `spring.profiles.active=preprod` – PostgreSQL, Eureka enabled
+- `spring.profiles.active=alpha` – PostgreSQL, Eureka enabled
 - `spring.profiles.active=prod` – PostgreSQL, Eureka enabled
+- `spring.profiles.active=dev` – In-memory H2 for local development
 - `spring.profiles.active=test` – In-memory H2 for tests
-- default (no profile) – In-memory H2 for local/dev
 
 Facade tool outbound base URLs (LangChain4j orchestration):
 
@@ -44,7 +44,7 @@ Facade tool outbound base URLs (LangChain4j orchestration):
 ## Quick local run
 
 ```bash
-./mvnw -pl pos-mcp-server -am spring-boot:run
+./mvnw -pl pos-mcp-server -am spring-boot:run -Dspring-boot.run.profiles=dev
 # or
 SPRING_PROFILES_ACTIVE=test ./mvnw -pl pos-mcp-server -am test
 ```

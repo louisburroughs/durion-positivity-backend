@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${POS_MCP_DB_HOST:localhost}:${POS_MCP_DB_PORT:5432}/${POS_MCP_DB_NAME:pos_mcp}
+    url: jdbc:postgresql://${POS_MCP_DB_HOST}:${POS_MCP_DB_PORT:5432}/${POS_MCP_DB_NAME:pos_mcp}
     driver-class-name: org.postgresql.Driver
-    username: ${POS_MCP_DB_USER:positivity}
+    username: ${POS_MCP_DB_USER:pos_mcp}
     password: ${POS_MCP_DB_PASSWORD}
   flyway:
     locations: classpath:db/migration
@@ -18,6 +18,8 @@ spring:
 eureka:
   client:
     enabled: true
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL}
 
 server:
   port: 8086
@@ -25,12 +27,12 @@ server:
 langchain4j:
   ollama:
     chat-model:
-      base-url: ${OLLAMA_BASE_URL:http://ollama:11434}
+      base-url: ${OLLAMA_BASE_URL}
       model-name: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
       temperature: 0.2
       timeout: 60s
     embedding-model:
-      base-url: ${OLLAMA_BASE_URL:http://ollama:11434}
+      base-url: ${OLLAMA_BASE_URL}
       model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
       timeout: 30s
 

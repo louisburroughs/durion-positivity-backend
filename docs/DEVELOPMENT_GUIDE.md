@@ -6,10 +6,11 @@ This document covers development workflows, build configuration, OpenAPI documen
 
 1. [Java Version Management with SDKMAN!](#java-version-management-with-sdkman)
 2. [Build Configuration](#build-configuration)
-3. [OpenAPI Documentation](#openapi-documentation)
-4. [Version Management](#version-management)
-5. [pos-events Shared Library](#pos-events-shared-library)
-6. [Spring Boot 4.0 Migration Status](#spring-boot-40-migration-status)
+3. [Runtime Profile Matrix](#runtime-profile-matrix)
+4. [OpenAPI Documentation](#openapi-documentation)
+5. [Version Management](#version-management)
+6. [pos-events Shared Library](#pos-events-shared-library)
+7. [Spring Boot 4.0 Migration Status](#spring-boot-40-migration-status)
 
 ---
 
@@ -150,6 +151,22 @@ The `pos-dependencies` module manages internal artifact versions:
 
 ---
 
+## Runtime Profile Matrix
+
+The backend uses four canonical environment/build profiles:
+
+| Profile | Activation | Primary Purpose | Intended Environment |
+|----------|-------------|------------------|----------------------|
+| `openapi` | Maven profile (`-Popenapi`) | Generate module `openapi.yaml` using `spring-boot:start/stop` and `springdoc-openapi:generate` | Build-time only |
+| `dev` | Spring runtime profile (`--spring.profiles.active=dev`) | Local developer runtime with H2 and minimal laptop-friendly defaults | Developer workstation |
+| `alpha` | Spring runtime profile (`--spring.profiles.active=alpha`) | Near-production runtime defaults for EC2 alpha environment | AWS EC2 alpha |
+| `prod` | Spring runtime profile (`--spring.profiles.active=prod`) | Production runtime configuration (env-driven; intentionally minimal while production is being finalized) | Production |
+
+Migration note:
+- Legacy profile names are retired: `local` is replaced by `dev`, and `preprod` is replaced by `alpha`.
+
+---
+
 ## OpenAPI Documentation
 
 ### Overview
@@ -202,15 +219,15 @@ public class SecurityConfig {
 ```bash
 cd pos-inventory
 ./mvnw -Popenapi clean verify -DskipTests
-# Output: target/openapi.json
+# Output: openapi.yaml
 ```
 
 **Method 2: Manual**
 
 ```bash
 cd pos-inventory
-java -jar target/pos-inventory-*.jar --spring.profiles.active=local --server.port=8093 &
-curl http://localhost:8093/v3/api-docs > openapi.json
+java -jar target/pos-inventory-*.jar --spring.profiles.active=dev --server.port=8093 &
+curl http://localhost:8093/v3/api-docs.yaml > openapi.yaml
 ```
 
 ### Access Points (When Running)

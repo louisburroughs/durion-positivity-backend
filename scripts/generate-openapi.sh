@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 MVNW="./mvnw"
-PROFILE="local"
+PROFILE="openapi"
 PHASE="verify"
 SKIP_FLAGS=(-DskipTests -DskipITs)
 MODULE_TIMEOUT_SECONDS=420
@@ -21,7 +21,7 @@ Usage:
   scripts/generate-openapi.sh [options] [module...]
 
 Options:
-  --profile <name>   Maven profile to activate (default: local)
+  --profile <name>   Maven profile to activate (default: openapi)
   --phase <phase>    Maven phase/goal to run (default: verify)
                      Note: verify ensures post-integration-test runs (spring-boot:stop).
   --timeout <sec>    Per-module timeout in seconds (default: 420, use 0 to disable)
@@ -36,7 +36,7 @@ Options:
 Examples:
   scripts/generate-openapi.sh
   scripts/generate-openapi.sh pos-price pos-tax
-  scripts/generate-openapi.sh --profile local --phase verify
+  scripts/generate-openapi.sh --profile openapi --phase verify
 EOF
 }
 

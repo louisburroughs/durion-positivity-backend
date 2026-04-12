@@ -13,7 +13,7 @@ server:
 eureka:
   client:
     serviceUrl:
-      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+      defaultZone: ${EUREKA_SERVER_URL:${EUREKA_SERVER_URL:}}
     # Do NOT register with Eureka by default - pos-tax is internal-only
     # Other services use it as a library dependency, not via REST calls
     register-with-eureka: false

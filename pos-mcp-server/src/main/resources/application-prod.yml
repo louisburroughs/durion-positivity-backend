@@ -1,9 +1,11 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${POS_MCP_DB_HOST:localhost}:${POS_MCP_DB_PORT:5432}/${POS_MCP_DB_NAME:pos_mcp}
+    url: jdbc:postgresql://${POS_MCP_DB_HOST}:${POS_MCP_DB_PORT:5432}/${POS_MCP_DB_NAME:pos_mcp}
     driver-class-name: org.postgresql.Driver
     username: ${POS_MCP_DB_USER:pos_mcp}
-    password: ${POS_MCP_DB_PASSWORD:password}
+    password: ${POS_MCP_DB_PASSWORD}
+  flyway:
+    locations: classpath:db/migration
   jpa:
     hibernate:
       ddl-auto: validate
@@ -16,6 +18,5 @@ spring:
 eureka:
   client:
     enabled: true
-
-server:
-  port: 8086
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL}
