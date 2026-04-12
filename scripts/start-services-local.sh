@@ -24,7 +24,8 @@ mkdir -p logs
 # Start services in order
 echo -e "${YELLOW}Starting Service Discovery (Eureka) on port 8761...${NC}"
 java -jar pos-service-discovery/target/pos-service-discovery-*.jar \
-  --spring.profiles.active=dev > logs/pos-service-discovery.log 2>&1 &
+  --spring.profiles.active=dev \
+  --server.port=8761 > logs/pos-service-discovery.log 2>&1 &
 echo $! > logs/pos-service-discovery.pid
 echo -e "${BLUE}  PID: $!${NC}"
 sleep 15
