@@ -53,7 +53,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
 
         /**
          * Creates a new mapping key.
-         * 
+         *
          * @param request the mapping key creation request
          * @return the created mapping key response
          * @throws ResponseStatusException with NOT_FOUND if posting category not found
@@ -92,15 +92,17 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 mappingKey.setModifiedBy(request.getCreatedBy());
 
                 MappingKey saved = mappingKeyRepository.save(mappingKey);
-                log.info("Created mapping key: {} with ID: {}", maskText(saved.getKeyName()),
-                                maskUUID(saved.getMappingKeyId()));
+                if (log.isInfoEnabled()) {
+                        log.info("Created mapping key: {} with ID: {}", maskText(saved.getKeyName()),
+                                        maskUUID(saved.getMappingKeyId()));
+                }
 
                 return toResponse(saved, category.getCategoryName());
         }
 
         /**
          * Retrieves a mapping key by ID.
-         * 
+         *
          * @param mappingKeyId the mapping key identifier
          * @return the mapping key response
          * @throws ResponseStatusException with NOT_FOUND if mapping key or category not
@@ -109,7 +111,9 @@ public class MappingKeyServiceImpl implements MappingKeyService {
         @Override
         @Transactional(readOnly = true)
         public MappingKeyResponse getMappingKey(@NonNull UUID mappingKeyId) {
-                log.info("Retrieving mapping key: {}", mappingKeyId);
+                if (log.isInfoEnabled()) {
+                        log.info("Retrieving mapping key(mask): {}", maskUUID(mappingKeyId));
+                }
 
                 MappingKey mappingKey = mappingKeyRepository.findById(mappingKeyId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -124,7 +128,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
 
         /**
          * Updates an existing mapping key.
-         * 
+         *
          * @param mappingKeyId the mapping key identifier
          * @param request      the update request
          * @return the updated mapping key response
@@ -137,7 +141,9 @@ public class MappingKeyServiceImpl implements MappingKeyService {
         public MappingKeyResponse updateMappingKey(
                         @NonNull UUID mappingKeyId,
                         @NonNull MappingKeyUpdateRequest request) {
-                log.info("Updating mapping key: {}", mappingKeyId);
+                if (log.isInfoEnabled()) {
+                        log.info("Updating mapping key(mask): {}", maskUUID(mappingKeyId));
+                }
 
                 MappingKey mappingKey = mappingKeyRepository.findById(mappingKeyId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -163,14 +169,16 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 mappingKey.setModifiedBy(request.getModifiedBy());
 
                 MappingKey updated = mappingKeyRepository.save(mappingKey);
-                log.info("Updated mapping key: {}", updated.getMappingKeyId());
+                if (log.isInfoEnabled()) {
+                        log.info("Updated mapping key(mask): {}", maskUUID(updated.getMappingKeyId()));
+                }
 
                 return toResponse(updated, category.getCategoryName());
         }
 
         /**
          * Lists mapping keys for a posting category.
-         * 
+         *
          * @param postingCategoryId the posting category identifier
          * @param page              page number (0-based)
          * @param size              page size
@@ -189,8 +197,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                         Boolean isActive) {
 
                 if (log.isInfoEnabled()) {
-                        log.info("Listing mapping keys for category: {}, page={}, size={}, isActive={}",
-                                        maskUUID(postingCategoryId), page, size, isActive);
+                        log.info("Listing mapping keys: page={}, size={}, isActive={}", page, size, isActive);
                 }
 
                 // Validate category exists
@@ -231,7 +238,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
         /**
          * Deactivates a mapping key.
          * Validates that no active GL mappings reference this key.
-         * 
+         *
          * @param mappingKeyId the mapping key identifier
          * @return the deactivated mapping key response
          * @throws ResponseStatusException with NOT_FOUND if mapping key not found
@@ -265,7 +272,9 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                 mappingKey.setIsActive(false);
                 MappingKey deactivated = mappingKeyRepository.save(mappingKey);
 
-                log.info("Deactivated mapping key: {}", mappingKeyId);
+                if (log.isInfoEnabled()) {
+                        log.info("Deactivated mapping key(mask): {}", maskUUID(mappingKeyId));
+                }
 
                 return toResponse(deactivated, category.getCategoryName());
         }
@@ -293,7 +302,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
          * last 4 chars.
          * This preserves enough information for correlation while preventing
          * information disclosure.
-         * 
+         *
          * @param uuid the UUID to mask
          * @return masked UUID string, or "null" if input is null
          */

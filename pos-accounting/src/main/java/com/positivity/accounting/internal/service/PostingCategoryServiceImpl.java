@@ -46,7 +46,7 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
 
     /**
      * Creates a new posting category.
-     * 
+     *
      * @param request the posting category creation request
      * @return the created posting category response
      * @throws ResponseStatusException with BAD_REQUEST if category name already
@@ -74,14 +74,17 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
         category.setModifiedBy(request.getCreatedBy());
 
         PostingCategory saved = postingCategoryRepository.save(category);
-        log.info("Created posting category: {} with ID: {}", saved.getCategoryName(), saved.getPostingCategoryId());
+        if (log.isInfoEnabled()) {
+            log.info("Created posting category: {} with ID(mask): {}",
+                    maskText(saved.getCategoryName()), maskUuid(saved.getPostingCategoryId()));
+        }
 
         return toResponse(saved);
     }
 
     /**
      * Retrieves a posting category by ID.
-     * 
+     *
      * @param postingCategoryId the posting category identifier
      * @return the posting category response
      * @throws ResponseStatusException with NOT_FOUND if posting category not found
@@ -89,7 +92,9 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
     @Override
     @Transactional(readOnly = true)
     public PostingCategoryResponse getPostingCategory(@NonNull UUID postingCategoryId) {
-        log.info("Retrieving posting category: {}", postingCategoryId);
+        if (log.isInfoEnabled()) {
+            log.info("Retrieving posting category(mask): {}", maskUuid(postingCategoryId));
+        }
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -100,7 +105,7 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
 
     /**
      * Updates an existing posting category.
-     * 
+     *
      * @param postingCategoryId the posting category identifier
      * @param request           the update request
      * @return the updated posting category response
@@ -112,7 +117,9 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
     public PostingCategoryResponse updatePostingCategory(
             @NonNull UUID postingCategoryId,
             @NonNull PostingCategoryUpdateRequest request) {
-        log.info("Updating posting category: {}", postingCategoryId);
+        if (log.isInfoEnabled()) {
+            log.info("Updating posting category(mask): {}", maskUuid(postingCategoryId));
+        }
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -131,14 +138,16 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
         category.setModifiedBy(request.getModifiedBy());
 
         PostingCategory updated = postingCategoryRepository.save(category);
-        log.info("Updated posting category: {}", updated.getPostingCategoryId());
+        if (log.isInfoEnabled()) {
+            log.info("Updated posting category(mask): {}", maskUuid(updated.getPostingCategoryId()));
+        }
 
         return toResponse(updated);
     }
 
     /**
      * Lists posting categories with pagination and filtering.
-     * 
+     *
      * @param page     page number (0-based)
      * @param size     page size
      * @param sort     sort field
@@ -152,7 +161,10 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
             int size,
             @NonNull String sort,
             Boolean isActive) {
-        log.info("Listing posting categories: page={}, size={}, sort={}, isActive={}", page, size, sort, isActive);
+        if (log.isInfoEnabled()) {
+            log.info("Listing posting categories: page={}, size={}, isActive={}",
+                    page, size, isActive);
+        }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(sort));
         Page<PostingCategory> categoryPage;
@@ -180,7 +192,7 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
     /**
      * Deactivates a posting category.
      * Validates that no active GL mappings reference this category.
-     * 
+     *
      * @param postingCategoryId the posting category identifier
      * @return the deactivated posting category response
      * @throws ResponseStatusException with NOT_FOUND if posting category not found
@@ -189,7 +201,9 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
     @Override
     @Transactional
     public PostingCategoryResponse deactivatePostingCategory(@NonNull UUID postingCategoryId) {
-        log.info("Deactivating posting category: {}", postingCategoryId);
+        if (log.isInfoEnabled()) {
+            log.info("Deactivating posting category(mask): {}", maskUuid(postingCategoryId));
+        }
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -206,7 +220,9 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
         category.setIsActive(false);
         PostingCategory deactivated = postingCategoryRepository.save(category);
 
-        log.info("Deactivated posting category: {}", postingCategoryId);
+        if (log.isInfoEnabled()) {
+            log.info("Deactivated posting category(mask): {}", maskUuid(postingCategoryId));
+        }
 
         return toResponse(deactivated);
     }
@@ -245,5 +261,13 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
             return "****";
         }
         return trimmed.substring(0, 2) + "****" + trimmed.substring(trimmed.length() - 2);
+    }
+
+    private String maskUuid(UUID value) {
+        if (value == null) {
+            return "null";
+        }
+        String uuidString = value.toString();
+        return uuidString.substring(0, 8) + "-****-****-****-" + uuidString.substring(32);
     }
 }
