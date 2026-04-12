@@ -50,7 +50,9 @@ public class VehicleSearchController {
         public ResponseEntity<SearchVehiclesResponse> search(
                         @RequestBody SearchVehiclesRequest request) {
 
-                log.info("POST /v1/vehicles/search - query='{}', limit={}", request.getQuery(), request.getLimit());
+                log.info("POST /v1/vehicles/search - query(mask)='{}', limit={}",
+                                maskForLog(request != null ? request.getQuery() : null),
+                                request != null ? request.getLimit() : null);
 
                 var results = searchService.search(request);
                 return ResponseEntity.ok(results);
@@ -68,7 +70,7 @@ public class VehicleSearchController {
                         @Parameter(description = "Result limit (default 25, max 50)") @RequestParam(required = false, defaultValue = "25") Integer limit,
                         @Parameter(description = "Enable contains matching (default false)") @RequestParam(required = false, defaultValue = "false") Boolean enableContains) {
 
-                log.info("GET /v1/vehicles/search?q='{}' - limit={}", q, limit);
+                log.info("GET /v1/vehicles/search?q(mask)='{}' - limit={}", maskForLog(q), limit);
 
                 var request = SearchVehiclesRequest.builder()
                                 .query(q)
@@ -78,5 +80,20 @@ public class VehicleSearchController {
 
                 var results = searchService.search(request);
                 return ResponseEntity.ok(results);
+        }
+
+        private String maskForLog(String value) {
+                if (value == null) {
+                        return "null";
+                }
+                String sanitized = value
+                                .replace('\r', '_')
+                                .replace('\n', '_')
+                                .replace('\t', '_');
+                int length = sanitized.length();
+                if (length <= 4) {
+                        return "****";
+                }
+                return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
         }
 }
