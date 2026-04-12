@@ -28,8 +28,7 @@ class ExaWebSearchToolTest {
 
     String result = tool.webSearch("automotive oil filter");
 
-    assertThat(result).contains("EXA_API_KEY is not configured");
-    assertThat(result).doesNotContain("Exception");
+    assertThat(result).contains("EXA_API_KEY is not configured").doesNotContain("Exception");
   }
 
   @Test
