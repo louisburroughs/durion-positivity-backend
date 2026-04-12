@@ -29,11 +29,11 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * REST Controller for payment application operations (AR).
- * 
+ *
  * Endpoints:
  * - POST /payments/{paymentId}/applications - Apply payment to invoices
  * - POST /payment-applications/{applicationId}/reverse - Reverse application
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114</a>
@@ -59,7 +59,7 @@ public class PaymentApplicationController {
         public ResponseEntity<Void> voidPayment(
                         @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
                         @RequestBody(required = false) Object body) {
-                log.info("Voiding payment {}", paymentId);
+                log.info("Voiding payment(mask) {}", maskForLog(paymentId));
                 paymentApplicationService.voidPayment(paymentId);
                 return ResponseEntity.noContent().build();
         }
@@ -74,21 +74,22 @@ public class PaymentApplicationController {
         public ResponseEntity<Void> reversePayment(
                         @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
                         @Valid @RequestBody PaymentApplicationReversalRequest request) {
-                log.info("Reversing payment {} with reason: {}", paymentId, request.getReason());
+                log.info("Reversing payment(mask) {} with reason(mask): {}",
+                                maskForLog(paymentId), maskForLog(request.getReason()));
                 paymentApplicationService.reversePayment(paymentId, request.getReason());
                 return ResponseEntity.noContent().build();
         }
 
         /**
          * Apply a payment to one or more invoices.
-         * 
+         *
          * Business Rules (from Issue #114):
          * - Payment must be AVAILABLE with sufficient funds
          * - Each invoice must be applicable (not PaidInFull/Voided/Cancelled)
          * - Applications are atomic across all target invoices
          * - Idempotent via applicationRequestId
          * - Overpayments create CustomerCredit
-         * 
+         *
          * @param paymentId payment to apply
          * @param request   application request with invoices and amounts
          * @return application response with details
@@ -105,27 +106,28 @@ public class PaymentApplicationController {
                         @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
                         @Valid @RequestBody PaymentApplicationRequest request) {
 
-                log.info("Applying payment {} to {} invoices (request: {})",
-                                paymentId, request.getApplications().size(), request.getApplicationRequestId());
+                log.info("Applying payment(mask) {} to {} invoices (request(mask): {})",
+                                maskForLog(paymentId), request.getApplications().size(),
+                                maskForLog(request.getApplicationRequestId()));
 
                 PaymentApplicationResponse response = paymentApplicationService.applyPaymentToInvoices(
                                 paymentId, request);
 
-                log.info("Successfully applied payment {} with total {} to {} invoices",
-                                paymentId, response.getAppliedAmount(), response.getApplications().size());
+                log.info("Successfully applied payment(mask) {} with total {} to {} invoices",
+                                maskForLog(paymentId), response.getAppliedAmount(), response.getApplications().size());
 
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
 
         /**
          * Reverse a payment application (compensating transaction).
-         * 
+         *
          * Business Rules (from Issue #114):
          * - Requires elevated permission (ACCOUNTING_ADMIN or AR_MANAGER)
          * - Requires non-empty reason for audit trail
          * - Reversals are NEW records, not deletions
          * - Restores invoice balance and payment unappliedAmount
-         * 
+         *
          * @param applicationId application to reverse
          * @param request       reversal request with reason
          * @return 204 No Content on success
@@ -141,12 +143,28 @@ public class PaymentApplicationController {
                         @Parameter(description = "Payment application identifier") @PathVariable UUID applicationId,
                         @Valid @RequestBody PaymentApplicationReversalRequest request) {
 
-                log.info("Reversing payment application {} with reason: {}", applicationId, request.getReason());
+                log.info("Reversing payment application(mask) {} with reason(mask): {}",
+                                maskForLog(applicationId), maskForLog(request.getReason()));
 
                 paymentApplicationService.reversePaymentApplication(applicationId, request.getReason());
 
-                log.info("Successfully reversed payment application {}", applicationId);
+                log.info("Successfully reversed payment application(mask) {}", maskForLog(applicationId));
 
                 return ResponseEntity.noContent().build();
+        }
+
+        private String maskForLog(Object value) {
+                if (value == null) {
+                        return "null";
+                }
+                String sanitized = value.toString()
+                                .replace('\r', '_')
+                                .replace('\n', '_')
+                                .replace('\t', '_');
+                int length = sanitized.length();
+                if (length <= 4) {
+                        return "****";
+                }
+                return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
         }
 }

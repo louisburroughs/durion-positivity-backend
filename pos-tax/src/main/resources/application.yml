@@ -31,9 +31,9 @@ management:
   endpoint:
     health:
       show-details: when-authorized
-  metrics:
-    export:
-      prometheus:
+  prometheus:
+    metrics:
+      export:
         enabled: true
 
 springdoc:
@@ -48,9 +48,9 @@ pos:
     test-mode:
       enabled: ${TAX_TEST_MODE:false}
       default-rates:
-        STATE: 0.0725      # 7.25% state tax
-        COUNTY: 0.01       # 1% county tax
-        CITY: 0.0025       # 0.25% city tax
+        STATE: 0.0725 # 7.25% state tax
+        COUNTY: 0.01 # 1% county tax
+        CITY: 0.0025 # 0.25% city tax
     external-service:
       base-url: ${TAX_SERVICE_URL:https://api.taxservice.example.com}
       api-key: ${TAX_SERVICE_API_KEY:}

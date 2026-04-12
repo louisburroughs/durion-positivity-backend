@@ -46,7 +46,8 @@ public class MobileUnitController {
     @PostMapping
     public ResponseEntity<MobileUnitResponse> createMobileUnit(
             @Parameter(description = "Mobile unit creation request body") @RequestBody MobileUnitRequest request) {
-        log.info("Creating mobile unit with name={}", request != null ? request.getName() : null);
+        log.info("Creating mobile unit with name(mask)={}",
+                maskForLog(request != null ? request.getName() : null));
         return ResponseEntity.status(HttpStatus.CREATED).body(mobileUnitService.createMobileUnit(request));
     }
 
@@ -103,6 +104,21 @@ public class MobileUnitController {
     @GetMapping("/{id}/coverage-rules")
     public ResponseEntity<List<CoverageRuleResponse>> getCoverageRules(@PathVariable UUID id) {
         return ResponseEntity.ok(mobileUnitService.getCoverageRules(id));
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 
 }

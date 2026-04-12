@@ -39,6 +39,6 @@ payment:
     provider: ${PAYMENT_GATEWAY_PROVIDER:stripe}
 
 stripe:
-  api-key: DUMMY_KEY_FOR_DEV
-  connect-account: DUMMY_CONNECT_ACCOUNT_FOR_DEV
+  api-key: ${STRIPE_API_KEY:DUMMY_STRIPE_API_KEY}
+  connect-account: ${STRIPE_CONNECT_ACCOUNT:DUMMY_CONNECT_ACCOUNT_FOR_DEV}
   idempotency-window-hours: ${STRIPE_IDEMPOTENCY_WINDOW_HOURS:24}

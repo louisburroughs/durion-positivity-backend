@@ -17,7 +17,6 @@ import com.positivity.shopmanager.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +37,8 @@ public class ShopMobileUnitController {
     public ResponseEntity<Object> getMobileUnits(
             @Parameter(description = "Location ID (optional for specific mobile unit)") @PathVariable(required = false) Long locationId,
             @Parameter(description = "Bay ID (optional for specific mobile unit)") @PathVariable(required = false) Long bayId) {
-        log.info("Fetching mobile units - locationId={}, bayId={}", locationId, bayId);
+        log.info("Fetching mobile units - locationId(mask)={}, bayId(mask)={}", maskForLog(locationId),
+                maskForLog(bayId));
         Object mobileUnits = mobileUnitService.getMobileUnits(locationId, bayId);
         return ResponseEntity.ok(mobileUnits);
     }
@@ -51,7 +51,7 @@ public class ShopMobileUnitController {
     public ResponseEntity<Object> createMobileUnit(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Mobile unit creation request body") @RequestBody(required = false) Object request) {
-        log.info("Creating mobile unit for shop location ID: {}", locationId);
+        log.info("Creating mobile unit for shop location ID(mask): {}", maskForLog(locationId));
         Object mobileUnit = mobileUnitService.createMobileUnit(locationId, request);
         return ResponseEntity.ok(mobileUnit);
     }
@@ -69,18 +69,32 @@ public class ShopMobileUnitController {
     }
 
     @Operation(summary = "Delete mobile unit", description = "Delete a specific mobile unit by locationId and bayId.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Mobile unit deleted successfully."),
-            @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
-    })
+    @ApiResponse(responseCode = "204", description = "Mobile unit deleted successfully.")
+    @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
     @DeleteMapping("/{locationId}/mobileUnit/{bayId}")
     @PreAuthorize("hasAuthority('shop:bay:edit')")
     @EmitEvent(id = "SHOP_MOBILE_UNIT_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteMobileUnit(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Bay ID", example = "1") @PathVariable Long bayId) {
-        log.info("Deleting mobile unit ID: {} for shop location ID: {}", bayId, locationId);
+        log.info("Deleting mobile unit ID(mask): {} for shop location ID(mask): {}", maskForLog(bayId),
+                maskForLog(locationId));
         mobileUnitService.deleteMobileUnit(locationId, bayId);
         return ResponseEntity.noContent().build();
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 }

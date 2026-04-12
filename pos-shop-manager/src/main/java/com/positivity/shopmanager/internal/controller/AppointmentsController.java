@@ -50,8 +50,8 @@ public class AppointmentsController {
             @Parameter(description = "Appointment creation request body") @Valid @RequestBody AppointmentCreateRequest request,
             @Parameter(description = "Idempotency key for safe retries") @org.springframework.web.bind.annotation.RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Parameter(description = "Correlation ID for request tracing") @org.springframework.web.bind.annotation.RequestHeader(value = "X-Correlation-Id", required = false) UUID correlationId) {
-        log.info("Create appointment requested. X-Correlation-Id={}, Idempotency-Key={}", correlationId,
-                idempotencyKey);
+        log.info("Create appointment requested. X-Correlation-Id(mask)={}, Idempotency-Key(mask)={}",
+                maskForLog(correlationId), maskForLog(idempotencyKey));
         AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, correlationId);
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{appointmentId}")
@@ -68,7 +68,8 @@ public class AppointmentsController {
     public ResponseEntity<AppointmentResponse> getAppointment(
             @Parameter(description = "Appointment ID", example = "appt-123") @PathVariable String appointmentId,
             @Parameter(description = "Correlation ID for request tracing") @org.springframework.web.bind.annotation.RequestHeader(value = "X-Correlation-Id", required = false) UUID correlationId) {
-        log.info("Load appointment requested. appointmentId={}, X-Correlation-Id={}", appointmentId, correlationId);
+        log.info("Load appointment requested. appointmentId(mask)={}, X-Correlation-Id(mask)={}",
+                maskForLog(appointmentId), maskForLog(correlationId));
         AppointmentResponse response = appointmentsService.getById(appointmentId, correlationId);
         return ResponseEntity.ok(response);
     }
@@ -97,6 +98,21 @@ public class AppointmentsController {
             @PathVariable UUID appointmentId,
             @Valid @RequestBody CancelAppointmentRequest request) {
         return ResponseEntity.ok(appointmentsService.cancelAppointment(appointmentId, request));
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 
 }

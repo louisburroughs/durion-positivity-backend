@@ -55,7 +55,7 @@ public class VehicleApplicabilityHintController {
             HintResponse response = hintService.createHint(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalArgumentException e) {
-            log.error("Error creating hint: {}", e.getMessage());
+            log.error("Error creating hint: {}", sanitizeForLogging(e.getMessage()));
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
@@ -73,7 +73,7 @@ public class VehicleApplicabilityHintController {
             HintResponse response = hintService.updateHint(hintId, request);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            log.error("Error updating hint {}: {}", hintId, e.getMessage());
+            log.error("Error updating hint(mask) {}: {}", maskForLog(hintId), sanitizeForLogging(e.getMessage()));
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
@@ -89,7 +89,7 @@ public class VehicleApplicabilityHintController {
             hintService.deleteHint(hintId);
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
-            log.error("Error deleting hint {}: {}", hintId, e.getMessage());
+            log.error("Error deleting hint(mask) {}: {}", maskForLog(hintId), sanitizeForLogging(e.getMessage()));
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
@@ -104,7 +104,7 @@ public class VehicleApplicabilityHintController {
             HintResponse response = hintService.getHint(hintId);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            log.error("Error retrieving hint {}: {}", hintId, e.getMessage());
+            log.error("Error retrieving hint(mask) {}: {}", maskForLog(hintId), sanitizeForLogging(e.getMessage()));
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
@@ -127,5 +127,27 @@ public class VehicleApplicabilityHintController {
             @Valid @RequestBody FilterProductsRequest request) {
         FilterProductsResponse response = hintService.filterProductsByVehicleAttributes(request.getVehicleAttributes());
         return ResponseEntity.ok(response);
+    }
+
+    private String maskForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.toString()
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
+    }
+
+    private String sanitizeForLogging(String input) {
+        if (input == null) {
+            return "null";
+        }
+        return input.replaceAll("[\\r\\n\\t]", "_").replaceAll("[\\p{Cntrl}]", "");
     }
 }

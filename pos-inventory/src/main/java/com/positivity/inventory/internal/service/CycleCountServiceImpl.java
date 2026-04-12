@@ -62,8 +62,10 @@ public class CycleCountServiceImpl implements CycleCountService {
 
         @Override
         public CountResponse submitCount(SubmitCountRequest request) {
-                log.info("Submitting count for task: {}, auditor: {}",
-                                maskForLog(request.getTaskId()), maskForLog(request.getAuditorId()));
+                if (log.isInfoEnabled()) {
+                        log.info("Submitting count for task: {}, auditor: {}",
+                                        maskForLog(request.getTaskId()), maskForLog(request.getAuditorId()));
+                }
 
                 // Validate quantity
                 validateQuantity(request.getActualQuantity());
@@ -94,8 +96,10 @@ public class CycleCountServiceImpl implements CycleCountService {
                                 .build();
 
                 countEntry = countEntryRepository.save(countEntry);
-                log.info("Created count entry: {}, variance: {}",
-                                maskForLog(countEntry.getCountEntryId()), variance);
+                if (log.isInfoEnabled()) {
+                        log.info("Created count entry: {}, variance: {}",
+                                        maskForLog(countEntry.getCountEntryId()), variance);
+                }
 
                 // Update task
                 task.setLatestCountEntryId(countEntry.getCountEntryId());
@@ -110,10 +114,7 @@ public class CycleCountServiceImpl implements CycleCountService {
         public CountResponse submitRecount(SubmitRecountRequest request) {
 
                 if (log.isInfoEnabled()) {
-                        log.info("POST inventory - cycle-count - recount - taskId: {}, auditor:  {}, permission: {}",
-                                        maskForLog(request.getTaskId()),
-                                        maskForLog(request.getAuditorId()),
-                                        request.getPermission());
+                        log.info("POST inventory - cycle-count - recount request received");
                 }
 
                 // Validate quantity
@@ -124,8 +125,11 @@ public class CycleCountServiceImpl implements CycleCountService {
 
                 // Check recount limit
                 if (task.getCountEntriesCount() >= MAX_TOTAL_COUNTS) {
-                        log.warn("Recount limit exceeded for task: {}. Current: {}, Max: {}",
-                                        maskForLog(task.getTaskId()), task.getCountEntriesCount(), MAX_TOTAL_COUNTS);
+                        if (log.isWarnEnabled()) {
+                                log.warn("Recount limit exceeded for task: {}. Current: {}, Max: {}",
+                                                maskForLog(task.getTaskId()), task.getCountEntriesCount(),
+                                                MAX_TOTAL_COUNTS);
+                        }
 
                         // Mark task as requiring investigation
                         task.setStatus(TaskStatus.REQUIRES_INVESTIGATION);
@@ -163,8 +167,10 @@ public class CycleCountServiceImpl implements CycleCountService {
                                 .build();
 
                 recountEntry = countEntryRepository.save(recountEntry);
-                log.info("Created recount entry: {}, sequence: {}, variance: {}",
-                                maskForLog(recountEntry.getCountEntryId()), newSequenceNumber, variance);
+                if (log.isInfoEnabled()) {
+                        log.info("Created recount entry: {}, sequence: {}, variance: {}",
+                                        maskForLog(recountEntry.getCountEntryId()), newSequenceNumber, variance);
+                }
 
                 // Update task
                 task.setLatestCountEntryId(recountEntry.getCountEntryId());
@@ -173,7 +179,7 @@ public class CycleCountServiceImpl implements CycleCountService {
 
                 // Check if this was the last allowed recount
                 boolean limitReached = task.getCountEntriesCount() >= MAX_TOTAL_COUNTS;
-                if (limitReached) {
+                if (limitReached && log.isInfoEnabled()) {
                         log.info("Maximum recount limit reached for task: {}",
                                         maskForLog(task.getTaskId()));
                 }
@@ -257,7 +263,9 @@ public class CycleCountServiceImpl implements CycleCountService {
                         }
                 } else if (PERMISSION_RECOUNT_ANY.equals(permission)) {
                         // Manager permission: can trigger any recount
-                        log.info("Manager recount authorized for task: {}", maskForLog(task.getTaskId()));
+                        if (log.isInfoEnabled()) {
+                                log.info("Manager recount authorized for task: {}", maskForLog(task.getTaskId()));
+                        }
                 } else {
                         throw new InsufficientPermissionException(
                                         String.format("Invalid permission: %s. Expected %s or %s",
