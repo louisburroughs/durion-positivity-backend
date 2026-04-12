@@ -19,7 +19,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,10 +40,8 @@ public class VehicleSearchController {
         @Operation(summary = "Search vehicles", description = "Search for vehicles by VIN, license plate, unit number, or description. "
                         +
                         "Results are ranked by relevance: exact match > prefix match > contains match.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Search results returned", content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class))),
-                        @ApiResponse(responseCode = "400", description = "Invalid search query")
-        })
+        @ApiResponse(responseCode = "200", description = "Search results returned", content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Invalid search query")
         @PostMapping
         @EmitEvent(id = "VEHICLE_SEARCH", apiVersion = "1")
         public ResponseEntity<SearchVehiclesResponse> search(
@@ -59,10 +56,8 @@ public class VehicleSearchController {
         }
 
         @Operation(summary = "Search vehicles (query parameter)", description = "Alternative search endpoint using query parameters. Useful for browser-based queries.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Search results returned", content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class))),
-                        @ApiResponse(responseCode = "400", description = "Invalid search query")
-        })
+        @ApiResponse(responseCode = "200", description = "Search results returned", content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
+        @ApiResponse(responseCode = "400", description = "Invalid search query")
         @GetMapping
         @EmitEvent(id = "VEHICLE_SEARCH", apiVersion = "1")
         public ResponseEntity<SearchVehiclesResponse> searchByQuery(
