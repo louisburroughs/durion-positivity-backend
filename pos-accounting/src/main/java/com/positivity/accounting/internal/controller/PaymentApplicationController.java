@@ -29,11 +29,11 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * REST Controller for payment application operations (AR).
- * 
+ *
  * Endpoints:
  * - POST /payments/{paymentId}/applications - Apply payment to invoices
  * - POST /payment-applications/{applicationId}/reverse - Reverse application
- * 
+ *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114</a>
@@ -82,14 +82,14 @@ public class PaymentApplicationController {
 
         /**
          * Apply a payment to one or more invoices.
-         * 
+         *
          * Business Rules (from Issue #114):
          * - Payment must be AVAILABLE with sufficient funds
          * - Each invoice must be applicable (not PaidInFull/Voided/Cancelled)
          * - Applications are atomic across all target invoices
          * - Idempotent via applicationRequestId
          * - Overpayments create CustomerCredit
-         * 
+         *
          * @param paymentId payment to apply
          * @param request   application request with invoices and amounts
          * @return application response with details
@@ -121,13 +121,13 @@ public class PaymentApplicationController {
 
         /**
          * Reverse a payment application (compensating transaction).
-         * 
+         *
          * Business Rules (from Issue #114):
          * - Requires elevated permission (ACCOUNTING_ADMIN or AR_MANAGER)
          * - Requires non-empty reason for audit trail
          * - Reversals are NEW records, not deletions
          * - Restores invoice balance and payment unappliedAmount
-         * 
+         *
          * @param applicationId application to reverse
          * @param request       reversal request with reason
          * @return 204 No Content on success

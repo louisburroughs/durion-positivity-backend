@@ -22,7 +22,7 @@ import java.util.UUID;
 
 /**
  * Controller for workorder detail with role-based visibility.
- * 
+ *
  * <p>
  * Implements CAP-005 Story #155 - Role-Based Visibility
  */
@@ -51,7 +51,7 @@ public class WorkorderDetailController {
         Set<String> userAuthorities = extractAuthorities(authorities);
 
         log.debug("Getting workorder detail: workorderId(mask)={}, authorityCount={}",
-            maskForLog(workorderId), userAuthorities.size());
+                maskForLog(workorderId), userAuthorities.size());
 
         WorkorderDetailResponse response = workorderDetailService.getWorkorderDetail(workorderId, userAuthorities);
 

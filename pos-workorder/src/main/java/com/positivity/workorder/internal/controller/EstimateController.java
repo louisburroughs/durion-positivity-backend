@@ -239,7 +239,7 @@ public class EstimateController {
         try {
             EstimateResponse declined = estimateService.declineEstimate(estimateId, reason);
             return ResponseEntity.ok(declined);
-        } catch (IllegalStateException | IllegalArgumentException e) {
+        } catch (IllegalStateException | IllegalArgumentException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -256,7 +256,7 @@ public class EstimateController {
         try {
             EstimateResponse reopened = estimateService.reopenEstimate(estimateId);
             return ResponseEntity.ok(reopened);
-        } catch (IllegalStateException | IllegalArgumentException e) {
+        } catch (IllegalStateException | IllegalArgumentException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -346,7 +346,7 @@ public class EstimateController {
                     estimateId, e.getErrorCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
 
-        } catch (EntityNotFoundException e) {
+        } catch (EntityNotFoundException _) {
             log.warn("Estimate {} not found", estimateId);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
 
@@ -397,7 +397,7 @@ public class EstimateController {
                     idempotencyKey,
                     currentResponse.getId());
             return null;
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException _) {
             var existingWorkorderId = idempotencyService.getExistingWorkorderId(
                     IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE,
                     idempotencyKey);

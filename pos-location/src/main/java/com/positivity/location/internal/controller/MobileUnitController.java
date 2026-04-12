@@ -47,7 +47,7 @@ public class MobileUnitController {
     public ResponseEntity<MobileUnitResponse> createMobileUnit(
             @Parameter(description = "Mobile unit creation request body") @RequestBody MobileUnitRequest request) {
         log.info("Creating mobile unit with name(mask)={}",
-            maskForLog(request != null ? request.getName() : null));
+                maskForLog(request != null ? request.getName() : null));
         return ResponseEntity.status(HttpStatus.CREATED).body(mobileUnitService.createMobileUnit(request));
     }
 

@@ -46,7 +46,7 @@ public class TaxController {
     public ResponseEntity<TaxCalculationResponse> calculateTax(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "International tax calculation request", content = @Content(mediaType = "application/json", examples = @ExampleObject(name = "US destination example", value = "{\"lineItems\":[{\"lineItemId\":\"1\",\"description\":\"Oil Change Service\",\"quantity\":1,\"unitPrice\":89.99,\"taxExempt\":false}],\"destinationAddress\":{\"countryCode\":\"US\",\"regionCode\":\"CA\",\"city\":\"Los Angeles\",\"postalCode\":\"90001\",\"line1\":\"123 Main St\"},\"currencyCode\":\"USD\",\"locale\":\"en-US\",\"referenceId\":\"550e8400-e29b-41d4-a716-446655440000\",\"referenceType\":\"ESTIMATE\"}"))) @Valid @RequestBody TaxCalculationRequest request) {
         log.info("Received tax calculation request for {} line items, postal code(mask): {}",
-            request.getLineItems().size(), maskForLog(request.getPostalCode()));
+                request.getLineItems().size(), maskForLog(request.getPostalCode()));
 
         TaxCalculationResponse response = taxCalculationService.calculateTax(request);
 

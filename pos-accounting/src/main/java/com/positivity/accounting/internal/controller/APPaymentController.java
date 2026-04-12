@@ -38,7 +38,7 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * REST controller for AP (Accounts Payable) payment operations.
- * 
+ *
  * <p>
  * Endpoints:
  * <ul>
@@ -46,7 +46,7 @@ import org.springframework.validation.annotation.Validated;
  * <li>GET /v1/accounting/ap/payments/{paymentId} - Get payment details</li>
  * <li>GET /v1/accounting/ap/bills - List eligible vendor bills</li>
  * </ul>
- * 
+ *
  * @see APPaymentService
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
@@ -115,12 +115,7 @@ public class APPaymentController {
         @ApiResponse(responseCode = "404", description = "Payment not found")
         @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<APPaymentResponse> getPaymentByRef(
-                        @PathVariable
-                        @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
-                        @NotBlank
-                        @Size(min = 1, max = 100, message = "Payment reference must be 1-100 characters")
-                        @Pattern(regexp = "^[^\\r\\n]+$", message = "Payment reference must not contain newline characters")
-                        @NonNull String paymentRef) {
+                        @PathVariable @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012") @NotBlank @Size(min = 1, max = 100, message = "Payment reference must be 1-100 characters") @Pattern(regexp = "^[^\\r\\n]+$", message = "Payment reference must not contain newline characters") @NonNull String paymentRef) {
 
                 return apPaymentService.getPaymentByRef(paymentRef)
                                 .map(ResponseEntity::ok)
