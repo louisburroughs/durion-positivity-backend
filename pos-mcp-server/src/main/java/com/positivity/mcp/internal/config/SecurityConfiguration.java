@@ -33,8 +33,8 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    ApiErrorAuthenticationEntryPoint apiErrorAuthenticationEntryPoint(ObjectMapper objectMapper) {
-        return new ApiErrorAuthenticationEntryPoint(objectMapper);
+    ApiErrorAuthenticationEntryPoint apiErrorAuthenticationEntryPoint(ObjectMapper objectMapper, Clock clock) {
+        return new ApiErrorAuthenticationEntryPoint(objectMapper, clock);
     }
 
     /**
@@ -52,7 +52,7 @@ public class SecurityConfiguration {
             GatewayAuthoritiesFilter gatewayAuthoritiesFilter,
             ApiErrorAuthenticationEntryPoint apiErrorEntryPoint) {
         http
-                .securityMatcher("/v1/mcp/**")
+                .securityMatcher("/v1/mcp/**", "/v1/nlt/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())

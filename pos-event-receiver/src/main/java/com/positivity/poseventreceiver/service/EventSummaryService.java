@@ -1,4 +1,4 @@
-package com.positivity.poseventreceiver.services;
+package com.positivity.poseventreceiver.service;
 
 import com.positivity.poseventreceiver.internal.dto.EventSummaryResponse;
 import org.jspecify.annotations.NonNull;

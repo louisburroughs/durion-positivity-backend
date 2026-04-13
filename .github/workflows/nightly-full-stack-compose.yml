@@ -1,8 +1,8 @@
 name: Nightly Full-Stack Docker Compose
 
 on:
-  schedule:
-    - cron: "0 5 * * *" # Nightly at 05:00 UTC
+  #  schedule:
+  #    - cron: "0 5 * * *" # Nightly at 05:00 UTC
   workflow_dispatch:
 
 concurrency:

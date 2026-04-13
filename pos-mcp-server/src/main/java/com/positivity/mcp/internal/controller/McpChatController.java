@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.mcp.service.AgentOrchestrationService;
+import com.positivity.mcp.internal.security.McpPermissions;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,7 +35,7 @@ public class McpChatController {
 
     @Operation(summary = "Execute MCP chat message")
     @PostMapping("/chat")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_EXECUTE + "')")
     @EmitEvent(id = "MCP_CHAT_EXECUTE", apiVersion = "1")
     public ResponseEntity<ChatResponse> chat(
             @RequestBody @Valid @NonNull ChatRequest request,

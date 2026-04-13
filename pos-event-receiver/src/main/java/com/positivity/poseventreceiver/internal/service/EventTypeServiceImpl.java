@@ -1,10 +1,10 @@
-package com.positivity.poseventreceiver.internal.services;
+package com.positivity.poseventreceiver.internal.service;
 
 import com.positivity.poseventreceiver.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EventTypeMapper;
 import com.positivity.poseventreceiver.internal.dto.EventTypeRequest;
 import com.positivity.poseventreceiver.internal.dto.EventTypeResponse;
-import com.positivity.poseventreceiver.services.EventTypeService;
+import com.positivity.poseventreceiver.service.EventTypeService;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;

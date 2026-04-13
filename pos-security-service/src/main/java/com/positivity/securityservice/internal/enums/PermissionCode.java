@@ -273,13 +273,21 @@ public enum PermissionCode {
     SECURITY__AUDIT__VIEW(217, "security:audit:view"),
     SECURITY__AUDIT__CREATE(218, "security:audit:create"),
     SECURITY__AUTHORIZATION__DECIDE(219, "security:authorization:decide"),
-    SECURITY__TOKEN__ISSUE_INTERNAL(220, "security:token:issue_internal");
+    SECURITY__TOKEN__ISSUE_INTERNAL(220, "security:token:issue_internal"),
+
+    // ── MCP / NLTI runtime ───────────────────────────────────────────────────
+    NLTI__REQUEST__SUBMIT(221, "nlti:request:submit"),
+    NLTI__REQUEST__READ(222, "nlti:request:read"),
+    NLTI__AUDIT__READ(223, "nlti:audit:read"),
+    MCP__DOCUMENT__INGEST(224, "mcp:document:ingest"),
+    MCP__CHAT__STREAM(225, "mcp:chat:stream"),
+    MCP__CHAT__EXECUTE(226, "mcp:chat:execute");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 2;
+    public static final int CATALOG_VERSION = 3;
 
     private static final Map<String, PermissionCode> BY_CODE = Stream.of(values())
             .collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

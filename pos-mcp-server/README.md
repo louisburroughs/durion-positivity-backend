@@ -93,6 +93,7 @@ This module has been extended for Wave MCP-2 (Phase 2). The following are the no
   - `V3` — schema: `mcp_tool`, `mcp_role`, `mcp_tool_workflow`, `mcp_tool_role`, `mcp_workflow_state` tables
   - `V4` — seeds: 16 tools, 5 roles, and workflow mappings
   - `V5` — corrective migration (Location + ShopManager role mappings)
+  - `V6` — pgvector ivfflat index on `mcp_tool.embedding` and `mcp_tool_invocation_log` audit table
 - New repository and persistence:
   - `ToolMetadataRepository` / `ToolMetadataRepositoryImpl` — JDBC-backed storage
   - Uses `pgvector` column (embedding vector(768)) with cosine-similarity `<=>` queries to find semantically relevant tools
@@ -137,3 +138,65 @@ Tool availability is gated by role in the registry. At a high level:
 - `ToolRegistryLoader` is profile-neutral (no `@Profile`) so the loader runs in all profiles; test configurations provide a `ToolMetadataRepository` stub bean for startup.
 
 If you are extending or testing registry logic, ensure test fixtures provide the expected stub beans or run with a non-test profile against a Postgres test instance seeded with V4 data.
+
+### MCP Tuning and Fallback Config
+
+- `mcp.tuning.enabled` (default `true`) — enables scheduled adaptive tool-priority tuning
+- `mcp.tuning.cron` (default `0 0 2 * * ?`) — tuning schedule
+- `mcp.model.fallback.enabled` (default `false`) — enables fallback model behavior when implemented by runtime orchestration
+- `mcp.model.fallback.secondary-model-name` (default `${OLLAMA_FALLBACK_MODEL:mistral:7b}`)
+
+## MCP-3 API Surface Additions
+
+- `POST /v1/mcp/documents`
+  - Permission: `mcp:document:ingest`
+  - Event: `MCP_DOCUMENT_INGEST`
+  - Behavior: validates request payload and ingests document content + optional metadata into the RAG vector store
+  - Response: `201 Created`
+
+- `POST /v1/mcp/chat/stream`
+  - Permission: `mcp:chat:stream`
+  - Event: `MCP_CHAT_STREAM_EXECUTE`
+  - Behavior: streams chat tokens as Server-Sent Events (`event: chat`) from the session agent manager
+  - Response: `200 OK` with `text/event-stream`
+
+## Phase 3 — Embedding index
+
+- Flyway V6 adds an ivfflat index on `mcp_tool.embedding` using `vector_cosine_ops` with 100 lists to improve semantic tool selection latency for large registries.
+- `ToolEmbeddingInitializer` (annotated `@Profile("alpha")`) runs at startup and populates null tool embeddings using the `nomic-embed-text` Ollama model when available.
+
+## Phase 4 — Audit logging, adaptive tuning, and RAG document API
+
+- Invocation audit: `ToolInvocationLog` domain record backed by `mcp_tool_invocation_log` (created in V6). Note: a follow-up migration (V7) makes `tool_id` nullable to support session-level audit rows.
+- `ToolAuditService` (`@Profile("!test")`) is invoked on every `SessionAgentManager.chat()` and `StreamingSessionAgentManager.streamChat()` call. Exceptions are swallowed and logged at WARN to avoid degrading chat flow.
+- `ToolPriorityTuningService` (`@ConditionalOnProperty: mcp.tuning.enabled=true`, `@Profile("!test")`) runs on a daily cron (`mcp.tuning.cron`, default `0 0 2 * * ?`) and computes adaptive priorities over a 7-day window using the formula:
+
+  performanceScore = 0.6 × successRate + 0.3 × (1 - min(avgLatency/2000, 1)) - 0.2 × fallbackRate
+
+  The updated priority uses exponential smoothing: `newPriority = currentPriority × 0.7 + performanceScore × 0.3`, clamped to the range [0.1, 1.0].
+- Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). Ingested content is injected into the `mcp_document_embedding` pgvector RAG store, and the endpoint responds with `201 Created`.
+
+## Phase 5 — Streaming SSE and model fallback
+
+- Streaming agents: `StreamingPosAssistant` / `StreamingSessionAgentManager` provide a LangChain4j `TokenStream`-backed per-user agent cache. The streaming orchestration exposes `POST /v1/mcp/chat/stream` (permission `mcp:chat:stream`) and produces `text/event-stream` SSE responses.
+- Model fallback: `ModelFallbackConfiguration` (`@ConditionalOnProperty: mcp.model.fallback.enabled=true`) configures an optional secondary Ollama model. The secondary model name is controlled by `mcp.model.fallback.secondary-model-name` (default `mistral:7b`).
+
+## Configuration knobs (additions for Phases 3–5)
+
+Add the following to your `application.yml` or environment overrides to enable tuning and fallback behavior:
+
+```yaml
+mcp.tuning.enabled=true
+mcp.tuning.cron=0 0 2 * * ?
+mcp.model.fallback.enabled=false
+mcp.model.fallback.secondary-model-name=${OLLAMA_FALLBACK_MODEL:mistral:7b}
+```
+
+## Permissions and Gateway catalog
+
+- New API permissions:
+  - `mcp:document:ingest` — POST `/v1/mcp/documents`
+  - `mcp:chat:stream` — POST `/v1/mcp/chat/stream`
+  - `mcp:chat:execute` — POST `/v1/mcp/chat` (replaces prior `isAuthenticated()` guard)
+- NLTI permissions registered in the GatewayPermissionCatalog at bits 221–223: `nlti:request:submit`, `nlti:request:read`, `nlti:audit:read`.
+- `GatewayPermissionCatalog` and `PermissionCode` have been updated to `CATALOG_VERSION=3` (bits 221–226 now cover NLTI/MCP runtime permissions).

@@ -1,7 +1,7 @@
 package com.positivity.poseventreceiver.internal.controller;
 
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
-import com.positivity.poseventreceiver.services.EmitEventService;
+import com.positivity.poseventreceiver.service.EmitEventService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

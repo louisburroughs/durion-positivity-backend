@@ -2,7 +2,10 @@ package com.positivity.mcp.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.mcp.service.SessionAgentCacheMetrics;
+import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +34,26 @@ class NltiObservabilityMetricsConfigTest {
     void setUp() {
         config = new NltiObservabilityMetricsConfig();
         registry = new SimpleMeterRegistry();
+    }
+
+    @Test
+    @DisplayName("agentCacheSizeGauge registers session cache size gauge")
+    void agentCacheSizeGauge_registersGauge() {
+        Gauge gauge = config.agentCacheSizeGauge(registry, cacheMetricsWithSize(7L));
+
+        assertThat(gauge).isNotNull();
+        assertThat(registry.get("mcp.agent.cache.size").gauge()).isSameAs(gauge);
+        assertThat(gauge.value()).isEqualTo(7D);
+    }
+
+    @Test
+    @DisplayName("streamingAgentCacheSizeGauge registers streaming cache size gauge")
+    void streamingAgentCacheSizeGauge_registersGauge() {
+        Gauge gauge = config.streamingAgentCacheSizeGauge(registry, streamingCacheMetricsWithSize(3L));
+
+        assertThat(gauge).isNotNull();
+        assertThat(registry.get("mcp.streaming.agent.cache.size").gauge()).isSameAs(gauge);
+        assertThat(gauge.value()).isEqualTo(3D);
     }
 
     @Test
@@ -76,5 +99,13 @@ class NltiObservabilityMetricsConfigTest {
 
         assertThat(timer).isNotNull();
         assertThat(registry.timer("nlt.execution.latency")).isSameAs(timer);
+    }
+
+    private SessionAgentCacheMetrics cacheMetricsWithSize(long cacheSize) {
+        return () -> cacheSize;
+    }
+
+    private StreamingSessionAgentCacheMetrics streamingCacheMetricsWithSize(long cacheSize) {
+        return () -> cacheSize;
     }
 }

@@ -1,8 +1,8 @@
-package com.positivity.poseventreceiver.internal.services;
+package com.positivity.poseventreceiver.internal.service;
 
 import com.positivity.poseventreceiver.internal.dto.EventSummaryResponse;
 import com.positivity.poseventreceiver.internal.repository.EmittedEventHourlyRepository;
-import com.positivity.poseventreceiver.services.EventSummaryService;
+import com.positivity.poseventreceiver.service.EventSummaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
