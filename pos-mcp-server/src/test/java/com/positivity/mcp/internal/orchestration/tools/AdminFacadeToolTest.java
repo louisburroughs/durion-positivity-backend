@@ -18,7 +18,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  */
 class AdminFacadeToolTest {
 
-  private static final String SECURITY_BASE_URL = "http://pos-security-service/v1";
+  private static final String SECURITY_BASE_URL = "http://pos-security-service/v1/admin";
 
   private MockRestServiceServer mockServer;
   private AdminFacadeTool tool;
@@ -27,7 +27,7 @@ class AdminFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new AdminFacadeTool(builder);
+    tool = new AdminFacadeTool(builder, SECURITY_BASE_URL);
   }
 
   @Test

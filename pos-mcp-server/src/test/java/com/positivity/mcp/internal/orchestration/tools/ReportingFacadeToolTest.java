@@ -18,7 +18,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  */
 class ReportingFacadeToolTest {
 
-  private static final String BASE_URL = "http://pos-accounting/v1/reports";
+  private static final String BASE_URL = "http://pos-accounting/v1/reporting";
 
   private MockRestServiceServer mockServer;
   private ReportingFacadeTool tool;
@@ -27,7 +27,7 @@ class ReportingFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new ReportingFacadeTool(builder);
+    tool = new ReportingFacadeTool(builder, BASE_URL);
   }
 
   @Test

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS mcp_tool_role (
   role_id UUID NOT NULL REFERENCES mcp_role(id),
   PRIMARY KEY (tool_id, role_id)
 );
--- mcp_tool_workflow: many-to-many tool ↔ workflow state (NULL = all states)
+-- mcp_tool_workflow: many-to-many tool ↔ workflow state
 CREATE TABLE IF NOT EXISTS mcp_tool_workflow (
   tool_id UUID NOT NULL REFERENCES mcp_tool(id),
   workflow_state_id UUID NOT NULL REFERENCES mcp_workflow_state(id),

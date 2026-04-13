@@ -27,7 +27,7 @@ class PricingFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new PricingFacadeTool(builder);
+    tool = new PricingFacadeTool(builder, BASE_URL);
   }
 
   @Test

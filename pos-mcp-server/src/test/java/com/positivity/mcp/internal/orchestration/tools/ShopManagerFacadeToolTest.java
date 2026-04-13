@@ -28,7 +28,7 @@ class ShopManagerFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new ShopManagerFacadeTool(builder);
+    tool = new ShopManagerFacadeTool(builder, BASE_URL);
   }
 
   @Test

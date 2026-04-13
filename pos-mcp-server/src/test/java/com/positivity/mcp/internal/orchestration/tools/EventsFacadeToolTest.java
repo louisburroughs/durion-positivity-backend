@@ -18,7 +18,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  */
 class EventsFacadeToolTest {
 
-  private static final String BASE_URL = "http://pos-event-receiver/v1";
+  private static final String BASE_URL = "http://pos-event-receiver/v1/events";
 
   private MockRestServiceServer mockServer;
   private EventsFacadeTool tool;
@@ -27,7 +27,7 @@ class EventsFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new EventsFacadeTool(builder);
+    tool = new EventsFacadeTool(builder, BASE_URL);
   }
 
   @Test

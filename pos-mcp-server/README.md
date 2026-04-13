@@ -33,11 +33,6 @@ Facade tool outbound base URLs (LangChain4j orchestration):
 
 ## Known Limitations (Phase 1)
 
-- **Facade tool auth propagation (ADR-0014):** `InventoryFacadeTool` and `OrderFacadeTool` do not
-  propagate the caller's JWT to downstream services. Tool calls will receive 401 from `pos-inventory`
-  and `pos-order` until Phase 2 implements a shared `ClientHttpRequestInterceptor` for auth propagation.
-- **Tool registry is DB-backed only in Phase 2:** `ToolRegistryLoader` is an in-memory stub.
-  Role-to-tool mapping is hardcoded to empty in Phase 1.
 - **RAG store is empty on first deploy:** The pgvector store requires manual document seeding
   (Phase 2 includes document ingestion API).
 
@@ -114,7 +109,7 @@ Phase 1 exposed `InventoryFacadeTool` and `OrderFacadeTool`. Phase 2 adds the re
 - `PricingFacadeTool` — pos-price (pricing)
 - `WorkorderFacadeTool` — pos-workorder (workorder)
 - `CatalogFacadeTool` — pos-catalog (catalog)
-- `VehicleFacadeTool` — pos-catalog (catalog)
+- `VehicleFacadeTool` — pos-customer (customer)
 - `AccountingFacadeTool` — pos-accounting (accounting)
 - `InvoiceFacadeTool` — pos-invoice (invoice)
 - `HrFacadeTool` — pos-people (hr)
@@ -130,11 +125,11 @@ Phase 1 exposed `InventoryFacadeTool` and `OrderFacadeTool`. Phase 2 adds the re
 
 Tool availability is gated by role in the registry. At a high level:
 
-- `ROLE_CASHIER`: Customer, Pricing, Workorder, Catalog, Vehicle, Inventory, Order — core sales operations
-- `ROLE_SERVICE_WRITER`: All `CASHIER` tools + Location, ShopManager, Accounting, Invoice, Tax, Events
-- `ROLE_MANAGER`: All `SERVICE_WRITER` tools + HR, Reporting, Admin tools
-- `ROLE_ADMIN`: All tools
-- `ROLE_SUPPLIER`: Catalog, Vehicle, Inventory subset
+- `ROLE_CASHIER`: Inventory, Order, Customer, Pricing — core checkout and customer lookup
+- `ROLE_SERVICE_WRITER`: Workorder, Customer, Vehicle, Catalog, Pricing, Inventory, Location, ShopManager — service lane operations
+- `ROLE_MANAGER`: All `SERVICE_WRITER` tools + Reporting, Accounting, Invoice, HR — management and financials
+- `ROLE_ADMIN`: All 16 tools
+- `ROLE_SUPPLIER`: Order, Inventory, Catalog — supplier-facing subset
 
 ### Profile & Test Notes
 

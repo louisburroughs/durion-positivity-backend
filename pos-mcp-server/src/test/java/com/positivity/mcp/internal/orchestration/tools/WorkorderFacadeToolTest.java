@@ -27,7 +27,7 @@ class WorkorderFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new WorkorderFacadeTool(builder);
+    tool = new WorkorderFacadeTool(builder, BASE_URL);
   }
 
   @Test

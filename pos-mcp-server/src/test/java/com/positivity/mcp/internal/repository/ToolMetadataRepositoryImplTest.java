@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.RowMapper;
 
 import java.util.List;
 import java.util.UUID;
+import org.postgresql.util.PGobject;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -78,7 +79,7 @@ class ToolMetadataRepositoryImplTest {
   @SuppressWarnings("unchecked")
   void findTopKByEmbedding_returnsBoundedList() {
     float[] embedding = new float[768];
-    when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(embedding), eq(5)))
+    when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(PGobject.class), eq(5)))
         .thenReturn(List.of(SAMPLE_TOOL));
 
     List<ToolMetadata> result = repository.findTopKByEmbedding(embedding, 5);

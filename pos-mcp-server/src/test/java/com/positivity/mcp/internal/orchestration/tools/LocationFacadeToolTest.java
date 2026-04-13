@@ -27,7 +27,7 @@ class LocationFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new LocationFacadeTool(builder);
+    tool = new LocationFacadeTool(builder, BASE_URL);
   }
 
   @Test

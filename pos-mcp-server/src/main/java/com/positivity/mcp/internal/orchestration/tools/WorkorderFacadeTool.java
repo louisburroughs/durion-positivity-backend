@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -11,9 +12,11 @@ public class WorkorderFacadeTool {
 
   private final RestClient restClient;
 
-  public WorkorderFacadeTool(RestClient.Builder restClientBuilder) {
+  public WorkorderFacadeTool(
+      RestClient.Builder restClientBuilder,
+      @Value("${pos.workorder.base-url:http://pos-workorder/v1/workorders}") @NonNull String baseUrl) {
     this.restClient = restClientBuilder
-        .baseUrl("http://pos-workorder/v1/workorders")
+        .baseUrl(baseUrl)
         .build();
   }
 

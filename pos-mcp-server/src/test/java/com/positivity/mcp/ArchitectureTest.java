@@ -66,10 +66,10 @@ public class ArchitectureTest {
         static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
                         .that()
                         .resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..",
-                                        "..internal.orchestration..")
+                                        "..internal.service..")
                         .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
                         .allowEmptyShould(true)
-                        .because("repositories should only be accessed from service layer or orchestration");
+                        .because("repositories should only be accessed from service layer");
 
         @ArchTest
         static final ArchRule spring_boot_application_should_be_in_root_package = classes()

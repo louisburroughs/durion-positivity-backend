@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -11,9 +12,11 @@ public class PricingFacadeTool {
 
   private final RestClient restClient;
 
-  public PricingFacadeTool(RestClient.Builder restClientBuilder) {
+  public PricingFacadeTool(
+      RestClient.Builder restClientBuilder,
+      @Value("${pos.pricing.base-url:http://pos-price/v1/pricing}") @NonNull String baseUrl) {
     this.restClient = restClientBuilder
-        .baseUrl("http://pos-price/v1/pricing")
+        .baseUrl(baseUrl)
         .build();
   }
 

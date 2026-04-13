@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -11,9 +12,11 @@ public class LocationFacadeTool {
 
   private final RestClient restClient;
 
-  public LocationFacadeTool(RestClient.Builder restClientBuilder) {
+  public LocationFacadeTool(
+      RestClient.Builder restClientBuilder,
+      @Value("${pos.location.base-url:http://pos-location/v1/locations}") @NonNull String baseUrl) {
     this.restClient = restClientBuilder
-        .baseUrl("http://pos-location/v1/locations")
+        .baseUrl(baseUrl)
         .build();
   }
 

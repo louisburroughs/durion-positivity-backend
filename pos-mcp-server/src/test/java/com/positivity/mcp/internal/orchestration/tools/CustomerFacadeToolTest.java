@@ -27,7 +27,7 @@ class CustomerFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new CustomerFacadeTool(builder);
+    tool = new CustomerFacadeTool(builder, BASE_URL);
   }
 
   @Test

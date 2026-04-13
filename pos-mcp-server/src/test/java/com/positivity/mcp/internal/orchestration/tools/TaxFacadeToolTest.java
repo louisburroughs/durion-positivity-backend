@@ -27,7 +27,7 @@ class TaxFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new TaxFacadeTool(builder);
+    tool = new TaxFacadeTool(builder, BASE_URL);
   }
 
   @Test

@@ -27,7 +27,7 @@ class AccountingFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new AccountingFacadeTool(builder);
+    tool = new AccountingFacadeTool(builder, BASE_URL);
   }
 
   @Test

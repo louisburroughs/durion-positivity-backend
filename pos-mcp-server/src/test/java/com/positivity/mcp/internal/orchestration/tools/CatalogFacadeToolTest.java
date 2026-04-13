@@ -27,7 +27,7 @@ class CatalogFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new CatalogFacadeTool(builder);
+    tool = new CatalogFacadeTool(builder, BASE_URL);
   }
 
   @Test

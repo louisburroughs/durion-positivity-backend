@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.postgresql.util.PGobject;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -49,11 +50,31 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                avg_latency_ms, enabled, handler_bean
         FROM mcp_tool
         WHERE enabled = true
-        ORDER BY embedding <=> ?::vector
+          AND embedding IS NOT NULL
+        ORDER BY embedding <=> ?::vector, id
         LIMIT ?
         """;
 
-    return jdbcTemplate.query(sql, this::mapRow, embedding, limit);
+    return jdbcTemplate.query(sql, this::mapRow, toVectorPGobject(embedding), limit);
+  }
+
+  private static PGobject toVectorPGobject(float[] embedding) {
+    StringBuilder sb = new StringBuilder("[");
+    for (int i = 0; i < embedding.length; i++) {
+      if (i > 0) {
+        sb.append(",");
+      }
+      sb.append(embedding[i]);
+    }
+    sb.append("]");
+    PGobject pgVector = new PGobject();
+    pgVector.setType("vector");
+    try {
+      pgVector.setValue(sb.toString());
+    } catch (SQLException e) {
+      throw new IllegalArgumentException("Failed to create vector PGobject", e);
+    }
+    return pgVector;
   }
 
   private ToolMetadata mapRow(ResultSet rs, int rowNum) throws SQLException {

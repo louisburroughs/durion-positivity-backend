@@ -1,4 +1,4 @@
-package com.positivity.mcp.internal.orchestration;
+package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
@@ -9,6 +9,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
@@ -39,7 +40,11 @@ public class ToolRegistryLoader {
   }
 
   /**
-   * Loads role-to-tool-instance mappings from the DB at startup.
+   * Loads role-to-tool-instance mappings from the DB at startup for the IDLE
+   * workflow state.
+   * Only tools mapped to the {@code IDLE} workflow state are preloaded; tools for
+   * other
+   * workflow states (e.g., CREATING_PO) are resolved dynamically per request.
    * Tools are resolved by their Spring bean name (handler_bean column).
    */
   public @NonNull Map<String, List<Object>> loadRoleToolMappings() {
@@ -51,7 +56,7 @@ public class ToolRegistryLoader {
         try {
           Object bean = applicationContext.getBean(meta.handlerBean());
           beans.add(bean);
-        } catch (Exception e) {
+        } catch (NoSuchBeanDefinitionException e) {
           log.warn(
               "Tool bean '{}' not found for role '{}', skipping: {}",
               meta.handlerBean(),

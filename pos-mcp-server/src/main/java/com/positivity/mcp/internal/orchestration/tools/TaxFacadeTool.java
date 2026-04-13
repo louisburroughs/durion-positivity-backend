@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -11,9 +12,11 @@ public class TaxFacadeTool {
 
   private final RestClient restClient;
 
-  public TaxFacadeTool(RestClient.Builder restClientBuilder) {
+  public TaxFacadeTool(
+      RestClient.Builder restClientBuilder,
+      @Value("${pos.tax.base-url:http://pos-tax/v1/tax}") @NonNull String baseUrl) {
     this.restClient = restClientBuilder
-        .baseUrl("http://pos-tax/v1/tax")
+        .baseUrl(baseUrl)
         .build();
   }
 

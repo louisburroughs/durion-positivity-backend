@@ -18,7 +18,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  */
 class HrFacadeToolTest {
 
-  private static final String BASE_URL = "http://pos-people/v1/employees";
+  private static final String BASE_URL = "http://pos-people/v1/hr";
 
   private MockRestServiceServer mockServer;
   private HrFacadeTool tool;
@@ -27,7 +27,7 @@ class HrFacadeToolTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    tool = new HrFacadeTool(builder);
+    tool = new HrFacadeTool(builder, BASE_URL);
   }
 
   @Test
