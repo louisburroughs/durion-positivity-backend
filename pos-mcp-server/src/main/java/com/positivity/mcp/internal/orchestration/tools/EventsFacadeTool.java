@@ -14,7 +14,7 @@ public class EventsFacadeTool {
 
     public EventsFacadeTool(
             RestClient.Builder restClientBuilder,
-            @Value("${pos.events.base-url:http://pos-event-receiver/v1/events}") @NonNull String baseUrl) {
+            @Value("${pos.event-receiver.base-url:http://pos-event-receiver/v1/events}") @NonNull String baseUrl) {
         this.restClient = restClientBuilder
                 .baseUrl(baseUrl)
                 .build();

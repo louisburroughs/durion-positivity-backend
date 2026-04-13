@@ -34,7 +34,13 @@ public class BearerTokenRelayInterceptor implements ClientHttpRequestInterceptor
         HttpServletRequest httpRequest = servletAttrs.getRequest();
         String authHeader = httpRequest.getHeader(AUTHORIZATION);
         if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
-          request.getHeaders().set(AUTHORIZATION, authHeader);
+          String outboundAuthHeader = request.getHeaders().getFirst(AUTHORIZATION);
+          if (outboundAuthHeader == null || outboundAuthHeader.startsWith(BEARER_PREFIX)) {
+            request.getHeaders().set(AUTHORIZATION, authHeader);
+          } else {
+            log.debug(
+                "Outbound Authorization header already uses a non-Bearer scheme; skipping Bearer token relay");
+          }
         }
       }
     } catch (IllegalStateException e) {
