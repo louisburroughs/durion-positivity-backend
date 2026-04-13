@@ -103,4 +103,14 @@ class StreamingSessionAgentManagerTest {
     // Agent was rebuilt after eviction: resolveToolsForRole called twice
     verify(toolRegistry, times(2)).resolveToolsForRole("ROLE_CASHIER");
   }
+
+  @Test
+  @DisplayName("streamChat rebuilds agent when role changes for same userId")
+  void streamChat_roleChange_rebuildsAgent() {
+    manager.streamChat("user-1", "ROLE_CASHIER", "first");
+    manager.streamChat("user-1", "ROLE_MANAGER", "second");
+
+    verify(toolRegistry, times(1)).resolveToolsForRole("ROLE_CASHIER");
+    verify(toolRegistry, times(1)).resolveToolsForRole("ROLE_MANAGER");
+  }
 }

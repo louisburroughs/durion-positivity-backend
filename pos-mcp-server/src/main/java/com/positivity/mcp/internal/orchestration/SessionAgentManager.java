@@ -35,7 +35,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SessionAgentManager.class);
 
-  private final Cache<String, PosAssistant> agentCache;
+  private final Cache<String, CachedAgent> agentCache;
   private final Cache<String, AtomicInteger> requestCountCache;
   private final ChatModel chatModel;
   private final EmbeddingModel embeddingModel;
@@ -84,7 +84,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         .maximumSize(maxCachedAgents)
         .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
         .removalListener(
-            (String userId, PosAssistant ignored, com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
+            (String userId, CachedAgent ignored, com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
               if (userId != null) {
                 requestCountCache.invalidate(userId);
               }
@@ -101,7 +101,16 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
   PosAssistant getOrCreateAgent(
       @NonNull String userId,
       @NonNull String role) {
-    return agentCache.get(userId, key -> buildAgent(role));
+    CachedAgent cached = agentCache.getIfPresent(userId);
+    if (cached != null && role.equals(cached.role())) {
+      return cached.agent();
+    }
+    if (cached != null) {
+      agentCache.invalidate(userId);
+    }
+    PosAssistant agent = buildAgent(role);
+    agentCache.put(userId, new CachedAgent(role, agent));
+    return agent;
   }
 
   @Override
@@ -180,5 +189,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
   @Override
   public void evict(@NonNull String userId) {
     agentCache.invalidate(userId);
+  }
+
+  private record CachedAgent(@NonNull String role, @NonNull PosAssistant agent) {
   }
 }

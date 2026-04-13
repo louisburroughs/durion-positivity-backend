@@ -105,6 +105,15 @@ class SessionAgentManagerTest {
   }
 
   @Test
+  @DisplayName("getOrCreateAgent rebuilds agent when role changes for same userId")
+  void getOrCreateAgent_roleChange_rebuildsAgent() {
+    PosAssistant original = manager.getOrCreateAgent("user-1", "TECH");
+    PosAssistant afterRoleChange = manager.getOrCreateAgent("user-1", "MANAGER");
+
+    assertThat(afterRoleChange).isNotSameAs(original);
+  }
+
+  @Test
   @DisplayName("evict removes the user entry from cache so next call creates a fresh agent")
   void evict_causesNewAgentToBeCreatedOnNextCall() {
     PosAssistant before = manager.getOrCreateAgent("user-1", "TECH");
@@ -112,7 +121,7 @@ class SessionAgentManagerTest {
 
     // Verify Caffeine cache is empty after invalidation
     @SuppressWarnings("unchecked")
-    Cache<String, PosAssistant> cache = (Cache<String, PosAssistant>) ReflectionTestUtils.getField(manager,
+    Cache<String, ?> cache = (Cache<String, ?>) ReflectionTestUtils.getField(manager,
         "agentCache");
     assertThat(cache).isNotNull();
     cache.cleanUp();

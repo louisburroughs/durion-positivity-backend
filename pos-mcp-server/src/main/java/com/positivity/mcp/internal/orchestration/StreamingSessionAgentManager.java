@@ -34,7 +34,7 @@ public class StreamingSessionAgentManager
 
   private static final Logger LOGGER = LoggerFactory.getLogger(StreamingSessionAgentManager.class);
 
-  private final Cache<String, StreamingPosAssistant> agentCache;
+  private final Cache<String, CachedStreamingAgent> agentCache;
   private final Cache<String, AtomicInteger> requestCountCache;
   private final StreamingChatModel streamingChatModel;
   private final EmbeddingModel embeddingModel;
@@ -72,7 +72,7 @@ public class StreamingSessionAgentManager
     this.agentCache = Caffeine.newBuilder()
         .maximumSize(maxCachedAgents)
         .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
-        .removalListener((String userId, StreamingPosAssistant ignored,
+        .removalListener((String userId, CachedStreamingAgent ignored,
             com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
           if (userId != null) {
             requestCountCache.invalidate(userId);
@@ -130,7 +130,16 @@ public class StreamingSessionAgentManager
   private @NonNull StreamingPosAssistant getOrCreateAgent(
       @NonNull String userId,
       @NonNull String role) {
-    return agentCache.get(userId, key -> buildAgent(role));
+    CachedStreamingAgent cached = agentCache.getIfPresent(userId);
+    if (cached != null && role.equals(cached.role())) {
+      return cached.agent();
+    }
+    if (cached != null) {
+      agentCache.invalidate(userId);
+    }
+    StreamingPosAssistant agent = buildAgent(role);
+    agentCache.put(userId, new CachedStreamingAgent(role, agent));
+    return agent;
   }
 
   private @NonNull StreamingPosAssistant buildAgent(@NonNull String role) {
@@ -168,5 +177,8 @@ public class StreamingSessionAgentManager
         .onCompleteResponse(response -> emitter.complete())
         .onError(emitter::error)
         .start();
+  }
+
+  private record CachedStreamingAgent(@NonNull String role, @NonNull StreamingPosAssistant agent) {
   }
 }
