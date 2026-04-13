@@ -65,12 +65,13 @@ public class StreamingSessionAgentManager
     this.toolAuditService = toolAuditService;
     this.memoryMaxMessages = memoryMaxMessages;
     this.rateLimitPerSession = rateLimitPerSession;
+    int sanitizedMaxCachedAgents = Math.max(1, maxCachedAgents);
     this.requestCountCache = Caffeine.newBuilder()
-        .maximumSize(Math.max(1, maxCachedAgents))
+        .maximumSize(sanitizedMaxCachedAgents)
         .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
         .build();
     this.agentCache = Caffeine.newBuilder()
-        .maximumSize(maxCachedAgents)
+        .maximumSize(sanitizedMaxCachedAgents)
         .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
         .removalListener((String userId, CachedStreamingAgent ignored,
             com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
