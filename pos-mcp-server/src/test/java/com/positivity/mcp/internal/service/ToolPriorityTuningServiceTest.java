@@ -103,4 +103,30 @@ class ToolPriorityTuningServiceTest {
         .as("computed new priority must be within the clamped range [0.1, 1.0]")
         .isBetween(0.1, 1.0);
   }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  @DisplayName("tuneToolPriorities query filters out null tool_id rows")
+  void tuneToolPriorities_statsQueryContainsToolIdNotNullFilter() {
+    when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(List.of());
+
+    service.tuneToolPriorities();
+
+    ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+    verify(jdbcTemplate, times(1)).query(sqlCaptor.capture(), any(RowMapper.class));
+    assertThat(sqlCaptor.getValue()).contains("tool_id IS NOT NULL");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  @DisplayName("tuneToolPriorities query filters out selection-only rows (executionTimeMs < 0)")
+  void tuneToolPriorities_statsQueryContainsExecutionTimeMsFilter() {
+    when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(List.of());
+
+    service.tuneToolPriorities();
+
+    ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+    verify(jdbcTemplate, times(1)).query(sqlCaptor.capture(), any(RowMapper.class));
+    assertThat(sqlCaptor.getValue()).contains("execution_time_ms >= 0");
+  }
 }

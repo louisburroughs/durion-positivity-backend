@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -34,6 +35,8 @@ public class ToolPriorityTuningService {
                AVG(CASE WHEN fallback_invoked THEN 1.0 ELSE 0.0 END) AS fallback_rate
         FROM mcp_tool_invocation_log
         WHERE created_at > now() - interval '7 days'
+          AND tool_id IS NOT NULL
+          AND execution_time_ms >= 0
         GROUP BY tool_id
         HAVING COUNT(*) >= 10
         """;
@@ -79,7 +82,7 @@ public class ToolPriorityTuningService {
   }
 
   private record ToolPerformanceStats(
-      @NonNull UUID toolId,
+      @Nullable UUID toolId,
       double successRate,
       double avgLatency,
       double fallbackRate) {

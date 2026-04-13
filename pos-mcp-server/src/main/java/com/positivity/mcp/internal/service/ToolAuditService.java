@@ -41,9 +41,9 @@ public class ToolAuditService {
           semanticRank,
           finalScore,
           selected,
-          true,
           false,
-          0,
+          false,
+          -1,
           null);
       auditRepository.logInvocation(log);
     } catch (Exception exception) {

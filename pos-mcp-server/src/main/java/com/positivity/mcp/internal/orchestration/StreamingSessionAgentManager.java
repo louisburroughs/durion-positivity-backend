@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.service.ToolAuditService;
+import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -28,7 +29,8 @@ import reactor.core.publisher.FluxSink;
 
 @Component
 @Profile("alpha")
-public class StreamingSessionAgentManager implements StreamingAgentOrchestrationService {
+public class StreamingSessionAgentManager
+    implements StreamingAgentOrchestrationService, StreamingSessionAgentCacheMetrics {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(StreamingSessionAgentManager.class);
 
@@ -120,6 +122,7 @@ public class StreamingSessionAgentManager implements StreamingAgentOrchestration
     agentCache.invalidate(userId);
   }
 
+  @Override
   public long getCacheSize() {
     return agentCache.estimatedSize();
   }

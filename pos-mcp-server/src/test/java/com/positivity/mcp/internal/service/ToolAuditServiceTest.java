@@ -60,7 +60,10 @@ class ToolAuditServiceTest {
         && "session-abc".equals(log.sessionId())
         && log.semanticRank() == 2
         && Double.compare(log.finalScore(), 0.75) == 0
-        && log.selected()));
+        && log.selected()
+        && !log.success()
+        && !log.fallbackInvoked()
+        && log.executionTimeMs() == -1));
   }
 
   @Test

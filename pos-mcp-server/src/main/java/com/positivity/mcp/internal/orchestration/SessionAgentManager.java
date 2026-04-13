@@ -8,6 +8,7 @@ import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolAuditService;
 import com.positivity.mcp.service.AgentOrchestrationService;
+import com.positivity.mcp.service.SessionAgentCacheMetrics;
 import com.positivity.mcp.service.SystemPromptService;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
@@ -30,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 @Profile("alpha")
-public class SessionAgentManager implements AgentOrchestrationService {
+public class SessionAgentManager implements AgentOrchestrationService, SessionAgentCacheMetrics {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SessionAgentManager.class);
 
@@ -139,6 +140,7 @@ public class SessionAgentManager implements AgentOrchestrationService {
     }
   }
 
+  @Override
   public long getCacheSize() {
     return agentCache.estimatedSize();
   }

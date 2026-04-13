@@ -4,7 +4,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import java.lang.reflect.Method;
+import com.positivity.mcp.service.SessionAgentCacheMetrics;
+import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -15,9 +16,9 @@ public class NltiObservabilityMetricsConfig {
     @Bean
     @Profile("alpha")
     public Gauge agentCacheSizeGauge(MeterRegistry registry,
-            Object sessionAgentManager) {
+            SessionAgentCacheMetrics sessionAgentMetrics) {
         return Gauge.builder("mcp.agent.cache.size",
-                sessionAgentManager, this::resolveCacheSize)
+                sessionAgentMetrics, metrics -> metrics.getCacheSize())
                 .description("Current number of cached LangChain4j agent sessions")
                 .register(registry);
     }
@@ -25,24 +26,11 @@ public class NltiObservabilityMetricsConfig {
     @Bean
     @Profile("alpha")
     public Gauge streamingAgentCacheSizeGauge(MeterRegistry registry,
-            Object streamingSessionAgentManager) {
+            StreamingSessionAgentCacheMetrics streamingSessionAgentMetrics) {
         return Gauge.builder("mcp.streaming.agent.cache.size",
-                streamingSessionAgentManager, this::resolveCacheSize)
+                streamingSessionAgentMetrics, metrics -> metrics.getCacheSize())
                 .description("Current number of cached LangChain4j streaming agent sessions")
                 .register(registry);
-    }
-
-    private double resolveCacheSize(Object sessionAgentManager) {
-        try {
-            Method getter = sessionAgentManager.getClass().getMethod("getCacheSize");
-            Object result = getter.invoke(sessionAgentManager);
-            if (result instanceof Number number) {
-                return number.doubleValue();
-            }
-        } catch (ReflectiveOperationException _) {
-            // Keep gauge resilient if the bean contract changes.
-        }
-        return 0D;
     }
 
     @Bean
