@@ -1,11 +1,15 @@
 package com.positivity.mcp.internal.config;
 
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import com.positivity.mcp.service.DocumentIngestionService;
 import com.positivity.mcp.service.AgentOrchestrationService;
+import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import java.util.List;
+import org.jspecify.annotations.NonNull;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import reactor.core.publisher.Flux;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -20,6 +24,29 @@ public class SessionAgentManagerTestConfiguration {
     AgentOrchestrationService service = mock(AgentOrchestrationService.class);
     when(service.chat(anyString(), anyString(), anyString())).thenReturn("Test assistant response");
     return service;
+  }
+
+  @Bean
+  StreamingAgentOrchestrationService streamingAgentOrchestrationService() {
+    return new StreamingAgentOrchestrationService() {
+      @Override
+      public @NonNull Flux<String> streamChat(
+          @NonNull String userId,
+          @NonNull String role,
+          @NonNull String message) {
+        return Flux.just("test-token");
+      }
+
+      @Override
+      public void evict(@NonNull String userId) {
+        // No-op for test profile stub.
+      }
+    };
+  }
+
+  @Bean
+  DocumentIngestionService documentIngestionService() {
+    return mock(DocumentIngestionService.class);
   }
 
   @Bean

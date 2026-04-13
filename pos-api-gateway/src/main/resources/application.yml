@@ -112,6 +112,12 @@ spring:
                 - Path=/event-receiver/**
               filters:
                 - StripPrefix=1
+            - id: mcp-server
+              uri: lb://MCP-SERVER
+              predicates:
+                - Path=/mcp-server/**
+              filters:
+                - StripPrefix=1
             - id: vehicle-fitment
               uri: lb://VEHICLE-FITMENT
               predicates:

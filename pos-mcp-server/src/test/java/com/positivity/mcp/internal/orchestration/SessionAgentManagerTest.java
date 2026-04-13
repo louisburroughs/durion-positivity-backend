@@ -82,8 +82,8 @@ class SessionAgentManagerTest {
     orderFacadeTool = new OrderFacadeTool(RestClient.builder(), "http://localhost/v1/orders");
     manager = new SessionAgentManager(
         chatModel, embeddingModel, embeddingStore,
-        toolRegistry, exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, systemPromptService,
-        30, 500, 50);
+        toolRegistry, exaWebSearchTool, inventoryFacadeTool, orderFacadeTool, null, systemPromptService,
+        30, 500, 50, 100);
   }
 
   @Test

@@ -18,6 +18,9 @@ public final class McpPermissions {
     public static final String NLTI_REQUEST_SUBMIT = "nlti:request:submit";
     public static final String NLTI_REQUEST_READ = "nlti:request:read";
     public static final String NLTI_AUDIT_READ = "nlti:audit:read";
+    public static final String MCP_DOCUMENT_INGEST = "mcp:document:ingest";
+    public static final String MCP_CHAT_STREAM = "mcp:chat:stream";
+    public static final String MCP_CHAT_EXECUTE = "mcp:chat:execute";
 
     private McpPermissions() {
     }

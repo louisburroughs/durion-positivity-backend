@@ -52,7 +52,7 @@ public class SecurityConfiguration {
             GatewayAuthoritiesFilter gatewayAuthoritiesFilter,
             ApiErrorAuthenticationEntryPoint apiErrorEntryPoint) {
         http
-                .securityMatcher("/v1/mcp/**")
+                .securityMatcher("/v1/mcp/**", "/v1/nlt/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.service.AgentOrchestrationService;
 import java.util.List;
 
@@ -47,14 +48,16 @@ class McpChatControllerTest {
     private AgentOrchestrationService agentOrchestrationService;
 
     @Test
-    @WithMockUser(username = "test-user", roles = "USER")
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat with message returns 200 and response payload")
     void chat_withMessage_returns200() throws Exception {
         when(agentOrchestrationService.chat(anyString(), anyString(), anyString())).thenReturn("assistant reply");
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
                 "n/a",
-                List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
 
         mockMvc.perform(post("/v1/mcp/chat")
                 .principal(authentication)
@@ -67,7 +70,7 @@ class McpChatControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "test-user", roles = "USER")
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat orchestration failure returns 500 ApiError envelope")
     void chat_orchestrationFailure_returns500ApiError() throws Exception {
         when(agentOrchestrationService.chat(anyString(), anyString(), anyString()))
@@ -105,7 +108,17 @@ class McpChatControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "test-user", roles = "USER")
+    @DisplayName("POST /v1/mcp/chat: authenticated user without mcp:chat:execute authority is denied 403")
+    @WithMockUser(authorities = "ROLE_USER")
+    void postChat_withoutChatExecuteAuthority_returns403() throws Exception {
+        mockMvc.perform(post("/v1/mcp/chat")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"message\":\"test\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat with blank message returns 400 ApiError envelope")
     void chat_withBlankMessage_returns400() throws Exception {
         mockMvc.perform(post("/v1/mcp/chat")

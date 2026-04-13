@@ -4,7 +4,7 @@ public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {
     }
 
-    public static final int CATALOG_VERSION = 1;
+    public static final int CATALOG_VERSION = 3;
 
     protected static final String[] AUTHORITY_BY_BIT = {
             "PERM_accounting:je:view",
@@ -221,7 +221,19 @@ public final class GatewayPermissionCatalog {
             "PERM_workorder:parts:view",
             "PERM_workorder:parts:add",
             "PERM_workorder:wip:view",
-            "PERM_workorder:wip:view_all_locations"
+            "PERM_workorder:wip:view_all_locations",
+                "PERM_security:user_account_state:view",
+                "PERM_security:user_account_state:manage",
+                "PERM_security:audit:view",
+                "PERM_security:audit:create",
+                "PERM_security:authorization:decide",
+                "PERM_security:token:issue_internal",
+            "PERM_nlti:request:submit",
+            "PERM_nlti:request:read",
+            "PERM_nlti:audit:read",
+            "PERM_mcp:document:ingest",
+            "PERM_mcp:chat:stream",
+            "PERM_mcp:chat:execute"
     };
 
     public static String authorityForBit(int bitIndex) {

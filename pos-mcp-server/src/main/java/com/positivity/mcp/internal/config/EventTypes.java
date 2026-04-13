@@ -16,6 +16,10 @@ public final class EventTypes {
                 return List.of(
                                 EventTypeRegistration.search("MCP_CHAT_EXECUTE",
                                                 "Execute an MCP tool through the chat endpoint").build(),
+                                EventTypeRegistration.write("MCP_DOCUMENT_INGEST",
+                                                "Ingest a document into the RAG vector store").build(),
+                                EventTypeRegistration.write("MCP_CHAT_STREAM_EXECUTE",
+                                                "Execute a streaming MCP chat request").build(),
                                 EventTypeRegistration.write("MCP_LLM_API_CREATE",
                                                 "Create an LLM API configuration").build(),
                                 EventTypeRegistration.write("MCP_LLM_API_UPDATE",

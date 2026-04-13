@@ -26,6 +26,13 @@ mcp:
     cache-ttl-minutes: 30
     max-cached-agents: 500
     memory-max-messages: 50
+  tuning:
+    enabled: true
+    cron: "0 0 2 * * ?"
+  model:
+    fallback:
+      enabled: false
+      secondary-model-name: ${OLLAMA_FALLBACK_MODEL:mistral:7b}
 
 langchain4j:
   ollama:

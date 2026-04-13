@@ -15,12 +15,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>
  * Verifies:
  * <ul>
- * <li>Catalog contains exactly 221 permissions matching
+ * <li>Catalog contains exactly 227 permissions matching
  * {@code scripts/permissions-aggregate.yaml}.</li>
- * <li>Each bit index in the range [0, 220] is assigned exactly once (no gaps,
+ * <li>Each bit index in the range [0, 226] is assigned exactly once (no gaps,
  * no reuse).</li>
  * <li>Each canonical code string is unique across all enum constants.</li>
- * <li>{@code CATALOG_VERSION = 2} constant is declared and accessible.</li>
+ * <li>{@code CATALOG_VERSION = 3} constant is declared and accessible.</li>
  * <li>{@code fromCode(String)} provides a safe O(1) round-trip lookup.</li>
  * </ul>
  *
@@ -33,13 +33,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PermissionCodeTest {
 
     // -------------------------------------------------------------------------
-    // AC-1: Catalog size — 221 entries
+    // AC-1: Catalog size — 227 entries
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("catalog contains exactly 221 permissions")
-    void catalogContainsExactly221Permissions() {
-        assertThat(PermissionCode.values()).hasSize(221);
+    @DisplayName("catalog contains exactly 227 permissions")
+    void catalogContainsExactly227Permissions() {
+        assertThat(PermissionCode.values()).hasSize(227);
     }
 
     // -------------------------------------------------------------------------
@@ -53,17 +53,17 @@ class PermissionCodeTest {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        assertThat(bitIndexes).hasSize(221);
+        assertThat(bitIndexes).hasSize(227);
     }
 
     @Test
-    @DisplayName("bit indexes span from 0 to 220 with no gaps")
-    void bitIndexesSpanFrom0To220WithNoGaps() {
+    @DisplayName("bit indexes span from 0 to 226 with no gaps")
+    void bitIndexesSpanFrom0To226WithNoGaps() {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        // Issue PERM-001: every index 0..220 must be present
-        for (int i = 0; i < 221; i++) {
+        // Issue PERM-001: every index 0..226 must be present
+        for (int i = 0; i < 227; i++) {
             assertThat(bitIndexes)
                     .as("bit index %d must be assigned", i)
                     .contains(i);
@@ -81,7 +81,7 @@ class PermissionCodeTest {
                 .map(PermissionCode::code)
                 .collect(Collectors.toSet());
         // Issue PERM-001: no two enum constants may share a canonical code string
-        assertThat(codes).hasSize(221);
+        assertThat(codes).hasSize(227);
     }
 
     // -------------------------------------------------------------------------
@@ -89,9 +89,9 @@ class PermissionCodeTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("CATALOG_VERSION is 2")
-    void catalogVersionIsTwo() {
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(2);
+    @DisplayName("CATALOG_VERSION is 3")
+    void catalogVersionIsThree() {
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(3);
     }
 
     // -------------------------------------------------------------------------
@@ -124,12 +124,12 @@ class PermissionCodeTest {
     }
 
     @Test
-    @DisplayName("known last permission 'security:token:issue_internal' has bit index 220")
-    void knownLastPermissionHasBitIndex220() {
-        // Issue PERM-001: security:token:issue_internal must be last entry assigned
-        // bit index 220
-        Optional<PermissionCode> perm = PermissionCode.fromCode("security:token:issue_internal");
+    @DisplayName("known last permission 'mcp:chat:execute' has bit index 226")
+    void knownLastPermissionHasBitIndex226() {
+        // Issue PERM-001: mcp:chat:execute must be last entry assigned
+        // bit index 226
+        Optional<PermissionCode> perm = PermissionCode.fromCode("mcp:chat:execute");
         assertThat(perm).isPresent();
-        assertThat(perm.get().bitIndex()).isEqualTo(220);
+        assertThat(perm.get().bitIndex()).isEqualTo(226);
     }
 }

@@ -20,7 +20,12 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = { NltiController.class, McpChatController.class })
+@RestControllerAdvice(assignableTypes = {
+                NltiController.class,
+                McpChatController.class,
+                McpStreamingChatController.class,
+                DocumentIngestionController.class
+})
 class NltiExceptionHandler {
 
         private static final Logger logger = LoggerFactory.getLogger(NltiExceptionHandler.class);
