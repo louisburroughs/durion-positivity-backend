@@ -3,6 +3,9 @@ package com.positivity.mcp.internal.service;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,13 +40,14 @@ class ToolPriorityTuningServiceTest {
   @Mock
   private JdbcTemplate jdbcTemplate;
 
+  private final Clock clock = Clock.fixed(Instant.parse("2026-04-13T02:00:00Z"), ZoneOffset.UTC);
   private ToolPriorityTuningService service;
 
   private static final UUID TOOL_ID_1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
   @BeforeEach
   void setUp() {
-    service = new ToolPriorityTuningService(jdbcTemplate);
+    service = new ToolPriorityTuningService(jdbcTemplate, clock);
   }
 
   @Test

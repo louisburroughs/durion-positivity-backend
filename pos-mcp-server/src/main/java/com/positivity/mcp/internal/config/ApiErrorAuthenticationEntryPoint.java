@@ -12,6 +12,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -29,9 +30,11 @@ class ApiErrorAuthenticationEntryPoint implements AuthenticationEntryPoint {
   static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
 
   private final ObjectMapper objectMapper;
+  private final Clock clock;
 
-  ApiErrorAuthenticationEntryPoint(@NonNull ObjectMapper objectMapper) {
+  ApiErrorAuthenticationEntryPoint(@NonNull ObjectMapper objectMapper, @NonNull Clock clock) {
     this.objectMapper = objectMapper;
+    this.clock = clock;
   }
 
   @Override
@@ -44,7 +47,7 @@ class ApiErrorAuthenticationEntryPoint implements AuthenticationEntryPoint {
         "UNAUTHORIZED",
         "Authentication is required",
         HttpStatus.UNAUTHORIZED.value(),
-        Instant.now().toString(),
+        Instant.now(clock).toString(),
         correlationId.toString());
     response.setStatus(HttpStatus.UNAUTHORIZED.value());
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);

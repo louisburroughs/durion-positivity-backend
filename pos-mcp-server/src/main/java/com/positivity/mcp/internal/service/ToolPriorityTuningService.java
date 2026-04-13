@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -23,14 +24,16 @@ public class ToolPriorityTuningService {
   private static final Logger LOGGER = LoggerFactory.getLogger(ToolPriorityTuningService.class);
 
   private final JdbcTemplate jdbcTemplate;
+  private final Clock clock;
 
-  public ToolPriorityTuningService(@NonNull JdbcTemplate jdbcTemplate) {
+  public ToolPriorityTuningService(@NonNull JdbcTemplate jdbcTemplate, @NonNull Clock clock) {
     this.jdbcTemplate = jdbcTemplate;
+    this.clock = clock;
   }
 
   @Scheduled(cron = "${mcp.tuning.cron:0 0 2 * * ?}")
   public void tuneToolPriorities() {
-    Timestamp cutoff = Timestamp.from(Instant.now().minus(7, ChronoUnit.DAYS));
+    Timestamp cutoff = Timestamp.from(Instant.now(clock).minus(7, ChronoUnit.DAYS));
     String statsQuery = """
         SELECT tool_id,
                COUNT(*) AS total_calls,

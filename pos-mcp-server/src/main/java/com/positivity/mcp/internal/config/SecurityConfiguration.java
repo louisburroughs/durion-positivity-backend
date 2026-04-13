@@ -33,8 +33,8 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    ApiErrorAuthenticationEntryPoint apiErrorAuthenticationEntryPoint(ObjectMapper objectMapper) {
-        return new ApiErrorAuthenticationEntryPoint(objectMapper);
+    ApiErrorAuthenticationEntryPoint apiErrorAuthenticationEntryPoint(ObjectMapper objectMapper, Clock clock) {
+        return new ApiErrorAuthenticationEntryPoint(objectMapper, clock);
     }
 
     /**

@@ -1,8 +1,8 @@
-package com.positivity.poseventreceiver.internal.services;
+package com.positivity.poseventreceiver.internal.service;
 
 import com.positivity.poseventreceiver.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
-import com.positivity.poseventreceiver.services.EmitEventService;
+import com.positivity.poseventreceiver.service.EmitEventService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
