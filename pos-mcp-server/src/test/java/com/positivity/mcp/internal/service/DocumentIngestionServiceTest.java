@@ -7,6 +7,7 @@ import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.List;
 import java.util.Map;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -97,5 +98,16 @@ class DocumentIngestionServiceTest {
     verify(embeddingStore, times(2)).add(any(Embedding.class), any(TextSegment.class));
     verify(embeddingStore, never()).add(any(Embedding.class),
         argThat(seg -> seg.text().equals("doc0")));
+  }
+
+  @Test
+  @DisplayName("ingestDocuments throws IllegalArgumentException when contents and metadataList sizes differ")
+  void ingestDocuments_mismatchedSizes_throwsIllegalArgumentException() {
+    assertThrows(IllegalArgumentException.class, () ->
+        service.ingestDocuments(
+            List.of("doc0", "doc1"),
+            List.of(Map.of("i", 0))));
+
+    verify(embeddingStore, never()).add(any(Embedding.class), any(TextSegment.class));
   }
 }
