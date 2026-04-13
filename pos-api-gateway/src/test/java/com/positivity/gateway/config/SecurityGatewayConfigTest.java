@@ -1092,7 +1092,8 @@ class SecurityGatewayConfigTest {
                 /** Index at catalog size is out of range and returns null. */
                 @Test
                 void authorityForBit_outOfRange_returnsNull() {
-                        assertThat(GatewayPermissionCatalog.authorityForBit(GatewayPermissionCatalog.AUTHORITY_BY_BIT.length))
+                        assertThat(GatewayPermissionCatalog
+                                        .authorityForBit(GatewayPermissionCatalog.AUTHORITY_BY_BIT.length))
                                         .isNull();
                 }
         }
@@ -1126,7 +1127,8 @@ class SecurityGatewayConfigTest {
                         String personId = UUID.randomUUID().toString();
                         // bits 116 = people:employee:view, 117 = people:employee:create
                         String permBits = encodePermBits(116, 117);
-                        String token = buildCanonicalToken("alice", uid, personId, permBits, GatewayPermissionCatalog.CATALOG_VERSION);
+                        String token = buildCanonicalToken("alice", uid, personId, permBits,
+                                        GatewayPermissionCatalog.CATALOG_VERSION);
 
                         GatewayAuthProperties props = new GatewayAuthProperties();
                         props.setStripInboundIdentityHeaders(true);
@@ -1163,7 +1165,8 @@ class SecurityGatewayConfigTest {
                 void canonicalToken_withoutPersonId_isAccepted() {
                         String uid = UUID.randomUUID().toString();
                         String permBits = encodePermBits(116);
-                        String token = buildCanonicalToken("alice", uid, null, permBits, GatewayPermissionCatalog.CATALOG_VERSION);
+                        String token = buildCanonicalToken("alice", uid, null, permBits,
+                                        GatewayPermissionCatalog.CATALOG_VERSION);
 
                         GlobalFilter filter = new SecurityGatewayConfig(
                                         TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(),
@@ -1202,7 +1205,8 @@ class SecurityGatewayConfigTest {
                         // bit 0 = accounting:je:view
                         String permBits = encodePermBits(0);
                         // buildCanonicalToken never adds an 'authorities' claim
-                        String token = buildCanonicalToken("alice", uid, null, permBits, GatewayPermissionCatalog.CATALOG_VERSION);
+                        String token = buildCanonicalToken("alice", uid, null, permBits,
+                                        GatewayPermissionCatalog.CATALOG_VERSION);
 
                         GlobalFilter filter = new SecurityGatewayConfig(
                                         TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(),
@@ -1242,7 +1246,8 @@ class SecurityGatewayConfigTest {
                         String uid = UUID.randomUUID().toString();
                         // bit 116 = people:employee:view only
                         String permBits = encodePermBits(116);
-                        String token = buildCanonicalToken("alice", uid, null, permBits, GatewayPermissionCatalog.CATALOG_VERSION);
+                        String token = buildCanonicalToken("alice", uid, null, permBits,
+                                        GatewayPermissionCatalog.CATALOG_VERSION);
 
                         GatewayAuthProperties props = new GatewayAuthProperties();
                         props.setStripInboundIdentityHeaders(true);
@@ -1285,7 +1290,8 @@ class SecurityGatewayConfigTest {
                 void canonicalToken_inboundXUserHeader_isStrippedAndReplacedByTokenSubject() {
                         String uid = UUID.randomUUID().toString();
                         String permBits = encodePermBits(116);
-                        String token = buildCanonicalToken("alice", uid, null, permBits, GatewayPermissionCatalog.CATALOG_VERSION);
+                        String token = buildCanonicalToken("alice", uid, null, permBits,
+                                        GatewayPermissionCatalog.CATALOG_VERSION);
 
                         GatewayAuthProperties props = new GatewayAuthProperties();
                         props.setStripInboundIdentityHeaders(true);
@@ -1325,7 +1331,8 @@ class SecurityGatewayConfigTest {
                 void canonicalToken_spoofedXUserIdHeader_isStrippedAndReplacedByTokenUid() {
                         String uid = UUID.randomUUID().toString();
                         String permBits = encodePermBits(116);
-                        String token = buildCanonicalToken("alice", uid, null, permBits, GatewayPermissionCatalog.CATALOG_VERSION);
+                        String token = buildCanonicalToken("alice", uid, null, permBits,
+                                        GatewayPermissionCatalog.CATALOG_VERSION);
 
                         GatewayAuthProperties props = new GatewayAuthProperties();
                         props.setStripInboundIdentityHeaders(true);
