@@ -15,7 +15,7 @@ import java.util.UUID;
 
 /**
  * ArchUnit tests enforcing architecture rules for pos-mcp-server module.
- * 
+ *
  * Enforces:
  * - Internal package encapsulation
  * - Service layer as only public API
@@ -64,7 +64,9 @@ public class ArchitectureTest {
 
         @ArchTest
         static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
-                        .that().resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
+                        .that()
+                        .resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..",
+                                        "..internal.service..")
                         .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
                         .allowEmptyShould(true)
                         .because("repositories should only be accessed from service layer");

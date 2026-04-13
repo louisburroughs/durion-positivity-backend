@@ -55,4 +55,17 @@ class InventoryFacadeToolTest {
     mockServer.verify();
     assertThat(result).contains("items");
   }
+
+  @Test
+  @DisplayName("getLocationStock sends GET /locations/{locationId}/stock and returns body")
+  void getLocationStock_returnsStockForLocation() {
+    mockServer.expect(requestTo(BASE_URL + "/locations/LOC-001/stock"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(withSuccess("{\"locationId\":\"LOC-001\",\"items\":[]}", MediaType.APPLICATION_JSON));
+
+    String result = tool.getLocationStock("LOC-001");
+
+    mockServer.verify();
+    assertThat(result).contains("LOC-001");
+  }
 }
