@@ -41,20 +41,17 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
   public void ingestDocuments(
       @NonNull List<String> contents,
       @NonNull List<Map<String, Object>> metadataList) {
-    int count = Math.min(contents.size(), metadataList.size());
-    for (int index = 0; index < count; index++) {
+    if (contents.size() != metadataList.size()) {
+      throw new IllegalArgumentException(
+          "contents and metadataList must have equal size: contents=%d, metadataList=%d"
+              .formatted(contents.size(), metadataList.size()));
+    }
+    for (int index = 0; index < contents.size(); index++) {
       try {
         ingestDocument(contents.get(index), metadataList.get(index));
       } catch (Exception exception) {
         LOGGER.warn("Failed to ingest document at index {}", index, exception);
       }
-    }
-
-    if (contents.size() != metadataList.size()) {
-      LOGGER.warn(
-          "Ingestion input size mismatch: contents={}, metadataList={}",
-          contents.size(),
-          metadataList.size());
     }
   }
 }
