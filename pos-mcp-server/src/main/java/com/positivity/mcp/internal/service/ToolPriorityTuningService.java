@@ -1,5 +1,8 @@
 package com.positivity.mcp.internal.service;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -27,6 +30,7 @@ public class ToolPriorityTuningService {
 
   @Scheduled(cron = "${mcp.tuning.cron:0 0 2 * * ?}")
   public void tuneToolPriorities() {
+    Timestamp cutoff = Timestamp.from(Instant.now().minus(7, ChronoUnit.DAYS));
     String statsQuery = """
         SELECT tool_id,
                COUNT(*) AS total_calls,
@@ -34,7 +38,7 @@ public class ToolPriorityTuningService {
                AVG(execution_time_ms) AS avg_latency,
                AVG(CASE WHEN fallback_invoked THEN 1.0 ELSE 0.0 END) AS fallback_rate
         FROM mcp_tool_invocation_log
-        WHERE created_at > now() - interval '7 days'
+        WHERE created_at > ?
           AND tool_id IS NOT NULL
           AND execution_time_ms >= 0
         GROUP BY tool_id
@@ -47,7 +51,8 @@ public class ToolPriorityTuningService {
             resultSet.getObject("tool_id", UUID.class),
             resultSet.getDouble("success_rate"),
             resultSet.getDouble("avg_latency"),
-            resultSet.getDouble("fallback_rate")));
+            resultSet.getDouble("fallback_rate")),
+        cutoff);
 
     int tuned = 0;
     for (ToolPerformanceStats stat : stats) {

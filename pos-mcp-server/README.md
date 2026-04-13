@@ -174,7 +174,7 @@ If you are extending or testing registry logic, ensure test fixtures provide the
   performanceScore = 0.6 × successRate + 0.3 × (1 - min(avgLatency/2000, 1)) - 0.2 × fallbackRate
 
   The updated priority uses exponential smoothing: `newPriority = currentPriority × 0.7 + performanceScore × 0.3`, clamped to the range [0.1, 1.0].
-- Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). Ingested content is injected into the `mcp_document_embedding` pgvector RAG store. Batch ingestion continues on per-item errors and returns partial success details when appropriate.
+- Document ingestion: `DocumentIngestionService` (interface + impl) exposes `POST /v1/mcp/documents` (permission `mcp:document:ingest`). Ingested content is injected into the `mcp_document_embedding` pgvector RAG store, and the endpoint responds with `201 Created`.
 
 ## Phase 5 — Streaming SSE and model fallback
 

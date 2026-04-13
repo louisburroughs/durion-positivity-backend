@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,18 +50,18 @@ class ToolPriorityTuningServiceTest {
   @SuppressWarnings("unchecked")
   @DisplayName("tuneToolPriorities invokes the stats query on JdbcTemplate")
   void tuneToolPriorities_queryCalledWithSevenDayWindow() {
-    when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(List.of());
+    when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Timestamp.class))).thenReturn(List.of());
 
     service.tuneToolPriorities();
 
-    verify(jdbcTemplate, times(1)).query(anyString(), any(RowMapper.class));
+    verify(jdbcTemplate, times(1)).query(anyString(), any(RowMapper.class), any(Timestamp.class));
   }
 
   @Test
   @SuppressWarnings("unchecked")
   @DisplayName("tuneToolPriorities does not call update when stats query returns no rows")
   void tuneToolPriorities_noTools_noUpdates() {
-    when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(List.of());
+    when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Timestamp.class))).thenReturn(List.of());
 
     service.tuneToolPriorities();
 
@@ -81,7 +82,7 @@ class ToolPriorityTuningServiceTest {
     when(resultSet.getDouble("avg_latency")).thenReturn(9999.0);
     when(resultSet.getDouble("fallback_rate")).thenReturn(1.0);
 
-    when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenAnswer(invocation -> {
+    when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Timestamp.class))).thenAnswer(invocation -> {
       RowMapper<?> mapper = invocation.getArgument(1);
       return List.of(mapper.mapRow(resultSet, 0));
     });
@@ -108,12 +109,12 @@ class ToolPriorityTuningServiceTest {
   @SuppressWarnings("unchecked")
   @DisplayName("tuneToolPriorities query filters out null tool_id rows")
   void tuneToolPriorities_statsQueryContainsToolIdNotNullFilter() {
-    when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(List.of());
+    when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Timestamp.class))).thenReturn(List.of());
 
     service.tuneToolPriorities();
 
     ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-    verify(jdbcTemplate, times(1)).query(sqlCaptor.capture(), any(RowMapper.class));
+    verify(jdbcTemplate, times(1)).query(sqlCaptor.capture(), any(RowMapper.class), any(Timestamp.class));
     assertThat(sqlCaptor.getValue()).contains("tool_id IS NOT NULL");
   }
 
@@ -121,12 +122,12 @@ class ToolPriorityTuningServiceTest {
   @SuppressWarnings("unchecked")
   @DisplayName("tuneToolPriorities query filters out selection-only rows (executionTimeMs < 0)")
   void tuneToolPriorities_statsQueryContainsExecutionTimeMsFilter() {
-    when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(List.of());
+    when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Timestamp.class))).thenReturn(List.of());
 
     service.tuneToolPriorities();
 
     ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-    verify(jdbcTemplate, times(1)).query(sqlCaptor.capture(), any(RowMapper.class));
+    verify(jdbcTemplate, times(1)).query(sqlCaptor.capture(), any(RowMapper.class), any(Timestamp.class));
     assertThat(sqlCaptor.getValue()).contains("execution_time_ms >= 0");
   }
 }
