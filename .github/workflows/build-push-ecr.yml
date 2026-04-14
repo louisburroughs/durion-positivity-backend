@@ -29,10 +29,103 @@ env:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
-  # Job 1: Build all JARs with Maven and upload as a shared artifact
+  # Job 1: Detect which services need image builds
+  # ─────────────────────────────────────────────────────────────────────────
+  detect-services:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+      modules-csv: ${{ steps.detect.outputs.modules-csv }}
+      has-changes: ${{ steps.detect.outputs.has-changes }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect services to build
+        id: detect
+        run: |
+          set -euo pipefail
+
+          ALL_SERVICES_JSON='["pos-accounting","pos-api-gateway","pos-catalog","pos-customer","pos-event-receiver","pos-image","pos-inventory","pos-invoice","pos-location","pos-mcp-server","pos-people","pos-price","pos-security-service","pos-service-discovery","pos-shop-manager","pos-vehicle-inventory","pos-workorder"]'
+          FORCE_FULL_REBUILD=false
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            FORCE_FULL_REBUILD=true
+          fi
+
+          if [[ "${{ vars.AUTO_DEPLOY_ALPHA }}" == "true" ]]; then
+            # Alpha deploy uses a single BACKEND_TAG for the whole stack, so all images
+            # must exist for the commit tag whenever auto-deploy is enabled.
+            FORCE_FULL_REBUILD=true
+          fi
+
+          if [[ "${FORCE_FULL_REBUILD}" == "true" ]]; then
+            SERVICES_JSON="${ALL_SERVICES_JSON}"
+            MODULES_CSV="$(jq -r 'join(",")' <<< "${SERVICES_JSON}")"
+            echo "services=${SERVICES_JSON}" >> "$GITHUB_OUTPUT"
+            echo "modules-csv=${MODULES_CSV}" >> "$GITHUB_OUTPUT"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            echo "Full rebuild required: ${SERVICES_JSON}"
+            exit 0
+          fi
+
+          DIFF_BASE="${{ github.event.before }}"
+          DIFF_HEAD="${{ github.sha }}"
+          if [[ -z "${DIFF_BASE}" || "${DIFF_BASE}" == "0000000000000000000000000000000000000000" ]]; then
+            DIFF_BASE="$(git rev-parse HEAD~1)"
+          fi
+
+          CHANGED_FILES="$(git diff --name-only "${DIFF_BASE}" "${DIFF_HEAD}" || true)"
+
+          if echo "${CHANGED_FILES}" | grep -Eq '^(pom\.xml|docker-compose\.yml|deployment/alpha/docker-compose\.prod\.yml|\.github/workflows/build-push-ecr\.yml)$'; then
+            SERVICES_JSON="${ALL_SERVICES_JSON}"
+            MODULES_CSV="$(jq -r 'join(",")' <<< "${SERVICES_JSON}")"
+            echo "services=${SERVICES_JSON}" >> "$GITHUB_OUTPUT"
+            echo "modules-csv=${MODULES_CSV}" >> "$GITHUB_OUTPUT"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            echo "Shared build/deploy file changed: ${SERVICES_JSON}"
+            exit 0
+          fi
+
+          SERVICES_JSON="$(
+            echo "${CHANGED_FILES}" \
+              | grep '^pos-' || true \
+          )"
+
+          SERVICES_JSON="$(
+            echo "${SERVICES_JSON}" \
+              | cut -d'/' -f1 \
+              | sort -u \
+              | while read -r module; do
+                  [[ -n "${module}" && -f "${module}/Dockerfile" ]] && echo "${module}"
+                done \
+              | jq -R -s -c 'split("\n")[:-1]'
+          )"
+
+          if [[ "${SERVICES_JSON}" == "[]" ]]; then
+            echo "services=[]" >> "$GITHUB_OUTPUT"
+            echo "modules-csv=" >> "$GITHUB_OUTPUT"
+            echo "has-changes=false" >> "$GITHUB_OUTPUT"
+            echo "No containerized service changes detected"
+          else
+            MODULES_CSV="$(jq -r 'join(",")' <<< "${SERVICES_JSON}")"
+            echo "services=${SERVICES_JSON}" >> "$GITHUB_OUTPUT"
+            echo "modules-csv=${MODULES_CSV}" >> "$GITHUB_OUTPUT"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            echo "Changed services: ${SERVICES_JSON}"
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2: Build changed JARs with Maven and upload as a shared artifact
   # ─────────────────────────────────────────────────────────────────────────
   build-jars:
-    name: Maven Package (all modules)
+    name: Maven Package (selected modules)
+    needs: detect-services
+    if: needs.detect-services.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,23 +141,33 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
-      - name: Build all JARs (skip tests — tested separately in ci.yml)
-        run: ./mvnw package -B -DskipTests -q
+      - name: Build selected JARs (skip tests — tested separately in ci.yml)
+        run: ./mvnw -pl ${{ needs.detect-services.outputs.modules-csv }} -am package -B -DskipTests -q
 
-      - name: Upload JAR artifacts
+      - name: Stage JAR artifacts
+        run: |
+          set -euo pipefail
+          rm -rf .artifact-jars
+          jq -r '.[]' <<< '${{ needs.detect-services.outputs.services }}' | while read -r service; do
+            mkdir -p ".artifact-jars/${service}/target"
+            cp "${service}"/target/*.jar ".artifact-jars/${service}/target/"
+          done
+
+      - name: Store JAR artifacts
         uses: actions/upload-artifact@v4
         with:
           name: service-jars
-          path: "**/target/*.jar"
+          path: .artifact-jars/**
           retention-days: 1
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Job 2: Build and push one Docker image per service (parallel matrix)
+  # Job 3: Build and push one Docker image per selected service (parallel matrix)
   # ─────────────────────────────────────────────────────────────────────────
   push-images:
     name: Push ${{ matrix.service }}
-    needs: build-jars
+    needs: [detect-services, build-jars]
+    if: needs.detect-services.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write # Required for OIDC authentication
@@ -73,24 +176,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - pos-accounting
-          - pos-api-gateway
-          - pos-catalog
-          - pos-customer
-          - pos-event-receiver
-          - pos-image
-          - pos-inventory
-          - pos-invoice
-          - pos-location
-          - pos-mcp-server
-          - pos-people
-          - pos-price
-          - pos-security-service
-          - pos-service-discovery
-          - pos-shop-manager
-          - pos-vehicle-inventory
-          - pos-workorder
+        service: ${{ fromJson(needs.detect-services.outputs.services) }}
 
     steps:
       - name: Checkout
@@ -100,6 +186,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: service-jars
+          path: .
+
+      - name: Restore service JAR
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ matrix.service }}/target"
+          cp ".artifact-jars/${{ matrix.service }}/target/"*.jar "${{ matrix.service }}/target/"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -150,31 +243,29 @@ jobs:
           provenance: false
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Job 3: Write a deployment summary after all images are pushed
+  # Job 4: Write a deployment summary after selected images are pushed
   # ─────────────────────────────────────────────────────────────────────────
   deployment-summary:
     name: Deployment Summary
-    needs: push-images
+    needs: [detect-services, push-images]
     runs-on: ubuntu-latest
-    if: success()
+    if: needs.detect-services.outputs.has-changes == 'true' && success()
 
     steps:
       - name: Write summary
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
           IMAGE_TAG="sha-${SHORT_SHA}"
+          SERVICE_COUNT="$(jq 'length' <<< '${{ needs.detect-services.outputs.services }}')"
+          FULL_SERVICE_COUNT=17
 
           echo "## Backend Images Published" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "All service images pushed with tag: \`${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published image tag: \`${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Service | ECR Repository |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          for SERVICE in \
-            pos-accounting pos-api-gateway pos-catalog pos-customer \
-            pos-event-receiver pos-image pos-inventory pos-invoice \
-            pos-location pos-mcp-server pos-people pos-price pos-security-service \
-            pos-service-discovery pos-shop-manager pos-vehicle-inventory pos-workorder; do
+          for SERVICE in $(jq -r '.[]' <<< '${{ needs.detect-services.outputs.services }}'); do
             case "$SERVICE" in
               pos-service-discovery)
                 ECR_REPO_NAME="durion/eureka-server"
@@ -186,7 +277,11 @@ jobs:
             echo "| \`${SERVICE}\` | \`${ECR_REPO_NAME}:${IMAGE_TAG}\` |" >> "$GITHUB_STEP_SUMMARY"
           done
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Use \`${IMAGE_TAG}\` as **BACKEND_TAG** in \`docker-compose.prod.yml\` for deployment." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${SERVICE_COUNT}" -eq "${FULL_SERVICE_COUNT}" ]]; then
+            echo "This run published the full backend service set. Use \`${IMAGE_TAG}\` as **BACKEND_TAG** in \`docker-compose.prod.yml\` for deployment." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "This run published only changed services. Unchanged services were not retagged to \`${IMAGE_TAG}\`, so this tag is not valid for whole-stack deployment." >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Commit: \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
 

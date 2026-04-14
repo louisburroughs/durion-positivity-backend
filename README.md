@@ -71,6 +71,7 @@ The backend follows a domain-driven microservices architecture. Each bounded con
 - The main CI workflow in [.github/workflows/ci.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/.github/workflows/ci.yml) always validates Docker builds for changed services.
 - Docker Hub publishing from that workflow is optional and only runs when the repository variable `ENABLE_DOCKERHUB_PUSH` is set to `true`.
 - The dedicated ECR publishing workflow remains [.github/workflows/build-push-ecr.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/.github/workflows/build-push-ecr.yml).
+- On normal `main` pushes, the ECR workflow now publishes only changed containerized services. It falls back to a full backend image rebuild when deployment is enabled or when shared build/deploy files change.
 
 For local development, the primary [docker-compose.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/docker-compose.yml) now includes both `pos-mcp-server` and `ollama` alongside the rest of the backend stack.
 

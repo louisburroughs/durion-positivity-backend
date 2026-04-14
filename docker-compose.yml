@@ -93,6 +93,7 @@ services:
   postgres:
     image: timescale/timescaledb:2.17.2-pg16
     container_name: postgres-positivity
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
     ports:
       - "127.0.0.1:5432:5432"
     environment:

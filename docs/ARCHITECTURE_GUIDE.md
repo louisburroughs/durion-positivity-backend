@@ -377,8 +377,9 @@ jdbc:postgresql://postgres:5432/${POSTGRES_DB}
 
 ```yaml
 postgres:
-  image: postgres:16-alpine
+  image: timescale/timescaledb:2.17.2-pg16
   container_name: postgres-positivity
+  command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
   environment:
     POSTGRES_USER: ${POSTGRES_USER}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -393,6 +394,8 @@ postgres:
     timeout: 5s
     retries: 5
 ```
+
+Timescale-backed modules such as `pos-event-receiver` require `shared_preload_libraries=timescaledb` at PostgreSQL startup. This is a server startup setting, so it belongs in the Postgres container command/configuration rather than in Flyway migrations.
 
 ### Useful Commands
 
