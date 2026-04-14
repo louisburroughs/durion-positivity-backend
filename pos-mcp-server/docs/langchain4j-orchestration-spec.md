@@ -28,7 +28,7 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
    │       └─ per-session ChatMemory (MessageWindowChatMemory)
    │
    ├─ LangChain4j ─────────────── orchestration runtime
-   │   ├─ OllamaChatModel ──────── Ollama Cloud API (llama3.1 / qwen2.5 / etc.)
+   │   ├─ OllamaChatModel ──────── local or network-reachable Ollama runtime
    │   ├─ OllamaEmbeddingModel ── nomic-embed-text or similar
    │   └─ AiServices proxy ────── handles tool-calling loop, memory, RAG
    │
@@ -52,7 +52,7 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
 | Component | Role | Deployment |
 |-----------|------|------------|
 | pos-mcp-server | Tool host, LLM orchestration, session management, audit | Spring Boot service (existing) |
-| Ollama Cloud | Model runtime (chat + embeddings) | External SaaS |
+| Ollama | Model runtime (chat + embeddings) | Local container or reachable internal endpoint |
 | PostgreSQL | Tool registry, RAG embeddings, audit, chat memory | Existing shared instance |
 | Exa | Web search API | External SaaS |
 
@@ -81,7 +81,7 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
 | `SystemPrompt` + `LlmApiConfig` CRUD | `internal/entity/` + controllers | **Keep** — prompt and model config management |
 | SSE transport + `McpAsyncServer` | `internal/config/McpServerConfiguration` | **Keep** — external MCP clients can still connect |
 | `LlmApiProperties` | `internal/config/` | **Evolve** — extend for Ollama-specific settings |
-| Local MCP/Ollama compose override | `docker-compose.mcp.yml` | **Keep** |
+| Local backend compose stack | `docker-compose.yml` | **Keep** |
 | `internal/llm/` (empty) | — | **Replace** with LangChain4j orchestration |
 | `internal/orchestration/` (empty) | — | **Replace** with SessionAgentManager |
 
@@ -134,7 +134,7 @@ Property in parent or module POM:
 ## Configuration (application.yml additions)
 
 ```yaml
-# Ollama Cloud connection
+# Ollama connection
 langchain4j:
   ollama:
     chat-model:
@@ -637,7 +637,7 @@ All roles also get: **ExaWebSearchTool** (always) + **RAG retriever** (always).
 
 ## Docker Compose Changes
 
-Use the local MCP/Ollama compose override in `docker-compose.mcp.yml`:
+Use the primary backend compose file in `docker-compose.yml`:
 
 ```yaml
 services:
@@ -647,19 +647,19 @@ services:
       dockerfile: Dockerfile
     container_name: pos-mcp-server
     ports:
-      - "${POS_MCP_SERVER_PORT:-8094}:8086"
+      - "8094:8086"
     environment:
-      SPRING_PROFILES_ACTIVE: ${POS_MCP_SERVER_PROFILE:-alpha}
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POS_MCP_DB_NAME:-positivity}
-      SPRING_DATASOURCE_USERNAME: ${POS_MCP_DB_USER:-positivity}
-      SPRING_DATASOURCE_PASSWORD: ${POS_MCP_DB_PASSWORD}
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      MCP_SERVER_BASE_URL: http://pos-mcp-server:8086
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      SPRING_PROFILES_ACTIVE: alpha
+      POS_MCP_DB_HOST: postgres
+      POS_MCP_DB_PORT: 5432
+      POS_MCP_DB_NAME: pos_mcp
+      POS_MCP_DB_USER: ${SPRING_DATASOURCE_USERNAME}
+      POS_MCP_DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.1:8b}
       OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
-      OLLAMA_API_KEY: ${OLLAMA_API_KEY}
-      EXA_API_KEY: ${EXA_API_KEY}
+      EXA_API_KEY: ${EXA_API_KEY:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     depends_on:
       postgres:
@@ -670,7 +670,7 @@ services:
       - pos-network
 ```
 
-Only `pos-mcp-server` and `ollama` are layered in this override.
+`pos-mcp-server` and `ollama` now run directly inside the primary local backend stack.
 
 ---
 
@@ -693,11 +693,11 @@ Only `pos-mcp-server` and `ollama` are layered in this override.
 4. agent.chat(message, roleContext) →
    a. LangChain4j prepends system message with role context
    b. RAG retriever fetches relevant docs from pgvector
-   c. Ollama Cloud receives: system prompt + RAG context + chat history + user message + tool definitions
-   d. Ollama Cloud responds with tool call: InventoryTool.getLocationStock("charlotte-01")
+   c. Ollama receives: system prompt + RAG context + chat history + user message + tool definitions
+   d. Ollama responds with tool call: InventoryTool.getLocationStock("charlotte-01")
    e. LangChain4j executes tool call → RestClient → pos-inventory service
-   f. Tool result sent back to Ollama Cloud for synthesis
-   g. Ollama Cloud generates final answer
+   f. Tool result sent back to Ollama for synthesis
+   g. Ollama generates final answer
 5. Response returned: { "response": "Charlotte store has 47 tires in stock: ..." }
 6. NltiAuditEvent logged with tool calls, timings, and outcome
 ```
@@ -713,7 +713,7 @@ Only `pos-mcp-server` and `ollama` are layered in this override.
 | pgvector cold start (no documents) | RAG returns nothing, model relies solely on tools | Acceptable in Phase 1; seed with product catalogs, SOPs, knowledge base in Phase 2 |
 | Caffeine cache memory pressure | Too many cached agents consume heap | Cap at 500 agents, 30-min TTL; monitor with Micrometer gauge |
 | Exa API key in environment | Key rotation requires restart | Use Spring Cloud Config or Vault for dynamic secret rotation later |
-| Ollama Cloud connectivity/auth issues | Chat and embedding calls fail | Require `OLLAMA_BASE_URL` + `OLLAMA_API_KEY`; add startup health check for model endpoint reachability and alerting on auth failures |
+| Ollama connectivity issues | Chat and embedding calls fail | Require a reachable `OLLAMA_BASE_URL`; add startup health checks for model endpoint reachability and alerting on failures |
 
 ---
 
@@ -729,8 +729,8 @@ Only `pos-mcp-server` and `ollama` are layered in this override.
 - [x] Create `RagConfiguration` with pgvector
 - [x] Add Flyway migration for pgvector extension
 - [x] Update `McpChatController` to route through `SessionAgentManager`
-- [x] Add Ollama Cloud config properties to `application.yml`
-- [x] Update `docker-compose.mcp.yml` to keep only the local MCP/Ollama stack
+- [x] Add Ollama config properties to `application.yml`
+- [x] Fold the local MCP/Ollama services into the primary `docker-compose.yml` stack
 - [x] Verify end-to-end: user message → tool call → response
 
 ### Phase 2 — Tool Registry + Role Gating
@@ -763,7 +763,7 @@ Only `pos-mcp-server` and `ollama` are layered in this override.
 - [ ] Chat memory summarization for long sessions
 - [ ] Rate limiting per user
 - [ ] Model fallback chain (primary → secondary model)
-- [ ] Secret rotation (Exa key, Ollama Cloud API key)
+- [ ] Secret rotation (Exa key and any protected model-endpoint credentials)
 - [ ] Load testing with concurrent users
 
 ---

@@ -115,12 +115,18 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
           IMAGE_TAG="sha-${SHORT_SHA}"
           SERVICE="${{ matrix.service }}"
-          # pos-service-discovery builds the eureka-server image — ECR repo must match compose service name
-          if [[ "$SERVICE" == "pos-service-discovery" ]]; then
-            ECR_REPO_NAME="durion/eureka-server"
-          else
-            ECR_REPO_NAME="durion/${SERVICE}"
-          fi
+          # Some services publish to repository names that differ from the module directory.
+          case "$SERVICE" in
+            pos-service-discovery)
+              ECR_REPO_NAME="durion/eureka-server"
+              ;;
+            pos-mcp-server)
+              ECR_REPO_NAME="louisburroughs/durion-positivity-backend"
+              ;;
+            *)
+              ECR_REPO_NAME="durion/${SERVICE}"
+              ;;
+          esac
           FULL_IMAGE="${{ steps.login-ecr.outputs.registry }}/${ECR_REPO_NAME}:${IMAGE_TAG}"
           LATEST_IMAGE="${{ steps.login-ecr.outputs.registry }}/${ECR_REPO_NAME}:latest"
           echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
@@ -170,7 +176,18 @@ jobs:
             pos-event-receiver pos-image pos-inventory pos-invoice \
             pos-location pos-mcp-server pos-people pos-price pos-security-service \
             pos-service-discovery pos-shop-manager pos-vehicle-inventory pos-workorder; do
-            echo "| \`${SERVICE}\` | \`durion/${SERVICE}:${IMAGE_TAG}\` |" >> "$GITHUB_STEP_SUMMARY"
+            case "$SERVICE" in
+              pos-service-discovery)
+                ECR_REPO_NAME="durion/eureka-server"
+                ;;
+              pos-mcp-server)
+                ECR_REPO_NAME="louisburroughs/durion-positivity-backend"
+                ;;
+              *)
+                ECR_REPO_NAME="durion/${SERVICE}"
+                ;;
+            esac
+            echo "| \`${SERVICE}\` | \`${ECR_REPO_NAME}:${IMAGE_TAG}\` |" >> "$GITHUB_STEP_SUMMARY"
           done
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Use \`${IMAGE_TAG}\` as **BACKEND_TAG** in \`docker-compose.prod.yml\` for deployment." >> "$GITHUB_STEP_SUMMARY"

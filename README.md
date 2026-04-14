@@ -72,6 +72,8 @@ The backend follows a domain-driven microservices architecture. Each bounded con
 - Docker Hub publishing from that workflow is optional and only runs when the repository variable `ENABLE_DOCKERHUB_PUSH` is set to `true`.
 - The dedicated ECR publishing workflow remains [.github/workflows/build-push-ecr.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/.github/workflows/build-push-ecr.yml).
 
+For local development, the primary [docker-compose.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/docker-compose.yml) now includes both `pos-mcp-server` and `ollama` alongside the rest of the backend stack.
+
 ## Project Structure
 
 The project is organized as a multi-module Maven build. Key directories include:

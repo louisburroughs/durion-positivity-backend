@@ -74,15 +74,18 @@ Keep this module focused on MCP transport, tool exposure, backend integration, s
 
 Practical local bring-up:
 
-- [docker-compose.mcp.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/docker-compose.mcp.yml) - root-level compose override for layering `ollama` and `pos-mcp-server` onto the main backend stack
+- [docker-compose.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/docker-compose.yml) now includes both `ollama` and `pos-mcp-server` in the primary local stack
 
-The root override expects a local `pos-mcp-server` jar build and uses this module's [Dockerfile](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/Dockerfile).
+The root compose file builds this module with its [Dockerfile](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-mcp-server/Dockerfile) and provisions a dedicated local `pos_mcp` database alongside the rest of the backend services.
+
+On local startup, the compose stack also runs a one-shot `ollama-init` container that preloads the configured chat, embedding, and fallback models into the shared `ollama-data` volume before `pos-mcp-server` starts.
 
 Operationally, the expected flow is:
 
-- start the backend stack from this repo
-- start `ollama` and `pos-mcp-server` with [docker-compose.mcp.yml](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/docker-compose.mcp.yml)
+- start the backend stack from this repo with `docker compose up`
 - connect MCP clients directly to `pos-mcp-server`
+- use the built-in `ollama` service for local chat and embedding model calls
+- optionally override `OLLAMA_CHAT_MODEL`, `OLLAMA_EMBEDDING_MODEL`, and `OLLAMA_FALLBACK_MODEL` in `.env`
 
 ## Phase 2 (Wave MCP-2) — Delivery Summary
 
