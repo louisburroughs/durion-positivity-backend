@@ -172,7 +172,7 @@ jobs:
           cache: maven
 
       - name: Run integration tests
-        run: ./mvnw -pl ${{ matrix.module }} -am -DskipTests=false failsafe:integration-test failsafe:verify -T 1C -B -q
+        run: ./mvnw -pl ${{ matrix.module }} -am -DskipTests=false verify -T 1C -B -q
 
       - name: Upload integration test results
         if: always()

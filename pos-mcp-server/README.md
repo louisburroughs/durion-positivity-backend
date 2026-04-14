@@ -38,7 +38,12 @@ Facade tool outbound base URLs (LangChain4j orchestration):
 
 ## Quick local run
 
+`pos-mcp-server` depends on sibling workspace modules such as `pos-events`,
+`pos-security-common`, and `pos-shared-dtos`. Build and run it from the backend
+repo root with `-am` so Maven includes those reactor dependencies.
+
 ```bash
+cd /home/louis-burroughs/IdeaProjects/durion-positivity-backend
 ./mvnw -pl pos-mcp-server -am spring-boot:run -Dspring-boot.run.profiles=dev
 # or
 SPRING_PROFILES_ACTIVE=test ./mvnw -pl pos-mcp-server -am test
