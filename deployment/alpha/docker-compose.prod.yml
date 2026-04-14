@@ -1,0 +1,109 @@
+# Alpha deployment override for docker-compose.yml.
+# Replaces build: contexts with pre-built ECR images and sets production restart policies.
+# Deployed to /opt/durion/alpha/docker-compose.prod.yml by the build-push-ecr workflow.
+#
+# Required .env values (managed automatically by the deploy workflows):
+#   ECR_REGISTRY  – e.g. 288757602241.dkr.ecr.us-east-1.amazonaws.com
+#   BACKEND_TAG   – e.g. sha-a1b2c3d  (set by backend build workflow)
+#   FRONTEND_TAG  – e.g. sha-44455b8  (set by frontend build workflow)
+
+services:
+
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+
+  postgres:
+    restart: unless-stopped
+
+  # ── Observability ──────────────────────────────────────────────────────────
+
+  prometheus:
+    restart: unless-stopped
+
+  grafana:
+    restart: unless-stopped
+
+  otel-collector:
+    restart: unless-stopped
+
+  # ── Ollama (Docker Hub image — no ECR) ─────────────────────────────────────
+
+  ollama:
+    restart: unless-stopped
+
+  # ollama-init runs once (restart: no) — no override needed.
+
+  # ── Durion Backend Services ────────────────────────────────────────────────
+
+  eureka-server:
+    image: ${ECR_REGISTRY}/durion/eureka-server:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-accounting:
+    image: ${ECR_REGISTRY}/durion/pos-accounting:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-api-gateway:
+    image: ${ECR_REGISTRY}/durion/pos-api-gateway:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-catalog:
+    image: ${ECR_REGISTRY}/durion/pos-catalog:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-customer:
+    image: ${ECR_REGISTRY}/durion/pos-customer:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-event-receiver:
+    image: ${ECR_REGISTRY}/durion/pos-event-receiver:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-image:
+    image: ${ECR_REGISTRY}/durion/pos-image:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-inventory:
+    image: ${ECR_REGISTRY}/durion/pos-inventory:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-invoice:
+    image: ${ECR_REGISTRY}/durion/pos-invoice:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-location:
+    image: ${ECR_REGISTRY}/durion/pos-location:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-mcp-server:
+    image: ${ECR_REGISTRY}/durion/pos-mcp-server:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-people:
+    image: ${ECR_REGISTRY}/durion/pos-people:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-price:
+    image: ${ECR_REGISTRY}/durion/pos-price:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-security-service:
+    image: ${ECR_REGISTRY}/durion/pos-security-service:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-shop-manager:
+    image: ${ECR_REGISTRY}/durion/pos-shop-manager:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-vehicle-inventory:
+    image: ${ECR_REGISTRY}/durion/pos-vehicle-inventory:${BACKEND_TAG}
+    restart: unless-stopped
+
+  pos-workorder:
+    image: ${ECR_REGISTRY}/durion/pos-workorder:${BACKEND_TAG}
+    restart: unless-stopped
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+
+  pos-frontend:
+    image: ${ECR_REGISTRY}/durion/durion-positivity-frontend:${FRONTEND_TAG}
+    restart: unless-stopped

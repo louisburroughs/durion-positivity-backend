@@ -200,6 +200,19 @@ jobs:
       )
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload prod override to alpha host
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.ALPHA_EC2_HOST }}
+          username: ${{ secrets.ALPHA_EC2_USER }}
+          key: ${{ secrets.ALPHA_EC2_SSH_KEY }}
+          source: deployment/alpha/docker-compose.prod.yml
+          target: /opt/durion/alpha
+          strip_components: 2
+
       - name: Deploy backend services on alpha host
         env:
           SECURITY_SEED_ADMIN_PASSWORD_HASH: ${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}
@@ -228,6 +241,7 @@ jobs:
               pos-inventory
               pos-invoice
               pos-location
+              pos-mcp-server
               pos-people
               pos-price
               pos-security-service
@@ -253,6 +267,14 @@ jobs:
               printf 'SECURITY_SEED_ADMIN_PASSWORD_HASH=%s\n' "${SECURITY_SEED_ADMIN_PASSWORD_HASH}" >> "${ENV_FILE}"
             fi
 
+            # Ensure ECR_REGISTRY is present in .env (derived from the EC2 instance role).
+            ECR_REGISTRY="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.us-east-1.amazonaws.com"
+            if grep -q '^ECR_REGISTRY=' "${ENV_FILE}"; then
+              sed -i "s|^ECR_REGISTRY=.*|ECR_REGISTRY=${ECR_REGISTRY}|" "${ENV_FILE}"
+            else
+              printf 'ECR_REGISTRY=%s\n' "${ECR_REGISTRY}" >> "${ENV_FILE}"
+            fi
+
             cd "${BACKEND_DIR}"
 
             COMPOSE_ARGS=(
@@ -260,14 +282,6 @@ jobs:
               -f "${PROD_OVERRIDE}"
               --env-file "${ENV_FILE}"
             )
-
-            AVAILABLE_SERVICES="$(docker compose "${COMPOSE_ARGS[@]}" config --services)"
-            if printf '%s\n' "${AVAILABLE_SERVICES}" | grep -qx 'pos-mcp-server'; then
-              BACKEND_SERVICES+=(pos-mcp-server)
-              echo "Including pos-mcp-server in alpha deployment."
-            else
-              echo "pos-mcp-server is not defined in alpha compose files; skipping alpha deployment for that service."
-            fi
 
             docker compose \
               "${COMPOSE_ARGS[@]}" \
