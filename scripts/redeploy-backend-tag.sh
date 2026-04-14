@@ -78,6 +78,24 @@ COMPOSE_ARGS=(
   --env-file "$ENV_FILE"
 )
 
+desired_postgres_image="$(
+  docker compose "${COMPOSE_ARGS[@]}" config \
+    | sed -n '/^  postgres:/,/^[^ ]/p' \
+    | awk '/image:/ {print $2; exit}'
+)"
+current_postgres_container_id="$(docker compose "${COMPOSE_ARGS[@]}" ps -q postgres 2>/dev/null || true)"
+current_postgres_image=""
+
+if [[ -n "$current_postgres_container_id" ]]; then
+  current_postgres_image="$(docker inspect -f '{{.Config.Image}}' "$current_postgres_container_id" 2>/dev/null || true)"
+fi
+
+if [[ -n "$desired_postgres_image" && "$current_postgres_image" != "$desired_postgres_image" ]]; then
+  echo "Reconciling postgres image: current='${current_postgres_image:-<none>}' desired='${desired_postgres_image}'"
+  docker compose "${COMPOSE_ARGS[@]}" pull postgres
+  docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate postgres
+fi
+
 if [[ $# -gt 0 ]]; then
   SERVICES=("$@")
   echo "Pulling services: ${SERVICES[*]}"

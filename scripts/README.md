@@ -25,7 +25,8 @@ Validates migration hygiene rules across `pos-*` modules.
 
 ### `redeploy-backend-tag.sh` - Update Tag + Redeploy Services on EC2
 
-Updates `BACKEND_TAG` in `/opt/durion/alpha/.env`, then runs `docker compose pull` and
+Updates `BACKEND_TAG` in `/opt/durion/alpha/.env`, reconciles the shared `postgres`
+service if its compose image changed, then runs `docker compose pull` and
 `docker compose up -d --force-recreate` using the alpha compose files.
 
 **Usage:**
@@ -48,6 +49,8 @@ Updates `BACKEND_TAG` in `/opt/durion/alpha/.env`, then runs `docker compose pul
 **Notes:**
 - Run this on the EC2 host where `/opt/durion/alpha` exists.
 - Supports optional env overrides: `ALPHA_ROOT`, `BACKEND_DIR`, `ENV_FILE`, `PROD_OVERRIDE`, `LOG_TAIL`.
+- If the deployed `postgres` container is still on an older image than the merged compose
+  config, the script automatically pulls and recreates `postgres` before the app rollout.
 
 ### `generate-openapi.sh` - Per-Module + Aggregate OpenAPI Generation
 
