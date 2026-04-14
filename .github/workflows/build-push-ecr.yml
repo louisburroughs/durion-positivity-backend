@@ -222,7 +222,7 @@ jobs:
       - name: Pull compose files on alpha host
         run: |
           COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "${{ secrets.ALPHA_EC2_INSTANCE_ID }}" \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --parameters '{"commands":["aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml"]}' \
             --query "Command.CommandId" --output text)
