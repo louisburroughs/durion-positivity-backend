@@ -216,32 +216,48 @@ jobs:
 
       - name: Upload compose files to S3
         run: |
-          aws s3 cp docker-compose.yml s3://${{ secrets.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml
-          aws s3 cp deployment/alpha/docker-compose.prod.yml s3://${{ secrets.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml
+          aws s3 cp docker-compose.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml
+          aws s3 cp deployment/alpha/docker-compose.prod.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml
 
       - name: Pull compose files on alpha host
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ secrets.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters '{"commands":["aws s3 cp s3://${{ secrets.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ secrets.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml"]}' \
+            --parameters '{"commands":["aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml"]}' \
             --query "Command.CommandId" --output text)
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
-            --instance-id "${{ secrets.ALPHA_EC2_INSTANCE_ID }}"
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}"
 
       - name: Deploy backend services on alpha host
         run: |
           COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "${{ secrets.ALPHA_EC2_INSTANCE_ID }}" \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ github.sha }}'\"]}" \
+            --timeout-seconds 900 \
             --query "Command.CommandId" --output text)
-          aws ssm wait command-executed \
-            --command-id "$COMMAND_ID" \
-            --instance-id "${{ secrets.ALPHA_EC2_INSTANCE_ID }}"
+          echo "SSM Command ID: $COMMAND_ID"
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+              --query "Status" --output text)
+            echo "[$i/60] Status: $STATUS"
+            if [[ "$STATUS" == "Success" ]]; then break; fi
+            if [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+                --query "[StandardOutputContent,StandardErrorContent]" \
+                --output text
+              exit 1
+            fi
+            sleep 15
+          done
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
-            --instance-id "${{ secrets.ALPHA_EC2_INSTANCE_ID }}" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --query "[StandardOutputContent,StandardErrorContent]" \
             --output text
