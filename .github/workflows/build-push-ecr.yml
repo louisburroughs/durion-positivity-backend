@@ -120,9 +120,6 @@ jobs:
             pos-service-discovery)
               ECR_REPO_NAME="durion/eureka-server"
               ;;
-            pos-mcp-server)
-              ECR_REPO_NAME="louisburroughs/durion-positivity-backend"
-              ;;
             *)
               ECR_REPO_NAME="durion/${SERVICE}"
               ;;
@@ -179,9 +176,6 @@ jobs:
             case "$SERVICE" in
               pos-service-discovery)
                 ECR_REPO_NAME="durion/eureka-server"
-                ;;
-              pos-mcp-server)
-                ECR_REPO_NAME="louisburroughs/durion-positivity-backend"
                 ;;
               *)
                 ECR_REPO_NAME="durion/${SERVICE}"

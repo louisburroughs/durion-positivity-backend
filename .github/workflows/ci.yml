@@ -49,7 +49,8 @@ jobs:
           set -euo pipefail
 
           ARCHUNIT_MODULE="pos-archunit"
-          ALL_MODULES_JSON=$(ls -d pos-* | jq -R -s -c 'split("\n")[:-1]')
+          NON_TEST_MODULES_JSON='["pos-dependencies"]'
+          ALL_MODULES_JSON=$(ls -d pos-* | jq -R -s -c --argjson excluded "${NON_TEST_MODULES_JSON}" 'split("\n")[:-1] | map(select((. as $module | $excluded | index($module)) | not))')
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "modules=${ALL_MODULES_JSON}" >> "$GITHUB_OUTPUT"
@@ -79,7 +80,7 @@ jobs:
             exit 0
           fi
 
-          CHANGED_MODULES_JSON=$(echo "${CHANGED_FILES}" | grep '^pos-' | cut -d'/' -f1 | sort -u | jq -R -s -c 'split("\n")[:-1]')
+          CHANGED_MODULES_JSON=$(echo "${CHANGED_FILES}" | grep '^pos-' | cut -d'/' -f1 | sort -u | jq -R -s -c --argjson excluded "${NON_TEST_MODULES_JSON}" 'split("\n")[:-1] | map(select((. as $module | $excluded | index($module)) | not))')
           MATRIX_MODULES_JSON=$(jq -cn \
             --argjson changed "${CHANGED_MODULES_JSON}" \
             --arg archunit "${ARCHUNIT_MODULE}" \
@@ -126,7 +127,7 @@ jobs:
         run: ./scripts/check-flyway-hygiene.sh
 
       - name: Run unit tests (module + reactor deps)
-        run: ./mvnw -pl ${{ matrix.module }} -am test jacoco:report -DskipITs -T 1C -B -q
+        run: ./mvnw -pl ${{ matrix.module }} -am test org.jacoco:jacoco-maven-plugin:0.8.14:report -DskipITs -T 1C -B -q
 
       - name: Upload test results
         if: always()
